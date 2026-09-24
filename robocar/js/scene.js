@@ -608,7 +608,7 @@
 
   // ─── 카메라 ──────────────────────────────────────────────
   function camOf(R, vw) {
-    if (!R._cam) R._cam = { x: R.car.x - vw * 0.28, zoom: 1, shake: 0, flash: 0, last: performance.now(), land: 0, ui: [], pf: [] };
+    if (!R._cam) R._cam = { x: R.car.x - vw * (R.camFrac || 0.28), zoom: 1, shake: 0, flash: 0, last: performance.now(), land: 0, ui: [], pf: [] };
     return R._cam;
   }
   // main.js가 사건마다 불러 준다 (흔들림·섬광·HUD로 날아가는 별)
@@ -637,7 +637,7 @@
     const dt = Math.min(0.05, (now - K.last) / 1000); K.last = now;
     const speed = RC.Run.speedOf(R);
     const fast = speed > D.RUN.speed * 1.3;
-    const targetX = c.x - vw * 0.28 + (fast ? 60 : 0);
+    const targetX = c.x - vw * (R.camFrac || 0.28) + (fast ? 60 : 0);
     K.x += (targetX - K.x) * Math.min(1, dt * 6);
     const high = c.y < GY - 170;
     const targetZ = c.morph > 0 ? 1.12 : high ? 0.9 : 1;
@@ -782,7 +782,7 @@
       // 로고 판
       ctx.save(); ctx.globalAlpha = 0.9;
       ctx.font = '64px "Black Han Sans", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(80,140,255,0.12)'; ctx.fillText('ROBO GARAGE', vw / 2, 90);
+      ctx.fillStyle = 'rgba(80,140,255,0.08)'; ctx.fillText('ROBO GARAGE', vw / 2, ty - 175);
       ctx.restore();
     }
     // 스포트라이트

@@ -313,8 +313,13 @@
     const c = R.car;
     if (hudShown.stars !== R.stars) { $('hud-stars').querySelector('b').textContent = R.stars; hudShown.stars = R.stars; }
     const k = Math.min(1, c.x / R.level.length);
-    $('hud-fill').style.width = (k * 100) + '%';
-    $('hud-car').style.left = (k * 100) + '%';
+    const kq = Math.round(k * 400) / 400;
+    if (kq !== hudShown.p) {
+      hudShown.p = kq;
+      $('hud-fill').style.width = 'calc((100% - 76px) * ' + kq + ')';
+      $('hud-car').style.left = 'calc(34px + (100% - 76px) * ' + kq + ')';
+      $('hud-track').classList.toggle('night', kq > 0.7);
+    }
     const ready = c.form === 'car' && c.cd <= 0 && !R.done;
     const ring = c.form === 'robot' ? Math.max(0, c.robotT / D.RUN.robotTime) : 1 - c.cd / D.RUN.transformCd;
     const q = Math.round(ring * 40) / 40;
@@ -359,6 +364,7 @@
     const open = openCourses();
     const d = RC.Run.createRun(mine ? Object.assign({}, cfg) : { body: bodies[demoN % 3], wheel: ['normal', 'monster', 'spring'][demoN % 3], gear: ['jet', 'wing', 'drill'][demoN % 3], color: null }, 11 + demoN, open[Math.floor(demoN / 2) % open.length].id);
     d.car.x = d.level.length * (demoN % 2 ? 0.08 : 0.44);
+    d.camFrac = 0.13;   // 시작 화면: 로봇카를 왼쪽에 두어 로고와 겹치지 않게
     d.level.pits = d.level.pits.filter(p => Math.abs(p.x - d.car.x) > 400);
     demoN++;
     return d;
@@ -410,7 +416,13 @@
             box.appendChild(RC.Cards.render(document.createElement('canvas'), next, false));
             const list = $('new-cards');
             list.appendChild(box);
-            while (list.children.length > 3) list.removeChild(list.firstChild);
+            // 여러 장이면 부채처럼 겹쳐 펼친다 (최대 5장까지 보임)
+            while (list.children.length > 5) list.removeChild(list.firstChild);
+            const n = list.children.length;
+            [...list.children].forEach((el, k) => { el.style.setProperty('--r', ((k - (n - 1) / 2) * 4) + 'deg'); el.style.zIndex = k + 1; });
+            list.style.setProperty('--ov', n >= 4 ? '-26px' : n === 3 ? '-12px' : '0px');
+            list.classList.toggle('fan', n > 1);
+            list.dataset.label = '새 카드 ' + earned.length + '장!';
             S.play('sticker'); vibrate([20, 30, 40]);
             restart(document.querySelector('.cell'), 'full');
             showNext();
@@ -449,6 +461,15 @@
       const d = document.createElement('div');
       d.className = have ? 'have r' + s.rarity : 'locked';
       d.appendChild(RC.Cards.render(document.createElement('canvas'), s, !have));
+      // 누르면 크게 보기 (못 모은 카드는 목소리로 안내만)
+      d.addEventListener('click', () => {
+        if (!have) { S.play('bump'); S.say('별을 모으면 나와!'); return; }
+        S.play('sticker'); S.say(s.name + '!');
+        const z = $('card-zoom');
+        z.querySelector('.zc').innerHTML = '';
+        z.querySelector('.zc').appendChild(RC.Cards.render(document.createElement('canvas'), s, false));
+        z.className = 'on r' + s.rarity;
+      });
       b.appendChild(d);
     }
     $('book-note').textContent = prog.stickers.length + ' / ' + D.STICKERS.length + '장 모음 · 다음 카드까지 별 ' + (D.JAR - prog.bank) + '개';
@@ -490,7 +511,7 @@
   function goSleep() {
     if (mode !== 'sleep') { prog.log.sleeps++; saveAll(); }
     mode = 'sleep'; show('scr-sleep'); S.music(false); wakeLock(false);
-    S.say('오늘은 여기까지! 내일 또 만나!', { ms: 4000 });
+    S.say('오늘은 여기까지! 내일 또 만나!', { ms: 4000, bubble: false });
     endAfterRun = false;
   }
 
@@ -623,6 +644,7 @@
     wipe(toGarage);
   });
   $('btn-book').addEventListener('click', () => { S.unlock(); S.play('click'); wipe(toBook); });
+  $('card-zoom').addEventListener('click', () => { $('card-zoom').className = ''; S.play('click'); });
   $('btn-book-back').addEventListener('click', () => { S.play('click'); wipe(toTitle); });
   $('btn-run').addEventListener('click', () => { S.play('click'); wipe(toMap); });
   $('btn-again').addEventListener('click', () => { S.play('click'); wipe(() => startRun(prog.course)); });
@@ -632,7 +654,7 @@
     garageForm = garageForm === 'car' ? 'robot' : 'car'; garageMorph = RC.Car.MORPH;
     S.play(garageForm === 'robot' ? 'transform' : 'untransform');
     S.say(garageForm === 'robot' ? RC.find(D.BODIES, cfg.body).robot + ' 변신!' : '다시 자동차!');
-    $('btn-morph').querySelector('span').textContent = garageForm === 'robot' ? '자동차로' : '변신 보기';
+    $('btn-morph').querySelector('em').textContent = garageForm === 'robot' ? '자동차로' : '변신 보기';
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { downs.clear(); holding = false; saveAll(); if (mode === 'run') pause(); }

@@ -20,6 +20,21 @@
 </head>
 <body>
   <canvas id="stage" aria-label="게임 화면"></canvas>
+  <!-- 아이콘 모음 (버튼에서 <use href="#i-이름">으로 쓴다) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z"/></symbol>
+    <symbol id="i-cards" viewBox="0 0 24 24"><path d="M9 2h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-1V6a2 2 0 0 0-2-2H7a2 2 0 0 1 2-2zM5 5h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm5 4.2-1.2 2.5-2.7.4 2 1.9-.5 2.7 2.4-1.3 2.4 1.3-.5-2.7 2-1.9-2.7-.4z"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 2a1 1 0 0 1 1 1v1h13a1 1 0 0 1 .8 1.6L17.2 9l2.6 3.4A1 1 0 0 1 19 14H6v7a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1z"/></symbol>
+    <symbol id="i-again" viewBox="0 0 24 24"><path d="M12 4V1.5a.5.5 0 0 0-.8-.4L6.6 4.6a.5.5 0 0 0 0 .8l4.6 3.5a.5.5 0 0 0 .8-.4V6a6 6 0 1 1-6 6 1 1 0 1 0-2 0 8 8 0 1 0 8-8z"/></symbol>
+    <symbol id="i-garage" viewBox="0 0 24 24"><path d="M12 2.5 2.6 7.2A1 1 0 0 0 2 8.1V21a1 1 0 0 0 1 1h2V11h14v11h2a1 1 0 0 0 1-1V8.1a1 1 0 0 0-.6-.9zM7 13v2h10v-2zm0 4v2h10v-2zm0 4v1h10v-1z"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M10.6 4.6 3.9 11.3a1 1 0 0 0 0 1.4l6.7 6.7a1 1 0 0 0 1.4-1.4L7 13h13a1 1 0 1 0 0-2H7l5-5a1 1 0 0 0-1.4-1.4z"/></symbol>
+    <symbol id="i-morph" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 3 3 5.5v15.3l6-2.5 6 2.5 6-2.5V3l-6 2.5zm0 2.2 6 2.5v11.1l-6-2.5z"/></symbol>
+    <symbol id="i-speak" viewBox="0 0 24 24"><path d="M4 9h3l5-4v14l-5-4H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zm12.5-1.9a1 1 0 0 1 1.4 0 7 7 0 0 1 0 9.8 1 1 0 1 1-1.4-1.4 5 5 0 0 0 0-7 1 1 0 0 1 0-1.4z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+    <symbol id="i-car" viewBox="0 0 40 20"><path d="M3 13c0-2 1-3 3-3.4L11 5h13l6 4.4 5.5 1c1.6.3 2.5 1.4 2.5 3V15h-3a4 4 0 0 0-8 0H14a4 4 0 0 0-8 0H3z"/><circle cx="10" cy="15.5" r="3"/><circle cx="31" cy="15.5" r="3"/></symbol>
+  </svg>
 
   <!-- 로딩: 글꼴이 준비될 때까지 (글자가 바뀌며 깜빡이지 않게) -->
   <div id="splash"><div class="sp-logo">로봇카</div><div class="sp-bar"><i></i></div></div>
@@ -28,11 +43,11 @@
   <div id="wipe" aria-hidden="true"><i></i><i></i><i></i></div>
 
   <!-- 목소리 안내 자막 -->
-  <div id="say" aria-live="polite"></div>
+  <div id="say" aria-live="polite"><svg class="i" aria-hidden="true"><use href="#i-speak"/></svg><span></span></div>
 
   <!-- 배터리 (하루 타이머) + 보호자 자물쇠 -->
   <div id="corner">
-    <div id="battery" title="오늘 남은 놀이 시간"><i></i><span></span></div>
+    <div id="battery" title="오늘 남은 놀이 시간"><div class="cell-b"><i></i></div><span></span></div>
     <button id="btn-fs" aria-label="전체 화면"><svg viewBox="0 0 24 24"><path d="M4 9V4h5v2H6v3zm11-5h5v5h-2V6h-3zM4 15h2v3h3v2H4zm14 3v-3h2v5h-5v-2z"/></svg></button>
     <button id="btn-lock" aria-label="보호자 설정 (3초 누르기)"><svg viewBox="0 0 36 36"><circle class="ring" cx="18" cy="18" r="16"/></svg><svg class="ico" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></svg></button>
   </div>
@@ -46,8 +61,8 @@
         <span class="logo-sub">TRANSFORM · RACE · COLLECT</span>
       </div>
       <div class="title-btns">
-        <button id="btn-go-garage" class="btn primary big"><span>시작</span></button>
-        <button id="btn-book" class="btn ghost"><span>카드 도감 <b id="title-count">0/10</b></span></button>
+        <button id="btn-go-garage" class="btn primary big"><span><svg class="i" aria-hidden="true"><use href="#i-play"/></svg>시작</span></button>
+        <button id="btn-book" class="btn ghost"><span><svg class="i" aria-hidden="true"><use href="#i-cards"/></svg>카드 도감 <b id="title-count">0/10</b></span></button>
       </div>
     </div>
   </section>
@@ -57,7 +72,7 @@
     <div class="garage-head">
       <div class="chip"><small>ROBO GARAGE</small><b id="car-name">레이서</b><em id="car-parts">보통 바퀴 · 제트팩</em></div>
     </div>
-    <button id="btn-morph" class="btn ghost"><span>변신 보기</span></button>
+    <button id="btn-morph" class="btn ghost"><span><svg class="i" aria-hidden="true"><use href="#i-morph"/></svg><em>변신 보기</em></span></button>
     <div id="stats" class="panel">
       <div class="stat"><label>속도</label><div class="bar" data-k="speed"></div></div>
       <div class="stat"><label>점프</label><div class="bar" data-k="jump"></div></div>
@@ -72,7 +87,7 @@
       <div class="part-group colors-go">
         <h3>색깔</h3>
         <div id="colors"></div>
-        <button id="btn-run" class="btn primary big"><span>출발!</span></button>
+        <button id="btn-run" class="btn primary big"><span><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg>출발!</span></button>
       </div>
     </div>
   </section>
@@ -81,13 +96,13 @@
   <section id="scr-map" class="screen">
     <h2 class="map-title">어디로 갈까?</h2>
     <div id="courses"></div>
-    <button id="btn-map-back" class="btn ghost"><span>차고로</span></button>
+    <button id="btn-map-back" class="btn ghost"><span><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>차고로</span></button>
   </section>
 
   <!-- 달리기 HUD -->
   <section id="hud" class="screen">
     <div id="hud-stars"><img alt="" class="star-ico"><b>0</b></div>
-    <div id="hud-track"><div id="hud-fill"></div><i id="hud-car"></i><span class="flag"></span></div>
+    <div id="hud-track"><svg class="i t-sun" aria-hidden="true"><use href="#i-sun"/></svg><svg class="i t-moon" aria-hidden="true"><use href="#i-moon"/></svg><div id="hud-fill"></div><svg id="hud-car" aria-hidden="true" viewBox="0 0 40 20"><use href="#i-car"/></svg><span class="flag"></span></div>
     <!-- 출발 신호등 3·2·1 -->
     <div id="count" aria-hidden="true"><div class="lights"><i></i><i></i><i></i></div><b id="count-num"></b></div>
     <!-- 처음 두 판: 손가락 안내 -->
@@ -108,8 +123,8 @@
       </div>
       <p id="res-note" class="note"></p>
       <div class="row">
-        <button id="btn-again" class="btn primary big"><span>또 달리기</span></button>
-        <button id="btn-garage" class="btn ghost"><span>차고로</span></button>
+        <button id="btn-again" class="btn primary big"><span><svg class="i" aria-hidden="true"><use href="#i-again"/></svg>또 달리기</span></button>
+        <button id="btn-garage" class="btn ghost"><span><svg class="i" aria-hidden="true"><use href="#i-garage"/></svg>차고로</span></button>
       </div>
     </div>
   </section>
@@ -119,9 +134,12 @@
     <div class="panel wide book-panel">
       <div class="book-head"><h2>카드 도감</h2><span id="book-note"></span></div>
       <div id="book"></div>
-      <button id="btn-book-back" class="btn ghost"><span>돌아가기</span></button>
+      <button id="btn-book-back" class="btn ghost"><span><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>돌아가기</span></button>
     </div>
   </section>
+
+  <!-- 카드 크게 보기 (도감에서 카드를 누르면) -->
+  <div id="card-zoom" aria-hidden="true"><div class="zc"></div><p>화면을 누르면 닫혀요</p></div>
 
   <!-- 잠자기 -->
   <section id="scr-sleep" class="screen">
@@ -136,8 +154,8 @@
     <div class="panel pause-panel">
       <h2>잠깐 멈춤</h2>
       <div class="row">
-        <button id="btn-resume" class="btn primary big"><span>계속 달리기</span></button>
-        <button id="btn-quit" class="btn ghost"><span>차고로</span></button>
+        <button id="btn-resume" class="btn primary big"><span><svg class="i" aria-hidden="true"><use href="#i-play"/></svg>계속 달리기</span></button>
+        <button id="btn-quit" class="btn ghost"><span><svg class="i" aria-hidden="true"><use href="#i-garage"/></svg>차고로</span></button>
       </div>
     </div>
   </section>
