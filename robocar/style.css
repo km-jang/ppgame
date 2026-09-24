@@ -739,3 +739,41 @@ body.ready #scr-title.on #btn-go-garage { animation: rise .5s .6s var(--ease-out
 /* 버튼 글자는 줄바꿈하지 않는다 (좁은 창에서 "시 작"처럼 쪼개지지 않게) */
 .btn, .btn > span { white-space: nowrap; }
 .title-wrap { width: max-content; max-width: 96vw; }
+
+/* ═══ 아이 손가락 크기 (NN/g: 3~5세 터치 목표 최소 2cm) ═══════════ */
+:root { --tap: clamp(64px, min(9.5vw, 14.5vh), 104px); }
+.garage-panel { grid-template-columns: repeat(3, 1fr) auto; align-items: end; }
+.parts { gap: 8px; }
+.part { min-height: var(--tap); justify-content: center; font-size: 16px; }
+.part span { font-weight: 900; }
+.colors-go { justify-content: flex-end; }
+.colors-go #btn-run { margin: 0; min-height: calc(var(--tap) + 24px); padding-inline: 40px; }
+.color-panel { position: absolute; left: 20px; top: 118px; }
+.color-panel h3 { margin: 0 0 8px 2px; font-family: var(--display); font-weight: normal; font-size: 20px; color: var(--muted); letter-spacing: 2px; }
+#colors { display: grid; grid-template-columns: repeat(2, var(--tap)); gap: 12px; margin: 0; }
+.swatch { width: var(--tap); height: var(--tap); border-width: 4px; }
+#scr-garage.on .color-panel { animation: riseX .5s .15s var(--ease-out) both; }
+/* 잠긴 부품: 자물쇠와 필요한 별 수 */
+.part .lock { display: none; }
+.part.locked .lock { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 10px; background: rgba(5, 8, 16, .72); font-style: normal; }
+.part.locked .lock .i { width: 26px; height: 26px; color: #dfe7f2; }
+.part.locked .lock b { font: normal 18px var(--display); color: var(--gold); }
+.part.locked .lock b::before { content: "별 "; font-size: 14px; color: #dfe7f2; }
+.part.locked canvas { filter: grayscale(1) brightness(.6); }
+.part.nope { animation: nope .35s; }
+@keyframes nope { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+/* 결과: 구한 친구 · 공중 보너스 */
+.res-extra { display: flex; gap: 10px; justify-content: center; margin: 0; min-height: 0; }
+.res-extra span { padding: 4px 14px; border-radius: 999px; font: 900 16px var(--body); animation: popIn .45s .9s var(--ease-back) both; }
+.res-extra b { font-family: var(--display); font-weight: normal; font-size: 20px; margin-left: 4px; }
+.chip-ok { background: rgba(58, 255, 154, .16); color: #9dffcb; border: 1px solid rgba(58, 255, 154, .5); }
+.chip-air { background: rgba(255, 210, 58, .14); color: #ffe58a; border: 1px solid rgba(255, 210, 58, .5); }
+@media (max-height: 560px) {
+  .color-panel { top: 114px; left: 12px; } .color-panel h3 { font-size: 14px; margin-bottom: 4px; }
+  #colors { gap: 8px; }
+  .part { font-size: 12px; }
+  .colors-go #btn-run { padding-inline: 22px; }
+}
+/* 차고: 빈 곳을 누르면 뒤의 쇼룸(캔버스)이 받는다 (로봇카 만지기) */
+#scr-garage { pointer-events: none; }
+#scr-garage > * { pointer-events: auto; }

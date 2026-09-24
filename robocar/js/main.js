@@ -9,6 +9,10 @@
   // ─── 저장 ────────────────────────────────────────────────
   const cfg = Object.assign({ body: 'racer', wheel: 'normal', gear: 'jet', color: '#ff3b3b' }, RC.store.get('rc.cfg', {}));
   const prog = Object.assign({ bank: 0, stickers: [], runs: 0 }, RC.store.get('rc.prog', {}));
+  // 지금까지 모은 별 (부품 열기용). 부품 열기가 생기기 전에 이미 놀던 아이는 모두 열린 채로 둔다
+  if (prog.total == null) prog.total = prog.runs > 0 ? 999 : 0;
+  const isOpen = id => !D.UNLOCK[id] || prog.total >= D.UNLOCK[id];
+  const LOCK_ICO = '<svg class="i" aria-hidden="true" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></svg>';
   // 놀이 기록 (보호자 화면용, 이 기기에만): 부품 선택 횟수, 변신·도착 횟수, 날짜별 판 수, 잠자기 뒤 다시 켠 횟수
   prog.log = Object.assign({ parts: {}, transforms: 0, finished: 0, days: {}, sleeps: 0, sleepRetry: 0, first: null }, prog.log || {});
   function logRun() {
@@ -158,6 +162,31 @@
   // ─── 차고 ────────────────────────────────────────────────
   const LISTS = { body: D.BODIES, wheel: D.WHEELS, gear: D.GEAR };
   let garageForm = 'car', garageMorph = 0, garageBounce = 0, garagePop = 0;
+  let garageRoll = 0, garageRollV = 0, garageLights = 0, garagePunch = 0;
+  // 차고에서 만지며 놀기 (Toca Boca식 자유 놀이): 바퀴를 톡 하면 부릉 굴러가고, 앞을 톡 하면 전조등 번쩍,
+  // 로봇일 땐 톡 하면 주먹 자세. 나머지는 빵빵 폴짝
+  function garageTap(e) {
+    const f = zr ? zr() : 1;
+    const lx = e.clientX * f / view.s, ly = e.clientY * f / view.s - view.oy;
+    const cx = view.vw / 2, ty = 322, robot = garageForm === 'robot';
+    const sc = robot ? 1.15 : 1.7;
+    vibrate(15);
+    if (robot) {
+      if (Math.abs(lx - cx) < 90 * sc && ly > ty - 280 * sc && ly < ty + 10) {
+        garagePunch = 0.5; garageBounce = 1; S.play('bump'); S.say(['야호!', '로봇 출동!', '얍!'][Math.floor(Math.random() * 3)], { ms: 900 });
+        return;
+      }
+    } else {
+      const W = RC.find(D.WHEELS, cfg.wheel), wx = cfg.body === 'fire' ? [-56, 56] : [-50, 52];
+      // 전조등(차 앞머리 위쪽)을 먼저, 그다음 바퀴
+      if (lx > cx + 62 * sc && lx < cx + 115 * sc && ly > ty - 75 * sc && ly < ty - 26 * sc) { garageLights = 1; S.play('honk'); return; }
+      for (const dx of wx) {
+        const hx = cx + dx * sc, hy = ty - W.r * sc;
+        if (Math.hypot(lx - hx, ly - hy) < (W.r + 12) * sc) { garageRollV = 1400; S.play('rev'); return; }
+      }
+    }
+    garageBounce = 1; S.play('honk');
+  }
   // CSS 애니메이션을 처음부터 다시 틀기
   function restart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
   let lastStats = null;
@@ -181,7 +210,14 @@
         const cv = document.createElement('canvas'); cv.width = 300; cv.height = 192;
         b.appendChild(cv);
         const lb = document.createElement('span'); lb.textContent = p.name; b.appendChild(lb);
+        if (D.UNLOCK[p.id]) b.insertAdjacentHTML('beforeend', '<em class="lock">' + LOCK_ICO + '<b>' + D.UNLOCK[p.id] + '</b></em>');
         b.addEventListener('click', () => {
+          if (!isOpen(p.id)) {
+            // 아직 잠김: 별을 얼마나 더 모으면 되는지 알려 준다
+            S.play('bump'); restart(b, 'nope'); vibrate(20);
+            S.say('별 ' + (D.UNLOCK[p.id] - prog.total) + '개 더 모으면 열려!');
+            return;
+          }
           const changed = cfg[slot] !== p.id;
           cfg[slot] = p.id;
           if (slot === 'body' && !cfg.colorTouched) cfg.color = p.color;
@@ -221,6 +257,7 @@
       const slot = el.dataset.slot;
       for (const b of el.children) {
         b.setAttribute('aria-pressed', String(cfg[slot] === b.dataset.id));
+        b.classList.toggle('locked', !isOpen(b.dataset.id));
         thumb(b.querySelector('canvas'), { [slot]: b.dataset.id });
       }
     }
@@ -365,6 +402,10 @@
       else if (ev === 'pop') sayOnce('뿅!');
       else if (ev === 'slip') sayOnce('미끌!');
       else if (ev === 'cone') sayOnce('와르르!', 2500);
+      else if (ev === 'balloon') sayOnce('펑!', 1200);
+      else if (ev === 'airbonus') sayOnce('높이 날았다!', 2000);
+      else if (ev === 'check') sayOnce('절반 왔어! 힘내!', 1000);
+      else if (ev === 'rescue') { lastSay = performance.now(); S.say(({ cat: '고양이를', pup: '강아지를', bot: '꼬마 로봇을' })[Rx.lastFriend.kind] + ' 구했어!', { ms: 1800 }); }
       else if (ev === 'splash') sayOnce('철퍼덕!');
       else if (ev === 'hot') sayOnce('앗 뜨거!');
       else if (ev === 'monkey') sayOnce('장난꾸러기 원숭이 로봇이다!', 3000);
@@ -404,6 +445,10 @@
     for (let i = 0; i < 3; i++) { const im = document.createElement('img'); im.src = starURL; im.alt = ''; rt.appendChild(im); setTimeout(() => { if (i < rating && mode === 'result') { im.classList.add('on'); S.play('star'); vibrate(15); } }, 800 + i * 280); }
     setTimeout(() => { if (mode === 'result') S.play('slam'); }, 380);
     $('res-stars').textContent = '0';
+    // 구한 친구 · 공중 보너스 (있을 때만)
+    const ex = $('res-extra'); ex.innerHTML = '';
+    if (R.saved) ex.insertAdjacentHTML('beforeend', '<span class="chip-ok">구한 친구 <b>' + R.saved + '</b></span>');
+    if (R.airBonus) ex.insertAdjacentHTML('beforeend', '<span class="chip-air">공중 보너스 <b>+' + R.airBonus + '</b></span>');
     $('new-cards').innerHTML = '';
     $('res-note').textContent = '';
     let shown = 0, bank = prog.bank;
@@ -456,7 +501,12 @@
           clearInterval(timer);
           prog.bank = bank;
           prog.stickers = prog.stickers.concat(earned);
+          // 부품 열기: 모은 별을 더하고, 새로 열린 부품을 알려 준다
+          const before = Object.keys(D.UNLOCK).filter(isOpen);
+          prog.total += got;
+          const opened = Object.keys(D.UNLOCK).filter(id => isOpen(id) && !before.includes(id));
           saveAll();
+          renderParts();
           const left = D.STICKERS.length - prog.stickers.length;
           $('res-note').textContent = earned.length
             ? '새 카드 ' + earned.length + '장! 카드 도감에 넣었어요.'
@@ -470,6 +520,12 @@
             $('res-note').appendChild(tag);
             openBefore = nowOpen.length;
             setTimeout(() => { if (mode === 'result') { S.play('sticker'); S.say('새 코스가 열렸어! ' + nc.name + '!'); } }, earned.length ? 2600 : 900);
+          }
+          if (opened.length) {
+            const names = opened.map(id => RC.find(D.BODIES.concat(D.WHEELS, D.GEAR), id).name);
+            const tag = document.createElement('span'); tag.className = 'new-course'; tag.textContent = '새 부품: ' + names.join(', ') + '!';
+            $('res-note').appendChild(tag);
+            setTimeout(() => { if (mode === 'result') { S.play('unlock'); S.say('새 부품이 열렸어! ' + names[0] + '!'); } }, earned.length ? 4200 : 1800);
           }
           if (endAfterRun) setTimeout(() => { if (mode === 'result') goSleep(); }, 4500);
         }
@@ -643,7 +699,7 @@
     S.unlock();
     if (isPalm(e)) return;
     if (mode === 'run' && !paused) { downs.add(e.pointerId); tap = true; holding = true; }
-    else if (mode === 'garage') { garageBounce = 1; S.play('honk'); vibrate(15); }
+    else if (mode === 'garage') garageTap(e);
   });
   const release = e => { downs.delete(e.pointerId); holding = downs.size > 0; };
   canvas.addEventListener('pointerup', release);
@@ -765,6 +821,9 @@
     if (view.oy > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#05070d'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, 0, view.dpr * view.s * view.oy);
     const vw = view.vw;
+    // 엔진 소리: 달리는 판에서만 (신호등 동안은 제자리 부릉)
+    const engOn = mode === 'run' && R && !R.done && !paused && !parentOpen && !document.hidden;
+    S.engine(engOn, engOn ? (countdown > 0 ? 0 : RC.Run.speedOf(R) / D.RUN.speed) : 0);
 
     if ((mode === 'run' || mode === 'toResult') && R) {
       if (!parentOpen && !paused && mode === 'run') {
@@ -785,12 +844,15 @@
     } else if (mode === 'garage' || mode === 'sleep') {
       garageMorph = Math.max(0, garageMorph - dt * 0.5);
       garageBounce = Math.max(0, garageBounce - dt * 3);
+      garageRoll += garageRollV * dt; garageRollV *= Math.max(0, 1 - dt * 1.6);
+      garageLights = Math.max(0, garageLights - dt * 1.5); garagePunch = Math.max(0, garagePunch - dt);
       garagePop = Math.max(0, garagePop - dt * 1.6);
       const robotShown = garageForm === 'robot' ? garageMorph < RC.Car.MORPH / 2 : garageMorph > RC.Car.MORPH / 2;
       const sleep = mode === 'sleep';
       RC.Draw.drawShowroom(ctx, cfg, vw, gt, {
         form: sleep ? 'car' : garageForm, morph: sleep ? 0 : garageMorph, bounce: garageBounce,
         ty: sleep ? 400 : 322, scale: sleep ? 1.7 : (robotShown ? 1.15 : 1.7), night: sleep, pop: garagePop,
+        roll: garageRoll, rollV: garageRollV, lights: garageLights, punch: garagePunch,
       });
     } else {
       // 시작·결과·도감 뒤: 시연 달리기
@@ -837,6 +899,6 @@
   RC.debug = {
     get mode() { return mode; }, get run() { return R; }, cfg, prog, set, play,
     toGarage, toBook, startRun, showResult, goSleep, openParent, toTitle, pause, resume, get view() { return view; },
-    setGarageForm(f) { garageForm = f; }, toMap,
+    setGarageForm(f) { garageForm = f; }, toMap, renderParts, get garageFx() { return { lights: garageLights, roll: garageRollV, punch: garagePunch, bounce: garageBounce }; },
   };
 })(RC);

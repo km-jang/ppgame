@@ -1,5 +1,6 @@
 'use strict';
-// 소리. 파일 없이 WebAudio로 합성한다.
+// 소리. WebAudio 합성음이 바탕이고, 진짜 소리 파일(sounds/, Kenney 무료)을 겹쳐 두께를 더한다.
+// 파일을 못 받으면 합성음만 난다.
 //  - 효과음: 총소리·폭발은 잡음(노이즈)+저음 펀치, 나머지는 발진기
 //  - 배경음악: 16스텝 시퀀서 (베이스·킥·스네어·하이햇·아르페지오), 보스전엔 템포·층을 올린다
 // 브라우저 정책상 첫 터치·클릭·키 입력 뒤에야 소리가 난다 (unlock).
@@ -28,6 +29,7 @@
       for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
       applyGains();
       if (wantMusic) startMusic(wantMusic);
+      SM.load(ac, FILES);
     } catch (e) { ac = null; }
   }
 
@@ -114,6 +116,19 @@
     } },
   };
 
+  // 합성음 위에 겹치는 소리 파일: f 파일, v 크기, r 빠르기, d 길이 자르기, jit 음높이 흔들기
+  const SM = NG.makeSamples('sounds/');
+  const SAMPLE = {
+    shoot:    { f: 'blaster', v: 0.28, r: 1.25, d: 0.16, jit: 0.08 },
+    hit:      { f: 'enemy_hurt', v: 0.22, jit: 0.1 },
+    kill:     { f: 'enemy_destroy', v: 0.5, d: 0.55, jit: 0.1 },
+    hurt:     { f: 'impact', v: 1.0 },
+    eshoot:   { f: 'enemy_attack', v: 0.35, jit: 0.08 },
+    pick:     { f: 'tile-match', v: 0.6 },
+    dash:     { f: 'weapon_change', v: 0.5, r: 1.3 },
+    bossDown: { f: 'enemy_destroy', v: 1.1, r: 0.6 },
+  };
+  const FILES = Array.from(new Set(Object.values(SAMPLE).map(s => s.f)));
   function play(name, opt) {
     if (!ac || muted || !sfxOn) return;
     const s = SFX[name];
@@ -122,6 +137,8 @@
     if (last[name] && now - last[name] < s.gap) return;
     last[name] = now;
     s.fn(now + 0.005, opt);
+    const m = SAMPLE[name];
+    if (m) SM.play(m.f, sfxBus, { vol: m.v, rate: (m.r || 1) * (1 + (Math.random() - 0.5) * (m.jit || 0)), dur: m.d });
   }
 
   // ─── 배경음악 ─────────────────────────────────────────────

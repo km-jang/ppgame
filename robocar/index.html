@@ -85,11 +85,11 @@
       <div class="part-group"><h3>바퀴</h3><div class="parts" data-slot="wheel"></div></div>
       <div class="part-group"><h3>장비</h3><div class="parts" data-slot="gear"></div></div>
       <div class="part-group colors-go">
-        <h3>색깔</h3>
-        <div id="colors"></div>
         <button id="btn-run" class="btn primary big"><span><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg>출발!</span></button>
       </div>
     </div>
+    <!-- 색깔: 아이 손가락 크기(약 2cm)로 크게, 쇼룸 왼쪽에 -->
+    <div class="color-panel"><h3>색깔</h3><div id="colors"></div></div>
   </section>
 
   <!-- 코스 고르기 (코스가 두 개 이상 열렸을 때) -->
@@ -121,6 +121,7 @@
         <div id="new-cards"></div>
         <div id="next-card"><canvas width="300" height="420"></canvas><small>다음 카드</small></div>
       </div>
+      <p id="res-extra" class="res-extra"></p>
       <p id="res-note" class="note"></p>
       <div class="row">
         <button id="btn-again" class="btn primary big"><span><svg class="i" aria-hidden="true"><use href="#i-again"/></svg>또 달리기</span></button>
@@ -212,8 +213,10 @@
   <script src="js/art.js"></script>
   <script src="js/car.js"></script>
   <script src="js/site.js"></script>
+  <script src="js/friends.js"></script>
   <script src="js/scene.js"></script>
   <script src="js/cards.js"></script>
+  <script src="js/samples.js"></script>
   <script src="js/sound.js"></script>
   <script src="js/main.js"></script>
 </body>

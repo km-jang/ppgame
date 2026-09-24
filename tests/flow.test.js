@@ -55,6 +55,18 @@ async function until(page, fn, arg, ms) {
     assert(await until(P, () => RC.debug.mode === 'garage'), '차고로 안 감');
     assert(await until(P, () => document.getElementById('wipe').className === ''), '화면 넘김 띠가 남아 있음');
   });
+  await test('처음에는 부품 일부가 잠겨 있고, 누르면 바뀌지 않는다', async () => {
+    assert(await P.evaluate(() => document.querySelector('.parts[data-slot=body] .part:nth-child(2)').classList.contains('locked')), '소방차가 잠겨 있지 않음');
+    await P.tap('.parts[data-slot=body] .part:nth-child(2)');
+    assert(await P.evaluate(() => RC.debug.cfg.body === 'racer'), '잠긴 부품이 골라짐');
+    await P.evaluate(() => { RC.debug.prog.total = 999; RC.debug.renderParts(); });
+    assert(!(await P.evaluate(() => document.querySelector('.part.locked'))), '별을 모아도 안 열림');
+  });
+  await test('색 버튼과 부품 카드는 아이 손가락 크기 (탭 S9에서 약 2cm)', async () => {
+    const r = await P.evaluate(() => { const s = document.querySelector('.swatch').getBoundingClientRect(), p = document.querySelector('.part').getBoundingClientRect(); return [s.width, s.height, p.width, p.height]; });
+    const cm = 1280 / 25.3;   // 11인치 탭 가로 약 25.3cm
+    assert(r.every(v => v / cm >= 1.9), '크기 ' + r.map(v => (v / cm).toFixed(1) + 'cm').join(' '));
+  });
   await test('부품을 바꾸면 이름·능력치가 바뀐다', async () => {
     const before = await P.evaluate(() => document.getElementById('car-name').textContent + [...document.querySelectorAll('.bar i.on')].length);
     await P.tap('.parts[data-slot=body] .part:nth-child(2)');
