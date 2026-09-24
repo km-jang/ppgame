@@ -1,78 +1,11 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>sudo make AGI</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=game/">
+  <title>N-GUN</title>
 </head>
-<body>
-    <canvas id="matrix-canvas"></canvas>
-    <div id="app">
-        <header id="header">
-            <span class="blink">▶</span>&nbsp;sudo make AGI&nbsp;<span class="prompt-ver">v0.1.0-alpha</span>&nbsp;<span class="blink">◀</span>
-        </header>
-        <div id="main">
-            <!-- LEFT PANEL: Data + hack button + overclock -->
-            <div id="left-panel">
-                <div class="panel-title">// DATA STORAGE</div>
-                <div id="resource-display">
-                    <div id="data-count">DATA: 0</div>
-                    <div id="dps-display">DPS: 0 /sec</div>
-                    <div id="dpc-display">DPC: 1 /click</div>
-                    <div class="stat-sep">──────────────────────</div>
-                    <div id="total-clicks-display"      class="stat-line">CLICKS:       0</div>
-                    <div id="total-earned-display"      class="stat-line">EARNED:       0</div>
-                    <div id="upgrade-count-display"     class="stat-line">UPGRADES:     0 / 7</div>
-                    <div id="achievement-count-display" class="stat-line">ACHIEVEMENTS: 0 / 8</div>
-                    <div id="prestige-count-display"    class="stat-line">PRESTIGE:     0</div>
-                </div>
-                <div id="hack-section">
-                    <div id="combo-display" class="combo-hidden">COMBO x<span id="combo-count">0</span></div>
-                    <button id="hack-btn">
-                        <span class="btn-label">[ HACK ]</span>
-                        <span class="btn-sub">execute collect_data.sh</span>
-                    </button>
-                </div>
-                <!-- Prestige Reset -->
-                <div id="prestige-section">
-                    <button id="prestige-btn" disabled>[ PRESTIGE ]</button>
-                </div>
-                <!-- Overclock / Fever Time -->
-                <div id="overclock-section">
-                    <div id="overclock-label">OVERCLOCK: <span id="overclock-pct">0</span>%</div>
-                    <div id="overclock-bar-wrap">
-                        <div id="overclock-bar"></div>
-                    </div>
-                    <button id="overclock-btn" disabled>[ OVERCLOCK ]</button>
-                </div>
-            </div>
-
-            <!-- RIGHT PANEL: Upgrade shop (cards injected by script.js) -->
-            <div id="right-panel">
-                <div class="panel-title">// UPGRADE SHOP</div>
-                <div id="shop"></div>
-            </div>
-        </div>
-
-        <!-- BOTTOM PANEL: Scrolling console log -->
-        <div id="console-panel">
-            <div class="panel-title">// TERMINAL LOG&nbsp;<span class="blink" id="cursor-block">█</span></div>
-            <div id="console-log"></div>
-        </div>
-    </div>
-
-    <!-- FBI Overlay (full-screen, above #app) -->
-    <div id="fbi-overlay">
-        <div id="fbi-modal">
-            <div id="fbi-title">[경고] FBI 추적 감지!</div>
-            <div id="fbi-sub">사이버 수사대가 접근 중이다</div>
-            <div id="fbi-timer-display">5.0s</div>
-            <div id="fbi-progress">진행: 0 / 3회</div>
-            <button id="fbi-btn">[ IP 우회 ]</button>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
+<body style="background:#07080d;color:#e8f7ff;font-family:system-ui,sans-serif">
+  <p><a href="game/" style="color:#5ee7ff">N-GUN 게임으로 이동</a></p>
 </body>
 </html>
