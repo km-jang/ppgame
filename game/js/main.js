@@ -261,7 +261,9 @@
   // 브라우저는 첫 터치·클릭 뒤에야 소리를 허락한다. 시작 화면 음악도 그때 시작
   window.addEventListener('pointerdown', () => NG.Audio.unlock(), { passive: true });
 
-  $('btn-start').addEventListener('click', newGame);
+  // 최고 점수·설정이 브라우저 정리 때 지워지지 않게 요청 (돈 0원, 이 기기 안에서만)
+  const keep = () => { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* 무시 */ } };
+  $('btn-start').addEventListener('click', () => { keep(); newGame(); });
   $('btn-retry').addEventListener('click', newGame);
   $('btn-home').addEventListener('click', toTitle);
   $('btn-resume').addEventListener('click', resume);

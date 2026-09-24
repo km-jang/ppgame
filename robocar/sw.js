@@ -1,8 +1,8 @@
 // 오프라인 실행: 게임 파일과 글꼴을 태블릿에 저장해 두고 인터넷 없이도 연다.
 // 파일이 바뀌면 VERSION을 올린다.
-const VERSION = 'robocar-v12';
+const VERSION = 'robocar-v13';
 const FILES = ['./', 'index.html', 'style.css', 'manifest.json', 'icon.svg',
-  'js/data.js', 'js/run.js', 'js/art.js', 'js/car.js', 'js/site.js', 'js/friends.js', 'js/scene.js', 'js/cards.js', 'js/samples.js', 'js/sound.js', 'js/main.js',
+  'js/data.js', 'js/save.js', 'js/run.js', 'js/art.js', 'js/car.js', 'js/site.js', 'js/friends.js', 'js/scene.js', 'js/cards.js', 'js/samples.js', 'js/sound.js', 'js/main.js',
   'sounds/jump.ogg', 'sounds/jump_a.ogg', 'sounds/jump_b.ogg', 'sounds/jump_c.ogg', 'sounds/land.ogg', 'sounds/coin.ogg', 'sounds/break.ogg', 'sounds/impact.ogg', 'sounds/fall.ogg', 'sounds/tile-match.ogg', 'sounds/placement-a.ogg', 'sounds/placement-c.ogg', 'sounds/tile-land.ogg', 'sounds/skid.ogg', 'sounds/removal-a.ogg', 'sounds/weapon_change.ogg', 'sounds/engine.ogg'];
 
 self.addEventListener('install', e => {
