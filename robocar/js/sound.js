@@ -77,6 +77,12 @@
     hop:    t => { tone(sfx, t, 'sine', 260, 820, 0.2, 0.32); tone(sfx, t + 0.04, 'triangle', 520, 1200, 0.12, 0.12); },   // 폴짝 (저절로 넘기)
     cone:   t => { tone(sfx, t, 'triangle', 520, 260, 0.1, 0.25); noise(sfx, t, 'bandpass', 1800, 900, 0.08, 0.25); },          // 통! (고깔)
     splash: t => { noise(sfx, t, 'lowpass', 1400, 200, 0.35, 0.5); tone(sfx, t, 'sine', 180, 90, 0.2, 0.25); },             // 철퍼덕
+    balloon: t => { noise(sfx, t, 'highpass', 2500, 1200, 0.08, 0.5); tone(sfx, t, 'sine', 900, 300, 0.08, 0.2); },        // 펑
+    airbonus: t => { [784, 988, 1175].forEach((f, i) => tone(sfx, t + i * 0.06, 'triangle', f, f, 0.14, 0.2)); },
+    rescue: t => { [523, 659, 784, 1047].forEach((f, i) => tone(sfx, t + i * 0.09, 'triangle', f, f, 0.22, 0.24)); },
+    check:  t => { [659, 784, 1047].forEach((f, i) => tone(sfx, t + i * 0.1, 'square', f, f, 0.16, 0.14)); },
+    unlock: t => { [523, 784, 1047, 1568].forEach((f, i) => tone(sfx, t + i * 0.1, 'triangle', f, f, 0.3, 0.24)); },
+    rev:    t => { tone(sfx, t, 'sawtooth', 90, 260, 0.5, 0.16); tone(sfx, t + 0.05, 'square', 60, 140, 0.45, 0.08); noise(sfx, t, 'lowpass', 400, 1200, 0.5, 0.18); },
     slam:   t => { tone(sfx, t, 'sine', 120, 50, 0.3, 0.5); noise(sfx, t, 'lowpass', 2000, 200, 0.25, 0.35); },
   };
 
@@ -101,6 +107,8 @@
     transform: { f: 'weapon_change', v: 1.6, layer: true },
     untransform: { f: 'removal-a', v: 0.7 },
     slam:   { f: 'impact', v: 1.1, r: 0.85 },
+    balloon: { f: 'placement-a', v: 0.8, r: 1.6, layer: true },
+    rescue: { f: 'tile-match', v: 0.9, layer: true },
   };
   const FILES = Array.from(new Set(Object.values(SAMPLE).map(s => s.f).concat(['engine'])));
   function play(name) {

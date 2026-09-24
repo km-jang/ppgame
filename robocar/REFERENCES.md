@@ -22,6 +22,11 @@
 | [Hill Climb Racing (Common Sense Media)](https://www.commonsensemedia.org/app-reviews/hill-climb-racing) | 과장된 물리, 동전으로 부품 **업그레이드가 판을 넘어 이어짐**, **공중 시간·뒤집기 보너스** | 카드 모으기는 있음, 부품은 처음부터 다 열림, 공중 보너스 없음 | 공중에 오래 있으면 보너스 별 · 별로 부품 해금 (PLAN.md 9절과 같은 방향) |
 | [Juice it or Lose it 정리 (GameAnalytics)](https://www.gameanalytics.com/blog/squeezing-more-juice-out-of-your-game-design) | 부드러운 움직임, 늘어나고 눌리기, 화면 흔들림, 입자, 소리 | 대부분 있음 (PLAN.md 7.7·7.10) | 유지 |
 
+## 적용 (2026-09-24)
+
+위 표의 할 일 5가지를 모두 넣었다 (`PLAN.md` 7.12). 소유자가 보낸 **몬스터 트럭 유아 게임**(App Store, 2~5세, 평면 파스텔 그림체) 스크린샷에서
+하늘의 풍선, 종이 가루 축하, 불꽃 뒤로 뿜는 점프, 결승 깃발을 놀이 요소로 가져왔다. 그림체는 "유아틱하지 않게" 방침에 따라 따르지 않았다.
+
 ## 소유자가 직접 보면 좋은 것 (막힌 곳)
 
 1. 구글 플레이에서 "헬로카봇", "로보카폴리", "Hill Climb Racing" 게임 화면 캡처 몇 장

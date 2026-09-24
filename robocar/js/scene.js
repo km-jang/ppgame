@@ -440,6 +440,9 @@
           ctx.lineWidth = 6; ctx.strokeStyle = '#ffd23a'; ctx.stroke();
           break;
         case 'monkey': monkey(ctx, x, o, t); break;
+        case 'balloon': if (!o.popped) RC.Friends.balloon(ctx, o, x, t); break;
+        case 'friend': if (!o.saved) RC.Friends.waiting(ctx, o, x, t); break;
+        case 'check': RC.Friends.gate(ctx, x, t, o.passed); break;
         case 'flag': finishGate(ctx, x, t, P); break;
       }
     }
@@ -608,7 +611,7 @@
 
   // ─── 카메라 ──────────────────────────────────────────────
   function camOf(R, vw) {
-    if (!R._cam) R._cam = { x: R.car.x - vw * (R.camFrac || 0.28), zoom: 1, shake: 0, flash: 0, last: performance.now(), land: 0, ui: [], pf: [] };
+    if (!R._cam) R._cam = { x: R.car.x - vw * (R.camFrac || 0.28), zoom: 1, shake: 0, flash: 0, last: performance.now(), land: 0, ui: [], pf: [], pops: [] };
     return R._cam;
   }
   // main.js가 사건마다 불러 준다 (흔들림·섬광·HUD로 날아가는 별)
@@ -622,6 +625,10 @@
     else if (ev === 'go') { K.shake = Math.max(K.shake, 5); for (let i = 0; i < 10; i++) puffAdd(K, R.car.x - 60 + Math.random() * 30, GY - 4, -120 - Math.random() * 200, -30 - Math.random() * 60, 0.7, 8 + Math.random() * 6, 'dust', '#cfd3da'); }
     else if (ev === 'jump' || ev === 'jump2' || ev === 'hop' || ev === 'ramp') { K.jump = 0.22; K.land = 0; }
     else if (ev === 'cone') K.shake = Math.max(K.shake, 2.5);
+    else if (ev === 'balloon') K.shake = Math.max(K.shake, 2);
+    else if (ev === 'airbonus') K.pops.push({ x: R.car.x, y: R.car.y - 150, txt: '공중 보너스 +' + (R.lastBonus || 1), c: '#ffd23a', t: 0 });
+    else if (ev === 'rescue') { K.pops.push({ x: R.car.x, y: R.car.y - 170, txt: '구했다!', c: '#3aff9a', t: 0 }); K.flash = Math.max(K.flash, 0.15); }
+    else if (ev === 'check') K.pops.push({ x: R.car.x + 120, y: GY - 300, txt: '절반 왔어!', c: '#ffffff', t: 0 });
     else if (ev === 'splash') { K.shake = Math.max(K.shake, 3); for (let i = 0; i < 8; i++) puffAdd(K, R.car.x - 20 + Math.random() * 40, GY - 4, (Math.random() - 0.3) * 260, -120 - Math.random() * 160, 0.5, 5 + Math.random() * 4, 'dust', '#6a4424'); }
     else if (ev === 'pop') K.shake = Math.max(K.shake, 4);
     else if (ev === 'star' && R.lastStar) K.ui.push({ wx: R.lastStar.x, wy: R.lastStar.y, t: 0 });
@@ -703,6 +710,7 @@
       bounce: c.bump > 0 ? Math.sin(c.bump * 40) * 4 : R.t === 0 ? Math.abs(Math.sin(now * 0.028)) * 1.6 : (c.onGround && c.form === 'car' ? Math.sin(ix * 0.09) * 0.9 + Math.sin(ix * 0.031) * 0.6 : 0), squash: K.land > 0 ? Math.sin(K.land / 0.25 * Math.PI) : K.jump > 0 ? -Math.sin(K.jump / 0.22 * Math.PI) * 0.8 : 0,
       dist: ix, speed, running: c.onGround, air: !c.onGround, punch: c.punch,
     });
+    RC.Friends.riders(ctx, R, cx, iy, c.form, t);
     // 능력 연출
     if (c.form === 'robot' && R.body.ability === 'water' && c.robotT > D.RUN.robotTime - 0.9) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
@@ -725,6 +733,17 @@
       ctx.restore();
     }
     fx(ctx, R, cam);
+    // 떠오르는 글자 (공중 보너스·구했다!)
+    for (const q of K.pops) {
+      q.t += dt;
+      const k = q.t / 1.3, a = k < 0.15 ? k / 0.15 : Math.max(0, 1 - (k - 0.6) / 0.4), sc = k < 0.15 ? 0.6 + k / 0.15 * 0.5 : 1.1 - Math.min(0.1, k * 0.1);
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(q.x - cam, q.y - k * 60); ctx.scale(sc, sc);
+      ctx.font = '34px "Black Han Sans", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(8,12,24,0.9)'; ctx.strokeText(q.txt, 0, 0);
+      ctx.fillStyle = q.c; ctx.fillText(q.txt, 0, 0);
+      ctx.restore();
+    }
+    K.pops = K.pops.filter(q => q.t < 1.3);
     if (!low) { if (theme === 'site') RC.Site.foreground(ctx, P, cam, vw); else foreground(ctx, P, cam, vw); }
     ctx.restore();
 
@@ -841,7 +860,7 @@
       ctx.restore();
     }
     const hop = Math.sin((st.bounce || 0) * Math.PI) * 18;
-    const o = { t, form: st.form, morph: st.morph, dist: t * 20, running: false, sleep: night, speed: 0 };
+    const o = { t, form: st.form, morph: st.morph, dist: t * 20 + (st.roll || 0), running: false, sleep: night, speed: st.rollV || 0, punch: st.punch || 0 };
     // 바닥 반사
     ctx.save();
     ctx.beginPath(); ctx.rect(0, ty, vw, 600 - ty); ctx.clip();
@@ -857,6 +876,14 @@
     C.drawBot(ctx, cfg, cx, ty - hop, o);
     ctx.restore();
 
+    // 전조등 번쩍 (앞을 톡 했을 때)
+    if (st.lights > 0 && st.form === 'car') {
+      const hx = cx + 86 * sc, hy = ty - 34 * sc;
+      glow(ctx, '#fff6d0', hx, hy, 60 + st.lights * 120, st.lights);
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = st.lights * 0.6;
+      ctx.fillStyle = lin(ctx, hx, 0, hx + 520, 0, [[0, 'rgba(255,246,208,0.9)'], [1, 'rgba(255,246,208,0)']]);
+      poly(ctx, [0, -6, 520, -120, 520, 80, 0, 6], hx, hy); ctx.fill(); ctx.restore();
+    }
     if (night) {
       // 충전 케이블 + 흐르는 빛
       const px = cx - 150 * sc / 1.8 - 60;

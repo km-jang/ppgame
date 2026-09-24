@@ -19,10 +19,29 @@
     // 처음 몇 조각은 쉬운 순서로 고정 (도시: 별 → 상자 → 구덩이)
     const first = course.first;
     let i = 0;
+    // 구조할 친구 두 번(30%·65% 지점)과 절반 지점 축하 문
+    const specials = [{ at: 0.3, kind: 'friend' }, { at: 0.5, kind: 'check' }, { at: 0.65, kind: 'friend' }];
+    let fi = Math.floor(rand() * D.FRIENDS.length);
     while (x < L.length - 900) {
-      const kind = i < first.length ? first[i] : PATTERNS[Math.floor(rand() * PATTERNS.length)];
+      let kind = i < first.length ? first[i] : PATTERNS[Math.floor(rand() * PATTERNS.length)];
+      if (specials.length && x > L.length * specials[0].at) kind = specials.shift().kind;
       i++;
       switch (kind) {
+        case 'friend':
+          // 길가에서 기다리는 친구: 지나가기만 하면 차에 올라탄다 (놓치는 일 없음)
+          L.items.push({ type: 'friend', x: x + 200, kind: D.FRIENDS[fi++ % D.FRIENDS.length].id, saved: false });
+          for (let k = 0; k < 3; k++) star(x + 60 + k * 60, GY - 40);
+          x += 460; break;
+        case 'check':
+          L.items.push({ type: 'check', x: x + 150, passed: false });
+          for (let k = 0; k < 5; k++) star(x + 60 + k * 55, GY - 40);
+          x += 420; break;
+        case 'balloons': {
+          // 하늘에 뜬 풍선: 점프·제트로 닿으면 펑 하고 별 2개
+          const cols = ['#ff4d6d', '#ffd23a', '#39d8ff', '#a855f7', '#3aff9a'];
+          for (let k = 0; k < 3; k++) L.items.push({ type: 'balloon', x: x + 120 + k * 150, y: GY - 150 - (k % 2) * 60 - rand() * 30, color: cols[Math.floor(rand() * cols.length)], popped: false });
+          x += 560; break;
+        }
         case 'stars':
           for (let k = 0; k < 6; k++) star(x + k * 60, GY - 40);
           x += 480; break;
@@ -88,6 +107,7 @@
           x += 440; break;
       }
     }
+    L.items.sort((a, b) => a.x - b.x);   // 장애물 검사는 x 순서를 믿는다
     L.items.push({ type: 'flag', x: L.length });
     return L;
   }
@@ -107,7 +127,7 @@
         spin: 0, bump: 0, hot: 0, fall: false, punch: 0,
       },
       stars: 0, totalStars: L.items.filter(o => o.type === 'star').length,
-      smashed: 0, transforms: 0,
+      smashed: 0, transforms: 0, saved: 0, riders: [], airBonus: 0,
       fx: [], events: [], flying: [],
     };
   }
@@ -140,6 +160,17 @@
       R.flying.push({ x, y, vx: -60 + R.rand() * 260, vy: -380 - R.rand() * 200, t: 0 });
       R.totalStars += 1;
     }
+  }
+
+  // 공중에 오래 있다가 내리면 보너스 별 (날수록 더)
+  function landBonus(R) {
+    const c = R.car, a = c.airT || 0;
+    c.airT = 0;
+    if (a < R0.airBonusAfter) return;
+    const n = Math.min(R0.airBonusMax, 1 + Math.floor((a - R0.airBonusAfter) / R0.airBonusStep));
+    spill(R, c.x, c.y - 70, n);
+    R.airBonus += n; R.lastBonus = n;
+    R.events.push('airbonus');
   }
 
   function smash(R, o, stars) {
@@ -305,6 +336,7 @@
       const onRamp = floor < GY;
       c.y = floor;
       if (wasAir && c.vy > 300) { R.events.push('land'); puff(R, c.x, GY, '#d6d0c4', 6, 120, 8, 'dust'); }
+      if (wasAir) landBonus(R);
       c.vy = 0; c.onGround = true; c.fuel = R0.jetFuel;
       if (onRamp && c.x > 0) {
         const ramp = R.level.items.find(o => o.type === 'ramp' && c.x >= o.x && c.x <= o.x + o.w);
@@ -313,6 +345,10 @@
     } else {
       c.onGround = false;
     }
+
+    // 공중에 있던 시간 (구덩이·뿅 중은 빼고)
+    if (!c.onGround && !c.fall && !c.pop) c.airT = (c.airT || 0) + dt;
+    else if (c.fall || c.pop) c.airT = 0;
 
     // 장애물·별
     const robot = c.form === 'robot';
@@ -387,6 +423,23 @@
         if (Math.abs(o.x - c.x) < 30 && c.onGround && !robot) {
           o.hit = true; c.spin = 0.9; R.events.push('slip');
         } else if (Math.abs(o.x - c.x) < 30 && robot) { o.hit = true; }
+      } else if (o.type === 'balloon' && !o.popped) {
+        const dx = o.x - c.x, dy = o.y - (c.y - 45);
+        if (dx * dx + dy * dy < R0.balloonR * R0.balloonR * (robot ? 1.5 : 1)) {
+          o.popped = true; spill(R, o.x, o.y, 2); R.lastBalloon = o;
+          puff(R, o.x, o.y, o.color, 14, 320, 7, 'confetti');
+          R.events.push('balloon');
+        }
+      } else if (o.type === 'friend' && !o.saved) {
+        if (Math.abs(o.x - c.x) < 70) {
+          o.saved = true; R.saved += 1; R.riders.push(o.kind); R.lastFriend = o;
+          spill(R, o.x, GY - 60, 3);
+          R.events.push('rescue');
+        }
+      } else if (o.type === 'check' && !o.passed && c.x >= o.x) {
+        o.passed = true;
+        for (let k = 0; k < 4; k++) puff(R, o.x, GY - 230, ['#ff3b3b', '#ffd21a', '#22c55e', '#2f6bff'][k], 12, 380, 8, 'confetti');
+        R.events.push('check');
       } else if (o.type === 'flag' && !R.done && c.x >= o.x) {
         R.done = true; R.events.push('finish');
         for (let k = 0; k < 4; k++) puff(R, c.x + 100, GY - 250, ['#ff3b3b', '#ffd21a', '#22c55e', '#2f6bff'][k], 14, 420, 9, 'confetti');

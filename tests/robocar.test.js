@@ -252,5 +252,42 @@ test('방호벽은 차가 부딪히지 않고 저절로 폴짝 넘는다', () =>
   assert(R.done && seen.includes('hop') && !seen.includes('bump'), seen.join(','));
 });
 
+// ─── 참고 게임에서 가져온 것 ───
+function events(R, bot, sec) {
+  const seen = {}; let f = 0;
+  while (!R.done && f++ < 60 * sec) { stepRun(R, bot(R, f), DT); for (const e of R.events) seen[e] = (seen[e] || 0) + 1; R.events.length = 0; }
+  for (let i = 0; i < 90; i++) stepRun(R, NONE, DT);
+  return seen;
+}
+
+test('두 코스 모두 친구 두 명을 그냥 지나가기만 해도 구한다 (로보카폴리식 구조)', () => {
+  for (const course of ['city', 'site']) {
+    const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 5, course);
+    assert(R.level.items.filter(o => o.type === 'friend').length === 2, course + ' has 2 friends');
+    const seen = events(R, () => NONE, 400);
+    assert(R.saved === 2 && seen.rescue === 2 && R.riders.length === 2, course + ' saved ' + R.saved);
+    assert(seen.check === 1, course + ' halfway gate once');
+  }
+});
+
+test('풍선은 닿으면 펑 하고 별이 나온다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 4);
+  R.level.items = [{ type: 'balloon', x: 500, y: D.RUN.groundY - 150, color: '#ff4d6d', popped: false }, { type: 'flag', x: 1100 }];
+  R.level.pits = [];
+  const seen = events(R, (R) => ({ tap: R.car.x > 420 && R.car.x < 430, hold: false }), 30);
+  assert(seen.balloon === 1 && R.stars >= 2, 'popped, stars ' + R.stars);
+});
+
+test('오래 날면 공중 보너스 별, 보통 점프는 보너스 없음', () => {
+  const plain = flat();
+  stepRun(plain, { tap: true }, DT);
+  const a = events(plain, () => NONE, 3);
+  assert(!a.airbonus, 'no bonus for a normal jump');
+  const jet = flat({ body: 'racer', wheel: 'normal', gear: 'jet' });
+  stepRun(jet, { tap: true }, DT);
+  const b = events(jet, () => ({ tap: false, hold: true }), 4);
+  assert(b.airbonus === 1 && jet.airBonus >= 2, 'jet flight bonus ' + jet.airBonus);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

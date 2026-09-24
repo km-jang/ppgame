@@ -77,21 +77,34 @@ var RC = {};
     knock: 140,              // 상자에 박으면 뒤로 살짝 밀리는 속도 (순간 이동 대신)
     hopAhead: 85,            // 방호벽·관 앞 이만큼에서 저절로 폴짝
     popTime: 0.55,           // 구덩이에서 "뿅" 튀어나와 건너편에 닿기까지
+    airBonusAfter: 0.75,     // 이만큼(초) 넘게 공중에 있다 내리면 보너스 별 (Hill Climb Racing 참고)
+    airBonusStep: 0.2, airBonusMax: 5,
+    balloonR: 58,
   };
 
   const JAR = 15; // 별 병 크기 (이만큼 모으면 스티커 1장)
 
   // 코스: 조각(패턴) 목록이 다르다. first = 처음 몇 조각 고정 순서(쉬운 것부터)
   // unlock = 도시를 끝까지 달린 판 수가 이만큼이면 열림 (0 = 처음부터)
+  // 부품 열기: 지금까지 모은 별(prog.total)이 need 이상이면 열린다. need 없으면 처음부터
+  const UNLOCK = { monster: 20, fire: 50, wing: 90, police: 140, spring: 200, drill: 270 };
+
   const COURSES = [
     { id: 'city', name: '도시', desc: '낮에서 밤까지 큰 길을 달려요', unlock: 0,
       first: ['stars', 'boxes', 'pit', 'stars'],
-      patterns: ['stars', 'pit', 'boxes', 'rock', 'fire', 'ramp', 'high', 'monkey', 'boxes', 'pit'] },
+      patterns: ['stars', 'pit', 'boxes', 'rock', 'fire', 'ramp', 'high', 'monkey', 'boxes', 'pit', 'balloons'] },
     { id: 'site', name: '공사장', desc: '고깔을 쓰러뜨리고 흙더미를 넘어요', unlock: 1,
       first: ['stars', 'cones', 'dirt', 'stars'],
-      patterns: ['stars', 'pit', 'cones', 'pipe', 'dirt', 'crane', 'mud', 'boxes', 'cones', 'monkey'] },
+      patterns: ['stars', 'pit', 'cones', 'pipe', 'dirt', 'crane', 'mud', 'boxes', 'cones', 'monkey', 'balloons'] },
   ];
 
-  RC.DATA = { BODIES, WHEELS, GEAR, COLORS, STICKERS, RARITY, RUN, JAR, COURSES };
+  // 구조할 친구 (코스마다 두 번, 길가에서 "도와줘!")
+  const FRIENDS = [
+    { id: 'cat', name: '고양이', color: '#ff9f43' },
+    { id: 'pup', name: '강아지', color: '#c8a27a' },
+    { id: 'bot', name: '꼬마 로봇', color: '#7fd3ff' },
+  ];
+
+  RC.DATA = { BODIES, WHEELS, GEAR, COLORS, STICKERS, RARITY, RUN, JAR, COURSES, UNLOCK, FRIENDS };
   RC.find = (list, id) => list.find(x => x.id === id) || list[0];
 })(RC);
