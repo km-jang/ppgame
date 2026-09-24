@@ -1,4 +1,13 @@
-# N-GUN
+# 게임 모음
+
+| 폴더 | 게임 |
+|---|---|
+| [`robocar/`](robocar/) | **뚝딱 로봇카** · 5~6세용. 부품을 끼워 변신 로봇카를 만들고 도시·공사장을 달린다. 하루 타이머·보호자 설정 ([기획서](robocar/PLAN.md)) |
+| [`game/`](game/) | **N-GUN** · 아레나 슈팅 (아래 설명) |
+
+저장소 첫 화면(`index.html`)에서 둘 중 하나를 고른다.
+
+## N-GUN
 
 총열이 N개로 늘어나는 총을 들고 몰려오는 적을 웨이브 단위로 버티는 아레나 슈팅 게임.
 웨이브를 넘길 때마다 카드 3장 중 1장을 골라 총을 키운다. 5웨이브마다 보스.
@@ -24,7 +33,9 @@
 ## 테스트
 
 ```
-node tests/sim.test.js
+node tests/sim.test.js       # N-GUN 규칙
+node tests/robocar.test.js   # 뚝딱 로봇카 규칙
+node tests/flow.test.js      # 두 게임 화면 흐름 (Playwright 크로미움, 없으면 건너뜀)
 ```
 
 게임 규칙(`game/js/world.js`)을 브라우저 없이 수천 프레임 돌려서 웨이브 진행·카드·보스·게임 오버·관통·도탄을 확인한다.
@@ -32,6 +43,18 @@ node tests/sim.test.js
 ## 밸런스 조정
 
 수치는 전부 `game/js/data.js` 한 파일에 있다 (적 체력·속도, 웨이브 규모, 카드 효과).
+
+## 인터넷 주소로 열기 (GitHub Pages)
+
+태블릿에서 앱으로 설치하고 인터넷 없이 하려면 https 주소가 필요하다. 한 번만 켜 두면 된다.
+
+1. github.com/km-jang/n-gun 에서 위쪽 **Settings** 누르기
+2. 왼쪽 메뉴 **Pages** 누르기
+3. **Branch**에서 `main`, 폴더 `/ (root)` 고르고 **Save**
+4. 1~2분 뒤 같은 화면 위쪽에 주소가 뜬다: `https://km-jang.github.io/n-gun/`
+5. 태블릿 크롬에서 그 주소 → 게임 고르기 → 크롬 메뉴(⋮) → **홈 화면에 추가**
+
+main에 합친 것만 이 주소에 나온다.
 
 ## 이전 작업물
 

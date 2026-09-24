@@ -31,7 +31,8 @@
       spawnQueue: [], spawnTimer: 0, clearT: -1,
       player: makePlayer(w / 2, h / 2, df),
       enemies: [], bullets: [], eBullets: [], particles: [], drops: [], texts: [],
-      cards: null, events: [], shake: 0, flash: 0,
+      cards: null, events: [], shake: 0, flash: 0, whiteFlash: 0,
+      hitstop: 0, lastStop: -1, slow: 0, pulse: 0, booms: [],
       score: 0, nextId: 1,
       stats: { kills: 0, shots: 0, time: 0, picks: [] },
     };
@@ -126,7 +127,8 @@
       }
       return;
     }
-    if (W.enemies.length === 0) {
+    // 보스 연쇄 폭발·느린 화면이 끝날 때까지 카드 화면을 미룬다
+    if (W.enemies.length === 0 && !W.booms.length && W.slow <= 0) {
       if (W.clearT < 0) W.clearT = D.WAVE.clearDelay;
       W.clearT -= dt;
       if (W.clearT <= 0) openCards(W);
@@ -180,7 +182,38 @@
     }
   }
 
-  function damageEnemy(W, e, amount, crit) {
+  // 화면 멈춤. force면 간격 제한 없이
+  function impact(W, sec, force) {
+    if (!sec) return;
+    if (!force && W.t - W.lastStop < D.IMPACT.gap) return;
+    W.hitstop = Math.max(W.hitstop, sec);
+    W.lastStop = W.t;
+  }
+
+  // 적 사망 연출: 몸체가 삼각 파편으로 쪼개져 맞은 방향으로 흩어지고, 흰 섬광과 충격파 고리
+  function shatter(W, e, dx, dy) {
+    const big = e.r >= 20;
+    const n = Math.min(14, 4 + Math.round(e.r / 3));
+    const dl = Math.hypot(dx, dy) || 1;
+    const bx = dx / dl, by = dy / dl;
+    for (let i = 0; i < n; i++) {
+      if (W.particles.length >= MAX_PARTICLES) W.particles.shift();
+      const a = W.rand() * TAU;
+      const s = 90 + W.rand() * 260;
+      const life = 0.45 + W.rand() * 0.45;
+      W.particles.push({
+        shard: true, x: e.x + Math.cos(a) * e.r * 0.4, y: e.y + Math.sin(a) * e.r * 0.4,
+        vx: Math.cos(a) * s + bx * 180, vy: Math.sin(a) * s + by * 180,
+        rot: W.rand() * TAU, vr: (W.rand() - 0.5) * 18,
+        size: e.r * (0.35 + W.rand() * 0.35), life, max: life, color: e.def.color,
+      });
+    }
+    W.particles.push({ pop: true, x: e.x, y: e.y, r: e.r * 1.3, life: 0.12, max: 0.12, color: '#ffffff' });
+    W.particles.push({ ring: true, x: e.x, y: e.y, r: e.r * (big ? 3.2 : 2.4), life: big ? 0.4 : 0.3, max: big ? 0.4 : 0.3, color: e.def.color });
+    if (big) W.pulse = Math.max(W.pulse, 0.5);
+  }
+
+  function damageEnemy(W, e, amount, crit, dx, dy) {
     if (e.dead) return;
     e.hp -= amount;
     e.flash = 0.08;
@@ -188,17 +221,19 @@
       W.texts.push({ x: e.x, y: e.y - e.r, txt: Math.round(amount * 10) / 10 + '!', life: 0.7 });
       if (W.texts.length > 40) W.texts.shift();
     }
-    if (e.hp <= 0) killEnemy(W, e);
+    if (e.hp <= 0) killEnemy(W, e, dx || 0, dy || 0);
     else W.events.push('hit');
   }
 
-  function killEnemy(W, e) {
+  function killEnemy(W, e, dx, dy) {
     e.dead = true;
     const p = W.player;
     const mul = 1 + W.bossKills * 0.5;
     W.score += Math.round(e.def.score * mul * W.diff.score);
     W.stats.kills += 1;
-    burst(W, e.x, e.y, e.def.color, e.type === 'boss' ? 80 : 10 + e.r, e.type === 'boss' ? 420 : 220, e.type === 'boss' ? 5 : 3);
+    shatter(W, e, dx, dy);
+    burst(W, e.x, e.y, e.def.color, e.type === 'boss' ? 60 : 4 + Math.round(e.r / 3), e.type === 'boss' ? 420 : 200, e.type === 'boss' ? 5 : 2.5);
+    impact(W, D.IMPACT.stop[e.type], e.type === 'boss');
 
     if (e.def.splitInto) {
       for (let i = 0; i < 2; i++) {
@@ -210,8 +245,15 @@
     if (e.type === 'boss') {
       W.bossKills += 1;
       W.shake = Math.max(W.shake, 22);
-      W.flash = 0.35;
+      W.whiteFlash = 0.5;
+      W.pulse = 1;
+      W.slow = D.IMPACT.bossSlow;
       W.eBullets.length = 0;
+      // 연쇄 폭발: 보스 자리 주변에서 시간차로 터진다
+      for (let i = 0; i < D.IMPACT.bossBooms; i++) {
+        const a = W.rand() * TAU, r = e.r * (0.3 + W.rand() * 1.1);
+        W.booms.push({ delay: 0.12 + i * 0.13, x: e.x + Math.cos(a) * r, y: e.y + Math.sin(a) * r, color: i % 2 ? '#ffe66d' : e.def.color });
+      }
       for (let i = 0; i < 2; i++) addDrop(W, e.x + (i ? 20 : -20), e.y);
       W.events.push('bossDown');
     } else {
@@ -236,6 +278,7 @@
     W.shake = Math.max(W.shake, 12);
     W.flash = 0.2;
     burst(W, p.x, p.y, '#ffffff', 16, 260, 3);
+    impact(W, D.IMPACT.hurtStop, true);
     // 억울한 연속 피격 방지: 주변 적 탄 제거
     W.eBullets = W.eBullets.filter(b => NG.dist2(b.x, b.y, p.x, p.y) > 140 * 140);
     if (p.hp <= 0) {
@@ -344,7 +387,7 @@
           const rr = e.r + DR.r;
           if (NG.dist2(dx, dy, e.x, e.y) < rr * rr) {
             e.droneHit = DR.hitGap;
-            damageEnemy(W, e, p.gun.dmg * DR.dmgMul, false);
+            damageEnemy(W, e, p.gun.dmg * DR.dmgMul, false, e.x - p.x, e.y - p.y);
           }
         }
       }
@@ -373,7 +416,7 @@
     for (const e of W.enemies) {
       if (e.dead || e.spawnT > 0) continue;
       if (NG.dist2(e.x, e.y, p.x, p.y) < (radius + e.r) * (radius + e.r)) {
-        damageEnemy(W, e, p.gun.dmg * N.dmgMul * p.nova, false);
+        damageEnemy(W, e, p.gun.dmg * N.dmgMul * p.nova, false, e.x - p.x, e.y - p.y);
       }
     }
     W.particles.push({ ring: true, x: p.x, y: p.y, r: radius, life: 0.3, max: 0.3, color: '#5ee7ff' });
@@ -494,7 +537,7 @@
         if (NG.dist2(b.x, b.y, e.x, e.y) >= rr * rr) continue;
         if (b.hits.indexOf(e.id) >= 0) continue;
         const crit = W.rand() < g.crit;
-        damageEnemy(W, e, crit ? b.dmg * g.critMul : b.dmg, crit);
+        damageEnemy(W, e, crit ? b.dmg * g.critMul : b.dmg, crit, b.vx, b.vy);
         if (e.type !== 'boss' && !e.dead) { e.vx += b.vx * 0.08; e.vy += b.vy * 0.08; }
         b.hits.push(e.id);
         if (b.pierce > 0) b.pierce--;
@@ -518,7 +561,26 @@
   function updateFx(W, dt) {
     for (const q of W.particles) {
       q.life -= dt;
-      if (!q.ring) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.9; q.vy *= 0.9; }
+      if (q.ring || q.pop) continue;
+      q.x += q.vx * dt; q.y += q.vy * dt;
+      const f = q.shard ? 0.94 : 0.9;
+      q.vx *= f; q.vy *= f;
+      if (q.shard) q.rot += q.vr * dt;
+    }
+    // 보스 연쇄 폭발
+    if (W.booms.length) {
+      for (const b of W.booms) {
+        b.delay -= dt;
+        if (b.delay <= 0) {
+          W.particles.push({ pop: true, x: b.x, y: b.y, r: 34, life: 0.14, max: 0.14, color: '#ffffff' });
+          W.particles.push({ ring: true, x: b.x, y: b.y, r: 120, life: 0.45, max: 0.45, color: b.color });
+          burst(W, b.x, b.y, b.color, 18, 320, 4);
+          W.shake = Math.max(W.shake, 14);
+          W.pulse = Math.max(W.pulse, 0.7);
+          W.events.push('kill');
+        }
+      }
+      W.booms = W.booms.filter(b => b.delay > 0);
     }
     W.particles = W.particles.filter(q => q.life > 0);
     for (const t of W.texts) { t.life -= dt; t.y -= 30 * dt; }
@@ -527,13 +589,22 @@
     W.drops = W.drops.filter(d => d.life > 0);
     W.shake = Math.max(0, W.shake - dt * 40);
     W.flash = Math.max(0, W.flash - dt);
+    W.whiteFlash = Math.max(0, W.whiteFlash - dt);
+    W.pulse = Math.max(0, W.pulse - dt * 1.6);
     W.banner = Math.max(0, W.banner - dt);
   }
 
   // 한 프레임 진행. input: {moveX, moveY, aimAngle|null, dash}
   function step(W, input, dt) {
+    // 히트스톱: 화면이 멈춘 동안은 흔들림만 풀고 아무것도 움직이지 않는다
+    if (W.hitstop > 0) {
+      W.hitstop -= dt;
+      return;
+    }
     if (W.phase === 'over') { updateFx(W, dt); return; }
     if (W.phase !== 'play') return;
+    // 보스 격파 직후 느린 화면
+    if (W.slow > 0) { W.slow -= dt; dt *= D.IMPACT.slowRate; }
     W.t += dt;
     W.stats.time += dt;
     updatePlayer(W, input, dt);

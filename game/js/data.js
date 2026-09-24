@@ -53,6 +53,15 @@
     hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.5,  enemySpeed: 1.2,  count: 1.3,  bulletSpeed: 1.2,  fireRate: 1.35, score: 1.6 },
   };
 
+  // 타격감: 큰 적을 잡는 순간 화면을 아주 잠깐 멈춘다 (초). 연달아 걸리지 않게 간격을 둔다
+  const IMPACT = {
+    stop: { shooter: 0.03, splitter: 0.045, tank: 0.07, boss: 0.32 },
+    hurtStop: 0.09,
+    gap: 0.25,                 // 일반 적 멈춤 사이 최소 간격 (게임 시간)
+    bossSlow: 1.4, slowRate: 0.3, // 보스 격파 후 느린 화면
+    bossBooms: 7,              // 보스 격파 연쇄 폭발 수
+  };
+
   const DROP = { healChance: 0.04, life: 10, pickR: 24, magnetR: 90 };
 
   // 카드. apply(p): 플레이어 상태를 바꾼다. max: 최대 선택 횟수
@@ -94,5 +103,5 @@
   const DRONE = { radius: 46, spin: 2.6, r: 7, dmgMul: 1.5, hitGap: 0.25 };
   const NOVA = { radius: 95, dmgMul: 5 };
 
-  NG.DATA = { DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA };
+  NG.DATA = { IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA };
 })(NG);

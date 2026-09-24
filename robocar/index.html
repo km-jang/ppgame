@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#070b16">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="screen-orientation" content="landscape">
+  <meta name="x5-orientation" content="landscape">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <meta name="description" content="부품을 끼워 나만의 변신 로봇카를 만들고 도시를 달리는 5~6세용 게임">
+  <title>뚝딱 로봇카</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@500;700;900&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="stage" aria-label="게임 화면"></canvas>
+
+  <!-- 로딩: 글꼴이 준비될 때까지 (글자가 바뀌며 깜빡이지 않게) -->
+  <div id="splash"><div class="sp-logo">로봇카</div><div class="sp-bar"><i></i></div></div>
+
+  <!-- 화면 넘김 (비스듬한 띠가 쓸고 지나간다) -->
+  <div id="wipe" aria-hidden="true"><i></i><i></i><i></i></div>
+
+  <!-- 목소리 안내 자막 -->
+  <div id="say" aria-live="polite"></div>
+
+  <!-- 배터리 (하루 타이머) + 보호자 자물쇠 -->
+  <div id="corner">
+    <div id="battery" title="오늘 남은 놀이 시간"><i></i><span></span></div>
+    <button id="btn-fs" aria-label="전체 화면"><svg viewBox="0 0 24 24"><path d="M4 9V4h5v2H6v3zm11-5h5v5h-2V6h-3zM4 15h2v3h3v2H4zm14 3v-3h2v5h-5v-2z"/></svg></button>
+    <button id="btn-lock" aria-label="보호자 설정 (3초 누르기)"><svg viewBox="0 0 36 36"><circle class="ring" cx="18" cy="18" r="16"/></svg><svg class="ico" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></svg></button>
+  </div>
+
+  <!-- 시작 -->
+  <section id="scr-title" class="screen">
+    <div class="title-wrap">
+      <div class="logo">
+        <span class="logo-top">뚝딱</span>
+        <span class="logo-main">로봇카</span>
+        <span class="logo-sub">TRANSFORM · RACE · COLLECT</span>
+      </div>
+      <div class="title-btns">
+        <button id="btn-go-garage" class="btn primary big"><span>시작</span></button>
+        <button id="btn-book" class="btn ghost"><span>카드 도감 <b id="title-count">0/10</b></span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 차고 -->
+  <section id="scr-garage" class="screen">
+    <div class="garage-head">
+      <div class="chip"><small>ROBO GARAGE</small><b id="car-name">레이서</b><em id="car-parts">보통 바퀴 · 제트팩</em></div>
+    </div>
+    <button id="btn-morph" class="btn ghost"><span>변신 보기</span></button>
+    <div id="stats" class="panel">
+      <div class="stat"><label>속도</label><div class="bar" data-k="speed"></div></div>
+      <div class="stat"><label>점프</label><div class="bar" data-k="jump"></div></div>
+      <div class="stat"><label>하늘</label><div class="bar" data-k="air"></div></div>
+      <div class="stat"><label>파워</label><div class="bar" data-k="power"></div></div>
+      <p id="ability"></p>
+    </div>
+    <div class="garage-panel">
+      <div class="part-group"><h3>차체</h3><div class="parts" data-slot="body"></div></div>
+      <div class="part-group"><h3>바퀴</h3><div class="parts" data-slot="wheel"></div></div>
+      <div class="part-group"><h3>장비</h3><div class="parts" data-slot="gear"></div></div>
+      <div class="part-group colors-go">
+        <h3>색깔</h3>
+        <div id="colors"></div>
+        <button id="btn-run" class="btn primary big"><span>출발!</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 코스 고르기 (코스가 두 개 이상 열렸을 때) -->
+  <section id="scr-map" class="screen">
+    <h2 class="map-title">어디로 갈까?</h2>
+    <div id="courses"></div>
+    <button id="btn-map-back" class="btn ghost"><span>차고로</span></button>
+  </section>
+
+  <!-- 달리기 HUD -->
+  <section id="hud" class="screen">
+    <div id="hud-stars"><img alt="" class="star-ico"><b>0</b></div>
+    <div id="hud-track"><div id="hud-fill"></div><i id="hud-car"></i><span class="flag"></span></div>
+    <!-- 출발 신호등 3·2·1 -->
+    <div id="count" aria-hidden="true"><div class="lights"><i></i><i></i><i></i></div><b id="count-num"></b></div>
+    <!-- 처음 두 판: 손가락 안내 -->
+    <div id="hint" aria-hidden="true"><span class="finger"></span><span class="ripple"></span><b></b></div>
+    <button id="btn-transform"><span class="core"><span class="t1">변신!</span><span class="t2" id="ability-name">슝 돌진</span></span></button>
+  </section>
+
+  <!-- 결과 -->
+  <section id="scr-result" class="screen">
+    <div class="panel result">
+      <h2 class="banner">도착!</h2>
+      <div id="res-rating"></div>
+      <p class="big-num"><img alt="" class="star-ico"><b id="res-stars">0</b></p>
+      <div class="jar-row">
+        <div class="cell"><div id="jar-fill"></div><span id="jar-text">0 / 15</span><small>카드 에너지</small></div>
+        <div id="new-cards"></div>
+        <div id="next-card"><canvas width="300" height="420"></canvas><small>다음 카드</small></div>
+      </div>
+      <p id="res-note" class="note"></p>
+      <div class="row">
+        <button id="btn-again" class="btn primary big"><span>또 달리기</span></button>
+        <button id="btn-garage" class="btn ghost"><span>차고로</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 카드 도감 -->
+  <section id="scr-book" class="screen">
+    <div class="panel wide book-panel">
+      <div class="book-head"><h2>카드 도감</h2><span id="book-note"></span></div>
+      <div id="book"></div>
+      <button id="btn-book-back" class="btn ghost"><span>돌아가기</span></button>
+    </div>
+  </section>
+
+  <!-- 잠자기 -->
+  <section id="scr-sleep" class="screen">
+    <div class="sleep-panel panel">
+      <h2>오늘은 여기까지!</h2>
+      <p>로봇카가 충전 중이에요. 내일 또 만나요!</p>
+    </div>
+  </section>
+
+  <!-- 잠깐 멈춤 (홈 버튼·뒤로 가기 뒤에 돌아왔을 때) -->
+  <section id="scr-pause" class="screen">
+    <div class="panel pause-panel">
+      <h2>잠깐 멈춤</h2>
+      <div class="row">
+        <button id="btn-resume" class="btn primary big"><span>계속 달리기</span></button>
+        <button id="btn-quit" class="btn ghost"><span>차고로</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 세로로 들었을 때: 옆으로 눕혀 달라고 안내 -->
+  <section id="scr-rotate">
+    <div class="rotate-box">
+      <div class="tablet-ico"><i></i></div>
+      <h2>태블릿을 옆으로 눕혀 줘!</h2>
+      <p>로봇카는 가로 화면에서 달려요</p>
+    </div>
+  </section>
+
+  <!-- 보호자 설정 -->
+  <section id="scr-parent" class="screen">
+    <div class="panel parent">
+      <h2>보호자 설정</h2>
+      <div class="seg tabs" id="p-tabs"><button data-tab="set" aria-pressed="true">설정</button><button data-tab="log">놀이 기록</button><button data-tab="dev">기기 점검</button></div>
+      <div class="ptab" data-tab="set">
+      <p class="note">오늘 논 시간: <b id="p-played">0분</b></p>
+      <h3>하루 놀이 시간</h3>
+      <div class="seg" id="p-limit">
+        <button data-min="10">10분</button><button data-min="20">20분</button><button data-min="30">30분</button><button data-min="0">제한 없음</button>
+      </div>
+      <h3>소리 · 진동</h3>
+      <div class="seg">
+        <button id="p-voice" data-on="1">목소리 안내</button><button id="p-sound" data-on="1">효과음·음악</button><button id="p-vib" data-on="1">진동</button>
+      </div>
+      <h3>화질 <small id="p-q-now"></small></h3>
+      <div class="seg" id="p-quality">
+        <button data-q="auto">자동</button><button data-q="high">선명하게</button><button data-q="save">배터리 절약</button>
+      </div>
+      <p class="note small">시간이 다 되면 달리던 판은 끝까지 하고 잠자기 화면으로 넘어갑니다. 이 설정은 자물쇠를 3초 눌러야 열립니다. 갤럭시탭은 크롬 메뉴 → <b>홈 화면에 추가</b>하면 앱처럼 전체 화면으로 열리고, 인터넷이 없어도 됩니다.</p>
+      </div>
+      <!-- 아이 반응 확인용: 이 기기에만 저장, 밖으로 보내지 않음 -->
+      <div class="ptab" data-tab="log" hidden>
+        <dl class="plog" id="p-log"></dl>
+        <p class="note small">이 기록은 이 태블릿에만 저장되고 어디로도 보내지 않습니다.</p>
+      </div>
+      <!-- 실제 기기 점검: 목소리·진동·전체 화면·설치·오프라인·속도 -->
+      <div class="ptab" data-tab="dev" hidden>
+        <dl class="plog" id="p-dev"></dl>
+        <div class="seg"><button id="p-try-voice">목소리 들어 보기</button><button id="p-try-vib">진동 해 보기</button></div>
+      </div>
+      <div class="row">
+        <button id="p-extend" class="btn ghost small"><span>오늘 10분 더 주기</span></button>
+        <button id="p-close" class="btn primary small"><span>닫기</span></button>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/data.js"></script>
+  <script src="js/run.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/car.js"></script>
+  <script src="js/site.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/cards.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
