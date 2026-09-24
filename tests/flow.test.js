@@ -183,6 +183,53 @@ async function until(page, fn, arg, ms) {
     await sm.ctx.close();
   });
 
+  await test('기록 지키기: 다시 열어도 유지, 본 기록이 지워져도 예비 사본으로 복구, 코드로 옮기기', async () => {
+    // IndexedDB는 file:// 에서 안 되므로 이 점검만 작은 웹 서버로 연다 (실제 사용은 https 주소)
+    const http = require('http'), fs = require('fs');
+    const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.ogg': 'audio/ogg' };
+    const srv = http.createServer((q, r) => {
+      const f = path.join(path.resolve(__dirname, '..'), decodeURIComponent(q.url.split('?')[0]));
+      fs.readFile(f, (err, buf) => { if (err) { r.writeHead(404); r.end(); return; } r.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); r.end(buf); });
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const BASE = 'http://127.0.0.1:' + srv.address().port;
+    const sv = await open(browser, BASE + '/robocar/index.html');
+    const G = sv.page;
+    await G.evaluate(() => { localStorage.clear(); });
+    await G.reload(); await G.waitForTimeout(600);
+    // 기록 만들기: 판 수·카드·별·최고 기록
+    await G.evaluate(() => { const p = RC.debug.prog; p.runs = 7; p.stickers = ['s1', 's2']; p.total = 120; p.best = { city: 88 }; RC.debug.toGarage(); });
+    await G.waitForTimeout(1200);   // 예비 사본은 0.5초 뒤에 적힌다
+    const snap = () => G.evaluate(() => { const p = RC.debug.prog; return [p.runs, p.stickers.length, p.total, p.best.city].join(','); });
+    await G.reload(); await G.waitForTimeout(600);
+    assert(await snap() === '7,2,120,88', '다시 열면 기록이 남아야 함: ' + await snap());
+    assert(await G.evaluate(() => !document.querySelector('.parts [data-id=fire]').classList.contains('locked')), '별 120이면 소방차가 열려 있어야 함');
+    // 본 기록만 지워짐 → 예비 사본(localStorage)으로 복구
+    // (게임을 닫은 상태에서 지운다: 게임은 나갈 때 저장하므로)
+    const away = async fn => { await G.goto(BASE + '/robocar/icon.svg'); await G.evaluate(fn); await G.goto(BASE + '/robocar/index.html'); };
+    await away(() => { localStorage.removeItem('rc.prog'); });
+    await G.waitForTimeout(600);
+    assert(await snap() === '7,2,120,88', '예비 사본으로 복구: ' + await snap());
+    // 저장소 통째로 비움 → IndexedDB 사본으로 복구 (한 번 다시 열림)
+    await G.waitForTimeout(800);
+    await away(() => { localStorage.clear(); });
+    await G.waitForTimeout(2500);
+    assert(await snap() === '7,2,120,88', 'IndexedDB 사본으로 복구: ' + await snap());
+    // 코드로 내보냈다가 모두 지우고 불러오기
+    const code = await G.evaluate(() => RC.Save.exportCode());
+    assert(/^RC1-/.test(code), '코드 모양');
+    await away(() => new Promise(r => { localStorage.clear(); const q = indexedDB.deleteDatabase('robocar-save'); q.onsuccess = q.onerror = () => r(); }));
+    await G.waitForTimeout(1200);
+    assert(await G.evaluate(() => RC.debug.prog.runs) === 0, '다 지우면 처음부터');
+    assert(await G.evaluate(c => RC.Save.importText(c), code), '코드 불러오기 실패');
+    await G.reload(); await G.waitForTimeout(600);
+    assert(await snap() === '7,2,120,88', '코드로 옮긴 기록: ' + await snap());
+    assert(!(await G.evaluate(() => RC.Save.importText('엉터리'))), '엉터리 코드는 거절');
+    assert(!sv.errors.length, sv.errors.join(' | '));
+    await sv.ctx.close();
+    srv.close();
+  });
+
   console.log('N-GUN');
   const ng = await open(browser, ROOT + '/game/index.html');
   const G = ng.page;

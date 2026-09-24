@@ -27,7 +27,11 @@
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   let play = RC.store.get('rc.play', { date: today(), sec: 0, bonus: 0 });
   if (play.date !== today()) play = { date: today(), sec: 0, bonus: 0 };
-  const saveAll = () => { RC.store.set('rc.cfg', cfg); RC.store.set('rc.prog', prog); RC.store.set('rc.set', set); RC.store.set('rc.play', play); };
+  const saveAll = () => { if (RC.Save.frozen) return; RC.store.set('rc.cfg', cfg); RC.store.set('rc.prog', prog); RC.store.set('rc.set', set); RC.store.set('rc.play', play); RC.Save.backup(); };
+  // 개인 기록: 코스별 최고 별, 구한 친구 모두, 가장 큰 공중 보너스
+  prog.best = prog.best || {};
+  prog.rescued = prog.rescued || 0;
+  prog.bestAir = prog.bestAir || 0;
 
   // ─── 화면 크기: 논리 높이 600 기준 ─────────────────────────
   // 화질 시작값: 보호자 설정 → 없으면 기기 성능 힌트(갤럭시탭 A 같은 보급형은 한 단계 낮게)
@@ -141,6 +145,7 @@
       b.insertAdjacentHTML('beforeend', '<span class="lock">' + LOCK_SVG + '</span><span class="cap"><b></b><small></small></span>');
       b.querySelector('b').textContent = c.name;
       b.querySelector('small').textContent = open ? c.desc : '도시를 ' + c.unlock + '번 끝까지 달리면 열려요';
+      if (open && prog.best[c.id]) b.insertAdjacentHTML('beforeend', '<span class="best">최고 ★ ' + prog.best[c.id] + '</span>');
       coursePreview(cv, c.id);
       b.addEventListener('click', () => {
         if (!open) { S.play('bump'); S.say('도시를 끝까지 달리면 열려!'); return; }
@@ -449,6 +454,17 @@
     const ex = $('res-extra'); ex.innerHTML = '';
     if (R.saved) ex.insertAdjacentHTML('beforeend', '<span class="chip-ok">구한 친구 <b>' + R.saved + '</b></span>');
     if (R.airBonus) ex.insertAdjacentHTML('beforeend', '<span class="chip-air">공중 보너스 <b>+' + R.airBonus + '</b></span>');
+    // 개인 기록 갱신 (코스별 최고 별)
+    const cid = R.course.id, oldBest = prog.best[cid] || 0;
+    prog.rescued += R.saved; prog.bestAir = Math.max(prog.bestAir, R.airBonus);
+    if (got > oldBest) {
+      prog.best[cid] = got;
+      if (oldBest > 0) {
+        ex.insertAdjacentHTML('beforeend', '<span class="chip-best">최고 기록 <b>' + got + '</b></span>');
+        setTimeout(() => { if (mode === 'result') { S.play('unlock'); S.say('최고 기록이야! 별 ' + got + '개!'); } }, 2200);
+      }
+    }
+    saveAll();
     $('new-cards').innerHTML = '';
     $('res-note').textContent = '';
     let shown = 0, bank = prog.bank;
@@ -654,7 +670,12 @@
       ['변신 버튼', L.transforms + '번 (한 판에 ' + (prog.runs ? (L.transforms / prog.runs).toFixed(1) : 0) + '번)'],
       ['모은 카드', prog.stickers.length + ' / ' + D.STICKERS.length + '장'],
       ['잠자기 화면', L.sleeps + '번, 그 뒤 자물쇠로 시간 더 준 날 ' + L.sleepRetry + '번'],
+      ['최고 기록', D.COURSES.map(c => c.name + ' 별 ' + (prog.best[c.id] || 0)).join(' · ')],
+      ['구한 친구', prog.rescued + '명 · 가장 큰 공중 보너스 +' + prog.bestAir],
+      ['모은 별 (부품 열기)', (prog.total >= 999 ? '모두 열림' : prog.total + '개')],
     ]);
+    const bt = RC.Save.lastBackup();
+    $('p-save-state').textContent = RC.Save.available ? ('예비 사본 ' + (bt ? new Date(bt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '없음') + (RC.Save.persisted ? ' · 지워지지 않게 보호됨' : '')) : '이 브라우저는 저장을 막고 있어요';
   }
   // 실제 태블릿에서 되는지 한눈에: 초록 = 됨, 노랑 = 조건부, 빨강 = 안 됨
   let fpsAvg = 60;
@@ -664,6 +685,7 @@
     const voiceOk = S.hasVoice();
     dl($('p-dev'), [
       ['화면', view.w + ' × ' + view.h + ' (배율 ' + (window.devicePixelRatio || 1) + ')', view.w >= view.h * 1.2 ? 'ok' : 'no'],
+      ['기록 보호', !RC.Save.available ? '저장 안 됨 (사생활 보호 창?)' : RC.Save.persisted ? '지워지지 않게 보호됨' : '보통 저장 (앱으로 설치하면 보호가 켜지기 쉬움)', !RC.Save.available ? 'no' : RC.Save.persisted ? 'ok' : 'mid'],
       ['속도', Math.round(fpsAvg) + ' fps · 해상도 ' + Math.round(view.q * 100) + '%', fpsAvg >= 50 ? 'ok' : fpsAvg >= 35 ? 'mid' : 'no'],
       ['한국어 목소리', voiceOk ? '있음' : '없음 (자막만 나옴. 태블릿 설정에서 "텍스트 음성 변환"을 찾아 한국어 음성 설치)', voiceOk ? 'ok' : 'no'],
       ['진동', navigator.vibrate ? '지원' : '지원 안 함', navigator.vibrate ? 'ok' : 'mid'],
@@ -674,6 +696,28 @@
       ['손가락 동시 인식', (navigator.maxTouchPoints || 0) + '개', navigator.maxTouchPoints >= 2 ? 'ok' : 'mid'],
     ]);
   }
+  // 기록 지키기: 파일·코드로 내보내고 불러오기 (보호자 화면 안이라 아이는 못 누른다)
+  const reloadWith = ok => { if (ok) { S.say('기록을 불러왔어요!'); setTimeout(() => location.reload(), 900); } else alert('불러오지 못했어요. 파일이나 코드가 맞는지 확인해 주세요.'); };
+  $('p-exp-file').addEventListener('click', () => { saveAll(); setTimeout(() => { if (!RC.Save.exportFile()) alert('이 브라우저에서는 파일로 저장할 수 없어요. "기록 코드 복사"를 써 주세요.'); }, 600); });
+  $('p-imp-file').addEventListener('click', () => $('p-file').click());
+  $('p-file').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (!confirm('지금 기록을 이 파일 내용으로 바꿀까요?')) { e.target.value = ''; return; }
+    const r = new FileReader(); r.onload = () => reloadWith(RC.Save.importText(r.result)); r.readAsText(f);
+  });
+  $('p-exp-code').addEventListener('click', () => {
+    saveAll();
+    setTimeout(() => {
+      const code = RC.Save.exportCode();
+      const done = () => alert('기록 코드를 복사했어요. 메모장이나 카톡 나에게 보내기에 붙여 두세요.');
+      try { navigator.clipboard.writeText(code).then(done, () => prompt('아래 코드를 길게 눌러 복사하세요', code)); } catch (err) { prompt('아래 코드를 길게 눌러 복사하세요', code); }
+    }, 600);
+  });
+  $('p-imp-code').addEventListener('click', () => {
+    const code = prompt('기록 코드(RC1-로 시작)를 붙여 넣으세요');
+    if (code && confirm('지금 기록을 이 코드 내용으로 바꿀까요?')) reloadWith(RC.Save.importText(code));
+  });
   $('p-try-voice').addEventListener('click', () => { S.unlock(); const v = set.voice; S.setVoice(true); S.say('안녕! 나는 로봇카야!'); S.setVoice(v); });
   $('p-try-vib').addEventListener('click', () => { try { navigator.vibrate && navigator.vibrate([60, 60, 120]); } catch (e) { /* 무시 */ } });
   $('p-vib').addEventListener('click', () => { set.vib = !set.vib; saveAll(); renderParent(); vibrate(40); });
@@ -718,6 +762,7 @@
 
   $('btn-go-garage').addEventListener('click', () => {
     S.unlock(); S.play('click');
+    RC.Save.persist();   // 기록이 저절로 지워지지 않게 브라우저에 요청
     // 처음 한 번은 전체 화면으로 (주소창이 사라져 화면이 넓어진다)
     if (!fsAsked) { fsAsked = true; goFullscreen(); }
     wipe(toGarage);
@@ -736,7 +781,7 @@
     $('btn-morph').querySelector('em').textContent = garageForm === 'robot' ? '자동차로' : '변신 보기';
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { downs.clear(); holding = false; saveAll(); if (mode === 'run') pause(); }
+    if (document.hidden) { downs.clear(); holding = false; saveAll(); RC.Save.backupNow(); if (mode === 'run') pause(); }
     else if (mode === 'run') wakeLock(true);
   });
 
@@ -880,6 +925,10 @@
   } catch (e) { /* 무시 */ }
   resize();
   buildGarage();
+  // 기록: 브라우저 저장소가 통째로 비었으면 두 번째 예비 사본(IndexedDB)에서 되살리고 다시 연다. 보호 요청도
+  RC.Save.restoreAsync(() => location.reload());
+  window.addEventListener('pagehide', () => { saveAll(); RC.Save.backupNow(); });
+  RC.Save.persist();
   toTitle();
   S.say('뚝딱 로봇카! 시작을 눌러 봐!', { ms: 3500 });
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });

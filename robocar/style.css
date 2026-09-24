@@ -777,3 +777,7 @@ body.ready #scr-title.on #btn-go-garage { animation: rise .5s .6s var(--ease-out
 /* 차고: 빈 곳을 누르면 뒤의 쇼룸(캔버스)이 받는다 (로봇카 만지기) */
 #scr-garage { pointer-events: none; }
 #scr-garage > * { pointer-events: auto; }
+
+/* 개인 기록 */
+.chip-best { background: rgba(255, 106, 26, .18); color: #ffc29a; border: 1px solid rgba(255, 106, 26, .6); }
+.course .best { position: absolute; left: 14px; top: 14px; padding: 4px 12px; border-radius: 999px; background: rgba(5, 8, 16, .75); font: normal 18px var(--display); color: var(--gold); }

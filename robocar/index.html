@@ -194,7 +194,11 @@
       <!-- 아이 반응 확인용: 이 기기에만 저장, 밖으로 보내지 않음 -->
       <div class="ptab" data-tab="log" hidden>
         <dl class="plog" id="p-log"></dl>
-        <p class="note small">이 기록은 이 태블릿에만 저장되고 어디로도 보내지 않습니다.</p>
+        <h3>기록 지키기 <small id="p-save-state"></small></h3>
+        <div class="seg"><button id="p-exp-file">파일로 저장</button><button id="p-imp-file">파일 불러오기</button></div>
+        <div class="seg"><button id="p-exp-code">기록 코드 복사</button><button id="p-imp-code">코드로 불러오기</button></div>
+        <input type="file" id="p-file" accept=".json,application/json" hidden>
+        <p class="note small">기록은 이 태블릿 브라우저에 저장되고(예비 사본 2곳 포함) 어디로도 보내지 않습니다. 브라우저 데이터를 지우거나 다른 태블릿으로 옮길 때는 먼저 "파일로 저장"을 눌러 두세요.</p>
       </div>
       <!-- 실제 기기 점검: 목소리·진동·전체 화면·설치·오프라인·속도 -->
       <div class="ptab" data-tab="dev" hidden>
@@ -209,6 +213,7 @@
   </section>
 
   <script src="js/data.js"></script>
+  <script src="js/save.js"></script>
   <script src="js/run.js"></script>
   <script src="js/art.js"></script>
   <script src="js/car.js"></script>
