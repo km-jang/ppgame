@@ -186,7 +186,24 @@ function jumpHeight(dt) {
 test('점프 높이는 화면이 30·60·90·120Hz여도 같다', () => {
   const hs = [1 / 30, 1 / 60, 1 / 90, 1 / 120].map(jumpHeight);
   assert(Math.max(...hs) - Math.min(...hs) < 1, 'heights ' + hs.map(h => h.toFixed(1)).join(' '));
-  assert(hs[1] > 120, 'still a good jump ' + hs[1]);
+  // 소유자 피드백(너무 높고 둥실)으로 낮춘 높이 범위
+  assert(hs[1] > 100 && hs[1] < 130, 'jump height ' + hs[1].toFixed(1));
+});
+
+test('보통 점프 한 번으로 가장 넓은 구덩이를 넘는다', () => {
+  // 구덩이 폭 110~155, 빠지는 구간은 양쪽 25씩 뺀 폭 (차가 길어서). 가장자리 바로 앞에서 뛰면 넘어야 한다
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'drill' }, 6);
+  R.level.items = [{ type: 'flag', x: 1400 }];
+  R.level.pits = [{ x: 500, w: 155 }];
+  let jumped = false, fell = false, f = 0;
+  while (!R.done && f++ < 60 * 20) {
+    const tap = !jumped && R.car.x > 500 + 25 - 20;
+    if (tap) jumped = true;
+    stepRun(R, { tap }, DT);
+    if (R.events.includes('fall')) fell = true;
+    R.events.length = 0;
+  }
+  assert(R.done && !fell, 'cleared the widest pit');
 });
 
 test('땅에 닿기 직전에 누른 점프도 닿자마자 뛴다 (점프 기억)', () => {

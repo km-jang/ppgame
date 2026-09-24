@@ -27,7 +27,7 @@
           for (let k = 0; k < 6; k++) star(x + k * 60, GY - 40);
           x += 480; break;
         case 'pit': {
-          const w = 130 + Math.round(rand() * 60);
+          const w = 110 + Math.round(rand() * 45);
           L.pits.push({ x: x + 60, w });
           arc(x, w + 120, 110, 5);
           x += w + 320; break;
@@ -265,7 +265,7 @@
     c.mud = Math.max(0, (c.mud || 0) - dt);
 
     // 구덩이
-    const pit = R.level.pits.find(p => c.x > p.x + 10 && c.x < p.x + p.w - 10);
+    const pit = R.level.pits.find(p => c.x > p.x + 25 && c.x < p.x + p.w - 25);   // 차가 길어서 바퀴 하나가 걸쳐 있으면 안 빠진다
     // 경사로
     let floor = GY;
     for (const o of R.level.items) {
@@ -331,7 +331,7 @@
         // 방호벽·관: 차는 바로 앞에서 저절로 폴짝 뛰어넘는다 (부딪혀서 뒤로 순간 이동하던 것 대신)
         if (o.type === 'rock' && !robot && R.gear.id !== 'drill' && c.onGround && !c.pop && o.x - front < R0.hopAhead * (c.v / R0.speed) && o.x - front > -10) {
           o.hopped = true;
-          c.vy = -960; c.onGround = false; c.hop = 0.7; c.airJumps = R.wheel.double ? 1 : 0;
+          c.vy = -880; c.onGround = false; c.hop = 0.7; c.airJumps = R.wheel.double ? 1 : 0;
           R.events.push('hop');
           continue;
         }
