@@ -367,6 +367,7 @@
     ctx.globalAlpha = 1;
   }
 
+  const NUM = '"Rajdhani", system-ui, sans-serif', DISP = '"Black Han Sans", system-ui, sans-serif';
   function drawHud(ctx, W, view) {
     const p = W.player;
     const top = view.hudTop;
@@ -378,25 +379,45 @@
     const x0 = view.hudLeft;
     const cell = 16 * s, perRow = Math.max(5, Math.floor((right - 120 * s - x0) / cell));
     for (let i = 0; i < p.maxHp; i++) {
-      ctx.fillStyle = i < p.hp ? '#ff4d6d' : 'rgba(255,77,109,0.18)';
-      ctx.fillRect(x0 + (i % perRow) * cell, top + 2 + Math.floor(i / perRow) * cell, 12 * s, 12 * s);
+      const hx = x0 + (i % perRow) * cell, hy = top + 2 + Math.floor(i / perRow) * cell, hs = 12 * s;
+      const on = i < p.hp;
+      ctx.fillStyle = on ? '#ff4d6d' : 'rgba(255,77,109,0.16)';
+      if (on) { ctx.shadowColor = 'rgba(255,77,109,0.8)'; ctx.shadowBlur = 6; }
+      ctx.beginPath(); ctx.moveTo(hx + hs * 0.25, hy); ctx.lineTo(hx + hs, hy); ctx.lineTo(hx + hs * 0.75, hy + hs); ctx.lineTo(hx, hy + hs); ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
     }
     const rows = Math.ceil(p.maxHp / perRow);
     // 대시 게이지
     const k = 1 - p.dashCd / p.dashCdMax;
     const gy = top + 2 + rows * cell + 4;
-    ctx.fillStyle = 'rgba(94,231,255,0.18)';
-    ctx.fillRect(x0, gy, 76 * s, 4 * s);
+    ctx.fillStyle = 'rgba(94,231,255,0.16)';
+    ctx.fillRect(x0, gy, 76 * s, 5 * s);
     ctx.fillStyle = k >= 1 ? '#5ee7ff' : '#2b7f91';
-    ctx.fillRect(x0, gy, 76 * s * k, 4 * s);
+    if (k >= 1) { ctx.shadowColor = '#5ee7ff'; ctx.shadowBlur = 8; }
+    ctx.fillRect(x0, gy, 76 * s * k, 5 * s);
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'left';
+    ctx.font = '700 ' + Math.round(11 * s) + 'px ' + NUM;
+    ctx.fillStyle = k >= 1 ? '#5ee7ff' : '#4a7f8c';
+    ctx.fillText('DASH', x0 + 80 * s, gy - 3 * s);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8f7ff';
-    ctx.font = 'bold ' + Math.round(18 * s) + 'px system-ui, sans-serif';
-    ctx.fillText(W.score.toLocaleString(), right, top);
-    ctx.font = Math.round(12 * s) + 'px system-ui, sans-serif';
-    ctx.fillStyle = '#8aa4b8';
-    ctx.fillText('W' + W.wave + ' · N=' + p.gun.barrels + ' · ' + NG.fmtTime(W.stats.time), right, top + 22 * s);
+    ctx.font = '700 ' + Math.round(26 * s) + 'px ' + NUM;
+    ctx.fillText(W.score.toLocaleString(), right, top - 4 * s);
+    // WAVE · N · 시간을 작은 칸으로
+    ctx.font = '700 ' + Math.round(13 * s) + 'px ' + NUM;
+    const chips = [['WAVE', W.wave], ['N', p.gun.barrels], ['', NG.fmtTime(W.stats.time)]];
+    let cx = right;
+    for (let i = chips.length - 1; i >= 0; i--) {
+      const txt = (chips[i][0] ? chips[i][0] + ' ' : '') + chips[i][1];
+      const w = ctx.measureText(txt).width + 14 * s;
+      ctx.fillStyle = 'rgba(12,16,26,0.72)';
+      ctx.fillRect(cx - w, top + 26 * s, w, 18 * s);
+      ctx.fillStyle = i === 1 ? '#ffe66d' : '#bcd3e2';
+      ctx.fillText(txt, cx - 7 * s, top + 28.5 * s);
+      cx -= w + 4 * s;
+    }
 
     // 보스 체력바
     const boss = W.enemies.find(e => e.type === 'boss' && e.spawnT <= 0);
@@ -408,8 +429,8 @@
       ctx.fillRect(bx, by, bw * Math.max(0, boss.hp / boss.maxHp), 8);
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffb3d4';
-      ctx.font = 'bold 11px system-ui, sans-serif';
-      ctx.fillText('보스 #' + (W.bossKills + 1), W.w / 2, by + 12);
+      ctx.font = '700 13px ' + NUM;
+      ctx.fillText('BOSS #' + (W.bossKills + 1), W.w / 2, by + 12);
     }
 
     // 웨이브 알림
@@ -418,9 +439,16 @@
       ctx.globalAlpha = a;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = 'bold ' + Math.min(44, Math.round(W.w / 9)) + 'px system-ui, sans-serif';
+      const fs = Math.min(64, Math.round(W.w / 7));
+      const ty = W.h * 0.38, slide = (1 - Math.min(1, (D.WAVE.banner - W.banner) * 3)) * 40;
+      ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
       ctx.fillStyle = W.bossWave ? '#ff2e88' : '#e8f7ff';
-      ctx.fillText(W.bossWave ? '⚠ 보스 웨이브' : 'WAVE ' + W.wave, W.w / 2, W.h * 0.38);
+      ctx.shadowColor = W.bossWave ? 'rgba(255,46,136,0.8)' : 'rgba(94,231,255,0.7)'; ctx.shadowBlur = 20;
+      ctx.fillText(W.bossWave ? 'BOSS WAVE' : 'WAVE ' + W.wave, W.w / 2 + slide, ty);
+      ctx.shadowBlur = 0;
+      ctx.font = Math.round(fs * 0.32) + 'px ' + DISP;
+      ctx.fillStyle = W.bossWave ? '#ffb3d4' : '#8aa4b8';
+      ctx.fillText(W.bossWave ? '보스가 나타났다!' : '끝까지 버텨라', W.w / 2 - slide, ty + fs * 0.62);
       ctx.globalAlpha = 1;
     }
     ctx.textBaseline = 'alphabetic';
@@ -435,7 +463,7 @@
     ctx.fillStyle = '#e8f7ff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.font = 'bold 15px system-ui, sans-serif';
+    ctx.font = '16px ' + DISP;
     ctx.fillText('엄지로 밀어서 이동', h.x, h.y - R - 14);
     ctx.textBaseline = 'middle';
     ctx.fillText('오른쪽 드래그: 조준', W.w * 0.72, W.h * 0.5);

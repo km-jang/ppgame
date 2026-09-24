@@ -72,6 +72,7 @@
     go:     t => { tone(sfx, t, 'square', 1320, 1320, 0.4, 0.2); tone(sfx, t, 'sawtooth', 220, 520, 0.5, 0.12); noise(sfx, t, 'bandpass', 600, 2400, 0.4, 0.2); },
     whoosh: t => noise(sfx, t, 'bandpass', 500, 3500, 0.28, 0.22),                                                        // 화면 넘김
     swap:   t => { tone(sfx, t, 'square', 500, 1000, 0.07, 0.18); tone(sfx, t + 0.07, 'triangle', 1400, 1800, 0.12, 0.16); noise(sfx, t, 'highpass', 4000, 4000, 0.05, 0.25); },
+    hop:    t => { tone(sfx, t, 'sine', 260, 820, 0.2, 0.32); tone(sfx, t + 0.04, 'triangle', 520, 1200, 0.12, 0.12); },   // 폴짝 (저절로 넘기)
     cone:   t => { tone(sfx, t, 'triangle', 520, 260, 0.1, 0.25); noise(sfx, t, 'bandpass', 1800, 900, 0.08, 0.25); },          // 통! (고깔)
     splash: t => { noise(sfx, t, 'lowpass', 1400, 200, 0.35, 0.5); tone(sfx, t, 'sine', 180, 90, 0.2, 0.25); },             // 철퍼덕
     slam:   t => { tone(sfx, t, 'sine', 120, 50, 0.3, 0.5); noise(sfx, t, 'lowpass', 2000, 200, 0.25, 0.35); },
@@ -126,7 +127,7 @@
   function say(text, opt) {
     const el = document.getElementById('say');
     if (el && !(opt && opt.bubble === false)) {
-      el.textContent = text; el.classList.add('on');
+      (el.querySelector('span') || el).textContent = text; el.classList.add('on');
       clearTimeout(sayTimer);
       sayTimer = setTimeout(() => el.classList.remove('on'), (opt && opt.ms) || 2600);
     }

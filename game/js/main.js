@@ -98,7 +98,7 @@
       b.setAttribute('aria-pressed', String(on));
       b.querySelector('.state').textContent = on ? '켬' : '끔';
     }
-    $('btn-mute').textContent = NG.Audio.muted ? '🔇' : '🔊';
+    $('btn-mute').classList.toggle('muted', NG.Audio.muted);
   }
 
   function toggleAudio(kind) {
@@ -148,6 +148,13 @@
     show(null);
   }
 
+  // 단계 표시: 이미 올린 칸(채움) · 이번에 올릴 칸(깜빡) · 남은 칸
+  function pips(lv, max) {
+    let h = '';
+    for (let k = 0; k < max; k++) h += '<i class="' + (k < lv ? 'on' : k === lv ? 'next' : '') + '"></i>';
+    return h + '<em>Lv ' + (lv + 1) + '</em>';
+  }
+
   function showCards() {
     mode = 'cards';
     cardsShownAt = performance.now();
@@ -163,7 +170,8 @@
         '<span class="card-icon">' + c.icon + '</span>' +
         '<span class="card-name">' + c.name + '</span>' +
         '<span class="card-desc">' + c.desc + '</span>' +
-        '<span class="card-lv">' + (c.max === Infinity ? '' : 'Lv ' + lv + ' → ' + (lv + 1) + ' / ' + c.max) + '</span>';
+        '<span class="card-lv">' + (c.max === Infinity ? '' : pips(lv, c.max)) + '</span>';
+      b.style.animationDelay = (i * 0.07) + 's';
       b.addEventListener('click', () => choose(i));
       list.appendChild(b);
     });
@@ -370,7 +378,13 @@
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
   // 오프라인 실행 (홈 화면에 추가했을 때). 미리보기 창 안에서는 조용히 건너뛴다
   try {
-    if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && window.top === window) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && window.top === window) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      Promise.all([navigator.serviceWorker.ready, document.fonts ? document.fonts.ready : null]).then(([reg]) => {
+        const urls = performance.getEntriesByType('resource').map(r => r.name).filter(u => /fonts\.(googleapis|gstatic)\.com/.test(u));
+        if (urls.length && reg.active) reg.active.postMessage({ type: 'cache-fonts', urls });
+      }).catch(() => {});
+    }
   } catch (e) { /* 무시 */ }
 
   // 개발·테스트용 손잡이

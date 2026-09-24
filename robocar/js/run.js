@@ -27,7 +27,7 @@
           for (let k = 0; k < 6; k++) star(x + k * 60, GY - 40);
           x += 480; break;
         case 'pit': {
-          const w = 130 + Math.round(rand() * 60);
+          const w = 110 + Math.round(rand() * 45);
           L.pits.push({ x: x + 60, w });
           arc(x, w + 120, 110, 5);
           x += w + 320; break;
@@ -112,7 +112,9 @@
     };
   }
 
-  function speedOf(R) {
+  // 지금 달리는 속도 (목표 속도로 부드럽게 따라간 값)
+  function speedOf(R) { return R.car.v == null ? targetSpeed(R) : R.car.v; }
+  function targetSpeed(R) {
     const c = R.car;
     let v = R0.speed * R.wheel.speed;
     if (c.form === 'robot' && R.body.ability === 'dash') v *= R0.dashMul;
@@ -152,7 +154,24 @@
 
   // ─── 한 프레임 ────────────────────────────────────────────
   // input: {tap: 이번 프레임에 눌렀나, hold: 누르고 있나, transform: 변신 버튼 눌렀나}
+  // 화면 한 프레임(dt가 얼마든) → 규칙은 고정 간격(R0.step)으로 쪼개 계산한다.
+  // 누른 입력은 다음 계산 칸에 꼭 한 번 들어가게 모아 둔다. R.alpha는 그리기 보간용(0~1)
   function stepRun(R, input, dt) {
+    input = input || {};
+    R.acc = Math.min(0.1, (R.acc || 0) + dt);
+    if (input.tap) R.pendTap = true;
+    if (input.transform) R.pendTf = true;
+    while (R.acc >= R0.step - 1e-9) {
+      R.acc -= R0.step;
+      const c = R.car;
+      c.px = c.x; c.py = c.y;
+      tick(R, { tap: !!R.pendTap, hold: !!input.hold, transform: !!R.pendTf }, R0.step);
+      R.pendTap = false; R.pendTf = false;
+    }
+    R.alpha = R.acc / R0.step;
+  }
+
+  function tick(R, input, dt) {
     const c = R.car;
     // 타격 멈춤: 부수는 순간 아주 잠깐 정지 (손맛)
     if (R.freeze > 0) { R.freeze -= dt; return; }
@@ -197,9 +216,16 @@
     }
 
     // 점프·공중
-    if (!R.done && !c.fall) {
-      if (input.tap) {
+    c.buf = Math.max(0, (c.buf || 0) - dt);
+    // 구덩이에 막 빠지기 시작했을 때 누르면 가장자리에서 뛴 것으로 쳐 준다 (코요테 타임)
+    if (c.fall && !c.pop && input.tap && (c.fallT || 0) < R0.coyote) {
+      c.fall = false; c.y = Math.min(c.y, GY); c.onGround = true;
+    }
+    if (!R.done && !c.fall && !c.pop) {
+      if (input.tap && !c.onGround && c.airJumps <= 0 && !(R.gear.id === 'jet' && c.fuel > 0)) c.buf = R0.buffer;
+      if (input.tap || (c.onGround && c.buf > 0)) {
         if (c.onGround) {
+          c.buf = 0;
           c.vy = -R0.jumpV * R.wheel.jump; c.onGround = false; c.airJumps = R.wheel.double ? 1 : 0;
           R.events.push('jump');
         } else if (c.airJumps > 0) {
@@ -218,8 +244,20 @@
       }
     }
 
-    // 앞으로
-    c.x += speedOf(R) * dt;
+    // 앞으로: 속도는 목표로 부드럽게 (빨라질 땐 천천히, 느려질 땐 빨리)
+    const tv = targetSpeed(R);
+    if (c.v == null) c.v = tv;
+    c.v += (tv - c.v) * Math.min(1, dt * (tv > c.v ? R0.accel : R0.decel));
+    if (c.pop) {
+      // "뿅": 구덩이 바닥에서 건너편 땅까지 포물선으로 (순간 이동 없이)
+      const P = c.pop;
+      P.t += dt;
+      const k = Math.min(1, P.t / R0.popTime), e = k * (2 - k);
+      c.x = P.x0 + (P.x1 - P.x0) * e;
+      c.y = P.y0 + (GY - P.y0) * k - Math.sin(k * Math.PI) * 170;
+      c.vy = 0;
+      if (k >= 1) { c.pop = null; c.y = GY; c.onGround = true; c.v = tv * 0.7; R.events.push('land'); puff(R, c.x, GY, '#d6d0c4', 8, 140, 9, 'dust'); }
+    } else c.x += c.v * dt;
     c.bump = Math.max(0, c.bump - dt);
     c.spin = Math.max(0, c.spin - dt);
     c.hot = Math.max(0, c.hot - dt);
@@ -227,26 +265,40 @@
     c.mud = Math.max(0, (c.mud || 0) - dt);
 
     // 구덩이
-    const pit = R.level.pits.find(p => c.x > p.x + 10 && c.x < p.x + p.w - 10);
+    const pit = R.level.pits.find(p => c.x > p.x + 25 && c.x < p.x + p.w - 25);   // 차가 길어서 바퀴 하나가 걸쳐 있으면 안 빠진다
     // 경사로
     let floor = GY;
     for (const o of R.level.items) {
       if (o.type === 'ramp' && c.x >= o.x && c.x <= o.x + o.w) floor = GY - o.h * (c.x - o.x) / o.w;
     }
 
-    c.vy += R0.gravity * dt;
-    c.y += c.vy * dt;
-    if (c.fall) {
-      // 구덩이에 빠짐 → 아래로 떨어졌다가 "뿅" 하고 건너편으로 튀어나온다
-      if (c.y > GY + 160) {
-        const p = c.fall;
+    if (c.pop) {
+      // 위에서 이미 움직였다
+    } else {
+      // 중력: 꼭대기 근처에선 약하게(둥실), 내려올 땐 강하게(착). 제트·날개를 쓰는 동안은 그대로
+      let g = R0.gravity;
+      if (!c.onGround && !c.thrusting && !c.gliding && !c.fall) {
+        if (Math.abs(c.vy) < R0.apexV) g *= R0.apexMul;
+        else if (c.vy > 0) g *= R0.fallMul;
+      }
+      c.vy += g * dt;
+      c.y += c.vy * dt;
+    }
+    if (c.pop) {
+      // 튀어나오는 중
+    } else if (c.fall) {
+      // 구덩이에 빠짐 → 벽 안쪽에 머물며 떨어졌다가 "뿅" 하고 건너편으로 튀어나온다
+      const p = c.fall;
+      c.fallT = (c.fallT || 0) + dt;
+      c.x = Math.min(c.x, p.x + p.w - 40);
+      if (c.y > GY + 150) {
         c.fall = false;
-        c.x = p.x + p.w + 30; c.y = GY - 10; c.vy = -900; c.onGround = false;
-        puff(R, c.x, GY, '#ffe66d', 18, 320, 6, 'spark');
+        c.pop = { t: 0, x0: c.x, x1: p.x + p.w + 60, y0: c.y };
+        puff(R, c.x, GY + 40, '#ffe66d', 18, 320, 6, 'spark');
         R.events.push('pop');
       }
     } else if (pit && c.y >= GY - 1 && c.vy >= 0) {
-      c.fall = pit; c.onGround = false;
+      c.fall = pit; c.fallT = 0; c.onGround = false;
       R.events.push('fall');
     } else if (c.y >= floor) {
       const wasAir = !c.onGround;
@@ -256,7 +308,7 @@
       c.vy = 0; c.onGround = true; c.fuel = R0.jetFuel;
       if (onRamp && c.x > 0) {
         const ramp = R.level.items.find(o => o.type === 'ramp' && c.x >= o.x && c.x <= o.x + o.w);
-        if (ramp && c.x > ramp.x + ramp.w - speedOf(R) * dt * 1.5) { c.vy = -760; c.onGround = false; R.events.push('ramp'); }
+        if (ramp && c.x > ramp.x + ramp.w - c.v * dt * 1.5) { c.vy = -760; c.onGround = false; R.events.push('ramp'); }
       }
     } else {
       c.onGround = false;
@@ -276,6 +328,13 @@
           puff(R, o.x, o.y, '#ffe66d', 6, 160, 5, 'spark');
         }
       } else if ((o.type === 'box' || o.type === 'rock') && !o.broken && !o.hopped) {
+        // 방호벽·관: 차는 바로 앞에서 저절로 폴짝 뛰어넘는다 (부딪혀서 뒤로 순간 이동하던 것 대신)
+        if (o.type === 'rock' && !robot && R.gear.id !== 'drill' && c.onGround && !c.pop && o.x - front < R0.hopAhead * (c.v / R0.speed) && o.x - front > -10) {
+          o.hopped = true;
+          c.vy = -880; c.onGround = false; c.hop = 0.7; c.airJumps = R.wheel.double ? 1 : 0;
+          R.events.push('hop');
+          continue;
+        }
         const hitX = front > o.x && c.x - 40 < o.x + o.w;
         const hitY = c.y > GY - o.h + 4;
         if (hitX && hitY) {
@@ -284,14 +343,15 @@
             smash(R, o, o.type === 'rock' ? 3 : 2 + o.n);
           } else if (o.type === 'box') {
             // 차로 박으면 "쿵" 튕기고 상자는 그래도 부서진다 (막히는 일 없음). 별은 적게
-            c.bump = 0.45; c.x -= 20;
+            c.bump = 0.45; c.v = -R0.knock;
             R.events.push('bump');
             smash(R, o, 1);
           } else {
             // 바위: "쿵" 한 뒤 저절로 폴짝 넘어간다
+            // 공중에서 벽 옆구리에 닿으면: 위로 한 번 더 밀어 올려 넘긴다
             o.hopped = true;
-            c.x = o.x - 55; c.vy = -950; c.onGround = false; c.hop = 0.8;
-            R.events.push('bump');
+            c.vy = Math.min(c.vy, -760); c.onGround = false; c.hop = 0.7;
+            R.events.push('hop');
           }
         }
       } else if (o.type === 'fire' && !o.out) {

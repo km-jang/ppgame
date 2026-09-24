@@ -169,5 +169,88 @@ test('진흙은 차를 느리게 하지만 점프하면 피하고, 소방 로봇
   assert(wash.level.items[0].out, 'mud washed');
 });
 
+// ─── 손맛 (매끄러움) ───
+function flat(cfg) {
+  const R = createRun(cfg || { body: 'racer', wheel: 'normal', gear: 'drill' }, 1);
+  R.level.items = [{ type: 'flag', x: 99999 }]; R.level.pits = [];
+  return R;
+}
+function jumpHeight(dt) {
+  const R = flat();
+  stepRun(R, { tap: true }, dt);
+  let top = R.car.y, n = 0;
+  while (!R.car.onGround && n++ < 2000) { stepRun(R, NONE, dt); top = Math.min(top, R.car.y); }
+  return D.RUN.groundY - top;
+}
+
+test('점프 높이는 화면이 30·60·90·120Hz여도 같다', () => {
+  const hs = [1 / 30, 1 / 60, 1 / 90, 1 / 120].map(jumpHeight);
+  assert(Math.max(...hs) - Math.min(...hs) < 1, 'heights ' + hs.map(h => h.toFixed(1)).join(' '));
+  // 소유자 피드백(너무 높고 둥실)으로 낮춘 높이 범위
+  assert(hs[1] > 100 && hs[1] < 130, 'jump height ' + hs[1].toFixed(1));
+});
+
+test('보통 점프 한 번으로 가장 넓은 구덩이를 넘는다', () => {
+  // 구덩이 폭 110~155, 빠지는 구간은 양쪽 25씩 뺀 폭 (차가 길어서). 가장자리 바로 앞에서 뛰면 넘어야 한다
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'drill' }, 6);
+  R.level.items = [{ type: 'flag', x: 1400 }];
+  R.level.pits = [{ x: 500, w: 155 }];
+  let jumped = false, fell = false, f = 0;
+  while (!R.done && f++ < 60 * 20) {
+    const tap = !jumped && R.car.x > 500 + 25 - 20;
+    if (tap) jumped = true;
+    stepRun(R, { tap }, DT);
+    if (R.events.includes('fall')) fell = true;
+    R.events.length = 0;
+  }
+  assert(R.done && !fell, 'cleared the widest pit');
+});
+
+test('땅에 닿기 직전에 누른 점프도 닿자마자 뛴다 (점프 기억)', () => {
+  const R = flat();
+  stepRun(R, { tap: true }, DT);
+  while (R.car.vy < 0 || R.car.y < D.RUN.groundY - 25) stepRun(R, NONE, DT);   // 내려오는 중, 땅 바로 위
+  stepRun(R, { tap: true }, DT);
+  let jumped = false;
+  for (let i = 0; i < 20; i++) { stepRun(R, NONE, DT); if (R.events.includes('jump')) jumped = true; }
+  assert(jumped, 'buffered jump fired on landing');
+});
+
+test('구덩이에 막 빠지기 시작했을 때 눌러도 뛴다 (코요테 타임)', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'drill' }, 6);
+  R.level.items = [{ type: 'flag', x: 1400 }];
+  R.level.pits = [{ x: 400, w: 150 }];
+  while (!R.car.fall) stepRun(R, NONE, DT);
+  R.events.length = 0;
+  stepRun(R, { tap: true }, DT);
+  let popped = false, f = 0;
+  while (!R.done && f++ < 60 * 20) { stepRun(R, NONE, DT); if (R.events.includes('pop')) popped = true; R.events.length = 0; }
+  assert(!popped && R.done, 'jumped out from the edge instead of falling');
+});
+
+test('한 판 내내 순간 이동이 없다 (앞뒤로 튀지 않음)', () => {
+  for (const course of ['city', 'site']) {
+    const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 3, course);
+    let px = R.car.x, py = R.car.y, f = 0, worst = 0, worstY = 0;
+    while (!R.done && f++ < 60 * 200) {
+      stepRun(R, NONE, DT); R.events.length = 0;
+      worst = Math.max(worst, Math.abs(R.car.x - px)); worstY = Math.max(worstY, Math.abs(R.car.y - py));
+      px = R.car.x; py = R.car.y;
+    }
+    assert(worst < 20, course + ' x step ' + worst.toFixed(1));
+    assert(worstY < 40, course + ' y step ' + worstY.toFixed(1));
+  }
+});
+
+test('방호벽은 차가 부딪히지 않고 저절로 폴짝 넘는다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 2);
+  R.level.items = [{ type: 'rock', x: 600, w: 90, h: 70, broken: false }, { type: 'flag', x: 1300 }];
+  R.level.pits = [];
+  const seen = [];
+  let f = 0;
+  while (!R.done && f++ < 60 * 20) { stepRun(R, NONE, DT); seen.push(...R.events); R.events.length = 0; }
+  assert(R.done && seen.includes('hop') && !seen.includes('bump'), seen.join(','));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
