@@ -68,6 +68,11 @@
     finish: t => { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(sfx, t + i * 0.12, 'square', f, f, 0.2, 0.16)); },
     sticker: t => { [784, 988, 1175, 1568].forEach((f, i) => tone(sfx, t + i * 0.08, 'triangle', f, f, 0.3, 0.25)); },
     fill:   t => tone(sfx, t, 'triangle', 1200, 1200, 0.06, 0.12),
+    beep:   t => { tone(sfx, t, 'square', 660, 660, 0.14, 0.18); tone(sfx, t, 'sine', 1320, 1320, 0.1, 0.08); },            // 삐 (출발 신호)
+    go:     t => { tone(sfx, t, 'square', 1320, 1320, 0.4, 0.2); tone(sfx, t, 'sawtooth', 220, 520, 0.5, 0.12); noise(sfx, t, 'bandpass', 600, 2400, 0.4, 0.2); },
+    whoosh: t => noise(sfx, t, 'bandpass', 500, 3500, 0.28, 0.22),                                                        // 화면 넘김
+    swap:   t => { tone(sfx, t, 'square', 500, 1000, 0.07, 0.18); tone(sfx, t + 0.07, 'triangle', 1400, 1800, 0.12, 0.16); noise(sfx, t, 'highpass', 4000, 4000, 0.05, 0.25); },
+    slam:   t => { tone(sfx, t, 'sine', 120, 50, 0.3, 0.5); noise(sfx, t, 'lowpass', 2000, 200, 0.25, 0.35); },
   };
 
   function play(name) {

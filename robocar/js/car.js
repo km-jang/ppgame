@@ -85,6 +85,22 @@
     if (on !== false) glow(ctx, glowColor, x + pts[0], yb + pts[1], 16, 0.8);
   }
 
+  // 도장 반사: 차체 안쪽에 비스듬한 빛 띠 두 줄 (자동차 광고 사진처럼)
+  function sheen(ctx, pts, x, yb, top, bottom) {
+    ctx.save(); poly(ctx, pts, x, yb); ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,255,255,0.13)';
+    ctx.beginPath(); ctx.moveTo(x - 10, yb + top); ctx.lineTo(x + 18, yb + top); ctx.lineTo(x - 8, yb + bottom); ctx.lineTo(x - 36, yb + bottom); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.beginPath(); ctx.moveTo(x + 26, yb + top); ctx.lineTo(x + 34, yb + top); ctx.lineTo(x + 8, yb + bottom); ctx.lineTo(x, yb + bottom); ctx.fill();
+    ctx.restore();
+  }
+  // 차 밑 어두운 그림자(차체와 바닥 사이가 붙어 보이게)
+  function underShade(ctx, x, yb, w) {
+    ctx.fillStyle = lin(ctx, 0, yb - 6, 0, yb + 2, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0.35)']]);
+    ctx.fillRect(x - w, yb - 6, w * 2, 8);
+  }
+
   function highlight(ctx, pts, x, yb) {
     ctx.beginPath();
     for (let i = 0; i < pts.length; i += 2) { if (i === 0) ctx.moveTo(x + pts[i], yb + pts[i + 1]); else ctx.lineTo(x + pts[i], yb + pts[i + 1]); }
@@ -96,6 +112,7 @@
   function bodyRacer(ctx, x, yb, color, t, o) {
     const P = [-78, 0, -83, -14, -81, -28, -56, -32, -34, -50, -8, -52, 22, -33, 58, -27, 82, -18, 88, -9, 78, 0];
     poly(ctx, P, x, yb); ctx.fillStyle = paint(ctx, color, yb - 52, yb); ctx.fill(); outline(ctx, 2.5);
+    sheen(ctx, P, x, yb, -52, 0);
     // 아래 스커트
     poly(ctx, [-76, 0, 76, 0, 78, -6, -78, -6], x, yb); ctx.fillStyle = shade(color, 0.45); ctx.fill();
     // 레이싱 줄무늬
@@ -132,6 +149,7 @@
     ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 32, yb - 54); ctx.lineTo(x - 32, yb - 24); ctx.stroke();
     // 운전석
     poly(ctx, [22, 0, 22, -68, 58, -68, 80, -42, 88, -30, 88, 0], x, yb); ctx.fillStyle = paint(ctx, color, yb - 68, yb); ctx.fill(); outline(ctx, 2.5);
+    sheen(ctx, [-86, 0, -86, -60, 88, -60, 88, 0], x, yb, -60, 0);
     // 반사띠
     poly(ctx, [-86, -20, 88, -20, 88, -13, -86, -13], x, yb); ctx.fillStyle = '#ffd23a'; ctx.fill();
     ctx.fillStyle = '#ffffff';
@@ -162,6 +180,7 @@
   function bodyPolice(ctx, x, yb, color, t, o) {
     const P = [-80, 0, -84, -14, -80, -28, -56, -31, -38, -52, 18, -52, 38, -32, 72, -28, 84, -18, 86, -6, 80, 0];
     poly(ctx, P, x, yb); ctx.fillStyle = paint(ctx, color, yb - 52, yb); ctx.fill(); outline(ctx, 2.5);
+    sheen(ctx, P, x, yb, -52, 0);
     // 흰 문 도색
     ctx.save(); poly(ctx, P, x, yb); ctx.clip();
     poly(ctx, [-40, -31, 36, -31, 40, -4, -44, -4], x, yb);
@@ -276,6 +295,7 @@
       wing(ctx, roof.x, roof.y, !!o.glide, t, o.glide);
     }
     mounts = body(ctx, x, yb, color, t, o);
+    underShade(ctx, x, yb, 74);
     for (const dx of wx) arch(ctx, x + dx, axleY, wr);
     for (const dx of wx) wheel(ctx, x + dx, axleY, wr, rot, W.id, o.speed, color);
     if (cfg.gear === 'jet') jetPod(ctx, mounts.pod.x, mounts.pod.y, o.thrust, t);

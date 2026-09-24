@@ -1,6 +1,6 @@
 // 오프라인 실행: 게임 파일과 글꼴을 태블릿에 저장해 두고 인터넷 없이도 연다.
 // 파일이 바뀌면 VERSION을 올린다.
-const VERSION = 'robocar-v3';
+const VERSION = 'robocar-v4';
 const FILES = ['./', 'index.html', 'style.css', 'manifest.json', 'icon.svg',
   'js/data.js', 'js/run.js', 'js/art.js', 'js/car.js', 'js/scene.js', 'js/cards.js', 'js/sound.js', 'js/main.js'];
 

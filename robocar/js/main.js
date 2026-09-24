@@ -54,7 +54,22 @@
   let parentOpen = false;
   let paused = false, rotTold = false;
   const SCREENS = ['scr-title', 'scr-garage', 'hud', 'scr-result', 'scr-book', 'scr-sleep'];
-  function show(id) { for (const s of SCREENS) $(s).classList.toggle('on', s === id); }
+  function show(id) { for (const s of SCREENS) $(s).classList.toggle('on', s === id); document.body.dataset.scr = id; }
+  // 화면 넘김: 띠가 화면을 덮은 순간에 바꾸고 다시 걷는다 (연달아 눌러도 한 번만)
+  const wipeEl = $('wipe');
+  let wiping = false;
+  function wipe(fn) {
+    if (wiping) return;
+    const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { fn(); return; }
+    wiping = true; S.play('whoosh');
+    wipeEl.className = 'cover';
+    setTimeout(() => {
+      fn();
+      wipeEl.className = 'open';
+      setTimeout(() => { wipeEl.className = ''; wiping = false; }, 600);
+    }, 400);
+  }
 
   function toTitle() {
     mode = 'title'; show('scr-title'); S.music(true);
@@ -69,7 +84,10 @@
 
   // ─── 차고 ────────────────────────────────────────────────
   const LISTS = { body: D.BODIES, wheel: D.WHEELS, gear: D.GEAR };
-  let garageForm = 'car', garageMorph = 0, garageBounce = 0;
+  let garageForm = 'car', garageMorph = 0, garageBounce = 0, garagePop = 0;
+  // CSS 애니메이션을 처음부터 다시 틀기
+  function restart(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  let lastStats = null;
 
   function thumb(cv, over) {
     const c = cv.getContext('2d');
@@ -91,9 +109,11 @@
         b.appendChild(cv);
         const lb = document.createElement('span'); lb.textContent = p.name; b.appendChild(lb);
         b.addEventListener('click', () => {
+          const changed = cfg[slot] !== p.id;
           cfg[slot] = p.id;
           if (slot === 'body' && !cfg.colorTouched) cfg.color = p.color;
-          garageBounce = 1; S.play('click'); S.say(p.say);
+          garageBounce = 1; S.play(changed ? 'swap' : 'click'); S.say(p.say);
+          if (changed) { garagePop = 1; restart(b, 'pop'); if (slot === 'body') restart($('car-name').parentNode, 'pop'); vibrate(12); }
           saveAll(); renderParts();
         });
         el.appendChild(b);
@@ -103,7 +123,12 @@
     for (const c of D.COLORS) {
       const b = document.createElement('button');
       b.className = 'swatch'; b.style.setProperty('--c', c); b.style.setProperty('--c2', RC.Art.shade(c, 0.5)); b.dataset.c = c; b.setAttribute('aria-label', '색깔');
-      b.addEventListener('click', () => { cfg.color = c; cfg.colorTouched = true; garageBounce = 1; S.play('click'); saveAll(); renderParts(); });
+      b.addEventListener('click', () => {
+        const changed = cfg.color !== c;
+        cfg.color = c; cfg.colorTouched = true; garageBounce = 1; S.play(changed ? 'swap' : 'click');
+        if (changed) { garagePop = 0.8; restart(b, 'pop'); }
+        saveAll(); renderParts();
+      });
       cs.appendChild(b);
     }
     for (const bar of document.querySelectorAll('.bar')) bar.innerHTML = '<i></i><i></i><i></i><i></i><i></i>';
@@ -128,7 +153,18 @@
     }
     for (const b of $('colors').children) b.setAttribute('aria-pressed', String(cfg.color === b.dataset.c));
     const st = stats();
-    for (const bar of document.querySelectorAll('.bar')) [...bar.children].forEach((i, k) => i.classList.toggle('on', k < st[bar.dataset.k]));
+    for (const bar of document.querySelectorAll('.bar')) {
+      const key = bar.dataset.k, v = st[key], was = lastStats ? lastStats[key] : v;
+      [...bar.children].forEach((i, k) => {
+        i.classList.toggle('on', k < v);
+        if (k < v && k >= was) restart(i, 'gain');
+        else if (k >= v && k < was) restart(i, 'lose');
+      });
+      const lab = bar.parentNode;
+      lab.classList.toggle('up', v > was); lab.classList.toggle('down', v < was);
+      if (v !== was) setTimeout(() => lab.classList.remove('up', 'down'), 60);
+    }
+    lastStats = st;
     const body = RC.find(D.BODIES, cfg.body);
     $('car-name').textContent = body.name;
     $('car-parts').textContent = RC.find(D.WHEELS, cfg.wheel).name + ' · ' + RC.find(D.GEAR, cfg.gear).name;
@@ -141,18 +177,77 @@
   let lastSay = 0;
   const sayOnce = (txt, gap) => { const n = performance.now(); if (n - lastSay > (gap || 1500)) { lastSay = n; S.say(txt, { ms: 1400 }); } };
 
+  let countdown = 0, countStep = 0;
+  const countEl = $('count'), countNum = $('count-num'), lights = [...countEl.querySelectorAll('i')];
   function startRun() {
     if (checkSleep()) return;
     S.unlock();
     prog.runs += 1; saveAll();
     R = RC.Run.createRun(cfg, 1 + (prog.runs % 3));
     mode = 'run'; finishT = 0; readyTold = false; paused = false;
+    tutor = { on: prog.runs <= 2, taps: 0, holds: 0, shown: '', seen: new Set() };
     wakeLock(true);
     $('ability-name').textContent = R.body.abilityName;
     show('hud');
     placeHud();
-    S.music(true);
-    S.say('출발! 화면을 누르면 점프!');
+    S.music(false);
+    // 출발 신호: 빨강 세 번 → 초록 "출발!" (그동안 차는 제자리에서 부릉)
+    countdown = 3.4; countStep = 4;
+    countEl.className = 'on'; countNum.className = ''; countNum.textContent = '';
+    for (const l of lights) l.className = '';
+    S.say('준비!', { ms: 1200 });
+  }
+  function tickCountdown(dt) {
+    countdown -= dt;
+    const step = Math.ceil(countdown - 0.4);           // 3, 2, 1, 0
+    if (step < countStep && step >= 0) {
+      countStep = step;
+      if (step > 0) {
+        lights[3 - step].className = 'red';
+        countNum.textContent = step; restart(countNum, 'tick'); countNum.classList.remove('go');
+        S.play('beep'); vibrate(10);
+      } else {
+        for (const l of lights) l.className = 'green';
+        countNum.textContent = '출발!'; countNum.className = ''; restart(countNum, 'go');
+        S.play('go'); S.music(true); vibrate(30);
+        RC.Draw.fxEvent(R, 'go', view.vw);
+        S.say(tutor.on ? '화면을 누르면 점프!' : '출발!', { ms: 1800 });
+        setTimeout(() => { if (countdown <= 0) countEl.classList.add('out'); }, 500);
+        setTimeout(() => { if (countdown <= 0) countEl.className = ''; }, 950);
+      }
+    }
+  }
+
+  // ─── 처음 두 판: 손가락 안내 ──────────────────────────────
+  let tutor = { on: false };
+  const hintEl = $('hint'), hintTxt = hintEl.querySelector('b');
+  function setHint(kind, x, y, txt) {
+    if (kind !== tutor.shown) {
+      tutor.shown = kind;
+      hintEl.className = kind ? 'on' + (kind === 'hold' ? ' hold' : '') : '';
+      if (kind) hintTxt.textContent = txt;
+    }
+    if (kind) { hintEl.style.left = Math.round(x * view.s - 30) + 'px'; hintEl.style.top = Math.round(y * view.s) + 'px'; }
+  }
+  function tutorial() {
+    if (!tutor.on || R.done || countdown > 0) { if (tutor.shown) setHint(''); btnT.classList.remove('hint'); return; }
+    const c = R.car, cam = R._cam ? R._cam.x : c.x - view.vw * 0.28;
+    // 앞에 구덩이·방호벽·상자가 있으면 "톡! 점프" (몇 번 보여 주면 그만)
+    let target = null;
+    if (c.onGround && c.form === 'car' && tutor.taps < 6) {
+      for (const p of R.level.pits) { const d = p.x - c.x; if (d > 60 && d < 330) { target = { x: p.x + p.w / 2, id: 'p' + p.x }; break; } }
+      if (!target) for (const o of R.level.items) {
+        if ((o.type === 'rock' || o.type === 'box') && !o.broken && R.cfg.gear !== 'drill') { const d = o.x - c.x; if (d > 60 && d < 330) { target = { x: o.x + 40, id: 'o' + o.x }; break; } }
+      }
+    }
+    if (target) {
+      if (!tutor.seen.has(target.id)) { tutor.seen.add(target.id); tutor.taps++; }
+      setHint('tap', target.x - cam, 170, '톡! 점프');
+    } else if (!c.onGround && (R.cfg.gear === 'jet' || R.cfg.gear === 'wing') && !holding && c.vy > -200 && tutor.holds < 3 && c.form === 'car') {
+      if (tutor.shown !== 'hold') tutor.holds++;
+      setHint('hold', c.x - cam + 40, 150, '꾹 누르고 있어!');
+    } else setHint('');
+    btnT.classList.toggle('hint', c.form === 'car' && c.cd <= 0 && R.t > 4);
   }
 
   const btnT = $('btn-transform');
@@ -200,7 +295,9 @@
   let demoN = 0;
   function newDemo() {
     const bodies = ['racer', 'police', 'fire'];
-    const d = RC.Run.createRun({ body: bodies[demoN % 3], wheel: ['normal', 'monster', 'spring'][demoN % 3], gear: ['jet', 'wing', 'drill'][demoN % 3], color: null }, 11 + demoN);
+    // 한 번이라도 달려 봤으면 시작 화면에 아이가 만든 로봇카가 먼저 나온다
+    const mine = prog.runs > 0 && demoN % 2 === 0;
+    const d = RC.Run.createRun(mine ? Object.assign({}, cfg) : { body: bodies[demoN % 3], wheel: ['normal', 'monster', 'spring'][demoN % 3], gear: ['jet', 'wing', 'drill'][demoN % 3], color: null }, 11 + demoN);
     d.car.x = d.level.length * (demoN % 2 ? 0.08 : 0.44);
     d.level.pits = d.level.pits.filter(p => Math.abs(p.x - d.car.x) > 400);
     demoN++;
@@ -215,7 +312,8 @@
     const pct = got / Math.max(1, R.totalStars);
     const rating = pct >= 0.7 ? 3 : pct >= 0.4 ? 2 : 1;
     const rt = $('res-rating'); rt.innerHTML = '';
-    for (let i = 0; i < 3; i++) { const im = document.createElement('img'); im.src = starURL; im.alt = ''; rt.appendChild(im); setTimeout(() => { if (i < rating) { im.classList.add('on'); S.play('star'); } }, 350 + i * 300); }
+    for (let i = 0; i < 3; i++) { const im = document.createElement('img'); im.src = starURL; im.alt = ''; rt.appendChild(im); setTimeout(() => { if (i < rating && mode === 'result') { im.classList.add('on'); S.play('star'); vibrate(15); } }, 800 + i * 280); }
+    setTimeout(() => { if (mode === 'result') S.play('slam'); }, 380);
     $('res-stars').textContent = '0';
     $('new-cards').innerHTML = '';
     $('res-note').textContent = '';
@@ -224,13 +322,22 @@
     const step = Math.max(1, Math.ceil(got / 45));
     const setJar = () => { $('jar-fill').style.height = 'calc(' + (bank / D.JAR * 100) + '% - 8px)'; $('jar-text').textContent = bank + ' / ' + D.JAR; };
     setJar();
+    // 다음에 받을 카드를 실루엣으로 미리 보여 준다 (무엇이 나올까?)
+    const nextBox = $('next-card');
+    const showNext = () => {
+      const nx = D.STICKERS.find(s => !prog.stickers.includes(s.id) && !earned.includes(s.id));
+      nextBox.hidden = !nx;
+      if (nx) { RC.Cards.render(nextBox.querySelector('canvas'), nx, true); restart(nextBox, 'swap'); }
+    };
+    showNext();
+    const numEl = $('res-stars');
     S.say('별을 ' + got + '개 모았어!');
     setTimeout(() => {
       const timer = setInterval(() => {
         if (mode !== 'result') { clearInterval(timer); return; }
         const n = Math.min(step, got - shown);
         shown += n; bank += n;
-        $('res-stars').textContent = shown;
+        numEl.textContent = shown; restart(numEl, 'bump');
         S.play('fill');
         if (bank >= D.JAR) {
           bank -= D.JAR;
@@ -244,7 +351,9 @@
             const list = $('new-cards');
             list.appendChild(box);
             while (list.children.length > 3) list.removeChild(list.firstChild);
-            S.play('sticker');
+            S.play('sticker'); vibrate([20, 30, 40]);
+            restart(document.querySelector('.cell'), 'full');
+            showNext();
           }
         }
         setJar();
@@ -382,13 +491,13 @@
     S.unlock(); S.play('click');
     // 처음 한 번은 전체 화면으로 (주소창이 사라져 화면이 넓어진다)
     if (!fsAsked) { fsAsked = true; goFullscreen(); }
-    toGarage();
+    wipe(toGarage);
   });
-  $('btn-book').addEventListener('click', () => { S.unlock(); S.play('click'); toBook(); });
-  $('btn-book-back').addEventListener('click', () => { S.play('click'); toTitle(); });
-  $('btn-run').addEventListener('click', () => { S.play('click'); startRun(); });
-  $('btn-again').addEventListener('click', () => { S.play('click'); startRun(); });
-  $('btn-garage').addEventListener('click', () => { S.play('click'); toGarage(); });
+  $('btn-book').addEventListener('click', () => { S.unlock(); S.play('click'); wipe(toBook); });
+  $('btn-book-back').addEventListener('click', () => { S.play('click'); wipe(toTitle); });
+  $('btn-run').addEventListener('click', () => { S.play('click'); wipe(startRun); });
+  $('btn-again').addEventListener('click', () => { S.play('click'); wipe(startRun); });
+  $('btn-garage').addEventListener('click', () => { S.play('click'); wipe(toGarage); });
   $('btn-morph').addEventListener('click', () => {
     garageForm = garageForm === 'car' ? 'robot' : 'car'; garageMorph = RC.Car.MORPH;
     S.play(garageForm === 'robot' ? 'transform' : 'untransform');
@@ -413,7 +522,7 @@
     S.music(true);
   }
   $('btn-resume').addEventListener('click', () => { S.unlock(); S.play('click'); resume(); });
-  $('btn-quit').addEventListener('click', () => { S.play('click'); resume(); toGarage(); });
+  $('btn-quit').addEventListener('click', () => { S.play('click'); wipe(() => { resume(); countdown = 0; countEl.className = ''; toGarage(); }); });
   // 안드로이드 뒤로 가기(제스처)로 실수로 나가지 않게: 한 칸 쌓아 두고, 눌리면 멈춤 화면을 보여 준다
   try { history.pushState({ rc: 1 }, ''); } catch (e) { /* 무시 */ }
   window.addEventListener('popstate', () => {
@@ -472,24 +581,31 @@
     ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, 0, 0);
     const vw = view.vw;
 
-    if (mode === 'run' && R) {
-      if (!parentOpen && !paused) {
-        const input = { tap, hold: holding, transform: wantTransform };
-        tap = false; wantTransform = false;
-        RC.Run.stepRun(R, input, dt);
-        handleEvents(R, false);
+    if ((mode === 'run' || mode === 'toResult') && R) {
+      if (!parentOpen && !paused && mode === 'run') {
+        if (countdown > 0) {
+          tap = false; wantTransform = false;
+          tickCountdown(dt);
+        } else {
+          const input = { tap, hold: holding, transform: wantTransform };
+          tap = false; wantTransform = false;
+          RC.Run.stepRun(R, input, dt);
+          handleEvents(R, false);
+        }
         updateHud();
-        if (R.done) { finishT += dt; if (finishT > 1.8) showResult(); }
+        tutorial();
+        if (R.done) { finishT += dt; if (finishT > 1.8 && mode === 'run') { mode = 'toResult'; wipe(showResult); } }
       }
       RC.Draw.drawRun(ctx, R, vw);
     } else if (mode === 'garage' || mode === 'sleep') {
       garageMorph = Math.max(0, garageMorph - dt * 0.5);
       garageBounce = Math.max(0, garageBounce - dt * 3);
+      garagePop = Math.max(0, garagePop - dt * 1.6);
       const robotShown = garageForm === 'robot' ? garageMorph < RC.Car.MORPH / 2 : garageMorph > RC.Car.MORPH / 2;
       const sleep = mode === 'sleep';
       RC.Draw.drawShowroom(ctx, cfg, vw, gt, {
         form: sleep ? 'car' : garageForm, morph: sleep ? 0 : garageMorph, bounce: garageBounce,
-        ty: sleep ? 400 : 322, scale: sleep ? 1.7 : (robotShown ? 1.15 : 1.7), night: sleep,
+        ty: sleep ? 400 : 322, scale: sleep ? 1.7 : (robotShown ? 1.15 : 1.7), night: sleep, pop: garagePop,
       });
     } else {
       // 시작·결과·도감 뒤: 시연 달리기
@@ -513,8 +629,17 @@
   toTitle();
   S.say('뚝딱 로봇카! 시작을 눌러 봐!', { ms: 3500 });
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
-  // 웹폰트가 늦게 오면 썸네일을 다시 그린다
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { renderParts(); });
+  // 로딩 화면: 글꼴이 오면(늦어도 2.5초) 걷고 시작 화면 등장 연출을 튼다
+  let started = false;
+  function reveal() {
+    if (started) return; started = true;
+    renderParts();
+    $('splash').classList.add('done');
+    document.body.classList.add('ready');
+    if (mode === 'title') toTitle();
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(reveal);
+  setTimeout(reveal, 2500);
 
   // 개발·스크린샷용 손잡이
   RC.debug = {

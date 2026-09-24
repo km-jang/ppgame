@@ -334,6 +334,15 @@
     glow(ctx, '#ffcf3a', x, y, r * 2.2, 0.55);
     ctx.save(); ctx.translate(x, y + Math.sin(t * 4 + x * 0.05) * 3); ctx.rotate(Math.sin(t * 2 + x) * 0.18); ctx.scale(s, s);
     ctx.drawImage(starImg(), -48, -48); ctx.restore();
+    // 반짝: 별마다 다른 때에 십자 빛이 스친다
+    const ph = (t * 0.7 + x * 0.0071) % 1;
+    if (ph < 0.12 && !RC.Draw.low) {
+      const k = Math.sin(ph / 0.12 * Math.PI), L = r * 1.6 * k;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = k * 0.9; ctx.fillStyle = '#fff6d6';
+      const yy = y + Math.sin(t * 4 + x * 0.05) * 3 - r * 0.3, xx = x - r * 0.25;
+      poly(ctx, [0, -L, 2, -2, L, 0, 2, 2, 0, L, -2, 2, -L, 0, -2, -2], xx, yy); ctx.fill();
+      ctx.restore();
+    }
   }
 
   function crate(ctx, x, y, w, h, style) {
@@ -492,9 +501,100 @@
     }
   }
 
+  // ─── 화면 전용 입자 (배기·바퀴 먼지·착지 불꽃·발 먼지) ─────────
+  // 규칙(run.js)과 상관없는 꾸밈이라 카메라 상태(K.pf)에 따로 둔다.
+  function puffAdd(K, x, y, vx, vy, life, size, kind, color) {
+    if (K.pf.length > 90) K.pf.shift();
+    K.pf.push({ x, y, vx, vy, life, max: life, size, kind, color });
+  }
+  function emit(K, R, dt, P, speed) {
+    const c = R.car, low = RC.Draw.low;
+    K.em = (K.em || 0) + dt;
+    const step = low ? 0.1 : 0.05;
+    while (K.em > step) {
+      K.em -= step;
+      if (c.fall) continue;
+      const r = Math.random();
+      if (c.form === 'car') {
+        // 배기: 뒤꽁무니에서 옅은 연기 (밤엔 푸르스름)
+        puffAdd(K, c.x - 92, c.y - 24 + r * 4, -30 - r * 40, -18 - r * 20, 0.55, 5 + r * 3, 'smoke', mix('#b9c0cc', '#6d7aa6', P.wn));
+        // 바퀴 먼지: 땅에 있고 빠를수록 짙게
+        if (c.onGround && R.t > 0 && speed > D.RUN.speed * 0.9) puffAdd(K, c.x - 52 + r * 10, GY - 3, -60 - r * 60, -30 - r * 40, 0.45, 5 + r * 4, 'dust', mix(P.side, '#ffffff', 0.15));
+      } else if (c.onGround) {
+        // 로봇 발 먼지: 보폭에 맞춰
+        if (Math.sin(c.x * 0.045) > 0.6) puffAdd(K, c.x - 10 + r * 20, GY - 2, -50 - r * 40, -40 - r * 30, 0.4, 6 + r * 4, 'dust', mix(P.side, '#ffffff', 0.15));
+      }
+    }
+  }
+  function burst(K, x, y, heavy) {
+    for (let i = 0; i < (heavy ? 12 : 7); i++) {
+      const a = Math.PI + (Math.random() - 0.5) * 0.9, sp = 120 + Math.random() * 220;
+      puffAdd(K, x + (Math.random() - 0.5) * 120, y - 2, Math.cos(a) * sp * (Math.random() < 0.5 ? -1 : 1), -40 - Math.random() * 80, 0.5, 8 + Math.random() * 6, 'dust', '#d6d0c4');
+    }
+    for (let i = 0; i < (heavy ? 10 : 6); i++) {
+      const dir = i % 2 ? 1 : -1;
+      puffAdd(K, x + dir * 40, y - 2, dir * (260 + Math.random() * 300), -120 - Math.random() * 220, 0.35 + Math.random() * 0.2, 2.5, 'spark', '#ffc96a');
+    }
+  }
+  function particles(ctx, K, cam, dt) {
+    if (!K.pf.length) return;
+    for (const q of K.pf) {
+      q.life -= dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      if (q.kind === 'spark') q.vy += 900 * dt; else { q.vx *= 1 - dt * 2.5; q.vy *= 1 - dt * 2; }
+    }
+    K.pf = K.pf.filter(q => q.life > 0);
+    for (const q of K.pf) {
+      const k = q.life / q.max, x = q.x - cam;
+      if (q.kind === 'spark') {
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = k;
+        ctx.strokeStyle = q.color; ctx.lineWidth = q.size; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x, q.y); ctx.lineTo(x - q.vx * 0.03, q.y - q.vy * 0.03); ctx.stroke();
+        ctx.restore();
+      } else {
+        const grow = 1 + (1 - k) * (q.kind === 'smoke' ? 2.4 : 1.6);
+        soft(ctx, q.color, x, q.y, q.size * grow * 1.6, (q.kind === 'smoke' ? 0.32 : 0.5) * k);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 새 떼 (낮·노을): 멀리서 천천히 지나간다
+  function birds(ctx, P, cam, vw, t) {
+    const a = 1 - P.wn;
+    if (a <= 0.02) return;
+    const span = vw + 600;
+    const bx = ((t * 38 - cam * 0.03) % span + span) % span - 300;
+    ctx.save(); ctx.globalAlpha = a * 0.75; ctx.strokeStyle = mix('#2a3550', '#3a2238', P.ws); ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let i = 0; i < 6; i++) {
+      const x = bx + [0, -26, -30, -54, -60, -86][i], y = 150 + [0, -12, 12, -22, 20, -8][i] + Math.sin(t * 1.3 + i) * 3;
+      const f = Math.sin(t * 9 + i * 1.7), w = 9 - (i % 3);
+      ctx.beginPath(); ctx.moveTo(x - w, y - f * 5); ctx.quadraticCurveTo(x - w * 0.4, y - 3 - f * 3, x, y); ctx.quadraticCurveTo(x + w * 0.4, y - 3 - f * 3, x + w, y - f * 5); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 노을 빛줄기: 해에서 천천히 도는 옅은 빛살 (건물 뒤)
+  function godRays(ctx, P, vw, t) {
+    const a = P.ws * (1 - P.wn);
+    if (a <= 0.02) return;
+    const sx = vw * (0.68 - P.ws * 0.14), sy = 120 + P.ws * 200;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(sx, sy, 20, sx, sy, 620);
+    g.addColorStop(0, 'rgba(255,190,110,' + 0.22 * a + ')'); g.addColorStop(1, 'rgba(255,150,90,0)');
+    ctx.fillStyle = g;
+    for (let i = 0; i < 9; i++) {
+      const ang = t * 0.03 + i * TAU / 9 + Math.sin(i * 3.1) * 0.2, w = 0.06 + (i % 3) * 0.03;
+      ctx.beginPath(); ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + Math.cos(ang - w) * 700, sy + Math.sin(ang - w) * 700);
+      ctx.lineTo(sx + Math.cos(ang + w) * 700, sy + Math.sin(ang + w) * 700);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // ─── 카메라 ──────────────────────────────────────────────
   function camOf(R, vw) {
-    if (!R._cam) R._cam = { x: R.car.x - vw * 0.28, zoom: 1, shake: 0, flash: 0, last: performance.now(), land: 0, ui: [] };
+    if (!R._cam) R._cam = { x: R.car.x - vw * 0.28, zoom: 1, shake: 0, flash: 0, last: performance.now(), land: 0, ui: [], pf: [] };
     return R._cam;
   }
   // main.js가 사건마다 불러 준다 (흔들림·섬광·HUD로 날아가는 별)
@@ -502,8 +602,10 @@
     const K = camOf(R, vw || 1000);
     if (ev === 'smash') K.shake = Math.max(K.shake, 9);
     else if (ev === 'bump') K.shake = Math.max(K.shake, 6);
-    else if (ev === 'land') { K.shake = Math.max(K.shake, 3); K.land = 0.25; }
+    else if (ev === 'land') { K.shake = Math.max(K.shake, 3); K.land = 0.25; burst(K, R.car.x, GY, R.car.vy > 900 || R.car.form === 'robot'); }
+    else if (ev === 'ramp') burst(K, R.car.x + 40, R.car.y, false);
     else if (ev === 'transform') { K.shake = Math.max(K.shake, 7); K.flash = 0.45; }
+    else if (ev === 'go') { K.shake = Math.max(K.shake, 5); for (let i = 0; i < 10; i++) puffAdd(K, R.car.x - 60 + Math.random() * 30, GY - 4, -120 - Math.random() * 200, -30 - Math.random() * 60, 0.7, 8 + Math.random() * 6, 'dust', '#cfd3da'); }
     else if (ev === 'pop') K.shake = Math.max(K.shake, 4);
     else if (ev === 'star' && R.lastStar) K.ui.push({ wx: R.lastStar.x, wy: R.lastStar.y, t: 0 });
   }
@@ -531,7 +633,7 @@
     // 배경 (카메라 확대 영향 없음)
     const low = RC.Draw.low;
     sky(ctx, P, vw, t);
-    if (!low) clouds(ctx, P, cam, vw, t, lw);
+    if (!low) { godRays(ctx, P, vw, t); clouds(ctx, P, cam, vw, t, lw); birds(ctx, P, cam, vw, t); }
     drawLayer(ctx, tiles.far, lw, cam, 0.12, GY - 26 - 330 + 20, 330, vw);
     drawLayer(ctx, tiles.mid, lw, cam, 0.38, GY - 26 - 360 + 10, 360, vw);
 
@@ -546,6 +648,9 @@
     road(ctx, P, cam, vw, R.level.pits);
     items(ctx, R, cam, vw, t, P);
 
+    // 입자: 차 뒤에 그려서 연기가 차체를 덮지 않게
+    if (!R.freeze) emit(K, R, dt, P, speed);
+    particles(ctx, K, cam, R.freeze ? 0 : dt);
     // 차 그림자
     const cx = c.x - cam;
     if (!c.fall) {
@@ -568,7 +673,7 @@
     const spin = c.spin > 0 ? (1 - c.spin / 0.9) * TAU : 0;
     C.drawBot(ctx, R.cfg, cx, c.y, {
       t, form: c.form, morph: c.morph, thrust: c.thrusting, glide: c.gliding, spin, tilt: c.form === 'car' ? tilt : 0,
-      bounce: c.bump > 0 ? Math.sin(c.bump * 40) * 4 : 0, squash: K.land > 0 ? Math.sin(K.land / 0.25 * Math.PI) : 0,
+      bounce: c.bump > 0 ? Math.sin(c.bump * 40) * 4 : R.t === 0 ? Math.abs(Math.sin(now * 0.028)) * 1.6 : (c.onGround && c.form === 'car' ? Math.sin(c.x * 0.09) * 0.9 + Math.sin(c.x * 0.031) * 0.6 : 0), squash: K.land > 0 ? Math.sin(K.land / 0.25 * Math.PI) : 0,
       dist: c.x, speed, running: c.onGround, air: !c.onGround, punch: c.punch,
     });
     // 능력 연출
@@ -692,6 +797,22 @@
     ctx.restore();
 
     const sc = st.scale, cx = vw / 2;
+    // 부품을 바꾸면 회전판에서 빛 고리가 퍼지고 불꽃이 튄다
+    if (st.pop > 0) {
+      const k = 1 - st.pop;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(120,230,255,' + st.pop * 0.9 + ')'; ctx.lineWidth = 6 * st.pop + 1;
+      ctx.beginPath(); ctx.ellipse(vw / 2, ty, 120 + k * 200, 18 + k * 34, 0, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,170,80,' + st.pop * 0.6 + ')'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.ellipse(vw / 2, ty, 80 + k * 140, 12 + k * 22, 0, 0, TAU); ctx.stroke();
+      const r = RC.rng(5);
+      for (let i = 0; i < 16; i++) {
+        const a = r() * TAU, sp = 0.6 + r() * 0.8;
+        const px = vw / 2 + Math.cos(a) * (60 + k * 240 * sp), py = ty - 20 - k * (80 + r() * 140) + k * k * 90 + Math.sin(a) * 20;
+        glow(ctx, i % 3 ? '#8fe8ff' : '#ffc96a', px, py, 10 * st.pop + 4, st.pop);
+      }
+      ctx.restore();
+    }
     const hop = Math.sin((st.bounce || 0) * Math.PI) * 18;
     const o = { t, form: st.form, morph: st.morph, dist: t * 20, running: false, sleep: night, speed: 0 };
     // 바닥 반사

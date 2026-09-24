@@ -21,6 +21,12 @@
 <body>
   <canvas id="stage" aria-label="게임 화면"></canvas>
 
+  <!-- 로딩: 글꼴이 준비될 때까지 (글자가 바뀌며 깜빡이지 않게) -->
+  <div id="splash"><div class="sp-logo">로봇카</div><div class="sp-bar"><i></i></div></div>
+
+  <!-- 화면 넘김 (비스듬한 띠가 쓸고 지나간다) -->
+  <div id="wipe" aria-hidden="true"><i></i><i></i><i></i></div>
+
   <!-- 목소리 안내 자막 -->
   <div id="say" aria-live="polite"></div>
 
@@ -75,6 +81,10 @@
   <section id="hud" class="screen">
     <div id="hud-stars"><img alt="" class="star-ico"><b>0</b></div>
     <div id="hud-track"><div id="hud-fill"></div><i id="hud-car"></i><span class="flag"></span></div>
+    <!-- 출발 신호등 3·2·1 -->
+    <div id="count" aria-hidden="true"><div class="lights"><i></i><i></i><i></i></div><b id="count-num"></b></div>
+    <!-- 처음 두 판: 손가락 안내 -->
+    <div id="hint" aria-hidden="true"><span class="finger"></span><span class="ripple"></span><b></b></div>
     <button id="btn-transform"><span class="core"><span class="t1">변신!</span><span class="t2" id="ability-name">슝 돌진</span></span></button>
   </section>
 
@@ -87,6 +97,7 @@
       <div class="jar-row">
         <div class="cell"><div id="jar-fill"></div><span id="jar-text">0 / 15</span><small>카드 에너지</small></div>
         <div id="new-cards"></div>
+        <div id="next-card"><canvas width="300" height="420"></canvas><small>다음 카드</small></div>
       </div>
       <p id="res-note" class="note"></p>
       <div class="row">
