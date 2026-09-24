@@ -765,6 +765,9 @@
     if (view.oy > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#05070d'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, 0, view.dpr * view.s * view.oy);
     const vw = view.vw;
+    // 엔진 소리: 달리는 판에서만 (신호등 동안은 제자리 부릉)
+    const engOn = mode === 'run' && R && !R.done && !paused && !parentOpen && !document.hidden;
+    S.engine(engOn, engOn ? (countdown > 0 ? 0 : RC.Run.speedOf(R) / D.RUN.speed) : 0);
 
     if ((mode === 'run' || mode === 'toResult') && R) {
       if (!parentOpen && !paused && mode === 'run') {

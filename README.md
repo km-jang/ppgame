@@ -56,6 +56,10 @@ node tests/flow.test.js      # 두 게임 화면 흐름 (Playwright 크로미움
 
 main에 합친 것만 이 주소에 나온다.
 
+## 소리 출처
+
+두 게임의 소리 파일(`robocar/sounds/`, `game/sounds/`)은 Kenney(kenney.nl)의 무료 스타터 키트에서 가져왔다 (MIT 라이선스, 각 폴더 `LICENSE.md`).
+
 ## 이전 작업물
 
 방치형 클리커 "sudo make AGI"와 함께 있던 문서는 2026-09-24 재기획 때 모두 폐기했다.

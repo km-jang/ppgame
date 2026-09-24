@@ -1,5 +1,6 @@
 'use strict';
-// 효과음·음악(WebAudio 합성)과 목소리 안내(speechSynthesis). 파일 0개.
+// 효과음·음악(WebAudio 합성)과 목소리 안내(speechSynthesis).
+// 효과음 일부는 진짜 소리 파일(sounds/, Kenney 무료)로 내고, 파일이 없으면 합성음으로 대신한다.
 (function (RC) {
   let ac = null, master = null, sfx = null, bgm = null, noiseBuf = null;
   let soundOn = true, voiceOn = true;
@@ -18,6 +19,7 @@
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       if (wantMusic) startMusic();
+      SM.load(ac, FILES);
     } catch (e) { ac = null; }
   }
 
@@ -78,12 +80,64 @@
     slam:   t => { tone(sfx, t, 'sine', 120, 50, 0.3, 0.5); noise(sfx, t, 'lowpass', 2000, 200, 0.25, 0.35); },
   };
 
+  // 진짜 소리 파일: f 파일, v 크기, r 빠르기(음 높이), d 길이 자르기. layer면 합성음도 같이 낸다(두께)
+  const SM = RC.makeSamples('sounds/');
+  const SAMPLE = {
+    jump:   { f: 'jump', v: 0.9 },
+    jump2:  { f: 'jump_c', v: 1.6 },
+    hop:    { f: 'jump_b', v: 1.8, r: 1.05 },
+    land:   { f: 'land', v: 4, layer: true },
+    star:   { f: 'coin', v: 1.5 },
+    smash:  { f: 'break', v: 1.1, layer: true },
+    bump:   { f: 'impact', v: 1.1 },
+    fall:   { f: 'fall', v: 0.9, layer: true },
+    pop:    { f: 'tile-match', v: 0.8, r: 1.2 },
+    click:  { f: 'placement-a', v: 0.45 },
+    swap:   { f: 'placement-c', v: 0.6 },
+    cone:   { f: 'tile-land', v: 0.75, r: 0.9 },
+    slip:   { f: 'skid', v: 0.8, d: 0.75 },
+    ramp:   { f: 'skid', v: 0.35, d: 0.35, r: 1.4, layer: true },
+    boing:  { f: 'jump_a', v: 1.8 },
+    transform: { f: 'weapon_change', v: 1.6, layer: true },
+    untransform: { f: 'removal-a', v: 0.7 },
+    slam:   { f: 'impact', v: 1.1, r: 0.85 },
+  };
+  const FILES = Array.from(new Set(Object.values(SAMPLE).map(s => s.f).concat(['engine'])));
   function play(name) {
     if (!ac || !soundOn || !SFX[name]) return;
     const now = ac.currentTime;
     if (name !== 'star' && last[name] && now - last[name] < 0.05) return;
     last[name] = now;
-    SFX[name](now + 0.005);
+    const smp = SAMPLE[name];
+    let used = false;
+    if (smp) {
+      let rate = smp.r || 1;
+      if (name === 'star') {
+        // 연속으로 먹으면 음이 한 칸씩 올라간다 (합성음과 같은 규칙)
+        starStreak = now - starLast < 0.6 ? Math.min(starStreak + 1, 12) : 0; starLast = now;
+        rate = Math.pow(2, [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21][starStreak] / 12);
+      }
+      used = !!SM.play(smp.f, sfx, { vol: smp.v, rate, dur: smp.d });
+    }
+    if (!used || smp.layer) SFX[name](now + 0.005);
+  }
+
+  // 엔진 소리: 달리는 동안 낮게 깔리고, 빠를수록 음이 올라간다. k = 0(정지) ~ 1(최고 속도)
+  let eng = null;
+  function engine(on, k) {
+    if (!ac || !soundOn) on = false;
+    if (on && !eng) {
+      eng = SM.play('engine', sfx, { vol: 0.0001, loop: true, rate: 0.8 });
+      if (eng) eng.gain.gain.setTargetAtTime(0.13, ac.currentTime, 0.25);
+    }
+    if (!eng) return;
+    const t = ac.currentTime;
+    if (on) eng.src.playbackRate.setTargetAtTime(0.75 + Math.max(0, Math.min(1.4, k || 0)) * 0.4, t, 0.2);
+    else {
+      const e = eng; eng = null;
+      e.gain.gain.setTargetAtTime(0.0001, t, 0.15);
+      try { e.src.stop(t + 0.8); } catch (err) { /* 무시 */ }
+    }
   }
 
   // 음악: 신나는 장조 행진 (C - G - Am - F), 16스텝
@@ -142,7 +196,7 @@
   }
 
   RC.Sound = {
-    unlock, play, music, say,
+    unlock, play, music, say, engine,
     hasVoice: () => { try { return !!window.speechSynthesis && !!koVoice; } catch (e) { return false; } },
     setSound(on) { soundOn = on; if (master) master.gain.value = on ? 0.55 : 0; },
     setVoice(on) { voiceOn = on; if (!on) try { speechSynthesis.cancel(); } catch (e) { /* 무시 */ } },
