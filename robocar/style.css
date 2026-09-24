@@ -320,7 +320,10 @@ html, body {
   .btn.big { font-size: 28px; padding: 10px 32px; }
   .garage-panel { gap: 8px; padding: 8px 10px 10px; }
   .part-group h3 { font-size: 15px; margin-bottom: 4px; }
-  .part { font-size: 12px; }
+  .part { font-size: 12px; white-space: nowrap; letter-spacing: -0.5px; }
+  .part span { overflow: hidden; text-overflow: clip; max-width: 100%; }
+  .logo-sub { font-size: 13px; letter-spacing: 4px; white-space: nowrap; }
+  .title-wrap { gap: 22px; }
   #stats { display: none; }
   #btn-morph { top: auto; bottom: 150px; width: auto; }
   #btn-transform { width: 126px; height: 126px; right: 16px; bottom: 16px; }
@@ -331,3 +334,35 @@ html, body {
   .panel.result { padding: 12px 20px 16px; gap: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ─── 태블릿 전용 ─── */
+#btn-fs {
+  width: 44px; height: 44px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.25); background: rgba(7, 11, 22, 0.6);
+  display: grid; place-items: center;
+}
+#btn-fs svg { width: 20px; height: 20px; fill: rgba(255, 255, 255, 0.75); }
+#btn-fs[hidden] { display: none; }
+
+.pause-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 28px 40px 32px; text-align: center; display: flex; flex-direction: column; gap: 22px; }
+.pause-panel h2 { margin: 0; font-family: var(--display); font-weight: normal; font-size: 56px; transform: skewX(-8deg); }
+#scr-pause { background: rgba(3, 5, 12, 0.6); z-index: 45; }
+
+/* 세로 화면 안내: 태블릿 아이콘이 옆으로 눕는 동작을 되풀이 */
+#scr-rotate {
+  position: fixed; inset: 0; z-index: 70; display: none;
+  background: radial-gradient(ellipse at 50% 40%, #1b2a55, #070b16 70%);
+  align-items: center; justify-content: center; text-align: center;
+}
+body.portrait #scr-rotate { display: flex; }
+.rotate-box h2 { margin: 36px 0 10px; font-family: var(--display); font-weight: normal; font-size: 44px; }
+.rotate-box p { margin: 0; font: 700 22px var(--body); color: var(--muted); }
+.tablet-ico {
+  width: 150px; height: 220px; margin: 0 auto; border-radius: 22px; position: relative;
+  border: 8px solid #dfe7f2; background: linear-gradient(180deg, #2a3f7a, #101a36);
+  box-shadow: 0 0 40px rgba(57, 216, 255, 0.4);
+  animation: rot 2.4s ease-in-out infinite;
+}
+.tablet-ico i { position: absolute; left: 50%; bottom: 10px; width: 30px; height: 6px; margin-left: -15px; border-radius: 3px; background: #dfe7f2; }
+@keyframes rot { 0%, 25% { transform: rotate(0); } 55%, 85% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
+.panel.parent h3 small { font-weight: 500; color: var(--gold); margin-left: 6px; }

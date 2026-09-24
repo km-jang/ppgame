@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#070b16">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="screen-orientation" content="landscape">
+  <meta name="x5-orientation" content="landscape">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
   <meta name="description" content="부품을 끼워 나만의 변신 로봇카를 만들고 도시를 달리는 5~6세용 게임">
   <title>뚝딱 로봇카</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,6 +27,7 @@
   <!-- 배터리 (하루 타이머) + 보호자 자물쇠 -->
   <div id="corner">
     <div id="battery" title="오늘 남은 놀이 시간"><i></i><span></span></div>
+    <button id="btn-fs" aria-label="전체 화면"><svg viewBox="0 0 24 24"><path d="M4 9V4h5v2H6v3zm11-5h5v5h-2V6h-3zM4 15h2v3h3v2H4zm14 3v-3h2v5h-5v-2z"/></svg></button>
     <button id="btn-lock" aria-label="보호자 설정 (3초 누르기)"><svg viewBox="0 0 36 36"><circle class="ring" cx="18" cy="18" r="16"/></svg><svg class="ico" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></svg></button>
   </div>
 
@@ -106,6 +113,26 @@
     </div>
   </section>
 
+  <!-- 잠깐 멈춤 (홈 버튼·뒤로 가기 뒤에 돌아왔을 때) -->
+  <section id="scr-pause" class="screen">
+    <div class="panel pause-panel">
+      <h2>잠깐 멈춤</h2>
+      <div class="row">
+        <button id="btn-resume" class="btn primary big"><span>계속 달리기</span></button>
+        <button id="btn-quit" class="btn ghost"><span>차고로</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 세로로 들었을 때: 옆으로 눕혀 달라고 안내 -->
+  <section id="scr-rotate">
+    <div class="rotate-box">
+      <div class="tablet-ico"><i></i></div>
+      <h2>태블릿을 옆으로 눕혀 줘!</h2>
+      <p>로봇카는 가로 화면에서 달려요</p>
+    </div>
+  </section>
+
   <!-- 보호자 설정 -->
   <section id="scr-parent" class="screen">
     <div class="panel parent">
@@ -115,15 +142,19 @@
       <div class="seg" id="p-limit">
         <button data-min="10">10분</button><button data-min="20">20분</button><button data-min="30">30분</button><button data-min="0">제한 없음</button>
       </div>
-      <h3>소리</h3>
+      <h3>소리 · 진동</h3>
       <div class="seg">
-        <button id="p-voice" data-on="1">목소리 안내</button><button id="p-sound" data-on="1">효과음·음악</button>
+        <button id="p-voice" data-on="1">목소리 안내</button><button id="p-sound" data-on="1">효과음·음악</button><button id="p-vib" data-on="1">진동</button>
+      </div>
+      <h3>화질 <small id="p-q-now"></small></h3>
+      <div class="seg" id="p-quality">
+        <button data-q="auto">자동</button><button data-q="high">선명하게</button><button data-q="save">배터리 절약</button>
       </div>
       <div class="row">
         <button id="p-extend" class="btn ghost small"><span>오늘 10분 더 주기</span></button>
         <button id="p-close" class="btn primary small"><span>닫기</span></button>
       </div>
-      <p class="note small">시간이 다 되면 달리던 판은 끝까지 하고 잠자기 화면으로 넘어갑니다. 이 설정은 자물쇠를 3초 눌러야 열립니다.</p>
+      <p class="note small">시간이 다 되면 달리던 판은 끝까지 하고 잠자기 화면으로 넘어갑니다. 이 설정은 자물쇠를 3초 눌러야 열립니다. 갤럭시탭은 크롬 메뉴 → <b>홈 화면에 추가</b>하면 앱처럼 전체 화면으로 열리고, 인터넷이 없어도 됩니다.</p>
     </div>
   </section>
 

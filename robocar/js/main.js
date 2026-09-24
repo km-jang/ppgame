@@ -9,16 +9,26 @@
   // ─── 저장 ────────────────────────────────────────────────
   const cfg = Object.assign({ body: 'racer', wheel: 'normal', gear: 'jet', color: '#ff3b3b' }, RC.store.get('rc.cfg', {}));
   const prog = Object.assign({ bank: 0, stickers: [], runs: 0 }, RC.store.get('rc.prog', {}));
-  const set = Object.assign({ limit: 20, voice: true, sound: true }, RC.store.get('rc.set', {}));
+  const set = Object.assign({ limit: 20, voice: true, sound: true, vib: true, quality: 'auto' }, RC.store.get('rc.set', {}));
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   let play = RC.store.get('rc.play', { date: today(), sec: 0, bonus: 0 });
   if (play.date !== today()) play = { date: today(), sec: 0, bonus: 0 };
   const saveAll = () => { RC.store.set('rc.cfg', cfg); RC.store.set('rc.prog', prog); RC.store.set('rc.set', set); RC.store.set('rc.play', play); };
 
   // ─── 화면 크기: 논리 높이 600 기준 ─────────────────────────
+  // 화질 시작값: 보호자 설정 → 없으면 기기 성능 힌트(갤럭시탭 A 같은 보급형은 한 단계 낮게)
+  const weak = (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+  function baseQ() { return set.quality === 'high' ? 1 : set.quality === 'save' ? 0.7 : (weak ? 0.85 : 1); }
   const view = { w: 0, h: 0, dpr: 1, s: 1, vw: 1000, q: 1 };
+  view.q = baseQ();
+  RC.Draw.low = set.quality === 'save';
   function resize() {
     view.w = window.innerWidth; view.h = window.innerHeight;
+    // 세로로 들거나 창이 좁으면(분할 화면) 옆으로 눕혀 달라고 안내하고 달리기는 멈춘다
+    const portrait = view.w < view.h * 1.2;
+    document.body.classList.toggle('portrait', portrait);
+    if (portrait) { if (mode === 'run' && !paused) pause(); if (!rotTold) { rotTold = true; S.say('태블릿을 옆으로 눕혀 줘!', { bubble: false }); } }
+    else rotTold = false;
     view.dpr = Math.max(0.6, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.4e6 / (view.w * view.h))) * view.q);
     view.s = view.h / 600;
     view.vw = view.w / view.s;
@@ -42,6 +52,7 @@
   // ─── 화면 전환 ────────────────────────────────────────────
   let mode = 'title';
   let parentOpen = false;
+  let paused = false, rotTold = false;
   const SCREENS = ['scr-title', 'scr-garage', 'hud', 'scr-result', 'scr-book', 'scr-sleep'];
   function show(id) { for (const s of SCREENS) $(s).classList.toggle('on', s === id); }
 
@@ -135,7 +146,8 @@
     S.unlock();
     prog.runs += 1; saveAll();
     R = RC.Run.createRun(cfg, 1 + (prog.runs % 3));
-    mode = 'run'; finishT = 0; readyTold = false;
+    mode = 'run'; finishT = 0; readyTold = false; paused = false;
+    wakeLock(true);
     $('ability-name').textContent = R.body.abilityName;
     show('hud');
     placeHud();
@@ -165,6 +177,7 @@
       RC.Draw.fxEvent(Rx, ev, view.vw);
       S.play(ev);
       if (quiet) continue;
+      if (ev === 'smash') vibrate(35); else if (ev === 'transform') vibrate([20, 40, 60]); else if (ev === 'bump') vibrate(20); else if (ev === 'finish') vibrate([40, 60, 40, 60, 120]);
       if (ev === 'star') { const h = $('hud-stars'); h.classList.remove('pop'); void h.offsetWidth; h.classList.add('pop'); }
       else if (ev === 'transform') { lastSay = performance.now(); S.say(Rx.body.robot + ' 변신!', { ms: 1600 }); }
       else if (ev === 'smash') sayOnce('와장창!');
@@ -297,7 +310,7 @@
   }
   function checkSleep() { if (set.limit && battery() <= 0) { goSleep(); return true; } return false; }
   function goSleep() {
-    mode = 'sleep'; show('scr-sleep'); S.music(false);
+    mode = 'sleep'; show('scr-sleep'); S.music(false); wakeLock(false);
     S.say('오늘은 여기까지! 내일 또 만나!', { ms: 4000 });
     endAfterRun = false;
   }
@@ -321,7 +334,14 @@
     for (const b of $('p-limit').children) b.setAttribute('aria-pressed', String(Number(b.dataset.min) === set.limit));
     $('p-voice').dataset.on = set.voice ? '1' : '0';
     $('p-sound').dataset.on = set.sound ? '1' : '0';
+    $('p-vib').dataset.on = set.vib ? '1' : '0';
+    for (const b of $('p-quality').children) b.setAttribute('aria-pressed', String(b.dataset.q === set.quality));
+    $('p-q-now').textContent = '지금 해상도 ' + Math.round(view.q * 100) + '%';
   }
+  $('p-vib').addEventListener('click', () => { set.vib = !set.vib; saveAll(); renderParent(); vibrate(40); });
+  for (const b of $('p-quality').children) b.addEventListener('click', () => {
+    set.quality = b.dataset.q; view.q = baseQ(); RC.Draw.low = set.quality === 'save'; saveAll(); resize(); renderParent();
+  });
   for (const b of $('p-limit').children) b.addEventListener('click', () => { set.limit = Number(b.dataset.min); saveAll(); renderParent(); });
   $('p-voice').addEventListener('click', () => { set.voice = !set.voice; S.setVoice(set.voice); saveAll(); renderParent(); });
   $('p-sound').addEventListener('click', () => { set.sound = !set.sound; S.setSound(set.sound); saveAll(); renderParent(); });
@@ -333,16 +353,21 @@
   });
 
   // ─── 입력 ────────────────────────────────────────────────
-  canvas.addEventListener('pointerdown', () => {
+  // 여러 손가락을 따로 기억한다: 한 손가락을 떼도 다른 손가락이 누르고 있으면 계속 "꾹"
+  // 손바닥(닿은 면이 큰 터치)은 무시한다. 태블릿을 쥔 손이 화면 가장자리에 닿아도 점프하지 않게
+  const downs = new Set();
+  const isPalm = e => e.pointerType === 'touch' && Math.max(e.width || 0, e.height || 0) > 70;
+  canvas.addEventListener('pointerdown', e => {
     S.unlock();
-    if (mode === 'run') { tap = true; holding = true; }
-    else if (mode === 'garage') { garageBounce = 1; S.play('honk'); }
+    if (isPalm(e)) return;
+    if (mode === 'run' && !paused) { downs.add(e.pointerId); tap = true; holding = true; }
+    else if (mode === 'garage') { garageBounce = 1; S.play('honk'); vibrate(15); }
   });
-  const release = () => { holding = false; };
+  const release = e => { downs.delete(e.pointerId); holding = downs.size > 0; };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
   canvas.addEventListener('pointerleave', release);
-  btnT.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); wantTransform = true; btnT.classList.add('pressed'); });
+  btnT.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); if (paused) return; wantTransform = true; btnT.classList.add('pressed'); });
   btnT.addEventListener('pointerup', () => btnT.classList.remove('pressed'));
   btnT.addEventListener('pointerleave', () => btnT.classList.remove('pressed'));
   window.addEventListener('pointerdown', () => S.unlock(), { passive: true });
@@ -353,7 +378,12 @@
   });
   window.addEventListener('keyup', e => { if (e.code === 'Space') holding = false; });
 
-  $('btn-go-garage').addEventListener('click', () => { S.unlock(); S.play('click'); toGarage(); });
+  $('btn-go-garage').addEventListener('click', () => {
+    S.unlock(); S.play('click');
+    // 처음 한 번은 전체 화면으로 (주소창이 사라져 화면이 넓어진다)
+    if (!fsAsked) { fsAsked = true; goFullscreen(); }
+    toGarage();
+  });
   $('btn-book').addEventListener('click', () => { S.unlock(); S.play('click'); toBook(); });
   $('btn-book-back').addEventListener('click', () => { S.play('click'); toTitle(); });
   $('btn-run').addEventListener('click', () => { S.play('click'); startRun(); });
@@ -365,21 +395,73 @@
     S.say(garageForm === 'robot' ? RC.find(D.BODIES, cfg.body).robot + ' 변신!' : '다시 자동차!');
     $('btn-morph').querySelector('span').textContent = garageForm === 'robot' ? '자동차로' : '변신 보기';
   });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { holding = false; saveAll(); } });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { downs.clear(); holding = false; saveAll(); if (mode === 'run') pause(); }
+    else if (mode === 'run') wakeLock(true);
+  });
+
+  // ─── 멈춤 · 뒤로 가기 보호 ────────────────────────────────
+  function pause() {
+    if (mode !== 'run' || !R || R.done) return;
+    paused = true; downs.clear(); holding = false;
+    $('scr-pause').classList.add('on');
+    S.music(false);
+  }
+  function resume() {
+    paused = false;
+    $('scr-pause').classList.remove('on');
+    S.music(true);
+  }
+  $('btn-resume').addEventListener('click', () => { S.unlock(); S.play('click'); resume(); });
+  $('btn-quit').addEventListener('click', () => { S.play('click'); resume(); toGarage(); });
+  // 안드로이드 뒤로 가기(제스처)로 실수로 나가지 않게: 한 칸 쌓아 두고, 눌리면 멈춤 화면을 보여 준다
+  try { history.pushState({ rc: 1 }, ''); } catch (e) { /* 무시 */ }
+  window.addEventListener('popstate', () => {
+    try { history.pushState({ rc: 1 }, ''); } catch (e) { /* 무시 */ }
+    if (mode === 'run') pause();
+    else if (mode === 'garage' || mode === 'book') toTitle();
+  });
+
+  // ─── 태블릿 기능: 진동 · 화면 켜짐 유지 · 전체 화면 ─────────────
+  function vibrate(ms) { try { if (set.vib && navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* 무시 */ } }
+  let lockObj = null;
+  function wakeLock(on) {
+    try {
+      if (on && !lockObj && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { lockObj = l; l.addEventListener('release', () => { lockObj = null; }); }).catch(() => {});
+      else if (!on && lockObj) { lockObj.release().catch(() => {}); lockObj = null; }
+    } catch (e) { /* 무시 */ }
+  }
+  const fsBtn = $('btn-fs');
+  const root = document.documentElement;
+  const canFs = !!(document.fullscreenEnabled && root.requestFullscreen);
+  if (!canFs) fsBtn.hidden = true;
+  function goFullscreen() {
+    if (!canFs || document.fullscreenElement) return;
+    root.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+      // 전체 화면이 되면 가로로 고정 (지원하는 기기만)
+      try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) { /* 무시 */ }
+    }).catch(() => {});
+  }
+  fsBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else goFullscreen();
+  });
+  let fsAsked = false;
 
   // ─── 루프 ────────────────────────────────────────────────
   let lastTs = 0, gt = 0;
   // 자동 화질: 2초 동안 평균 45fps 아래면 해상도를 한 단계 낮추고 장식을 줄인다
   let perfAcc = 0, perfN = 0;
   function autoQuality(raw) {
-    if (mode !== 'run' || document.hidden || raw > 0.2 || RC.debug.noAuto) return;
+    if (mode !== 'run' || paused || document.hidden || raw > 0.2 || set.quality !== 'auto' || RC.debug.noAuto) return;
     perfAcc += raw; perfN++;
     if (perfN < 120) return;
     const avg = perfAcc / perfN; perfAcc = 0; perfN = 0;
     if (avg > 1 / 45 && view.q > 0.6) { view.q = Math.max(0.6, view.q * 0.85); RC.Draw.low = view.q < 0.9; resize(); }
   }
 
+  // 120Hz 화면(갤럭시탭 S 시리즈)에서도 60번만 그린다: 배터리·발열 절약
   function frame(ts) {
+    if (ts - lastTs < 1000 / 60 - 3) { requestAnimationFrame(frame); return; }
     const raw = (ts - lastTs) / 1000 || 0;
     const dt = Math.min(0.05, raw);
     lastTs = ts;
@@ -391,7 +473,7 @@
     const vw = view.vw;
 
     if (mode === 'run' && R) {
-      if (!parentOpen) {
+      if (!parentOpen && !paused) {
         const input = { tap, hold: holding, transform: wantTransform };
         tap = false; wantTransform = false;
         RC.Run.stepRun(R, input, dt);
@@ -422,6 +504,10 @@
 
   // ─── 시작 ────────────────────────────────────────────────
   S.setVoice(set.voice); S.setSound(set.sound);
+  // 오프라인 실행 (홈 화면에 추가했을 때). 미리보기 창 안에서는 조용히 건너뛴다
+  try {
+    if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && window.top === window) navigator.serviceWorker.register('sw.js').catch(() => {});
+  } catch (e) { /* 무시 */ }
   resize();
   buildGarage();
   toTitle();
@@ -433,7 +519,7 @@
   // 개발·스크린샷용 손잡이
   RC.debug = {
     get mode() { return mode; }, get run() { return R; }, cfg, prog, set, play,
-    toGarage, toBook, startRun, showResult, goSleep, openParent, toTitle,
+    toGarage, toBook, startRun, showResult, goSleep, openParent, toTitle, pause, resume, get view() { return view; },
     setGarageForm(f) { garageForm = f; },
   };
 })(RC);
