@@ -71,6 +71,17 @@ var RC = {};
 
   const JAR = 15; // 별 병 크기 (이만큼 모으면 스티커 1장)
 
-  RC.DATA = { BODIES, WHEELS, GEAR, COLORS, STICKERS, RARITY, RUN, JAR };
+  // 코스: 조각(패턴) 목록이 다르다. first = 처음 몇 조각 고정 순서(쉬운 것부터)
+  // unlock = 도시를 끝까지 달린 판 수가 이만큼이면 열림 (0 = 처음부터)
+  const COURSES = [
+    { id: 'city', name: '도시', desc: '낮에서 밤까지 큰 길을 달려요', unlock: 0,
+      first: ['stars', 'boxes', 'pit', 'stars'],
+      patterns: ['stars', 'pit', 'boxes', 'rock', 'fire', 'ramp', 'high', 'monkey', 'boxes', 'pit'] },
+    { id: 'site', name: '공사장', desc: '고깔을 쓰러뜨리고 흙더미를 넘어요', unlock: 1,
+      first: ['stars', 'cones', 'dirt', 'stars'],
+      patterns: ['stars', 'pit', 'cones', 'pipe', 'dirt', 'crane', 'mud', 'boxes', 'cones', 'monkey'] },
+  ];
+
+  RC.DATA = { BODIES, WHEELS, GEAR, COLORS, STICKERS, RARITY, RUN, JAR, COURSES };
   RC.find = (list, id) => list.find(x => x.id === id) || list[0];
 })(RC);

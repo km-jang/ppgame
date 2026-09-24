@@ -27,7 +27,7 @@
 
   // ─── 건물 타일 (팔레트별) ───────────────────────────────────
   const TILE_W = 1600, RES = 1.25;
-  const tiles = { far: [], mid: [] };
+  const tiles = { city: { far: [], mid: [] }, site: { far: [], mid: [] } };
   function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.round(w * RES); c.height = Math.round(h * RES); const g = c.getContext('2d'); g.scale(RES, RES); return [c, g]; }
 
   function buildFar(pi) {
@@ -99,9 +99,16 @@
     return c;
   }
 
-  function ensureTiles() {
-    if (tiles.far.length) return;
-    for (let i = 0; i < 3; i++) { tiles.far.push(buildFar(i)); tiles.mid.push(buildMid(i)); }
+  function ensureTiles(theme) {
+    const T = tiles[theme];
+    if (T.far.length) return T;
+    for (let i = 0; i < 3; i++) {
+      if (theme === 'site') {
+        const [cf, gf] = makeCanvas(TILE_W, 330); RC.Site.buildFar(PAL[i], i, TILE_W, 330, gf); T.far.push(cf);
+        const [cm, gm] = makeCanvas(TILE_W, 360); RC.Site.buildMid(PAL[i], i, TILE_W, 360, gm); T.mid.push(cm);
+      } else { T.far.push(buildFar(i)); T.mid.push(buildMid(i)); }
+    }
+    return T;
   }
 
   function drawLayer(ctx, list, w, cam, par, y, h, vw) {
@@ -200,14 +207,15 @@
   // 도로 줄(인도·연석·아스팔트·차선)은 타일로 그려 두고 이어 찍는다
   const ROAD_W = 840, ROAD_Y = GY - 26, ROAD_H = 600 - GY + 26;
   const roadCache = { key: '', c: null };
-  function roadTile(P) {
-    const key = Math.round(P.ws * 30) + ':' + Math.round(P.wn * 30);
+  function roadTile(P, theme) {
+    const key = theme + Math.round(P.ws * 30) + ':' + Math.round(P.wn * 30);
     if (roadCache.key === key) return roadCache.c;
     const R2 = 1.25;
     const c = roadCache.c || document.createElement('canvas');
     c.width = Math.round(ROAD_W * R2); c.height = Math.round(ROAD_H * R2);
     const g = c.getContext('2d');
     g.setTransform(R2, 0, 0, R2, 0, -ROAD_Y * R2);
+    if (theme === 'site') { RC.Site.roadTile(g, P, ROAD_W); roadCache.key = key; roadCache.c = c; return c; }
     g.fillStyle = lin(g, 0, GY - 26, 0, GY, [[0, shade(P.side, 1.1)], [1, shade(P.side, 0.85)]]);
     g.fillRect(0, GY - 26, ROAD_W, 26);
     g.strokeStyle = 'rgba(0,0,0,0.12)'; g.lineWidth = 1.5;
@@ -225,8 +233,8 @@
     return c;
   }
 
-  function road(ctx, P, cam, vw, pits) {
-    const tile = roadTile(P);
+  function road(ctx, P, cam, vw, pits, theme) {
+    const tile = roadTile(P, theme);
     const off = ((-cam % ROAD_W) + ROAD_W) % ROAD_W - ROAD_W;
     for (let x = off; x < vw; x += ROAD_W) ctx.drawImage(tile, x, ROAD_Y, ROAD_W + 0.5, ROAD_H);
     // 공사 구덩이
@@ -378,6 +386,7 @@
           break;
         case 'rock': {
           if (o.broken) break;
+          if (o.style === 'pipe') { RC.Site.pipe(ctx, x, o); break; }
           // 콘크리트 방호벽
           poly(ctx, [0, 0, 10, -16, 22, -66, 68, -66, 80, -16, 90, 0], x, GY);
           ctx.fillStyle = lin(ctx, 0, GY - 66, 0, GY, [[0, '#e3e7ee'], [1, '#8e96a3']]); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = INK; ctx.stroke();
@@ -409,7 +418,11 @@
             soft(ctx, '#2a2a33', x + o.w / 2 + Math.sin(t) * 10, GY - 110 - (t * 40 % 40), 40, 0.35);
           }
           break;
+        case 'cone': RC.Site.cone(ctx, x, o); break;
+        case 'mud': RC.Site.mud(ctx, x, o, t); break;
+        case 'hook': RC.Site.hook(ctx, x, t); break;
         case 'ramp': {
+          if (o.style === 'dirt') { RC.Site.dirtRamp(ctx, x, o); break; }
           // 강철 점프대
           ctx.fillStyle = '#2a303c';
           for (let k = 0; k < 4; k++) { const xx = x + 20 + k * 36, hh = o.h * (xx - x) / o.w; ctx.fillRect(xx - 2, GY - hh, 4, hh); }
@@ -509,6 +522,7 @@
   }
   function emit(K, R, dt, P, speed) {
     const c = R.car, low = RC.Draw.low;
+    const dust = R.course && R.course.id === 'site' ? mix(RC.Site.dust, '#4a4458', P.wn * 0.7) : mix(P.side, '#ffffff', 0.15);
     K.em = (K.em || 0) + dt;
     const step = low ? 0.1 : 0.05;
     while (K.em > step) {
@@ -519,10 +533,10 @@
         // 배기: 뒤꽁무니에서 옅은 연기 (밤엔 푸르스름)
         puffAdd(K, c.x - 92, c.y - 24 + r * 4, -30 - r * 40, -18 - r * 20, 0.55, 5 + r * 3, 'smoke', mix('#b9c0cc', '#6d7aa6', P.wn));
         // 바퀴 먼지: 땅에 있고 빠를수록 짙게
-        if (c.onGround && R.t > 0 && speed > D.RUN.speed * 0.9) puffAdd(K, c.x - 52 + r * 10, GY - 3, -60 - r * 60, -30 - r * 40, 0.45, 5 + r * 4, 'dust', mix(P.side, '#ffffff', 0.15));
+        if (c.onGround && R.t > 0 && speed > D.RUN.speed * 0.9) puffAdd(K, c.x - 52 + r * 10, GY - 3, -60 - r * 60, -30 - r * 40, 0.45, 5 + r * 4, 'dust', dust);
       } else if (c.onGround) {
         // 로봇 발 먼지: 보폭에 맞춰
-        if (Math.sin(c.x * 0.045) > 0.6) puffAdd(K, c.x - 10 + r * 20, GY - 2, -50 - r * 40, -40 - r * 30, 0.4, 6 + r * 4, 'dust', mix(P.side, '#ffffff', 0.15));
+        if (Math.sin(c.x * 0.045) > 0.6) puffAdd(K, c.x - 10 + r * 20, GY - 2, -50 - r * 40, -40 - r * 30, 0.4, 6 + r * 4, 'dust', dust);
       }
     }
   }
@@ -606,6 +620,8 @@
     else if (ev === 'ramp') burst(K, R.car.x + 40, R.car.y, false);
     else if (ev === 'transform') { K.shake = Math.max(K.shake, 7); K.flash = 0.45; }
     else if (ev === 'go') { K.shake = Math.max(K.shake, 5); for (let i = 0; i < 10; i++) puffAdd(K, R.car.x - 60 + Math.random() * 30, GY - 4, -120 - Math.random() * 200, -30 - Math.random() * 60, 0.7, 8 + Math.random() * 6, 'dust', '#cfd3da'); }
+    else if (ev === 'cone') K.shake = Math.max(K.shake, 2.5);
+    else if (ev === 'splash') { K.shake = Math.max(K.shake, 3); for (let i = 0; i < 8; i++) puffAdd(K, R.car.x - 20 + Math.random() * 40, GY - 4, (Math.random() - 0.3) * 260, -120 - Math.random() * 160, 0.5, 5 + Math.random() * 4, 'dust', '#6a4424'); }
     else if (ev === 'pop') K.shake = Math.max(K.shake, 4);
     else if (ev === 'star' && R.lastStar) K.ui.push({ wx: R.lastStar.x, wy: R.lastStar.y, t: 0 });
   }
@@ -613,7 +629,8 @@
   function setHud(x, y) { hud = { x, y }; }
 
   function drawRun(ctx, R, vw) {
-    ensureTiles();
+    const theme = R.course && R.course.id === 'site' ? 'site' : 'city';
+    const T = ensureTiles(theme);
     const c = R.car;
     const K = camOf(R, vw);
     const now = performance.now();
@@ -634,8 +651,8 @@
     const low = RC.Draw.low;
     sky(ctx, P, vw, t);
     if (!low) { godRays(ctx, P, vw, t); clouds(ctx, P, cam, vw, t, lw); birds(ctx, P, cam, vw, t); }
-    drawLayer(ctx, tiles.far, lw, cam, 0.12, GY - 26 - 330 + 20, 330, vw);
-    drawLayer(ctx, tiles.mid, lw, cam, 0.38, GY - 26 - 360 + 10, 360, vw);
+    drawLayer(ctx, T.far, lw, cam, 0.12, GY - 26 - 330 + 20, 330, vw);
+    drawLayer(ctx, T.mid, lw, cam, 0.38, GY - 26 - 360 + 10, 360, vw);
 
     // 월드 (확대·흔들림)
     ctx.save();
@@ -644,8 +661,8 @@
     ctx.translate(fx0 + (Math.random() - 0.5) * sh, fy0 + (Math.random() - 0.5) * sh);
     ctx.scale(K.zoom, K.zoom);
     ctx.translate(-fx0, -fy0);
-    props(ctx, P, cam, vw, t);
-    road(ctx, P, cam, vw, R.level.pits);
+    if (theme === 'site') RC.Site.props(ctx, P, cam, vw, t); else props(ctx, P, cam, vw, t);
+    road(ctx, P, cam, vw, R.level.pits, theme);
     items(ctx, R, cam, vw, t, P);
 
     // 입자: 차 뒤에 그려서 연기가 차체를 덮지 않게
@@ -698,7 +715,7 @@
       ctx.restore();
     }
     fx(ctx, R, cam);
-    if (!low) foreground(ctx, P, cam, vw);
+    if (!low) { if (theme === 'site') RC.Site.foreground(ctx, P, cam, vw); else foreground(ctx, P, cam, vw); }
     ctx.restore();
 
     // 속도선

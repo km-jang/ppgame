@@ -37,7 +37,7 @@ function drive(R, bot, maxSec) {
 function smartBot(R, f) {
   const c = R.car;
   const ahead = R.level.pits.some(p => p.x - c.x > 0 && p.x - c.x < 90)
-    || R.level.items.some(o => (o.type === 'rock' || o.type === 'fire') && o.x - c.x > 0 && o.x - c.x < 90);
+    || R.level.items.some(o => (o.type === 'rock' || o.type === 'fire' || o.type === 'mud') && o.x - c.x > 0 && o.x - c.x < 90);
   return { tap: ahead, hold: !c.onGround && f % 2 === 0, transform: c.cd <= 0 && f % 30 === 0 };
 }
 
@@ -114,6 +114,59 @@ test('소방 로봇 물대포는 앞의 불을 끈다', () => {
   R.level.pits = [];
   stepRun(R, { tap: false, hold: false, transform: true }, DT);
   assert(R.level.items[0].out, 'fire out');
+});
+
+// ─── 공사장 코스 ───
+test('공사장: 아무것도 안 눌러도 결승선까지 간다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 1, 'site');
+  assert(R.course.id === 'site', 'course');
+  const sec = drive(R, () => NONE, 400);
+  assert(R.done && sec < 180, 'finished in ' + sec.toFixed(0) + 's');
+});
+
+test('공사장: 부품 27가지 조합 모두 끝까지 간다', () => {
+  for (const b of D.BODIES) for (const w of D.WHEELS) for (const g of D.GEAR) {
+    const R = createRun({ body: b.id, wheel: w.id, gear: g.id }, 3, 'site');
+    drive(R, smartBot, 400);
+    assert(R.done, b.id + '/' + w.id + '/' + g.id + ' did not finish');
+  }
+});
+
+test('공사장: 한 판 길이도 약 1분이고 공사장 조각이 나온다', () => {
+  const R = createRun({ body: 'fire', wheel: 'normal', gear: 'wing' }, 5, 'site');
+  const types = new Set(R.level.items.map(o => o.style || o.type));
+  for (const t of ['cone', 'pipe', 'dirt']) assert(types.has(t), 'has ' + t);
+  const sec = drive(R, smartBot, 400);
+  console.log('       완주 ' + sec.toFixed(0) + '초, 별 ' + R.stars + '/' + R.totalStars);
+  assert(sec > 40 && sec < 110, 'length ' + sec);
+});
+
+test('고깔은 쓰러뜨리면 별이 나오고 막히지 않는다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 4, 'site');
+  R.level.items = [0, 1, 2].map(k => ({ type: 'cone', x: 400 + k * 70, w: 30, down: false })).concat([{ type: 'flag', x: 1100 }]);
+  R.level.pits = [];
+  drive(R, () => NONE, 30);
+  for (let i = 0; i < 90; i++) stepRun(R, NONE, DT);   // 날아오던 별이 다 들어올 때까지
+  assert(R.done, 'finished');
+  assert(R.level.items.filter(o => o.type === 'cone' && o.down).length === 3, 'all cones down');
+  assert(R.stars === 3, 'one star per cone, got ' + R.stars);
+});
+
+test('진흙은 차를 느리게 하지만 점프하면 피하고, 소방 로봇은 씻어 낸다', () => {
+  const mk = () => {
+    const R = createRun({ body: 'fire', wheel: 'normal', gear: 'jet' }, 4, 'site');
+    R.level.items = [{ type: 'mud', x: 400, w: 150, out: false, hit: false }, { type: 'flag', x: 1200 }];
+    R.level.pits = [];
+    return R;
+  };
+  const slow = mk(), jumpy = mk();
+  const a = drive(slow, () => NONE, 30);
+  const b = drive(jumpy, R => ({ tap: R.car.onGround && R.car.x > 330 && R.car.x < 380, hold: false, transform: false }), 30);
+  assert(slow.done && jumpy.done, 'both finish');
+  assert(a > b, 'mud slows: ' + a.toFixed(2) + ' vs ' + b.toFixed(2));
+  const wash = mk();
+  stepRun(wash, { tap: false, hold: false, transform: true }, DT);
+  assert(wash.level.items[0].out, 'mud washed');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -100,6 +100,22 @@ async function until(page, fn, arg, ms) {
     assert(await P.evaluate(() => document.querySelectorAll('#p-dev dt').length >= 8), '기기 점검 항목 부족');
     await P.tap('#p-close');
   });
+  await test('도시를 한 번 끝까지 달리면 공사장 코스가 열린다', async () => {
+    assert(await P.evaluate(() => /새 코스: 공사장/.test(document.getElementById('res-note').textContent)), '결과에 새 코스 알림 없음');
+    await P.evaluate(() => RC.debug.toGarage());
+    await P.waitForTimeout(400);
+    await P.tap('#btn-run');
+    assert(await until(P, () => RC.debug.mode === 'map'), '코스 고르기 화면 아님');
+    assert(await P.evaluate(() => document.querySelectorAll('.course:not(.locked)').length === 2), '열린 코스가 두 개가 아님');
+    await P.tap('.course:nth-child(2)');
+    assert(await until(P, () => RC.debug.mode === 'run' && RC.debug.run.course.id === 'site'), '공사장으로 출발 안 함');
+    assert(await until(P, () => RC.debug.run.level.items.some(o => o.type === 'cone' && o.down), null, 20000), '고깔을 하나도 못 쓰러뜨림');
+    await P.evaluate(() => { const R = RC.debug.run; R.car.x = R.level.length - 200; });
+    assert(await until(P, () => RC.debug.mode === 'result', null, 10000), '공사장 결과 화면 아님');
+    await P.waitForTimeout(700);
+    await P.tap('#btn-again');
+    assert(await until(P, () => RC.debug.mode === 'run' && RC.debug.run.course.id === 'site'), '또 달리기가 같은 코스가 아님');
+  });
   await test('시간이 다 되면 잠자기 화면', async () => {
     await P.evaluate(() => { RC.debug.play.sec = 99999; RC.debug.toGarage(); });
     assert(await until(P, () => RC.debug.mode === 'sleep'), '잠자기로 안 감');
@@ -112,6 +128,14 @@ async function until(page, fn, arg, ms) {
     await pr.page.waitForTimeout(500);
     assert(await pr.page.evaluate(() => document.body.classList.contains('portrait')), '세로 안내 없음');
     await pr.ctx.close();
+  });
+  await test('작은 탭(A7 Lite)에서 코스 카드 두 장이 화면 안에 있다', async () => {
+    const sm = await open(browser, ROOT + '/robocar/index.html', Object.assign({}, TAB, { viewport: { width: 893, height: 533 } }));
+    await sm.page.evaluate(() => { RC.debug.prog.log.finished = 1; RC.debug.toMap(); });
+    await sm.page.waitForTimeout(900);
+    const r = await sm.page.evaluate(() => [...document.querySelectorAll('.course, #btn-map-back')].every(e => { const b = e.getBoundingClientRect(); return b.bottom <= innerHeight && b.right <= innerWidth && b.left >= 0; }));
+    assert(r, '코스 카드나 돌아가기 버튼이 잘림');
+    await sm.ctx.close();
   });
   await test('작은 탭(A7 Lite)에서도 차고 버튼이 화면 안에 있다', async () => {
     const sm = await open(browser, ROOT + '/robocar/index.html', Object.assign({}, TAB, { viewport: { width: 893, height: 533 } }));

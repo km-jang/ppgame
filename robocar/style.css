@@ -584,3 +584,39 @@ body.ready #scr-title.on #btn-go-garage { animation: rise .5s .6s var(--ease-out
   .ptab { gap: 6px; }
   .panel.parent > .row { bottom: -16px; margin: 0 -20px -16px; padding: 8px 20px 10px; }
 }
+
+/* ─── 코스 고르기 ─── */
+#scr-map { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 70px 24px 24px; }
+#scr-map.on { display: flex; }
+.map-title { margin: 0; font-family: var(--display); font-weight: normal; font-size: 54px; transform: skewX(-8deg); text-shadow: 0 5px 0 #0b1222, 0 0 24px rgba(57, 216, 255, 0.5); }
+#courses { display: flex; gap: 26px; justify-content: center; width: 100%; }
+.course {
+  position: relative; width: min(42vw, 470px); padding: 0; border-radius: 20px; overflow: hidden; cursor: pointer; touch-action: manipulation;
+  background: #0b1222; border: 3px solid rgba(120, 200, 255, 0.35); color: #fff; text-align: left;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); transition: transform .12s var(--ease-out), border-color .2s, box-shadow .2s;
+}
+.course canvas { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; }
+.course .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 20px 14px; background: linear-gradient(180deg, transparent, rgba(5, 8, 16, 0.92) 45%); }
+.course b { display: block; font-family: var(--display); font-weight: normal; font-size: 40px; line-height: 1.05; transform: skewX(-8deg); }
+.course small { display: block; margin-top: 4px; font: 700 17px var(--body); color: #cfe0f5; }
+.course:active { transform: scale(0.97); }
+.course.last { border-color: var(--orange); box-shadow: 0 0 0 2px var(--orange), 0 0 30px rgba(255, 106, 26, 0.45), 0 16px 40px rgba(0, 0, 0, 0.55); }
+.course.new::after { content: "새 코스!"; position: absolute; right: 14px; top: 14px; padding: 4px 14px; border-radius: 999px; background: var(--orange); font: 900 16px var(--body); box-shadow: 0 0 16px rgba(255, 106, 26, 0.8); animation: nudge2 1s ease-in-out infinite; }
+@keyframes nudge2 { 50% { transform: translateY(-4px) scale(1.05); } }
+.course.locked { cursor: default; }
+.course.locked canvas { filter: grayscale(1) brightness(.45) blur(1px); }
+.course.locked .lock { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: rgba(7, 11, 22, 0.8); border: 2px solid rgba(255, 255, 255, 0.4); }
+.course.locked .lock svg { width: 30px; height: 30px; fill: #dfe7f2; }
+.course .lock { display: none; }
+.course.locked .lock { display: grid; }
+#scr-map.on .course { animation: rise .5s var(--ease-out) both; }
+#scr-map.on .course:nth-child(2) { animation-delay: .1s; }
+#scr-map.on .map-title { animation: dropIn .5s var(--ease-back) both; }
+#scr-map.on #btn-map-back { animation: rise .5s .25s var(--ease-out) both; }
+.note .new-course { display: inline-block; margin-left: 8px; padding: 2px 12px; border-radius: 999px; background: var(--orange); font: 900 16px var(--body); color: #fff; animation: popIn .5s var(--ease-back) both; }
+@media (max-height: 560px) {
+  #scr-map { gap: 12px; padding: 54px 16px 14px; }
+  .map-title { font-size: 36px; }
+  .course { width: min(40vw, 340px); }
+  .course b { font-size: 28px; } .course small { font-size: 13px; } .course .cap { padding: 26px 14px 10px; }
+}

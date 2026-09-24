@@ -6,14 +6,18 @@
 ## 지금 상태 (2026-09-24)
 
 - 작업 브랜치: `claude/change-engun-folder-to-game-msk2ro`
-- main에 들어간 것: N-GUN 첫 빌드 · 난이도·사운드 · 모바일 최적화 (PR #1 · #2 · #3)
-- **브랜치에만 있고 main에 아직 안 들어간 것** (소유자가 머지를 요청하면 PR로 합친다)
-  - N-GUN: 히트스톱 · 적 사망 연출 · 배경 · 오프라인(`game/sw.js`)
-  - 뚝딱 로봇카 전체: 시제품 → 비주얼 레벨업 → 갤럭시탭 우선 → 움직임·UX 다듬기 → 보호자 "놀이 기록"·"기기 점검"
-  - 공통: `CLAUDE.md` · `HANDOFF.md` · `tests/flow.test.js`
-- 테스트: 규칙 17 + 8, 화면 흐름 18, 모두 통과
-- 미리보기(로봇카): https://claude.ai/artifact/VjcTry8wHiiamThjBWTnhG (같은 주소로 갱신)
-- 오프라인 저장 버전: 로봇카 `robocar-v5`, N-GUN `ngun-v1`
+- main: PR #1 · #2 · #3에 이어, 소유자 승인(2026-09-24)으로 브랜치 작업 전체를 PR로 합침
+  (N-GUN 히트스톱·사망 연출·배경·오프라인, 뚝딱 로봇카 전체, 공사장 코스, 작업 지침·인계 문서·화면 흐름 점검)
+- 테스트: 규칙 17(N-GUN) + 13(로봇카), 화면 흐름 20, 모두 통과
+- 오프라인 저장 버전: 로봇카 `robocar-v6`, N-GUN `ngun-v1`
+
+## 미리보기 (같은 주소로 갱신)
+
+| 무엇 | 주소 |
+|---|---|
+| 게임 고르기 (두 게임 모두) | https://claude.ai/artifact/1NdyjCYm93T3mgEURVTa5g |
+| 뚝딱 로봇카 | https://claude.ai/artifact/VjcTry8wHiiamThjBWTnhG |
+| N-GUN | https://claude.ai/artifact/7KzosHZcRwWjAiWzJd6Hdj (옛 주소 8vHaFFqDBamdV7ZgTmhp3H는 첫 빌드 때 것, 갱신 안 함) |
 
 ## 소유자 결정 기록
 
@@ -24,11 +28,12 @@
 | 2026-09-24 | 비주얼이 유아틱함 → 레이싱 게임 느낌으로 (`robocar/VISUAL.md`) |
 | 2026-09-24 | 주 기기는 갤럭시탭, 모바일 위주 |
 | 2026-09-24 | 엠대시 전면 금지, 저장소 작업 지침(`CLAUDE.md`) 작성, 보완 사항을 게임에 적용 |
+| 2026-09-24 | 선택 승인: main 머지 · N-GUN 미리보기 · 게임 고르기 미리보기 · 로봇카 공사장 코스 (4개 모두) |
 
 ## 다음에 할 일
 
 1. 소유자가 갤럭시탭에서 미리보기를 해 보고 반응 전달 → 고칠 것 반영
-2. 머지 요청이 오면 PR 만들어 main에 합침 → GitHub Pages 켜짐 확인(`README.md` 순서)
+2. GitHub Pages 켜기(`README.md` 순서) → https 주소에서 앱 설치·오프라인 확인
 3. 실기기 확인: 보호자 설정 → 기기 점검 탭 결과를 받아 아래 "실기기 기록"에 적기
 4. 며칠 놀고 나면 놀이 기록 탭을 보고 로봇카 다음 단계(코스·부품 해금 등) 우선순위 정하기
 

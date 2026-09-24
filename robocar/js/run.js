@@ -8,15 +8,16 @@
 
   // ─── 코스 만들기 ──────────────────────────────────────────
   // 조각(패턴)을 이어 붙인다. 모든 조각은 어떤 부품 조합으로도 지나갈 수 있다
-  function buildLevel(seed) {
+  function buildLevel(seed, courseId) {
     const rand = RC.rng(seed);
-    const L = { length: R0.length, pits: [], items: [] };
+    const course = RC.find(D.COURSES, courseId || 'city');
+    const L = { length: R0.length, pits: [], items: [], course: course.id };
     const star = (x, y) => L.items.push({ type: 'star', x, y, got: false });
     const arc = (x0, w, h, n) => { for (let i = 0; i < n; i++) { const t = (i + 0.5) / n; star(x0 + t * w, GY - 40 - Math.sin(t * Math.PI) * h); } };
-    const PATTERNS = ['stars', 'pit', 'boxes', 'rock', 'fire', 'ramp', 'high', 'monkey', 'boxes', 'pit'];
+    const PATTERNS = course.patterns;
     let x = 700;
-    // 처음 몇 조각은 쉬운 순서로 고정 (별 → 상자 → 구덩이)
-    const first = ['stars', 'boxes', 'pit', 'stars'];
+    // 처음 몇 조각은 쉬운 순서로 고정 (도시: 별 → 상자 → 구덩이)
+    const first = course.first;
     let i = 0;
     while (x < L.length - 900) {
       const kind = i < first.length ? first[i] : PATTERNS[Math.floor(rand() * PATTERNS.length)];
@@ -58,6 +59,33 @@
           L.items.push({ type: 'monkey', x: x + 260, state: 'wait', threw: false, flee: 0 });
           for (let k = 0; k < 4; k++) star(x + 20 + k * 60, GY - 40);
           x += 520; break;
+        // ─── 공사장 조각 ───
+        case 'cones':
+          // 고깔 줄: 그냥 달려서 와르르 쓰러뜨리면 하나에 별 하나 (막히지 않음)
+          for (let k = 0; k < 4; k++) L.items.push({ type: 'cone', x: x + 80 + k * 70, w: 30, down: false });
+          x += 440; break;
+        case 'pipe':
+          // 큰 콘크리트 관: 규칙은 방호벽과 같다 (저절로 폴짝 · 로봇·드릴은 부숨)
+          L.items.push({ type: 'rock', style: 'pipe', x: x + 80, w: 96, h: 76, broken: false });
+          arc(x + 40, 190, 175, 4);
+          x += 470; break;
+        case 'dirt':
+          // 흙더미 점프대: 규칙은 점프대와 같다
+          L.items.push({ type: 'ramp', style: 'dirt', x: x + 40, w: 170, h: 64 });
+          arc(x + 220, 380, 200, 7);
+          x += 660; break;
+        case 'crane': {
+          // 기중기 갈고리에 매달린 높은 별 (장비 보너스) + 아래 별
+          L.items.push({ type: 'hook', x: x + 170 });
+          for (let k = 0; k < 5; k++) star(x + 60 + k * 55, GY - 240 - (k % 2) * 18);
+          for (let k = 0; k < 3; k++) star(x + 100 + k * 70, GY - 40);
+          x += 500; break;
+        }
+        case 'mud':
+          // 진흙 웅덩이: 차는 철퍼덕 느려지고(벌칙 없음) 점프하면 피한다. 로봇은 첨벙 지나감
+          L.items.push({ type: 'mud', x: x + 70, w: 150, out: false, hit: false });
+          arc(x + 40, 210, 130, 4);
+          x += 440; break;
       }
     }
     L.items.push({ type: 'flag', x: L.length });
@@ -66,11 +94,11 @@
 
   // ─── 시작 ────────────────────────────────────────────────
   // cfg: {body, wheel, gear, color}
-  function createRun(cfg, seed) {
+  function createRun(cfg, seed, courseId) {
     const body = RC.find(D.BODIES, cfg.body), wheel = RC.find(D.WHEELS, cfg.wheel), gear = RC.find(D.GEAR, cfg.gear);
-    const L = buildLevel(seed == null ? 7 : seed);
+    const L = buildLevel(seed == null ? 7 : seed, courseId);
     return {
-      cfg, body, wheel, gear, level: L, rand: RC.rng((seed || 7) * 13 + 1),
+      cfg, body, wheel, gear, level: L, course: RC.find(D.COURSES, L.course), rand: RC.rng((seed || 7) * 13 + 1),
       t: 0, done: false, doneT: 0,
       car: {
         x: 200, y: GY, vy: 0, onGround: true, airJumps: 0,
@@ -90,6 +118,7 @@
     if (c.form === 'robot' && R.body.ability === 'dash') v *= R0.dashMul;
     if (c.bump > 0) v *= 0.25;
     if (c.spin > 0) v *= 0.55;
+    if (c.mud > 0) v *= 0.6;
     if (c.hop > 0) v *= 1.5;
     if (R.done) v *= Math.max(0, 1 - R.doneT);
     return v;
@@ -149,6 +178,11 @@
             o.out = true; spill(R, o.x + o.w / 2, GY - 30, 2);
             puff(R, o.x + o.w / 2, GY - 20, '#bfe9ff', 14, 200, 14, 'steam');
           }
+          // 공사장: 진흙 웅덩이를 씻어 내면 별이 나온다
+          if (o.type === 'mud' && !o.out && o.x > c.x - 50 && o.x < c.x + R0.waterRange) {
+            o.out = true; spill(R, o.x + o.w / 2, GY - 20, 2);
+            puff(R, o.x + o.w / 2, GY - 10, '#bfe9ff', 12, 200, 12, 'steam');
+          }
         }
         R.events.push('water');
       }
@@ -190,6 +224,7 @@
     c.spin = Math.max(0, c.spin - dt);
     c.hot = Math.max(0, c.hot - dt);
     c.hop = Math.max(0, (c.hop || 0) - dt);
+    c.mud = Math.max(0, (c.mud || 0) - dt);
 
     // 구덩이
     const pit = R.level.pits.find(p => c.x > p.x + 10 && c.x < p.x + p.w - 10);
@@ -266,6 +301,18 @@
           puff(R, c.x, GY - 20, '#555a66', 10, 120, 16, 'steam');
           R.events.push('hot');
         }
+      } else if (o.type === 'cone' && !o.down) {
+        if (front > o.x && c.x - 40 < o.x + o.w && c.y > GY - 60) {
+          // 와르르: 고깔이 튕겨 나가고 별 하나
+          o.down = true; o.vx = 380 + R.rand() * 200; o.vy = -420 - R.rand() * 200; o.rot = 0; o.fly = 0;
+          spill(R, o.x + 15, GY - 40, 1);
+          R.events.push('cone');
+        }
+      } else if (o.type === 'mud' && !o.out) {
+        if (c.x > o.x + 10 && c.x < o.x + o.w - 10 && c.onGround) {
+          if (!robot && c.mud <= 0) { c.mud = 0.7; R.events.push('splash'); puff(R, c.x, GY - 6, '#7a5a38', 12, 220, 10, 'chunk'); }
+          else if (robot && !o.hit) { o.hit = true; R.events.push('splash'); puff(R, c.x, GY - 6, '#7a5a38', 10, 260, 9, 'chunk'); }
+        }
       } else if (o.type === 'monkey') {
         if (o.flee > 0) { o.flee += dt; o.x += 500 * dt; continue; }
         if (!o.threw && o.x - c.x < 650) {
@@ -297,6 +344,13 @@
       }
     }
     R.flying = R.flying.filter(f => !f.got);
+
+    // 쓰러진 고깔이 날아가는 모습 (꾸밈)
+    for (const o of R.level.items) {
+      if (o.type !== 'cone' || !o.down || o.fly > 1.5) continue;
+      o.fly += dt; o.dx = (o.dx || 0) + o.vx * dt; o.vy += 1800 * dt; o.cy = Math.min(0, (o.cy || 0) + o.vy * dt); o.rot += 12 * dt;
+      if (o.cy >= 0 && o.vy > 0) { o.vy *= -0.35; o.vx *= 0.6; }
+    }
 
     // 효과
     if (c.thrusting && R.rand() < 0.9) R.fx.push({ kind: 'flame', x: c.x - 55, y: c.y - 30, vx: -200, vy: 120, life: 0.25, max: 0.25, color: '#ffb020', size: 10 });

@@ -63,7 +63,7 @@
   let mode = 'title';
   let parentOpen = false;
   let paused = false, rotTold = false;
-  const SCREENS = ['scr-title', 'scr-garage', 'hud', 'scr-result', 'scr-book', 'scr-sleep'];
+  const SCREENS = ['scr-title', 'scr-garage', 'scr-map', 'hud', 'scr-result', 'scr-book', 'scr-sleep'];
   function show(id) { for (const s of SCREENS) $(s).classList.toggle('on', s === id); document.body.dataset.scr = id; }
   // 화면 넘김: 띠가 화면을 덮은 순간에 바꾸고 다시 걷는다 (연달아 눌러도 한 번만)
   const wipeEl = $('wipe');
@@ -91,6 +91,47 @@
     S.say('로봇카를 만들어 보자!');
   }
   function toBook() { mode = 'book'; renderBook(); show('scr-book'); S.say('카드 도감!', { bubble: false }); }
+
+  // ─── 코스 ────────────────────────────────────────────────
+  // 도시를 끝까지 달린 판 수가 unlock 이상이면 열린다 (기록 전 예전 판은 판 수로 대신 셈)
+  const unlocked = c => c.unlock === 0 || prog.log.finished >= c.unlock || prog.runs > c.unlock + 1;
+  const openCourses = () => D.COURSES.filter(unlocked);
+  function toMap() {
+    if (checkSleep()) return;
+    // 코스가 하나뿐이면 고르지 않고 바로 출발 (처음 하는 아이가 헷갈리지 않게)
+    if (openCourses().length < 2) { startRun('city'); return; }
+    mode = 'map'; show('scr-map'); renderMap();
+    S.say('어디로 갈까?', { bubble: false });
+  }
+  const LOCK_SVG = '<svg viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></svg>';
+  function renderMap() {
+    const box = $('courses'); box.innerHTML = '';
+    for (const c of D.COURSES) {
+      const open = unlocked(c);
+      const b = document.createElement('button');
+      b.className = 'course' + (open ? '' : ' locked') + (open && c.id === (prog.course || 'city') ? ' last' : '') + (open && c.unlock && !(prog.seen || []).includes(c.id) ? ' new' : '');
+      const cv = document.createElement('canvas'); cv.width = 640; cv.height = 384;
+      b.appendChild(cv);
+      b.insertAdjacentHTML('beforeend', '<span class="lock">' + LOCK_SVG + '</span><span class="cap"><b></b><small></small></span>');
+      b.querySelector('b').textContent = c.name;
+      b.querySelector('small').textContent = open ? c.desc : '도시를 ' + c.unlock + '번 끝까지 달리면 열려요';
+      coursePreview(cv, c.id);
+      b.addEventListener('click', () => {
+        if (!open) { S.play('bump'); S.say('도시를 끝까지 달리면 열려!'); return; }
+        S.play('click'); wipe(() => startRun(c.id));
+      });
+      box.appendChild(b);
+    }
+  }
+  // 코스 미리보기: 아이가 만든 로봇카가 그 코스를 달리는 한 장면
+  function coursePreview(cv, id) {
+    const g = cv.getContext('2d');
+    const Rp = RC.Run.createRun(Object.assign({}, cfg), 21, id);
+    Rp.car.x = Rp.level.length * (id === 'site' ? 0.2 : 0.46);
+    Rp.level.pits = Rp.level.pits.filter(p => Math.abs(p.x - Rp.car.x) > 300);
+    g.setTransform(cv.height / 600, 0, 0, cv.height / 600, 0, 0);
+    RC.Draw.drawRun(g, Rp, cv.width / (cv.height / 600));
+  }
 
   // ─── 차고 ────────────────────────────────────────────────
   const LISTS = { body: D.BODIES, wheel: D.WHEELS, gear: D.GEAR };
@@ -189,12 +230,17 @@
 
   let countdown = 0, countStep = 0;
   const countEl = $('count'), countNum = $('count-num'), lights = [...countEl.querySelectorAll('i')];
-  function startRun() {
+  let openBefore = 1;
+  function startRun(courseId) {
     if (checkSleep()) return;
     S.unlock();
+    const course = RC.find(D.COURSES, typeof courseId === 'string' ? courseId : (prog.course || 'city'));
+    prog.course = course.id;
+    prog.seen = Array.from(new Set((prog.seen || []).concat(course.id)));
+    openBefore = openCourses().length;
     prog.runs += 1;
     logRun(); saveAll();
-    R = RC.Run.createRun(cfg, 1 + (prog.runs % 3));
+    R = RC.Run.createRun(cfg, 1 + (prog.runs % 3), course.id);
     mode = 'run'; finishT = 0; readyTold = false; paused = false;
     tutor = { on: prog.runs <= 2, taps: 0, holds: 0, shown: '', seen: new Set() };
     wakeLock(true);
@@ -222,7 +268,7 @@
         countNum.textContent = '출발!'; countNum.className = ''; restart(countNum, 'go');
         S.play('go'); S.music(true); vibrate(30);
         RC.Draw.fxEvent(R, 'go', view.vw);
-        S.say(tutor.on ? '화면을 누르면 점프!' : '출발!', { ms: 1800 });
+        S.say(tutor.on ? '화면을 누르면 점프!' : R.course.id === 'site' ? '공사장 출발! 고깔을 쓰러뜨려 봐!' : '출발!', { ms: 1800 });
         setTimeout(() => { if (countdown <= 0) countEl.classList.add('out'); }, 500);
         setTimeout(() => { if (countdown <= 0) countEl.className = ''; }, 950);
       }
@@ -248,7 +294,7 @@
     if (c.onGround && c.form === 'car' && tutor.taps < 6) {
       for (const p of R.level.pits) { const d = p.x - c.x; if (d > 60 && d < 330) { target = { x: p.x + p.w / 2, id: 'p' + p.x }; break; } }
       if (!target) for (const o of R.level.items) {
-        if ((o.type === 'rock' || o.type === 'box') && !o.broken && R.cfg.gear !== 'drill') { const d = o.x - c.x; if (d > 60 && d < 330) { target = { x: o.x + 40, id: 'o' + o.x }; break; } }
+        if (((o.type === 'rock' || o.type === 'box') && !o.broken && R.cfg.gear !== 'drill') || (o.type === 'mud' && !o.out)) { const d = o.x - c.x; if (d > 60 && d < 330) { target = { x: o.x + 40, id: 'o' + o.x }; break; } }
       }
     }
     if (target) {
@@ -290,6 +336,8 @@
       else if (ev === 'fall') sayOnce('으악!');
       else if (ev === 'pop') sayOnce('뿅!');
       else if (ev === 'slip') sayOnce('미끌!');
+      else if (ev === 'cone') sayOnce('와르르!', 2500);
+      else if (ev === 'splash') sayOnce('철퍼덕!');
       else if (ev === 'hot') sayOnce('앗 뜨거!');
       else if (ev === 'monkey') sayOnce('장난꾸러기 원숭이 로봇이다!', 3000);
       else if (ev === 'finish') { lastSay = performance.now(); S.say('도착! 잘했어!'); prog.log.finished++; saveAll(); }
@@ -308,7 +356,8 @@
     const bodies = ['racer', 'police', 'fire'];
     // 한 번이라도 달려 봤으면 시작 화면에 아이가 만든 로봇카가 먼저 나온다
     const mine = prog.runs > 0 && demoN % 2 === 0;
-    const d = RC.Run.createRun(mine ? Object.assign({}, cfg) : { body: bodies[demoN % 3], wheel: ['normal', 'monster', 'spring'][demoN % 3], gear: ['jet', 'wing', 'drill'][demoN % 3], color: null }, 11 + demoN);
+    const open = openCourses();
+    const d = RC.Run.createRun(mine ? Object.assign({}, cfg) : { body: bodies[demoN % 3], wheel: ['normal', 'monster', 'spring'][demoN % 3], gear: ['jet', 'wing', 'drill'][demoN % 3], color: null }, 11 + demoN, open[Math.floor(demoN / 2) % open.length].id);
     d.car.x = d.level.length * (demoN % 2 ? 0.08 : 0.44);
     d.level.pits = d.level.pits.filter(p => Math.abs(p.x - d.car.x) > 400);
     demoN++;
@@ -378,6 +427,15 @@
             ? '새 카드 ' + earned.length + '장! 카드 도감에 넣었어요.'
             : (left ? '별 ' + (D.JAR - bank) + '개만 더 모으면 새 카드!' : '카드를 다 모았어요! 챔피언!');
           if (earned.length) setTimeout(() => { if (mode === 'result') S.say('새 카드를 받았어!'); }, 700);
+          // 새 코스가 열렸으면 알려 준다
+          const nowOpen = openCourses();
+          if (nowOpen.length > openBefore) {
+            const nc = nowOpen[nowOpen.length - 1];
+            const tag = document.createElement('span'); tag.className = 'new-course'; tag.textContent = '새 코스: ' + nc.name + '!';
+            $('res-note').appendChild(tag);
+            openBefore = nowOpen.length;
+            setTimeout(() => { if (mode === 'result') { S.play('sticker'); S.say('새 코스가 열렸어! ' + nc.name + '!'); } }, earned.length ? 2600 : 900);
+          }
           if (endAfterRun) setTimeout(() => { if (mode === 'result') goSleep(); }, 4500);
         }
       }, 60);
@@ -566,8 +624,9 @@
   });
   $('btn-book').addEventListener('click', () => { S.unlock(); S.play('click'); wipe(toBook); });
   $('btn-book-back').addEventListener('click', () => { S.play('click'); wipe(toTitle); });
-  $('btn-run').addEventListener('click', () => { S.play('click'); wipe(startRun); });
-  $('btn-again').addEventListener('click', () => { S.play('click'); wipe(startRun); });
+  $('btn-run').addEventListener('click', () => { S.play('click'); wipe(toMap); });
+  $('btn-again').addEventListener('click', () => { S.play('click'); wipe(() => startRun(prog.course)); });
+  $('btn-map-back').addEventListener('click', () => { S.play('click'); wipe(toGarage); });
   $('btn-garage').addEventListener('click', () => { S.play('click'); wipe(toGarage); });
   $('btn-morph').addEventListener('click', () => {
     garageForm = garageForm === 'car' ? 'robot' : 'car'; garageMorph = RC.Car.MORPH;
@@ -599,6 +658,7 @@
   window.addEventListener('popstate', () => {
     try { history.pushState({ rc: 1 }, ''); } catch (e) { /* 무시 */ }
     if (mode === 'run') pause();
+    else if (mode === 'map') wipe(toGarage);
     else if (mode === 'garage' || mode === 'book') toTitle();
   });
 
@@ -685,7 +745,7 @@
       RC.Run.stepRun(demo, demoInput(demo), dt);
       handleEvents(demo, true);
       RC.Draw.drawRun(ctx, demo, vw);
-      if (mode === 'result' || mode === 'book') { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(3,5,12,0.55)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+      if (mode === 'result' || mode === 'book' || mode === 'map') { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(3,5,12,0.55)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
     }
     requestAnimationFrame(frame);
   }
@@ -724,6 +784,6 @@
   RC.debug = {
     get mode() { return mode; }, get run() { return R; }, cfg, prog, set, play,
     toGarage, toBook, startRun, showResult, goSleep, openParent, toTitle, pause, resume, get view() { return view; },
-    setGarageForm(f) { garageForm = f; },
+    setGarageForm(f) { garageForm = f; }, toMap,
   };
 })(RC);
