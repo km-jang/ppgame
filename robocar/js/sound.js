@@ -140,6 +140,7 @@
 
   RC.Sound = {
     unlock, play, music, say,
+    hasVoice: () => { try { return !!window.speechSynthesis && !!koVoice; } catch (e) { return false; } },
     setSound(on) { soundOn = on; if (master) master.gain.value = on ? 0.55 : 0; },
     setVoice(on) { voiceOn = on; if (!on) try { speechSynthesis.cancel(); } catch (e) { /* 무시 */ } },
   };

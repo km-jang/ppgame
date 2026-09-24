@@ -368,6 +368,10 @@
   resize();
   toTitle();
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
+  // 오프라인 실행 (홈 화면에 추가했을 때). 미리보기 창 안에서는 조용히 건너뛴다
+  try {
+    if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && window.top === window) navigator.serviceWorker.register('sw.js').catch(() => {});
+  } catch (e) { /* 무시 */ }
 
   // 개발·테스트용 손잡이
   NG.debug = { get world() { return W; }, get mode() { return mode; }, get diff() { return diff; }, newGame, choose, setDiff };

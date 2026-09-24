@@ -9,6 +9,16 @@
   // ─── 저장 ────────────────────────────────────────────────
   const cfg = Object.assign({ body: 'racer', wheel: 'normal', gear: 'jet', color: '#ff3b3b' }, RC.store.get('rc.cfg', {}));
   const prog = Object.assign({ bank: 0, stickers: [], runs: 0 }, RC.store.get('rc.prog', {}));
+  // 놀이 기록 (보호자 화면용, 이 기기에만): 부품 선택 횟수, 변신·도착 횟수, 날짜별 판 수, 잠자기 뒤 다시 켠 횟수
+  prog.log = Object.assign({ parts: {}, transforms: 0, finished: 0, days: {}, sleeps: 0, sleepRetry: 0, first: null }, prog.log || {});
+  function logRun() {
+    const L = prog.log, d = new Date().toISOString().slice(0, 10);
+    L.first = L.first || d;
+    L.days[d] = (L.days[d] || 0) + 1;
+    for (const k of Object.keys(L.days).sort().slice(0, -30)) delete L.days[k];   // 최근 30일만
+    for (const slot of ['body', 'wheel', 'gear']) { const id = slot + ':' + cfg[slot]; L.parts[id] = (L.parts[id] || 0) + 1; }
+    L.parts['color:' + cfg.color] = (L.parts['color:' + cfg.color] || 0) + 1;
+  }
   const set = Object.assign({ limit: 20, voice: true, sound: true, vib: true, quality: 'auto' }, RC.store.get('rc.set', {}));
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
   let play = RC.store.get('rc.play', { date: today(), sec: 0, bonus: 0 });
@@ -182,7 +192,8 @@
   function startRun() {
     if (checkSleep()) return;
     S.unlock();
-    prog.runs += 1; saveAll();
+    prog.runs += 1;
+    logRun(); saveAll();
     R = RC.Run.createRun(cfg, 1 + (prog.runs % 3));
     mode = 'run'; finishT = 0; readyTold = false; paused = false;
     tutor = { on: prog.runs <= 2, taps: 0, holds: 0, shown: '', seen: new Set() };
@@ -274,14 +285,14 @@
       if (quiet) continue;
       if (ev === 'smash') vibrate(35); else if (ev === 'transform') vibrate([20, 40, 60]); else if (ev === 'bump') vibrate(20); else if (ev === 'finish') vibrate([40, 60, 40, 60, 120]);
       if (ev === 'star') { const h = $('hud-stars'); h.classList.remove('pop'); void h.offsetWidth; h.classList.add('pop'); }
-      else if (ev === 'transform') { lastSay = performance.now(); S.say(Rx.body.robot + ' 변신!', { ms: 1600 }); }
+      else if (ev === 'transform') { lastSay = performance.now(); S.say(Rx.body.robot + ' 변신!', { ms: 1600 }); prog.log.transforms++; }
       else if (ev === 'smash') sayOnce('와장창!');
       else if (ev === 'fall') sayOnce('으악!');
       else if (ev === 'pop') sayOnce('뿅!');
       else if (ev === 'slip') sayOnce('미끌!');
       else if (ev === 'hot') sayOnce('앗 뜨거!');
       else if (ev === 'monkey') sayOnce('장난꾸러기 원숭이 로봇이다!', 3000);
-      else if (ev === 'finish') { lastSay = performance.now(); S.say('도착! 잘했어!'); }
+      else if (ev === 'finish') { lastSay = performance.now(); S.say('도착! 잘했어!'); prog.log.finished++; saveAll(); }
     }
     Rx.events.length = 0;
   }
@@ -419,6 +430,7 @@
   }
   function checkSleep() { if (set.limit && battery() <= 0) { goSleep(); return true; } return false; }
   function goSleep() {
+    if (mode !== 'sleep') { prog.log.sleeps++; saveAll(); }
     mode = 'sleep'; show('scr-sleep'); S.music(false); wakeLock(false);
     S.say('오늘은 여기까지! 내일 또 만나!', { ms: 4000 });
     endAfterRun = false;
@@ -446,7 +458,66 @@
     $('p-vib').dataset.on = set.vib ? '1' : '0';
     for (const b of $('p-quality').children) b.setAttribute('aria-pressed', String(b.dataset.q === set.quality));
     $('p-q-now').textContent = '지금 해상도 ' + Math.round(view.q * 100) + '%';
+    renderLog(); renderDev();
   }
+  for (const b of $('p-tabs').children) b.addEventListener('click', () => {
+    for (const x of $('p-tabs').children) x.setAttribute('aria-pressed', String(x === b));
+    for (const t of document.querySelectorAll('.ptab')) t.hidden = t.dataset.tab !== b.dataset.tab;
+    renderLog(); renderDev();
+  });
+  function dl(el, rows) {
+    el.innerHTML = '';
+    for (const [k, v, cls] of rows) {
+      const dt = document.createElement('dt'); dt.textContent = k;
+      const dd = document.createElement('dd'); dd.textContent = v; if (cls) dd.className = cls;
+      el.append(dt, dd);
+    }
+  }
+  function favorite(slot) {
+    const L = prog.log.parts, list = slot === 'color' ? D.COLORS.map(c => ({ id: c, name: null })) : LISTS[slot];
+    let best = null, n = 0, total = 0;
+    for (const p of list) { const c = L[slot + ':' + p.id] || 0; total += c; if (c > n) { n = c; best = p; } }
+    if (!best) return '아직 없음';
+    const name = best.name || colorName(best.id);
+    return name + ' (' + Math.round(n / total * 100) + '%)';
+  }
+  function colorName(c) { return ({ '#ff3b3b': '빨강', '#ff9f1a': '주황', '#ffd21a': '노랑', '#22c55e': '초록', '#2f6bff': '파랑', '#a855f7': '보라' })[c.toLowerCase()] || c; }
+  function renderLog() {
+    const L = prog.log, days = Object.keys(L.days).sort();
+    const recent = days.slice(-7).map(d => d.slice(5).replace('-', '/') + ' ' + L.days[d] + '판').join(' · ');
+    dl($('p-log'), [
+      ['처음 한 날', L.first || '아직 없음'],
+      ['모두 달린 판', prog.runs + '판 (끝까지 ' + L.finished + '판)'],
+      ['최근 7일', recent || '아직 없음'],
+      ['제일 좋아하는 차체', favorite('body')],
+      ['바퀴', favorite('wheel')],
+      ['장비', favorite('gear')],
+      ['색깔', favorite('color')],
+      ['변신 버튼', L.transforms + '번 (한 판에 ' + (prog.runs ? (L.transforms / prog.runs).toFixed(1) : 0) + '번)'],
+      ['모은 카드', prog.stickers.length + ' / ' + D.STICKERS.length + '장'],
+      ['잠자기 화면', L.sleeps + '번, 그 뒤 자물쇠로 시간 더 준 날 ' + L.sleepRetry + '번'],
+    ]);
+  }
+  // 실제 태블릿에서 되는지 한눈에: 초록 = 됨, 노랑 = 조건부, 빨강 = 안 됨
+  let fpsAvg = 60;
+  function renderDev() {
+    const standalone = matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches;
+    const sw = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
+    const voiceOk = S.hasVoice();
+    dl($('p-dev'), [
+      ['화면', view.w + ' × ' + view.h + ' (배율 ' + (window.devicePixelRatio || 1) + ')', view.w >= view.h * 1.2 ? 'ok' : 'no'],
+      ['속도', Math.round(fpsAvg) + ' fps · 해상도 ' + Math.round(view.q * 100) + '%', fpsAvg >= 50 ? 'ok' : fpsAvg >= 35 ? 'mid' : 'no'],
+      ['한국어 목소리', voiceOk ? '있음' : '없음 (자막만 나옴. 태블릿 설정에서 "텍스트 음성 변환"을 찾아 한국어 음성 설치)', voiceOk ? 'ok' : 'no'],
+      ['진동', navigator.vibrate ? '지원' : '지원 안 함', navigator.vibrate ? 'ok' : 'mid'],
+      ['전체 화면', canFs ? (document.fullscreenElement ? '지금 전체 화면' : '가능') : '지원 안 함', canFs ? 'ok' : 'mid'],
+      ['화면 켜짐 유지', navigator.wakeLock ? '지원' : '지원 안 함', navigator.wakeLock ? 'ok' : 'mid'],
+      ['앱으로 설치', standalone ? '설치해서 여는 중' : '브라우저로 여는 중 (크롬 메뉴 → 홈 화면에 추가)', standalone ? 'ok' : 'mid'],
+      ['인터넷 없이', sw ? '준비됨' : /^https?:/.test(location.protocol) ? '한 번 더 열면 준비됨' : '웹 주소로 열어야 가능', sw ? 'ok' : 'mid'],
+      ['손가락 동시 인식', (navigator.maxTouchPoints || 0) + '개', navigator.maxTouchPoints >= 2 ? 'ok' : 'mid'],
+    ]);
+  }
+  $('p-try-voice').addEventListener('click', () => { S.unlock(); const v = set.voice; S.setVoice(true); S.say('안녕! 나는 로봇카야!'); S.setVoice(v); });
+  $('p-try-vib').addEventListener('click', () => { try { navigator.vibrate && navigator.vibrate([60, 60, 120]); } catch (e) { /* 무시 */ } });
   $('p-vib').addEventListener('click', () => { set.vib = !set.vib; saveAll(); renderParent(); vibrate(40); });
   for (const b of $('p-quality').children) b.addEventListener('click', () => {
     set.quality = b.dataset.q; view.q = baseQ(); RC.Draw.low = set.quality === 'save'; saveAll(); resize(); renderParent();
@@ -454,7 +525,7 @@
   for (const b of $('p-limit').children) b.addEventListener('click', () => { set.limit = Number(b.dataset.min); saveAll(); renderParent(); });
   $('p-voice').addEventListener('click', () => { set.voice = !set.voice; S.setVoice(set.voice); saveAll(); renderParent(); });
   $('p-sound').addEventListener('click', () => { set.sound = !set.sound; S.setSound(set.sound); saveAll(); renderParent(); });
-  $('p-extend').addEventListener('click', () => { play.bonus = (play.bonus || 0) + 10; saveAll(); renderParent(); });
+  $('p-extend').addEventListener('click', () => { if (mode === 'sleep') prog.log.sleepRetry++; play.bonus = (play.bonus || 0) + 10; saveAll(); renderParent(); });
   $('p-close').addEventListener('click', () => {
     parentOpen = false;
     $('scr-parent').classList.remove('on');
@@ -574,6 +645,7 @@
     const raw = (ts - lastTs) / 1000 || 0;
     const dt = Math.min(0.05, raw);
     lastTs = ts;
+    if (raw > 0 && raw < 0.2) fpsAvg += (1 / raw - fpsAvg) * 0.02;
     gt += dt;
     autoQuality(raw);
     tickTimer(dt);
@@ -622,7 +694,14 @@
   S.setVoice(set.voice); S.setSound(set.sound);
   // 오프라인 실행 (홈 화면에 추가했을 때). 미리보기 창 안에서는 조용히 건너뛴다
   try {
-    if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && window.top === window) navigator.serviceWorker.register('sw.js').catch(() => {});
+    if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && window.top === window) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      // 이미 받은 글꼴을 저장해 달라고 알린다 (첫 방문에도 오프라인 글꼴이 준비되게)
+      Promise.all([navigator.serviceWorker.ready, document.fonts ? document.fonts.ready : null]).then(([reg]) => {
+        const urls = performance.getEntriesByType('resource').map(r => r.name).filter(u => /fonts\.(googleapis|gstatic)\.com/.test(u));
+        if (urls.length && reg.active) reg.active.postMessage({ type: 'cache-fonts', urls });
+      }).catch(() => {});
+    }
   } catch (e) { /* 무시 */ }
   resize();
   buildGarage();

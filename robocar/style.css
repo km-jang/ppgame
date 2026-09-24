@@ -561,3 +561,26 @@ body.ready #scr-title.on #btn-go-garage { animation: rise .5s .6s var(--ease-out
   #next-card { width: 70px; }
   #btn-transform.hint::after { font-size: 18px; }
 }
+
+/* 보호자 설정: 탭 · 놀이 기록 · 기기 점검 */
+.panel.parent { max-height: calc(100vh - 24px); overflow-y: auto; }
+.seg.tabs button { font-family: var(--display); font-size: 18px; }
+.ptab { display: flex; flex-direction: column; gap: 10px; }
+.ptab[hidden] { display: none; }
+.plog { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 4px 0; font: 700 17px var(--body); }
+.plog dt { color: var(--muted); font-weight: 500; }
+.plog dd { margin: 0; color: #fff; }
+.plog dd.ok::before { content: "● "; color: #3aff9a; }
+.plog dd.no::before { content: "● "; color: #ff6a4a; }
+.plog dd.mid::before { content: "● "; color: var(--gold); }
+/* 닫기 줄은 항상 보이게 (작은 탭에서 내용이 길어도) */
+.panel.parent > .row { position: sticky; bottom: -24px; margin: 0 -28px -24px; padding: 12px 28px 16px; background: linear-gradient(180deg, rgba(9, 14, 28, 0), rgba(9, 14, 28, 0.97) 30%); }
+@media (max-height: 560px) {
+  .panel.parent { padding: 12px 20px 16px; gap: 6px; }
+  .panel.parent h2 { font-size: 22px; }
+  .panel.parent h3 { margin-top: 2px; font-size: 14px; }
+  .seg button { padding: 8px 6px; font-size: 15px; }
+  .plog { font-size: 14px; gap: 4px 12px; }
+  .ptab { gap: 6px; }
+  .panel.parent > .row { bottom: -16px; margin: 0 -20px -16px; padding: 8px 20px 10px; }
+}
