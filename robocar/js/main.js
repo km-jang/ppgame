@@ -29,31 +29,53 @@
   // 화질 시작값: 보호자 설정 → 없으면 기기 성능 힌트(갤럭시탭 A 같은 보급형은 한 단계 낮게)
   const weak = (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
   function baseQ() { return set.quality === 'high' ? 1 : set.quality === 'save' ? 0.7 : (weak ? 0.85 : 1); }
-  const view = { w: 0, h: 0, dpr: 1, s: 1, vw: 1000, q: 1 };
+  const view = { w: 0, h: 0, dpr: 1, s: 1, vw: 1000, q: 1, oy: 0 };
   view.q = baseQ();
   RC.Draw.low = set.quality === 'save';
+  // 태블릿을 실제로 세로로 들었는지: 창 모양이 아니라 기기 방향으로 판단한다.
+  // (갤럭시탭에서 Claude 앱 옆 창·화면 분할·주소창 때문에 창이 좁아도 가로로 든 것이면 막지 않는다)
+  function devicePortrait() {
+    try { if (screen.orientation && screen.orientation.type) return screen.orientation.type.indexOf('portrait') === 0; } catch (e) { /* 무시 */ }
+    if (typeof window.orientation === 'number') return window.orientation % 180 === 0;   // 예전 iOS
+    try { if (screen.width && screen.height) return screen.height > screen.width; } catch (e) { /* 무시 */ }
+    return window.innerWidth < window.innerHeight;
+  }
+  const MIN_W = 960;   // 창이 좁으면 이 논리 폭이 보이도록 줄이고 위아래를 비운다 (길이 앞이 보여야 하니까)
   function resize() {
     view.w = window.innerWidth; view.h = window.innerHeight;
-    // 세로로 들거나 창이 좁으면(분할 화면) 옆으로 눕혀 달라고 안내하고 달리기는 멈춘다
-    const portrait = view.w < view.h * 1.2;
+    const narrow = view.w < view.h * 1.2;
+    // 기기를 세로로 들었을 때만 눕혀 달라고 안내하고 달리기는 멈춘다
+    const portrait = narrow && devicePortrait();
     document.body.classList.toggle('portrait', portrait);
+    document.body.classList.toggle('narrow', narrow && !portrait);
     if (portrait) { if (mode === 'run' && !paused) pause(); if (!rotTold) { rotTold = true; S.say('태블릿을 옆으로 눕혀 줘!', { bubble: false }); } }
     else rotTold = false;
+    // 좁은 창(가로로 든 태블릿의 옆 창·분할 화면): 버튼·패널까지 통째로 줄여서 넓은 화면처럼 보이게
+    view.k = narrow && !portrait ? Math.min(1, view.w / 1000) : 1;
+    document.body.style.zoom = view.k === 1 ? '' : String(view.k);
     view.dpr = Math.max(0.6, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.4e6 / (view.w * view.h))) * view.q);
-    view.s = view.h / 600;
+    view.s = Math.min(view.h / 600, view.w / MIN_W);
     view.vw = view.w / view.s;
+    view.oy = Math.max(0, (view.h / view.s - 600) / 2);   // 좁은 창: 게임 화면을 세로 가운데에 (논리 좌표)
     canvas.width = Math.round(view.w * view.dpr); canvas.height = Math.round(view.h * view.dpr);
-    canvas.style.width = view.w + 'px'; canvas.style.height = view.h + 'px';
+    canvas.style.width = (view.w / view.k) + 'px'; canvas.style.height = (view.h / view.k) + 'px';
     placeHud();
   }
   // HUD 별 아이콘 위치 → 캔버스 논리 좌표 (모은 별이 여기로 날아간다)
+  // 화면 줄임(zoom) 때 브라우저마다 위치 값 단위가 달라서, 캔버스 크기로 비율을 맞춘다
+  function zr() { const cw = canvas.getBoundingClientRect().width; return cw ? view.w / cw : 1; }
   function placeHud() {
     const el = document.querySelector('#hud-stars .star-ico');
-    const r = el.getBoundingClientRect();
-    if (r.width) RC.Draw.setHud((r.left + r.width / 2) / view.s, (r.top + r.height / 2) / view.s);
-    else RC.Draw.setHud(52 / view.s, 46 / view.s);
+    const r = el.getBoundingClientRect(), f = zr();
+    if (r.width) RC.Draw.setHud((r.left + r.width / 2) * f / view.s, (r.top + r.height / 2) * f / view.s - view.oy);
+    else RC.Draw.setHud(52 / view.s, 46 / view.s - view.oy);
   }
   window.addEventListener('resize', resize);
+  // 안드로이드는 돌린 직후 크기가 늦게 바뀌는 일이 있어 방향 바뀜 알림에서도, 조금 뒤에도 다시 잰다
+  const resizeSoon = () => { resize(); for (const ms of [120, 350, 800]) setTimeout(resize, ms); };
+  window.addEventListener('orientationchange', resizeSoon);
+  try { if (screen.orientation) screen.orientation.addEventListener('change', resizeSoon); } catch (e) { /* 무시 */ }
+  try { if (window.visualViewport) window.visualViewport.addEventListener('resize', resize); } catch (e) { /* 무시 */ }
 
   // 별 아이콘 (게임 속 별과 같은 그림)
   const starURL = RC.Draw.starImg().toDataURL();
@@ -284,7 +306,7 @@
       hintEl.className = kind ? 'on' + (kind === 'hold' ? ' hold' : '') : '';
       if (kind) hintTxt.textContent = txt;
     }
-    if (kind) { hintEl.style.left = Math.round(x * view.s - 30) + 'px'; hintEl.style.top = Math.round(y * view.s) + 'px'; }
+    if (kind) { const k = view.k || 1; hintEl.style.left = Math.round(x * view.s / k - 30) + 'px'; hintEl.style.top = Math.round((y + view.oy) * view.s / k) + 'px'; }
   }
   function tutorial() {
     if (!tutor.on || R.done || countdown > 0) { if (tutor.shown) setHint(''); btnT.classList.remove('hint'); return; }
@@ -332,7 +354,7 @@
 
   function handleEvents(Rx, quiet) {
     for (const ev of Rx.events) {
-      RC.Draw.fxEvent(Rx, ev, view.vw);
+      if (!(quiet && ev === 'star')) RC.Draw.fxEvent(Rx, ev, view.vw);   // 시연 중엔 별이 화면 구석으로 날아가지 않게
       S.play(ev);
       if (quiet) continue;
       if (ev === 'smash') vibrate(35); else if (ev === 'transform') vibrate([20, 40, 60]); else if (ev === 'bump') vibrate(20); else if (ev === 'finish') vibrate([40, 60, 40, 60, 120]);
@@ -738,7 +760,10 @@
     autoQuality(raw);
     tickTimer(dt);
     renderBattery();
-    ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, 0, 0);
+    // 크기 알림을 놓쳐도 매 프레임 창 크기를 확인한다 (알림 없이 크기만 바뀌는 웹뷰 대비)
+    if (window.innerWidth !== view.w || window.innerHeight !== view.h) resize();
+    if (view.oy > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#05070d'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, 0, view.dpr * view.s * view.oy);
     const vw = view.vw;
 
     if ((mode === 'run' || mode === 'toResult') && R) {
