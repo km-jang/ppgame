@@ -26,7 +26,44 @@
     }
   }
 
-  function drawGrid(ctx, W) {
+  // 모바일 최적화: 배경 격자와 발광은 미리 그려 두고 이미지로 찍는다
+  // (매 프레임 선 수백 개·shadowBlur는 모바일 GPU에서 가장 비싼 작업)
+  let gridCache = null;
+  function drawGrid(ctx, W, dpr) {
+    if (!gridCache || gridCache.w !== W.w || gridCache.h !== W.h || gridCache.dpr !== dpr) {
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(W.w * dpr));
+      c.height = Math.max(1, Math.round(W.h * dpr));
+      const g = c.getContext('2d');
+      g.scale(dpr, dpr);
+      paintGrid(g, W);
+      gridCache = { c, w: W.w, h: W.h, dpr };
+    }
+    ctx.drawImage(gridCache.c, 0, 0, W.w, W.h);
+  }
+
+  const glowCache = {};
+  function glow(ctx, color, x, y, radius, alpha) {
+    const key = color + radius;
+    let c = glowCache[key];
+    if (!c) {
+      c = document.createElement('canvas');
+      const s = radius * 2;
+      c.width = c.height = s;
+      const g = c.getContext('2d');
+      const grad = g.createRadialGradient(radius, radius, 0, radius, radius, radius);
+      grad.addColorStop(0, color);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, s, s);
+      glowCache[key] = c;
+    }
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(c, x - radius, y - radius);
+    ctx.globalAlpha = 1;
+  }
+
+  function paintGrid(ctx, W) {
     ctx.fillStyle = '#07080d';
     ctx.fillRect(0, 0, W.w, W.h);
     ctx.strokeStyle = 'rgba(94,231,255,0.06)';
@@ -54,11 +91,10 @@
         ctx.globalAlpha = 1;
         continue;
       }
+      if (e.type === 'boss') glow(ctx, 'rgba(255,46,136,0.55)', e.x, e.y, Math.round(e.r * 1.8), 1);
       shapePath(ctx, e);
       ctx.fillStyle = e.flash > 0 ? '#ffffff' : e.def.color;
-      if (e.type === 'boss') { ctx.shadowColor = e.def.color; ctx.shadowBlur = 25; }
       ctx.fill();
-      ctx.shadowBlur = 0;
       ctx.lineWidth = 2;
       ctx.strokeStyle = 'rgba(0,0,0,0.35)';
       ctx.stroke();
@@ -123,11 +159,9 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    ctx.shadowColor = '#5ee7ff';
-    ctx.shadowBlur = p.dashT > 0 ? 30 : 16;
+    glow(ctx, 'rgba(94,231,255,0.6)', p.x, p.y, 34, p.dashT > 0 ? 1 : 0.7);
     ctx.fillStyle = p.dashT > 0 ? '#ffffff' : '#5ee7ff';
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
-    ctx.shadowBlur = 0;
     ctx.fillStyle = '#07080d';
     ctx.font = 'bold 11px system-ui, sans-serif';
     ctx.textAlign = 'center';
@@ -184,33 +218,38 @@
   function drawHud(ctx, W, view) {
     const p = W.player;
     const top = view.hudTop;
+    const s = view.ui || 1; // 터치 기기에서 글자·칸을 키운다
+    const right = W.w - view.hudRight;
     ctx.textBaseline = 'top';
 
-    // 체력 칸
+    // 체력 칸 (많아지면 줄을 바꾼다)
     const x0 = view.hudLeft;
+    const cell = 16 * s, perRow = Math.max(5, Math.floor((right - 120 * s - x0) / cell));
     for (let i = 0; i < p.maxHp; i++) {
       ctx.fillStyle = i < p.hp ? '#ff4d6d' : 'rgba(255,77,109,0.18)';
-      ctx.fillRect(x0 + i * 16, top + 2, 12, 12);
+      ctx.fillRect(x0 + (i % perRow) * cell, top + 2 + Math.floor(i / perRow) * cell, 12 * s, 12 * s);
     }
+    const rows = Math.ceil(p.maxHp / perRow);
     // 대시 게이지
     const k = 1 - p.dashCd / p.dashCdMax;
+    const gy = top + 2 + rows * cell + 4;
     ctx.fillStyle = 'rgba(94,231,255,0.18)';
-    ctx.fillRect(x0, top + 20, 76, 4);
+    ctx.fillRect(x0, gy, 76 * s, 4 * s);
     ctx.fillStyle = k >= 1 ? '#5ee7ff' : '#2b7f91';
-    ctx.fillRect(x0, top + 20, 76 * k, 4);
+    ctx.fillRect(x0, gy, 76 * s * k, 4 * s);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8f7ff';
-    ctx.font = 'bold 18px system-ui, sans-serif';
-    ctx.fillText(W.score.toLocaleString(), W.w - 12, top);
-    ctx.font = '12px system-ui, sans-serif';
+    ctx.font = 'bold ' + Math.round(18 * s) + 'px system-ui, sans-serif';
+    ctx.fillText(W.score.toLocaleString(), right, top);
+    ctx.font = Math.round(12 * s) + 'px system-ui, sans-serif';
     ctx.fillStyle = '#8aa4b8';
-    ctx.fillText('WAVE ' + W.wave + '  ·  N=' + p.gun.barrels + '  ·  ' + NG.fmtTime(W.stats.time), W.w - 12, top + 22);
+    ctx.fillText('W' + W.wave + ' · N=' + p.gun.barrels + ' · ' + NG.fmtTime(W.stats.time), right, top + 22 * s);
 
     // 보스 체력바
     const boss = W.enemies.find(e => e.type === 'boss' && e.spawnT <= 0);
     if (boss) {
-      const bw = Math.min(420, W.w - 40), bx = (W.w - bw) / 2, by = top + 44;
+      const bw = Math.min(420, W.w - 40), bx = (W.w - bw) / 2, by = Math.max(top + 44 * s, gy + 14);
       ctx.fillStyle = 'rgba(255,46,136,0.2)';
       ctx.fillRect(bx, by, bw, 8);
       ctx.fillStyle = '#ff2e88';
@@ -227,7 +266,7 @@
       ctx.globalAlpha = a;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = 'bold 44px system-ui, sans-serif';
+      ctx.font = 'bold ' + Math.min(44, Math.round(W.w / 9)) + 'px system-ui, sans-serif';
       ctx.fillStyle = W.bossWave ? '#ff2e88' : '#e8f7ff';
       ctx.fillText(W.bossWave ? '⚠ 보스 웨이브' : 'WAVE ' + W.wave, W.w / 2, W.h * 0.38);
       ctx.globalAlpha = 1;
@@ -235,21 +274,29 @@
     ctx.textBaseline = 'alphabetic';
   }
 
-  function drawSticks(ctx, touch) {
-    for (const s of [touch.move, touch.aim]) {
-      if (!s) continue;
-      ctx.strokeStyle = 'rgba(232,247,255,0.25)';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(s.ox, s.oy, touch.radius, 0, TAU); ctx.stroke();
-      ctx.fillStyle = 'rgba(232,247,255,0.25)';
-      ctx.beginPath(); ctx.arc(s.kx, s.ky, 22, 0, TAU); ctx.fill();
-    }
+  // 게임 시작 직후 몇 초, 무엇을 누르면 되는지 보여 준다 (스틱 자체는 main.js가 DOM으로 그린다)
+  function drawTouchHint(ctx, W, touch) {
+    if (W.t > 5 || touch.move || touch.aim) return;
+    const a = Math.min(1, (5 - W.t) / 1.5) * 0.7;
+    const h = touch.home, R = touch.radius;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#e8f7ff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = 'bold 15px system-ui, sans-serif';
+    ctx.fillText('엄지로 밀어서 이동', h.x, h.y - R - 14);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('오른쪽 드래그: 조준', W.w * 0.72, W.h * 0.5);
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillText('(안 해도 자동 조준)', W.w * 0.72, W.h * 0.5 + 20);
+    ctx.globalAlpha = 1;
+    ctx.textBaseline = 'alphabetic';
   }
 
   // view: {dpr, hudTop, hudLeft, hud(false면 HUD 생략)}, touch: 입력 모듈의 터치 상태
   function draw(ctx, W, view, touch) {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    drawGrid(ctx, W);
+    drawGrid(ctx, W, view.dpr);
     ctx.save();
     if (W.shake > 0) {
       const s = W.shake * 0.5;
@@ -265,7 +312,7 @@
       ctx.fillRect(0, 0, W.w, W.h);
     }
     if (view.hud !== false) drawHud(ctx, W, view);
-    if (touch) drawSticks(ctx, touch);
+    if (touch && view.touchHint) drawTouchHint(ctx, W, touch);
   }
 
   NG.Render = { draw };

@@ -6,7 +6,8 @@
   function createInput(canvas) {
     const keys = new Set();
     const mouse = { x: 0, y: 0, seen: false };
-    const touch = { radius: STICK_R, move: null, aim: null, used: false };
+    // home: 이동 스틱이 쉬는 자리 (왼쪽 아래). main.js가 화면 크기에 맞춰 정한다
+    const touch = { radius: STICK_R, move: null, aim: null, used: false, home: { x: 110, y: 400 } };
     let aimMode = 'auto'; // auto | mouse
     let aimModeLocked = false; // F로 직접 고르면 자동 전환하지 않음
     let dashQueued = false;
@@ -59,20 +60,37 @@
       const w = canvas.getBoundingClientRect().width;
       for (const t of e.changedTouches) {
         const s = stickFrom(t);
-        if (s.ox < w / 2) { if (!touch.move) touch.move = s; }
-        else if (!touch.aim) touch.aim = s;
+        if (s.ox < w / 2) {
+          if (touch.move) continue;
+          // 스틱 근처를 누르면 스틱 자리에서 시작 (진짜 조이스틱처럼),
+          // 멀리 누르면 스틱이 그 자리로 따라온다
+          const R = touch.radius, h = touch.home;
+          if (Math.hypot(s.ox - h.x, s.oy - h.y) < R * 1.6) { s.ox = h.x; s.oy = h.y; }
+          touch.move = s;
+          moveKnob(s, s.kx, s.ky);
+        } else if (!touch.aim) touch.aim = s;
       }
     }, { passive: false });
+
+    // 손가락이 스틱 반경 밖으로 나가면 받침이 손가락을 따라 끌려온다.
+    // 그래서 방향을 반대로 틀 때 받침 중심까지 되돌아갈 필요가 없다
+    function moveKnob(s, x, y, follow) {
+      const R = touch.radius;
+      let dx = x - s.ox, dy = y - s.oy;
+      const d = Math.hypot(dx, dy);
+      if (d > R) {
+        if (follow) { s.ox = x - dx / d * R; s.oy = y - dy / d * R; }
+        dx = dx / d * R; dy = dy / d * R;
+      }
+      s.kx = s.ox + dx; s.ky = s.oy + dy;
+    }
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
       for (const t of e.changedTouches) {
         for (const s of [touch.move, touch.aim]) {
           if (!s || s.id !== t.identifier) continue;
           const p = local(t.clientX, t.clientY);
-          let dx = p.x - s.ox, dy = p.y - s.oy;
-          const d = Math.hypot(dx, dy);
-          if (d > STICK_R) { dx = dx / d * STICK_R; dy = dy / d * STICK_R; }
-          s.kx = s.ox + dx; s.ky = s.oy + dy;
+          moveKnob(s, p.x, p.y, true);
         }
       }
     }, { passive: false });
@@ -94,9 +112,16 @@
       }
       let aimAngle = null;
       if (touch.move) {
+        // 반응 곡선: 가운데 12%는 무시, 반경의 70%만 밀어도 최고 속도.
+        // 엄지를 조금만 움직여도 시원하게 움직이고, 살짝 닿은 떨림에는 안 움직인다
+        const R = touch.radius;
         const dx = touch.move.kx - touch.move.ox, dy = touch.move.ky - touch.move.oy;
         const d = Math.hypot(dx, dy);
-        if (d > 8) { mx = dx / STICK_R; my = dy / STICK_R; }
+        const dead = R * 0.12, full = R * 0.7;
+        if (d > dead) {
+          const m = Math.min(1, (d - dead) / (full - dead));
+          mx = dx / d * m; my = dy / d * m;
+        }
       }
       if (touch.aim) {
         const dx = touch.aim.kx - touch.aim.ox, dy = touch.aim.ky - touch.aim.oy;

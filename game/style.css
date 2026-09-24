@@ -22,7 +22,9 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
   touch-action: none;
+  overscroll-behavior: none;
 }
 
 #game { display: block; position: fixed; inset: 0; }
@@ -58,27 +60,123 @@ kbd {
 }
 .icon-btn:hover { border-color: var(--cyan); }
 
-/* 대시 버튼: 터치 기기에서 게임 중일 때만 */
-#btn-dash {
+/* ─── 터치 조작부: 실제 게임패드처럼 보이게 ─── */
+.stick {
+  --r: 62px;
   display: none;
   position: fixed;
-  right: max(18px, env(safe-area-inset-right));
-  bottom: max(18px, env(safe-area-inset-bottom));
-  width: 76px; height: 76px;
+  left: 0; top: 0;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
   border-radius: 50%;
-  border: 2px solid var(--cyan);
-  background: rgba(94, 231, 255, 0.12);
-  color: var(--cyan);
-  font-weight: 700;
-  font-size: 15px;
+  pointer-events: none;
+  z-index: 4;
+  will-change: transform;
+  /* 움푹 들어간 받침 */
+  background:
+    radial-gradient(circle at 50% 50%, transparent 58%, rgba(94, 231, 255, 0.10) 59%, transparent 61%),
+    radial-gradient(circle at 50% 38%, #1c2636 0%, #0e141e 62%, #06090e 100%);
+  box-shadow:
+    inset 0 4px 10px rgba(0, 0, 0, 0.75),
+    inset 0 -2px 3px rgba(255, 255, 255, 0.07),
+    0 0 0 2px rgba(94, 231, 255, 0.22),
+    0 8px 18px rgba(0, 0, 0, 0.55);
+  opacity: 0.9;
+}
+.stick.idle { transition: transform .16s ease-out; opacity: 0.6; }
+/* 네 방향 눈금 */
+.stick::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background:
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 50% 0 / 3px 8px no-repeat,
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 50% 100% / 3px 8px no-repeat,
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 0 50% / 8px 3px no-repeat,
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 100% 50% / 8px 3px no-repeat;
+}
+/* 볼록한 엄지 머리 */
+.stick-knob {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: calc(var(--r) * 0.95);
+  height: calc(var(--r) * 0.95);
+  margin: calc(var(--r) * -0.475) 0 0 calc(var(--r) * -0.475);
+  border-radius: 50%;
+  will-change: transform;
+  background: radial-gradient(circle at 36% 30%, #6c7d93 0%, #334052 45%, #1a2230 80%, #111720 100%);
+  box-shadow:
+    0 8px 12px rgba(0, 0, 0, 0.6),
+    0 2px 0 rgba(0, 0, 0, 0.5),
+    inset 0 2px 2px rgba(255, 255, 255, 0.28),
+    inset 0 -4px 6px rgba(0, 0, 0, 0.5);
+}
+/* 미끄럼 방지 홈 */
+.stick-knob::after {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 6px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.stick.active { opacity: 1; }
+.stick.active .stick-knob { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--cyan), 0 0 16px rgba(94, 231, 255, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.28), inset 0 -4px 6px rgba(0, 0, 0, 0.5); }
+.stick.aim { box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.75), 0 0 0 2px rgba(255, 46, 136, 0.3), 0 8px 18px rgba(0, 0, 0, 0.55); }
+.stick.aim.active .stick-knob { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--pink), 0 0 16px rgba(255, 46, 136, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.28), inset 0 -4px 6px rgba(0, 0, 0, 0.5); }
+body.touch.playing #stick-move { display: block; }
+body.touch.playing #stick-aim.on { display: block; }
+
+/* 대시: 오락실 버튼. 바깥 고리가 차오르며 재사용 대기를 보여 주고, 누르면 쑥 들어간다 */
+#btn-dash {
+  --k: 1;
+  --size: 92px;
+  display: none;
+  position: fixed;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(28px, env(safe-area-inset-bottom));
+  width: var(--size); height: var(--size);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, #0b0f17 84%, transparent 86%),
+    conic-gradient(var(--cyan) calc(var(--k) * 360deg), rgba(94, 231, 255, 0.14) 0);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55);
   z-index: 5;
+  touch-action: none;
+}
+/* 볼록한 버튼 머리 */
+#btn-dash span {
+  position: absolute;
+  inset: 12%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 900 15px system-ui, sans-serif;
+  letter-spacing: 1px;
+  color: #0b2830;
+  background: radial-gradient(circle at 38% 28%, #5d6a7b 0%, #2c3645 60%, #1a212c 100%);
+  box-shadow: 0 5px 0 #0a0d13, inset 0 2px 2px rgba(255, 255, 255, 0.2);
+  transform: translateY(-3px);
+  transition: transform .06s, box-shadow .06s, background .15s;
+}
+#btn-dash.ready span {
+  color: #06303a;
+  background: radial-gradient(circle at 38% 28%, #b8f7ff 0%, #4fdcf5 40%, #1a9fbb 85%, #127c93 100%);
+  box-shadow: 0 5px 0 #0a5566, 0 0 18px rgba(94, 231, 255, 0.45), inset 0 2px 3px rgba(255, 255, 255, 0.6);
+}
+#btn-dash:active span, #btn-dash.pressed span {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #0a5566, inset 0 3px 6px rgba(0, 0, 0, 0.35);
 }
 body.touch.playing #btn-dash { display: block; }
+@media (min-width: 900px) { #btn-dash { --size: 108px; } #btn-dash span { font-size: 17px; } }
 body.touch .only-pc { display: none; }
 body:not(.touch) .only-touch { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .only-pc { display: none; }
-  .only-touch { display: flex !important; }
 }
 
 #toast {
@@ -167,20 +265,17 @@ h2 { font-size: 26px; }
 }
 
 .help {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  margin-top: 22px;
-  text-align: left;
-}
-.help-col {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
 }
-.help-col b { color: var(--text); }
+.help b { color: var(--cyan); }
+.pc-line { font-size: 12px; color: var(--muted); margin: 10px 0 0; }
 
 .settings { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
 .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
@@ -280,4 +375,44 @@ h2 { font-size: 26px; }
   .card-lv { width: 100%; padding-left: 46px; }
   .card-key { top: 50%; transform: translateY(-50%); }
   .stats dd { font-size: 16px; }
+}
+
+/* ─── 터치 기기: 누르기 쉬운 크기 (최소 44px) ─── */
+body.touch .icon-btn { width: 44px; height: 44px; font-size: 18px; }
+body.touch .seg button, body.touch .toggle { min-height: 48px; }
+body.touch .big-btn { padding: 16px; font-size: 19px; }
+body.touch .text-btn { padding: 10px 16px; }
+body.touch .card { min-height: 64px; }
+#btn-fs[hidden] { display: none; }
+
+/* ─── 가로로 눕힌 폰 (높이가 낮음): 시작 화면을 두 칸으로 ─── */
+@media (max-height: 520px) and (orientation: landscape) {
+  .screen { align-items: flex-start; padding-block: 10px; }
+  .panel { padding: 16px 18px; }
+  #scr-title .panel {
+    max-width: 760px;
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    column-gap: 22px;
+    align-items: center;
+    text-align: left;
+  }
+  #scr-title .logo { font-size: 44px; grid-column: 1; grid-row: 1; }
+  #scr-title .tagline { grid-column: 1; grid-row: 2; margin-bottom: 6px; }
+  #scr-title .best { grid-column: 1; grid-row: 3; margin-bottom: 6px; }
+  #scr-title .settings, #scr-title .big-btn { grid-column: 2; }
+  #scr-title .settings { grid-row: 1 / span 3; margin-bottom: 8px; }
+  #scr-title .big-btn { grid-row: 4; }
+  #scr-title .help { grid-column: 1; grid-row: 4; margin: 0; font-size: 12px; gap: 2px; }
+  #scr-title .hint, #scr-title .pc-line { display: none; }
+  h2 { font-size: 20px; }
+  .sub { margin-bottom: 10px; }
+  #card-list { grid-template-columns: repeat(3, 1fr); }
+  .card { padding: 12px 8px; gap: 4px; flex-direction: column; text-align: center; }
+  .card-icon { font-size: 26px; }
+  .card-desc, .card-lv { padding-left: 0; width: auto; min-height: 0; }
+  .card-key { top: 6px; transform: none; }
+  .score-big { font-size: 34px; }
+  .stats { margin: 10px 0; }
+  .picks { margin-bottom: 10px; }
 }
