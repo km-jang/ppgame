@@ -736,3 +736,6 @@ body.ready #scr-title.on #btn-go-garage { animation: rise .5s .6s var(--ease-out
   .panel.result { top: calc(50% + 14px); max-height: calc(100vh - 64px); }
   .panel.result .banner { font-size: 42px; }
 }
+/* 버튼 글자는 줄바꿈하지 않는다 (좁은 창에서 "시 작"처럼 쪼개지지 않게) */
+.btn, .btn > span { white-space: nowrap; }
+.title-wrap { width: max-content; max-width: 96vw; }

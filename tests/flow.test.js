@@ -129,6 +129,31 @@ async function until(page, fn, arg, ms) {
     assert(await pr.page.evaluate(() => document.body.classList.contains('portrait')), '세로 안내 없음');
     await pr.ctx.close();
   });
+  await test('가로로 든 태블릿의 좁은 창(옆 창·화면 분할)에서는 막지 않고 줄여서 보여 준다', async () => {
+    const ctx2 = await browser.newContext(Object.assign({}, TAB, { viewport: { width: 700, height: 760 } }));
+    await ctx2.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+    await ctx2.addInitScript(() => { try { Object.defineProperty(screen.orientation, 'type', { get: () => 'landscape-primary' }); } catch (e) {} });
+    const pg = await ctx2.newPage();
+    await pg.goto(ROOT + '/robocar/index.html'); await pg.waitForTimeout(600);
+    const st = await pg.evaluate(() => [document.body.classList.contains('portrait'), document.body.classList.contains('narrow'), document.body.style.zoom]);
+    assert(!st[0] && st[1] && Number(st[2]) < 1, '좁은 가로 창 처리 ' + st.join(','));
+    await pg.evaluate(() => RC.debug.toGarage()); await pg.waitForTimeout(500);
+    const inside = await pg.evaluate(() => { const b = document.getElementById('btn-run').getBoundingClientRect(), k = Number(document.body.style.zoom) || 1; const cw = document.getElementById('stage').getBoundingClientRect().width, f = innerWidth / cw; return (b.right * f) <= innerWidth + 1 && (b.bottom * f) <= innerHeight + 1; });
+    assert(inside, '출발 버튼이 화면 밖');
+    await ctx2.close();
+  });
+  await test('세로에서 가로로 돌리면 안내가 사라진다', async () => {
+    const ctx3 = await browser.newContext(Object.assign({}, TAB, { viewport: { width: 800, height: 1280 } }));
+    await ctx3.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+    await ctx3.addInitScript(() => { window.__o = 'portrait-primary'; try { Object.defineProperty(screen.orientation, 'type', { get: () => window.__o }); } catch (e) {} });
+    const pg = await ctx3.newPage();
+    await pg.goto(ROOT + '/robocar/index.html'); await pg.waitForTimeout(500);
+    assert(await pg.evaluate(() => document.body.classList.contains('portrait')), '세로 안내 없음');
+    await pg.evaluate(() => { window.__o = 'landscape-primary'; });
+    await pg.setViewportSize({ width: 1280, height: 800 }); await pg.waitForTimeout(400);
+    assert(!(await pg.evaluate(() => document.body.classList.contains('portrait'))), '돌려도 안내가 남음');
+    await ctx3.close();
+  });
   await test('작은 탭(A7 Lite)에서 코스 카드 두 장이 화면 안에 있다', async () => {
     const sm = await open(browser, ROOT + '/robocar/index.html', Object.assign({}, TAB, { viewport: { width: 893, height: 533 } }));
     await sm.page.evaluate(() => { RC.debug.prog.log.finished = 1; RC.debug.toMap(); });
