@@ -46,6 +46,13 @@
     clearDelay: 0.8, banner: 2.0,
   };
 
+  // 난이도. 적 체력·속도·수, 적 탄 속도·연사, 내 체력, 점수 배율
+  const DIFFICULTY = {
+    easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.6,  enemySpeed: 0.8,  count: 0.75, bulletSpeed: 0.75, fireRate: 0.7,  score: 0.6 },
+    normal: { id: 'normal', name: '보통',   hp: 5, enemyHp: 1,    enemySpeed: 1,    count: 1,    bulletSpeed: 1,    fireRate: 1,    score: 1 },
+    hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.5,  enemySpeed: 1.2,  count: 1.3,  bulletSpeed: 1.2,  fireRate: 1.35, score: 1.6 },
+  };
+
   const DROP = { healChance: 0.04, life: 10, pickR: 24, magnetR: 90 };
 
   // 카드. apply(p): 플레이어 상태를 바꾼다. max: 최대 선택 횟수
@@ -87,5 +94,5 @@
   const DRONE = { radius: 46, spin: 2.6, r: 7, dmgMul: 1.5, hitGap: 0.25 };
   const NOVA = { radius: 95, dmgMul: 5 };
 
-  NG.DATA = { PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA };
+  NG.DATA = { DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA };
 })(NG);

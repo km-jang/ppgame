@@ -110,6 +110,19 @@
     }
     ctx.stroke();
 
+    // 총구 화염
+    if (p.muzzle > 0) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,230,109,' + (p.muzzle / 0.05) + ')';
+      for (let i = 0; i < n; i++) {
+        const a = p.aim + (n === 1 ? 0 : -spread / 2 + spread * i / (n - 1));
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(a) * (p.r + 13), p.y + Math.sin(a) * (p.r + 13), 5, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
     ctx.shadowColor = '#5ee7ff';
     ctx.shadowBlur = p.dashT > 0 ? 30 : 16;
     ctx.fillStyle = p.dashT > 0 ? '#ffffff' : '#5ee7ff';

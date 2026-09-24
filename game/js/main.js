@@ -7,14 +7,24 @@
   const input = NG.createInput(canvas);
   const view = { dpr: 1, hudTop: 14, hudLeft: 104 };
   const demoView = Object.create(view, { hud: { value: false } });
-  const BEST_KEY = 'ngun.best';
+  const BEST_KEY = 'ngun.best2';   // 난이도별 {easy:{score,wave}, ...}
   const MUTE_KEY = 'ngun.muted';
+  const DIFF_KEY = 'ngun.diff';
+  const AUDIO_KEY = 'ngun.audio';
 
   let W = null;        // 실제 판
   let demo = null;     // 시작 화면 뒤에서 혼자 도는 시연 판
   let mode = 'title';  // title | play | cards | paused | over
   let cardsShownAt = 0;
-  let best = NG.store.get(BEST_KEY, { score: 0, wave: 0 });
+  let diff = NG.store.get(DIFF_KEY, 'normal');
+  if (!NG.DATA.DIFFICULTY[diff]) diff = 'normal';
+  let bests = NG.store.get(BEST_KEY, null);
+  if (!bests) {
+    // 난이도 도입 전 기록은 '보통'으로 옮긴다
+    const old = NG.store.get('ngun.best', null);
+    bests = old ? { normal: old } : {};
+  }
+  const bestOf = d => bests[d] || { score: 0, wave: 0 };
   let lastTs = 0;
 
   // ─── 화면 크기 ─────────────────────────────────────────────
@@ -50,24 +60,53 @@
   }
 
   function renderBest() {
-    $('best').textContent = best.score > 0
-      ? '최고 기록 ' + best.score.toLocaleString() + '점 · WAVE ' + best.wave
-      : '첫 도전을 시작하세요';
+    const b = bestOf(diff);
+    $('best').textContent = b.score > 0
+      ? NG.DATA.DIFFICULTY[diff].name + ' 최고 기록 ' + b.score.toLocaleString() + '점 · WAVE ' + b.wave
+      : NG.DATA.DIFFICULTY[diff].name + ' 첫 도전을 시작하세요';
+  }
+
+  function setDiff(d) {
+    diff = d;
+    NG.store.set(DIFF_KEY, d);
+    for (const b of document.querySelectorAll('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === d));
+    renderBest();
+  }
+
+  function renderAudioToggles() {
+    for (const b of document.querySelectorAll('[data-audio]')) {
+      const on = b.dataset.audio === 'music' ? NG.Audio.musicOn : NG.Audio.sfxOn;
+      b.setAttribute('aria-pressed', String(on));
+      b.querySelector('.state').textContent = on ? '켬' : '끔';
+    }
+    $('btn-mute').textContent = NG.Audio.muted ? '🔇' : '🔊';
+  }
+
+  function toggleAudio(kind) {
+    NG.Audio.unlock();
+    if (kind === 'music') NG.Audio.setMusic(!NG.Audio.musicOn);
+    else NG.Audio.setSfx(!NG.Audio.sfxOn);
+    NG.store.set(AUDIO_KEY, { music: NG.Audio.musicOn, sfx: NG.Audio.sfxOn });
+    renderAudioToggles();
   }
 
   // ─── 흐름 ──────────────────────────────────────────────────
   function newGame() {
     NG.Audio.unlock();
     const { w, h } = size();
-    W = NG.World.createWorld(w, h);
+    W = NG.World.createWorld(w, h, undefined, diff);
     input.reset();
     mode = 'play';
+    NG.Audio.setDuck(false);
+    NG.Audio.music('play');
     show(null);
   }
 
   function toTitle() {
     W = null;
     mode = 'title';
+    NG.Audio.setDuck(false);
+    NG.Audio.music('title');
     renderBest();
     show('scr-title');
   }
@@ -76,6 +115,7 @@
     if (mode !== 'play') return;
     mode = 'paused';
     $('pause-aim').textContent = input.aimMode === 'mouse' ? '마우스' : '자동';
+    NG.Audio.setDuck(true);
     show('scr-pause');
   }
 
@@ -83,6 +123,7 @@
     if (mode !== 'paused') return;
     input.reset();
     mode = 'play';
+    NG.Audio.setDuck(false);
     show(null);
   }
 
@@ -121,11 +162,14 @@
 
   function gameOver() {
     mode = 'over';
-    const isBest = W.score > best.score;
-    if (isBest || W.wave > best.wave) {
-      best = { score: Math.max(best.score, W.score), wave: Math.max(best.wave, W.wave) };
-      NG.store.set(BEST_KEY, best);
+    const b = bestOf(diff);
+    const isBest = W.score > b.score;
+    if (isBest || W.wave > b.wave) {
+      bests[diff] = { score: Math.max(b.score, W.score), wave: Math.max(b.wave, W.wave) };
+      NG.store.set(BEST_KEY, bests);
     }
+    NG.Audio.music('off');
+    $('over-diff').textContent = W.diff.name;
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-wave').textContent = W.wave;
@@ -145,7 +189,15 @@
   }
 
   function drainEvents(world) {
-    for (const ev of world.events) NG.Audio.play(ev);
+    for (const ev of world.events) {
+      if (ev === 'shoot') NG.Audio.play(ev, { n: world.player.gun.barrels });
+      else NG.Audio.play(ev);
+      if (world === W) {
+        if (ev === 'boss') NG.Audio.music('boss');
+        else if (ev === 'bossDown') NG.Audio.music('play');
+        else if (ev === 'hurt' || ev === 'over') vibrate(ev === 'over' ? 300 : 60);
+      }
+    }
     world.events.length = 0;
   }
 
@@ -167,8 +219,17 @@
     NG.Audio.unlock();
     NG.Audio.setMuted(!NG.Audio.muted);
     NG.store.set(MUTE_KEY, NG.Audio.muted);
-    $('btn-mute').textContent = NG.Audio.muted ? '🔇' : '🔊';
+    renderAudioToggles();
   }
+
+  function vibrate(ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* 지원 안 하면 무시 */ }
+  }
+
+  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => setDiff(b.dataset.diff));
+  for (const b of document.querySelectorAll('[data-audio]')) b.addEventListener('click', () => toggleAudio(b.dataset.audio));
+  // 브라우저는 첫 터치·클릭 뒤에야 소리를 허락한다. 시작 화면 음악도 그때 시작
+  window.addEventListener('pointerdown', () => NG.Audio.unlock(), { passive: true });
 
   $('btn-start').addEventListener('click', newGame);
   $('btn-retry').addEventListener('click', newGame);
@@ -220,11 +281,15 @@
 
   // ─── 시작 ──────────────────────────────────────────────────
   NG.Audio.setMuted(NG.store.get(MUTE_KEY, false));
-  $('btn-mute').textContent = NG.Audio.muted ? '🔇' : '🔊';
+  const audioPref = NG.store.get(AUDIO_KEY, { music: true, sfx: true });
+  NG.Audio.setMusic(audioPref.music !== false);
+  NG.Audio.setSfx(audioPref.sfx !== false);
+  renderAudioToggles();
+  setDiff(diff);
   resize();
   toTitle();
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
 
   // 개발·테스트용 손잡이
-  NG.debug = { get world() { return W; }, get mode() { return mode; }, newGame, choose };
+  NG.debug = { get world() { return W; }, get mode() { return mode; }, get diff() { return diff; }, newGame, choose, setDiff };
 })(NG);
