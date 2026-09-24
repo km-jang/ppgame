@@ -60,30 +60,119 @@ kbd {
 }
 .icon-btn:hover { border-color: var(--cyan); }
 
-/* 대시 버튼: 터치 기기에서 게임 중일 때만. 테두리 원이 차오르며 재사용 대기를 보여 준다 */
-#btn-dash {
-  --k: 1;
+/* ─── 터치 조작부: 실제 게임패드처럼 보이게 ─── */
+.stick {
+  --r: 62px;
   display: none;
   position: fixed;
-  right: max(22px, env(safe-area-inset-right));
-  bottom: max(22px, env(safe-area-inset-bottom));
-  width: 88px; height: 88px;
+  left: 0; top: 0;
+  width: calc(var(--r) * 2);
+  height: calc(var(--r) * 2);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 4;
+  will-change: transform;
+  /* 움푹 들어간 받침 */
+  background:
+    radial-gradient(circle at 50% 50%, transparent 58%, rgba(94, 231, 255, 0.10) 59%, transparent 61%),
+    radial-gradient(circle at 50% 38%, #1c2636 0%, #0e141e 62%, #06090e 100%);
+  box-shadow:
+    inset 0 4px 10px rgba(0, 0, 0, 0.75),
+    inset 0 -2px 3px rgba(255, 255, 255, 0.07),
+    0 0 0 2px rgba(94, 231, 255, 0.22),
+    0 8px 18px rgba(0, 0, 0, 0.55);
+  opacity: 0.9;
+}
+.stick.idle { transition: transform .16s ease-out; opacity: 0.6; }
+/* 네 방향 눈금 */
+.stick::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background:
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 50% 0 / 3px 8px no-repeat,
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 50% 100% / 3px 8px no-repeat,
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 0 50% / 8px 3px no-repeat,
+    linear-gradient(rgba(232, 247, 255, 0.28), rgba(232, 247, 255, 0.28)) 100% 50% / 8px 3px no-repeat;
+}
+/* 볼록한 엄지 머리 */
+.stick-knob {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: calc(var(--r) * 0.95);
+  height: calc(var(--r) * 0.95);
+  margin: calc(var(--r) * -0.475) 0 0 calc(var(--r) * -0.475);
+  border-radius: 50%;
+  will-change: transform;
+  background: radial-gradient(circle at 36% 30%, #6c7d93 0%, #334052 45%, #1a2230 80%, #111720 100%);
+  box-shadow:
+    0 8px 12px rgba(0, 0, 0, 0.6),
+    0 2px 0 rgba(0, 0, 0, 0.5),
+    inset 0 2px 2px rgba(255, 255, 255, 0.28),
+    inset 0 -4px 6px rgba(0, 0, 0, 0.5);
+}
+/* 미끄럼 방지 홈 */
+.stick-knob::after {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle, rgba(255, 255, 255, 0.07) 0 2px, transparent 2px 6px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.stick.active { opacity: 1; }
+.stick.active .stick-knob { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--cyan), 0 0 16px rgba(94, 231, 255, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.28), inset 0 -4px 6px rgba(0, 0, 0, 0.5); }
+.stick.aim { box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.75), 0 0 0 2px rgba(255, 46, 136, 0.3), 0 8px 18px rgba(0, 0, 0, 0.55); }
+.stick.aim.active .stick-knob { box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), 0 0 0 2px var(--pink), 0 0 16px rgba(255, 46, 136, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.28), inset 0 -4px 6px rgba(0, 0, 0, 0.5); }
+body.touch.playing #stick-move { display: block; }
+body.touch.playing #stick-aim.on { display: block; }
+
+/* 대시: 오락실 버튼. 바깥 고리가 차오르며 재사용 대기를 보여 주고, 누르면 쑥 들어간다 */
+#btn-dash {
+  --k: 1;
+  --size: 92px;
+  display: none;
+  position: fixed;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(28px, env(safe-area-inset-bottom));
+  width: var(--size); height: var(--size);
   padding: 0;
   border: none;
   border-radius: 50%;
   background:
-    radial-gradient(closest-side, rgba(12, 16, 26, 0.85) 86%, transparent 88%),
-    conic-gradient(var(--cyan) calc(var(--k) * 360deg), rgba(94, 231, 255, 0.15) 0);
-  color: rgba(94, 231, 255, 0.5);
-  font-weight: 800;
-  font-size: 16px;
+    radial-gradient(closest-side, #0b0f17 84%, transparent 86%),
+    conic-gradient(var(--cyan) calc(var(--k) * 360deg), rgba(94, 231, 255, 0.14) 0);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55);
   z-index: 5;
   touch-action: none;
 }
-#btn-dash.ready { color: var(--cyan); box-shadow: 0 0 18px rgba(94, 231, 255, 0.35); }
-#btn-dash:active { transform: scale(0.94); }
-@media (min-width: 900px) { #btn-dash { width: 104px; height: 104px; font-size: 18px; } }
+/* 볼록한 버튼 머리 */
+#btn-dash span {
+  position: absolute;
+  inset: 12%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 900 15px system-ui, sans-serif;
+  letter-spacing: 1px;
+  color: #0b2830;
+  background: radial-gradient(circle at 38% 28%, #5d6a7b 0%, #2c3645 60%, #1a212c 100%);
+  box-shadow: 0 5px 0 #0a0d13, inset 0 2px 2px rgba(255, 255, 255, 0.2);
+  transform: translateY(-3px);
+  transition: transform .06s, box-shadow .06s, background .15s;
+}
+#btn-dash.ready span {
+  color: #06303a;
+  background: radial-gradient(circle at 38% 28%, #b8f7ff 0%, #4fdcf5 40%, #1a9fbb 85%, #127c93 100%);
+  box-shadow: 0 5px 0 #0a5566, 0 0 18px rgba(94, 231, 255, 0.45), inset 0 2px 3px rgba(255, 255, 255, 0.6);
+}
+#btn-dash:active span, #btn-dash.pressed span {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #0a5566, inset 0 3px 6px rgba(0, 0, 0, 0.35);
+}
 body.touch.playing #btn-dash { display: block; }
+@media (min-width: 900px) { #btn-dash { --size: 108px; } #btn-dash span { font-size: 17px; } }
 body.touch .only-pc { display: none; }
 body:not(.touch) .only-touch { display: none; }
 @media (hover: none) and (pointer: coarse) {

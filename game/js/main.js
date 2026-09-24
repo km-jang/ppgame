@@ -9,6 +9,7 @@
   const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
   if (isTouch) document.body.classList.add('touch');
   const input = NG.createInput(canvas);
+  const stickMove = $('stick-move'), stickAim = $('stick-aim');
   const view = { dpr: 1, hudTop: 14, hudLeft: 104, hudRight: 12, ui: 1, touchHint: isTouch };
   const demoView = Object.create(view, { hud: { value: false } });
   const BEST_KEY = 'ngun.best2';   // 난이도별 {easy:{score,wave}, ...}
@@ -46,6 +47,11 @@
     // HUD는 왼쪽 위 버튼 묶음 오른쪽부터 (전체 화면 버튼이 숨겨지면 그만큼 당긴다)
     view.hudLeft = Math.round($('topbar').getBoundingClientRect().right) + 12;
     view.hudTop = isTouch ? 16 : 14;
+    // 이동 스틱: 태블릿은 크게, 폰은 조금 작게. 왼쪽 아래 엄지가 닿는 자리에 둔다
+    const R = Math.min(w, h) >= 600 ? 80 : 62;
+    input.touch.radius = R;
+    input.touch.home = { x: Math.round(28 + R * 1.15), y: Math.round(h - 30 - R * 1.15) };
+    for (const el of [stickMove, stickAim]) el.style.setProperty('--r', R + 'px');
     frozenDrawn = false;
     canvas.width = Math.round(w * view.dpr);
     canvas.height = Math.round(h * view.dpr);
@@ -255,9 +261,26 @@
   $('btn-pause').addEventListener('click', () => (mode === 'play' ? pause() : resume()));
   $('btn-mute').addEventListener('click', toggleMute);
   const dashBtn = $('btn-dash');
-  dashBtn.addEventListener('touchstart', e => { e.preventDefault(); input.queueDash(); vibrate(15); }, { passive: false });
+  dashBtn.addEventListener('touchstart', e => { e.preventDefault(); input.queueDash(); vibrate(15); dashBtn.classList.add('pressed'); }, { passive: false });
+  for (const ev of ['touchend', 'touchcancel']) dashBtn.addEventListener(ev, () => dashBtn.classList.remove('pressed'));
   dashBtn.addEventListener('mousedown', () => input.queueDash());
   window.addEventListener('touchstart', () => document.body.classList.add('touch'), { once: true, passive: true });
+  // 스틱 그리기: 손가락 입력 상태를 DOM 위치로 옮긴다
+  function placeStick(el, s, fallback) {
+    const R = input.touch.radius;
+    const o = s || fallback;
+    el.style.transform = 'translate3d(' + (o.ox - R) + 'px,' + (o.oy - R) + 'px,0)';
+    el.firstElementChild.style.transform = 'translate3d(' + (o.kx - o.ox) + 'px,' + (o.ky - o.oy) + 'px,0)';
+    el.classList.toggle('active', !!s);
+    el.classList.toggle('idle', !s);
+  }
+  function updateSticks() {
+    const t = input.touch, h = t.home;
+    placeStick(stickMove, t.move, { ox: h.x, oy: h.y, kx: h.x, ky: h.y });
+    stickAim.classList.toggle('on', !!t.aim);
+    if (t.aim) placeStick(stickAim, t.aim);
+  }
+
   let dashShown = -1;
   function updateDashBtn() {
     const p = W.player;
@@ -324,6 +347,7 @@
         if (mode === 'play' && W.phase === 'cards') showCards();
         else if (mode === 'play' && W.phase === 'over') gameOver();
         updateDashBtn();
+        if (isTouch) updateSticks();
         frozenDrawn = false;
       }
       if (!frozenDrawn) {

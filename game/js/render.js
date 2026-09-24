@@ -274,37 +274,23 @@
     ctx.textBaseline = 'alphabetic';
   }
 
-  // 게임 시작 직후 몇 초, 손가락을 어디에 둘지 보여 준다
+  // 게임 시작 직후 몇 초, 무엇을 누르면 되는지 보여 준다 (스틱 자체는 main.js가 DOM으로 그린다)
   function drawTouchHint(ctx, W, touch) {
     if (W.t > 5 || touch.move || touch.aim) return;
-    const a = Math.min(1, (5 - W.t) / 1.5) * 0.55;
+    const a = Math.min(1, (5 - W.t) / 1.5) * 0.7;
+    const h = touch.home, R = touch.radius;
     ctx.globalAlpha = a;
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = '#e8f7ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(W.w / 2, W.h * 0.3); ctx.lineTo(W.w / 2, W.h - 20); ctx.stroke();
-    ctx.setLineDash([]);
     ctx.fillStyle = '#e8f7ff';
-    ctx.font = 'bold 16px system-ui, sans-serif';
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.font = 'bold 15px system-ui, sans-serif';
+    ctx.fillText('엄지로 밀어서 이동', h.x, h.y - R - 14);
     ctx.textBaseline = 'middle';
-    ctx.fillText('드래그: 이동', W.w * 0.25, W.h * 0.7);
-    ctx.fillText('드래그: 조준', W.w * 0.75, W.h * 0.62);
+    ctx.fillText('오른쪽 드래그: 조준', W.w * 0.72, W.h * 0.5);
     ctx.font = '13px system-ui, sans-serif';
-    ctx.fillText('(안 하면 자동 조준)', W.w * 0.75, W.h * 0.62 + 22);
+    ctx.fillText('(안 해도 자동 조준)', W.w * 0.72, W.h * 0.5 + 20);
     ctx.globalAlpha = 1;
     ctx.textBaseline = 'alphabetic';
-  }
-
-  function drawSticks(ctx, touch) {
-    for (const s of [touch.move, touch.aim]) {
-      if (!s) continue;
-      ctx.strokeStyle = 'rgba(232,247,255,0.25)';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(s.ox, s.oy, touch.radius, 0, TAU); ctx.stroke();
-      ctx.fillStyle = 'rgba(232,247,255,0.25)';
-      ctx.beginPath(); ctx.arc(s.kx, s.ky, 22, 0, TAU); ctx.fill();
-    }
   }
 
   // view: {dpr, hudTop, hudLeft, hud(false면 HUD 생략)}, touch: 입력 모듈의 터치 상태
@@ -326,10 +312,7 @@
       ctx.fillRect(0, 0, W.w, W.h);
     }
     if (view.hud !== false) drawHud(ctx, W, view);
-    if (touch) {
-      if (view.touchHint) drawTouchHint(ctx, W, touch);
-      drawSticks(ctx, touch);
-    }
+    if (touch && view.touchHint) drawTouchHint(ctx, W, touch);
   }
 
   NG.Render = { draw };

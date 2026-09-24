@@ -304,8 +304,10 @@
       if (W.rand() < 0.8) burst(W, p.x, p.y, '#5ee7ff', 1, 40, 3);
       if (p.dashT <= 0 && p.nova > 0) nova(W, p);
     } else {
-      p.vx = mx * p.speed;
-      p.vy = my * p.speed;
+      // 속도를 바로 바꾸지 않고 빠르게 따라가게 해서 출발·정지가 부드럽다 (약 0.1초)
+      const k = Math.min(1, dt * 16);
+      p.vx += (mx * p.speed - p.vx) * k;
+      p.vy += (my * p.speed - p.vy) * k;
     }
     p.x = NG.clamp(p.x + p.vx * dt, p.r, W.w - p.r);
     p.y = NG.clamp(p.y + p.vy * dt, p.r, W.h - p.r);
