@@ -218,5 +218,37 @@ test('어려움이 보통보다 빨리 끝난다 (가만히 있는 봇, 시드 8
   assert(e > n && n > h, 'ordering');
 });
 
+
+test('히트스톱: 중장갑 처치 순간 시간이 멈췄다가 다시 흐른다', () => {
+  const W = createWorld(800, 600, 41);
+  W.spawnQueue.length = 0;
+  W.enemies = [{ id: 900, type: 'tank', def: NG.DATA.ENEMIES.tank, x: 100, y: 100, r: 26, hp: 0.5, maxHp: 18, speed: 0,
+    vx: 0, vy: 0, spawnT: 0, flash: 0, droneHit: 0, dead: false, ang: 0, cd: 0, ringCd: 0, aimCd: 0, summonCd: 0, strafe: 1 }];
+  W.bullets.push({ x: 100, y: 100, vx: 500, vy: 0, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+  step(W, IDLE, DT);
+  assert(W.hitstop > 0, 'hitstop set');
+  assert(W.particles.some(q => q.shard) && W.particles.some(q => q.pop), 'shards + pop');
+  const t = W.t;
+  step(W, IDLE, DT);
+  assert(W.t === t, 'frozen during hitstop');
+  for (let i = 0; i < 10; i++) step(W, IDLE, DT);
+  assert(W.t > t, 'time resumes');
+});
+
+test('보스 처치: 느린 화면 + 연쇄 폭발이 끝난 뒤에 카드 화면', () => {
+  const W = createWorld(800, 600, 43);
+  W.spawnQueue.length = 0;
+  W.wave = 5; W.bossWave = true;
+  W.enemies = [{ id: 901, type: 'boss', def: NG.DATA.ENEMIES.boss, x: 400, y: 100, r: 58, hp: 0.5, maxHp: 320, speed: 0,
+    vx: 0, vy: 0, spawnT: 0, flash: 0, droneHit: 0, dead: false, ang: 0, cd: 0, ringCd: 99, aimCd: 99, summonCd: 99, strafe: 1 }];
+  W.bullets.push({ x: 400, y: 100, vx: 0, vy: -500, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+  step(W, IDLE, DT);
+  assert(W.bossKills === 1 && W.slow > 0 && W.booms.length === NG.DATA.IMPACT.bossBooms, 'boss death sequence');
+  let frames = 0;
+  while (W.phase === 'play' && frames++ < 60 * 20) step(W, IDLE, DT);
+  assert(W.phase === 'cards', 'cards eventually');
+  assert(W.booms.length === 0, 'all booms done before cards');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

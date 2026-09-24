@@ -26,20 +26,172 @@
     }
   }
 
-  // 모바일 최적화: 배경 격자와 발광은 미리 그려 두고 이미지로 찍는다
-  // (매 프레임 선 수백 개·shadowBlur는 모바일 GPU에서 가장 비싼 작업)
-  let gridCache = null;
-  function drawGrid(ctx, W, dpr) {
-    if (!gridCache || gridCache.w !== W.w || gridCache.h !== W.h || gridCache.dpr !== dpr) {
+  // ─── 배경 ─────────────────────────────────────────────────
+  // 층: ①성운 배경(저해상도로 미리 그려 늘려 찍음, 가장자리 어둡게 포함) ②별 3겹 시차 스크롤
+  //     ③네온 격자(미리 그림, 큰 폭발 때 번쩍) ④보스전 붉은 테두리 맥동
+  // 웨이브가 오를수록 테마가 바뀐다 (청록 → 보라 → 자홍 → 불씨), 보스 웨이브는 핏빛
+  const THEMES = [
+    { from: 1,  base: '#05070c', a: '#0d4a6b', b: '#10284f', grid: '94,231,255' },
+    { from: 5,  base: '#07050e', a: '#3d1f7a', b: '#0f3b63', grid: '170,150,255' },
+    { from: 10, base: '#0a050b', a: '#6b1a55', b: '#2b1a6b', grid: '255,120,200' },
+    { from: 15, base: '#0b0605', a: '#7a3510', b: '#5a0f35', grid: '255,170,90' },
+  ];
+  const BOSS_THEME = { base: '#0b0406', a: '#6b0a26', b: '#2a0712', grid: '255,70,120' };
+
+  function themeFor(W) {
+    if (W.bossWave && W.enemies.some(e => e.type === 'boss')) return BOSS_THEME;
+    let t = THEMES[0];
+    for (const th of THEMES) if (W.wave >= th.from) t = th;
+    return t;
+  }
+
+  // 성운: 1/4 해상도 캔버스에 흐릿한 빛 덩어리 몇 개 + 가장자리 어둡게
+  function paintBackdrop(th, w, h) {
+    const s = 0.25;
+    const c = document.createElement('canvas');
+    c.width = Math.max(8, Math.round(w * s)); c.height = Math.max(8, Math.round(h * s));
+    const g = c.getContext('2d');
+    g.scale(s, s);
+    g.fillStyle = th.base;
+    g.fillRect(0, 0, w, h);
+    const rand = NG.rng(th.a.length * 97 + th.from * 31 + 7);
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 5; i++) {
+      const x = rand() * w, y = rand() * h, rad = Math.max(w, h) * (0.25 + rand() * 0.35);
+      const grad = g.createRadialGradient(x, y, 0, x, y, rad);
+      grad.addColorStop(0, i % 2 ? th.a : th.b);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      g.globalAlpha = 0.5 + rand() * 0.4;
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+    }
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    const v = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.hypot(w, h) * 0.6);
+    v.addColorStop(0, 'rgba(0,0,0,0)');
+    v.addColorStop(1, 'rgba(0,0,0,0.7)');
+    g.fillStyle = v;
+    g.fillRect(0, 0, w, h);
+    return c;
+  }
+
+  function paintGrid(ctx, w, h, rgb) {
+    ctx.strokeStyle = 'rgba(' + rgb + ',0.09)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 40) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h); }
+    for (let y = 0; y <= h; y += 40) { ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(' + rgb + ',0.4)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, w - 2, h - 2);
+  }
+
+  function makeStars(w, h) {
+    const rand = NG.rng(4242);
+    const layers = [
+      { n: 70, size: 1,   alpha: 0.35, drift: 4,  par: 0.015 },
+      { n: 40, size: 1.6, alpha: 0.55, drift: 10, par: 0.04 },
+      { n: 18, size: 2.4, alpha: 0.85, drift: 22, par: 0.08 },
+    ];
+    const area = (w * h) / (1280 * 800); // 화면 넓이에 비례해 개수 조절
+    for (const L of layers) {
+      L.stars = [];
+      const n = Math.max(6, Math.round(L.n * area));
+      for (let i = 0; i < n; i++) L.stars.push({ x: rand() * w, y: rand() * h, ph: rand() * TAU });
+    }
+    return layers;
+  }
+
+  const bg = { key: '', w: 0, h: 0, dpr: 0, backdrop: null, prev: null, fade: 0, grid: null, stars: null, theme: null, last: 0 };
+
+  function drawBackground(ctx, W, dpr) {
+    const th = themeFor(W);
+    const now = performance.now();
+    const rdt = Math.min(0.1, (now - (bg.last || now)) / 1000);
+    bg.last = now;
+    const sizeChanged = bg.w !== W.w || bg.h !== W.h || bg.dpr !== dpr;
+    if (sizeChanged) {
+      bg.w = W.w; bg.h = W.h; bg.dpr = dpr;
+      bg.stars = makeStars(W.w, W.h);
+      bg.theme = null;
+      bg.prev = null;
+    }
+    if (bg.theme !== th) {
+      // 테마가 바뀌면 1.5초에 걸쳐 새 성운으로 넘어간다
+      if (bg.backdrop && !sizeChanged) { bg.prev = bg.backdrop; bg.fade = 1; }
+      bg.backdrop = paintBackdrop(th, W.w, W.h);
       const c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(W.w * dpr));
-      c.height = Math.max(1, Math.round(W.h * dpr));
+      c.width = Math.max(1, Math.round(W.w * dpr)); c.height = Math.max(1, Math.round(W.h * dpr));
       const g = c.getContext('2d');
       g.scale(dpr, dpr);
-      paintGrid(g, W);
-      gridCache = { c, w: W.w, h: W.h, dpr };
+      paintGrid(g, W.w, W.h, th.grid);
+      bg.grid = c;
+      bg.theme = th;
     }
-    ctx.drawImage(gridCache.c, 0, 0, W.w, W.h);
+
+    // 플레이어 위치에 따라 배경이 살짝 반대로 밀린다 (깊이감)
+    const p = W.player;
+    const px = W.w / 2 - p.x, py = W.h / 2 - p.y;
+
+    const m = 24;
+    ctx.drawImage(bg.backdrop, -m + px * 0.01, -m + py * 0.01, W.w + m * 2, W.h + m * 2);
+    if (bg.prev && bg.fade > 0) {
+      ctx.globalAlpha = bg.fade;
+      ctx.drawImage(bg.prev, -m + px * 0.01, -m + py * 0.01, W.w + m * 2, W.h + m * 2);
+      ctx.globalAlpha = 1;
+      bg.fade -= rdt / 1.5;
+      if (bg.fade <= 0) bg.prev = null;
+    }
+
+    // 별: 천천히 흘러가고 반짝인다. 가까운 층일수록 빠르고 크다
+    ctx.fillStyle = '#e8f7ff';
+    const t = now / 1000;
+    for (const L of bg.stars) {
+      const ox = px * L.par - t * L.drift * 0.35, oy = py * L.par + t * L.drift;
+      for (const s of L.stars) {
+        let x = (s.x + ox) % W.w; if (x < 0) x += W.w;
+        let y = (s.y + oy) % W.h; if (y < 0) y += W.h;
+        ctx.globalAlpha = L.alpha * (0.65 + 0.35 * Math.sin(t * 2 + s.ph));
+        ctx.fillRect(x, y, L.size, L.size);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // 격자: 웨이브가 오를수록 선명해지고, 큰 폭발 때 번쩍인다
+    const tier = Math.min(3, Math.floor((W.wave - 1) / 5));
+    ctx.globalAlpha = 0.65 + tier * 0.1;
+    ctx.drawImage(bg.grid, 0, 0, W.w, W.h);
+    if (W.pulse > 0) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(1, W.pulse * 1.4);
+      ctx.drawImage(bg.grid, 0, 0, W.w, W.h);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 보스전: 화면 가장자리가 심장 박동처럼 붉게 뛴다
+  let dangerCache = null;
+  function drawDanger(ctx, W) {
+    if (!(W.bossWave && W.enemies.some(e => e.type === 'boss'))) return;
+    if (!dangerCache || dangerCache.w !== W.w || dangerCache.h !== W.h) {
+      const s = 0.25;
+      const c = document.createElement('canvas');
+      c.width = Math.max(8, Math.round(W.w * s)); c.height = Math.max(8, Math.round(W.h * s));
+      const g = c.getContext('2d');
+      g.scale(s, s);
+      const v = g.createRadialGradient(W.w / 2, W.h / 2, Math.min(W.w, W.h) * 0.35, W.w / 2, W.h / 2, Math.hypot(W.w, W.h) * 0.55);
+      v.addColorStop(0, 'rgba(255,30,80,0)');
+      v.addColorStop(1, 'rgba(255,30,80,0.55)');
+      g.fillStyle = v;
+      g.fillRect(0, 0, W.w, W.h);
+      dangerCache = { c, w: W.w, h: W.h };
+    }
+    const beat = Math.pow(Math.max(0, Math.sin(performance.now() / 1000 * 2.4 * Math.PI)), 6);
+    ctx.globalAlpha = 0.35 + beat * 0.5;
+    ctx.drawImage(dangerCache.c, 0, 0, W.w, W.h);
+    ctx.globalAlpha = 1;
   }
 
   const glowCache = {};
@@ -61,20 +213,6 @@
     ctx.globalAlpha = alpha;
     ctx.drawImage(c, x - radius, y - radius);
     ctx.globalAlpha = 1;
-  }
-
-  function paintGrid(ctx, W) {
-    ctx.fillStyle = '#07080d';
-    ctx.fillRect(0, 0, W.w, W.h);
-    ctx.strokeStyle = 'rgba(94,231,255,0.06)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 0; x <= W.w; x += 40) { ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, W.h); }
-    for (let y = 0; y <= W.h; y += 40) { ctx.moveTo(0, y + 0.5); ctx.lineTo(W.w, y + 0.5); }
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(94,231,255,0.35)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, W.w - 2, W.h - 2);
   }
 
   function drawEnemies(ctx, W) {
@@ -197,8 +335,22 @@
       ctx.globalAlpha = a;
       if (q.ring) {
         ctx.strokeStyle = q.color;
-        ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(q.x, q.y, q.r * (1.2 - a * 0.4), 0, TAU); ctx.stroke();
+        ctx.lineWidth = 2 + a * 4;
+        ctx.beginPath(); ctx.arc(q.x, q.y, q.r * (1.2 - a * 0.9), 0, TAU); ctx.stroke();
+      } else if (q.shard) {
+        // 회전하며 날아가는 삼각 파편
+        const s = q.size * (0.5 + a * 0.5);
+        ctx.fillStyle = q.color;
+        ctx.beginPath();
+        ctx.moveTo(q.x + Math.cos(q.rot) * s, q.y + Math.sin(q.rot) * s);
+        ctx.lineTo(q.x + Math.cos(q.rot + 2.4) * s * 0.7, q.y + Math.sin(q.rot + 2.4) * s * 0.7);
+        ctx.lineTo(q.x + Math.cos(q.rot + 4.0) * s * 0.8, q.y + Math.sin(q.rot + 4.0) * s * 0.8);
+        ctx.closePath();
+        ctx.fill();
+      } else if (q.pop) {
+        // 처치 순간 흰 섬광
+        ctx.fillStyle = q.color;
+        ctx.beginPath(); ctx.arc(q.x, q.y, q.r * (1.6 - a * 0.6), 0, TAU); ctx.fill();
       } else {
         ctx.fillStyle = q.color;
         ctx.fillRect(q.x - q.size / 2, q.y - q.size / 2, q.size, q.size);
@@ -296,7 +448,7 @@
   // view: {dpr, hudTop, hudLeft, hud(false면 HUD 생략)}, touch: 입력 모듈의 터치 상태
   function draw(ctx, W, view, touch) {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    drawGrid(ctx, W, view.dpr);
+    drawBackground(ctx, W, view.dpr);
     ctx.save();
     if (W.shake > 0) {
       const s = W.shake * 0.5;
@@ -307,8 +459,13 @@
     drawBullets(ctx, W);
     drawPlayer(ctx, W);
     ctx.restore();
+    drawDanger(ctx, W);
     if (W.flash > 0) {
       ctx.fillStyle = 'rgba(255,77,109,' + (W.flash * 0.6) + ')';
+      ctx.fillRect(0, 0, W.w, W.h);
+    }
+    if (W.whiteFlash > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.4, W.whiteFlash * 0.8) + ')';
       ctx.fillRect(0, 0, W.w, W.h);
     }
     if (view.hud !== false) drawHud(ctx, W, view);
