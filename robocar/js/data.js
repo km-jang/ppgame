@@ -24,9 +24,9 @@ var RC = {};
 
   // 바퀴: 점프 높이·속도
   const WHEELS = [
-    { id: 'normal',  name: '보통 바퀴',   jump: 1.0,  speed: 1.0,  r: 16, say: '보통 바퀴!' },
-    { id: 'monster', name: '몬스터 바퀴', jump: 1.22, speed: 0.95, r: 25, say: '몬스터 바퀴! 높이 뛰어!' },
-    { id: 'spring',  name: '스프링 바퀴', jump: 1.0,  speed: 1.0,  r: 15, double: true, say: '스프링 바퀴! 두 번 뛰어!' },
+    { id: 'normal',  name: '보통 바퀴',   jump: 1.0,  speed: 1.0,  r: 18, say: '보통 바퀴!' },
+    { id: 'monster', name: '몬스터 바퀴', jump: 1.22, speed: 0.95, r: 27, say: '몬스터 바퀴! 높이 뛰어!' },
+    { id: 'spring',  name: '스프링 바퀴', jump: 1.0,  speed: 1.0,  r: 17, double: true, say: '스프링 바퀴! 두 번 뛰어!' },
   ];
 
   // 등 장비: 공중·장애물
@@ -38,19 +38,21 @@ var RC = {};
 
   const COLORS = ['#ff3b3b', '#ff9f1a', '#ffd21a', '#22c55e', '#2f6bff', '#a855f7'];
 
-  // 스티커: 별 병이 찰 때마다 순서대로 하나씩
+  // 수집 카드: 별 병이 찰 때마다 순서대로 한 장씩 (id는 예전 스티커와 같아서 모은 기록이 이어진다)
+  // rarity: 1 일반 · 2 레어 · 3 전설
   const STICKERS = [
-    { id: 's1', icon: '🏎️', name: '레이서 로봇' },
-    { id: 's2', icon: '🚒', name: '소방 로봇' },
-    { id: 's3', icon: '🚓', name: '경찰 로봇' },
-    { id: 's4', icon: '⭐', name: '반짝 별' },
-    { id: 's5', icon: '🚀', name: '제트팩' },
-    { id: 's6', icon: '🐵', name: '장난꾸러기' },
-    { id: 's7', icon: '🔧', name: '뚝딱 스패너' },
-    { id: 's8', icon: '🌈', name: '무지개 길' },
-    { id: 's9', icon: '🏁', name: '결승 깃발' },
-    { id: 's10', icon: '🏆', name: '챔피언 컵' },
+    { id: 's1',  name: '레이서 로봇',     rarity: 1, form: 'robot', cfg: { body: 'racer',  wheel: 'normal',  gear: 'jet' } },
+    { id: 's2',  name: '소방 로봇',       rarity: 1, form: 'robot', cfg: { body: 'fire',   wheel: 'normal',  gear: 'wing' } },
+    { id: 's3',  name: '경찰 로봇',       rarity: 1, form: 'robot', cfg: { body: 'police', wheel: 'normal',  gear: 'jet' } },
+    { id: 's4',  name: '몬스터 레이서',   rarity: 1, form: 'car',   cfg: { body: 'racer',  wheel: 'monster', gear: 'jet' } },
+    { id: 's5',  name: '제트 소방차',     rarity: 2, form: 'car',   cfg: { body: 'fire',   wheel: 'spring',  gear: 'jet' } },
+    { id: 's6',  name: '드릴 경찰차',     rarity: 2, form: 'car',   cfg: { body: 'police', wheel: 'monster', gear: 'drill' } },
+    { id: 's7',  name: '날개 레이서',     rarity: 2, form: 'car',   cfg: { body: 'racer',  wheel: 'spring',  gear: 'wing' } },
+    { id: 's8',  name: '드릴 소방 로봇',  rarity: 2, form: 'robot', cfg: { body: 'fire',   wheel: 'normal',  gear: 'drill' } },
+    { id: 's9',  name: '황금 레이서',     rarity: 3, form: 'robot', cfg: { body: 'racer',  wheel: 'monster', gear: 'wing', color: '#ffc21a' } },
+    { id: 's10', name: '챔피언 경찰 로봇', rarity: 3, form: 'robot', cfg: { body: 'police', wheel: 'normal',  gear: 'jet',  color: '#a855f7' } },
   ];
+  const RARITY = { 1: { name: '일반', c1: '#5b7fb5', c2: '#1a2a4a' }, 2: { name: '레어', c1: '#a855f7', c2: '#2a1450' }, 3: { name: '전설', c1: '#ffc21a', c2: '#5a3a00' } };
 
   // 달리기 수치 (논리 좌표: 화면 높이 600 기준)
   const RUN = {
@@ -62,12 +64,13 @@ var RC = {};
     jetFuel: 1.3, jetThrust: 3000, jetMaxUp: 330,
     glideFall: 110,
     robotTime: 3.5, transformCd: 5,
+    morph: 0.4, morphSlow: 0.45,  // 변신 연출 길이(게임 시간)와 그동안의 느린 화면 배율
     dashMul: 1.8, magnetR: 320, waterRange: 750,
     starR: 42,
   };
 
   const JAR = 15; // 별 병 크기 (이만큼 모으면 스티커 1장)
 
-  RC.DATA = { BODIES, WHEELS, GEAR, COLORS, STICKERS, RUN, JAR };
+  RC.DATA = { BODIES, WHEELS, GEAR, COLORS, STICKERS, RARITY, RUN, JAR };
   RC.find = (list, id) => list.find(x => x.id === id) || list[0];
 })(RC);

@@ -115,7 +115,9 @@
     o.broken = true;
     R.smashed += 1;
     spill(R, o.x + o.w / 2, GY - o.h / 2, stars);
-    puff(R, o.x + o.w / 2, GY - o.h / 2, o.type === 'rock' ? '#8d8f99' : '#c98a4b', 16, 380, 12, 'chunk');
+    puff(R, o.x + o.w / 2, GY - o.h / 2, o.type === 'rock' ? '#c3c8d2' : '#c98a4b', 16, 380, 12, 'chunk');
+    puff(R, o.x + o.w / 2, GY - 20, '#c9c2b4', 8, 140, 18, 'dust');
+    R.freeze = 0.06;
     R.events.push('smash');
   }
 
@@ -123,15 +125,20 @@
   // input: {tap: 이번 프레임에 눌렀나, hold: 누르고 있나, transform: 변신 버튼 눌렀나}
   function stepRun(R, input, dt) {
     const c = R.car;
+    // 타격 멈춤: 부수는 순간 아주 잠깐 정지 (손맛)
+    if (R.freeze > 0) { R.freeze -= dt; return; }
+    // 변신하는 동안은 느린 화면
+    if (c.morph > 0) dt *= R0.morphSlow;
     R.t += dt;
     if (R.done) R.doneT += dt;
 
     // 변신
     c.cd = Math.max(0, c.cd - dt);
     c.morph = Math.max(0, c.morph - dt);
+    c.landT = Math.max(0, (c.landT || 0) - dt);
     c.punch = Math.max(0, c.punch - dt);
     if (input.transform && c.form === 'car' && c.cd <= 0 && !R.done) {
-      c.form = 'robot'; c.robotT = R0.robotTime; c.morph = 0.35;
+      c.form = 'robot'; c.robotT = R0.robotTime; c.morph = R0.morph;
       R.transforms += 1;
       R.events.push('transform');
       puff(R, c.x, c.y - 50, '#ffffff', 20, 300, 6, 'spark');
@@ -152,7 +159,7 @@
     }
     if (c.form === 'robot') {
       c.robotT -= dt;
-      if (c.robotT <= 0) { c.form = 'car'; c.cd = R0.transformCd; c.morph = 0.35; R.events.push('untransform'); }
+      if (c.robotT <= 0) { c.form = 'car'; c.cd = R0.transformCd; c.morph = R0.morph; R.events.push('untransform'); }
     }
 
     // 점프·공중
@@ -230,7 +237,7 @@
         const magnet = robot && R.body.ability === 'siren';
         if (magnet && dx * dx + dy * dy < R0.magnetR * R0.magnetR) { o.x -= dx * 6 * dt; o.y -= dy * 6 * dt; dx = o.x - c.x; dy = o.y - (c.y - 35); }
         if (dx * dx + dy * dy < R0.starR * R0.starR * (robot ? 1.6 : 1)) {
-          o.got = true; R.stars += 1; R.events.push('star');
+          o.got = true; R.stars += 1; R.events.push('star'); R.lastStar = { x: o.x, y: o.y };
           puff(R, o.x, o.y, '#ffe66d', 6, 160, 5, 'spark');
         }
       } else if ((o.type === 'box' || o.type === 'rock') && !o.broken && !o.hopped) {
@@ -286,7 +293,7 @@
       else {
         const tx = c.x, ty = c.y - 40;
         f.x += (tx - f.x) * Math.min(1, dt * 9); f.y += (ty - f.y) * Math.min(1, dt * 9);
-        if (Math.abs(tx - f.x) < 20 && Math.abs(ty - f.y) < 20) { f.got = true; R.stars += 1; R.events.push('star'); }
+        if (Math.abs(tx - f.x) < 20 && Math.abs(ty - f.y) < 20) { f.got = true; R.stars += 1; R.events.push('star'); R.lastStar = { x: f.x, y: f.y }; }
       }
     }
     R.flying = R.flying.filter(f => !f.got);

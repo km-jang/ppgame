@@ -118,7 +118,7 @@
   let sayTimer = 0;
   function say(text, opt) {
     const el = document.getElementById('say');
-    if (el) {
+    if (el && !(opt && opt.bubble === false)) {
       el.textContent = text; el.classList.add('on');
       clearTimeout(sayTimer);
       sayTimer = setTimeout(() => el.classList.remove('on'), (opt && opt.ms) || 2600);

@@ -79,7 +79,7 @@ test('변신하면 로봇이 되고, 시간이 지나면 차로 돌아온다', (
   stepRun(R, { tap: false, hold: false, transform: true }, DT);
   assert(R.car.form === 'robot', 'robot');
   const v = RC.Run.speedOf(R);
-  for (let i = 0; i < 60 * 4; i++) stepRun(R, NONE, DT);
+  for (let i = 0; i < 60 * 5; i++) stepRun(R, NONE, DT);
   assert(R.car.form === 'car' && R.car.cd > 0, 'back to car with cooldown');
   assert(v > RC.Run.speedOf(R), 'racer robot is faster');
 });
