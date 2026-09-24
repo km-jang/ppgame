@@ -294,7 +294,8 @@
     if (c.onGround && c.form === 'car' && tutor.taps < 6) {
       for (const p of R.level.pits) { const d = p.x - c.x; if (d > 60 && d < 330) { target = { x: p.x + p.w / 2, id: 'p' + p.x }; break; } }
       if (!target) for (const o of R.level.items) {
-        if (((o.type === 'rock' || o.type === 'box') && !o.broken && R.cfg.gear !== 'drill') || (o.type === 'mud' && !o.out)) { const d = o.x - c.x; if (d > 60 && d < 330) { target = { x: o.x + 40, id: 'o' + o.x }; break; } }
+        // 방호벽·관은 저절로 넘으므로 안내하지 않는다
+        if ((o.type === 'box' && !o.broken && R.cfg.gear !== 'drill') || (o.type === 'mud' && !o.out)) { const d = o.x - c.x; if (d > 60 && d < 330) { target = { x: o.x + 40, id: 'o' + o.x }; break; } }
       }
     }
     if (target) {
@@ -722,8 +723,13 @@
   }
 
   // 120Hz 화면(갤럭시탭 S 시리즈)에서도 60번만 그린다: 배터리·발열 절약
+  // 화면 주사율을 재서 120Hz 이상일 때만 한 번 걸러 그린다 (고르게 60번).
+  // 90Hz(갤럭시탭 A 일부)는 걸러 그리면 11ms·22ms가 섞여 덜컹거리므로 매번 그린다
+  let rafLast = 0, rafMs = 16.7, skipOdd = false;
   function frame(ts) {
-    if (ts - lastTs < 1000 / 60 - 3) { requestAnimationFrame(frame); return; }
+    if (rafLast) { const d = ts - rafLast; if (d > 4 && d < 40) rafMs += (d - rafMs) * 0.05; }
+    rafLast = ts;
+    if (rafMs < 9.5) { skipOdd = !skipOdd; if (skipOdd) { requestAnimationFrame(frame); return; } }
     const raw = (ts - lastTs) / 1000 || 0;
     const dt = Math.min(0.05, raw);
     lastTs = ts;

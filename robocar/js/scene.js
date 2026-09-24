@@ -617,9 +617,10 @@
     if (ev === 'smash') K.shake = Math.max(K.shake, 9);
     else if (ev === 'bump') K.shake = Math.max(K.shake, 6);
     else if (ev === 'land') { K.shake = Math.max(K.shake, 3); K.land = 0.25; burst(K, R.car.x, GY, R.car.vy > 900 || R.car.form === 'robot'); }
-    else if (ev === 'ramp') burst(K, R.car.x + 40, R.car.y, false);
+    else if (ev === 'ramp') { burst(K, R.car.x + 40, R.car.y, false); K.jump = 0.22; }
     else if (ev === 'transform') { K.shake = Math.max(K.shake, 7); K.flash = 0.45; }
     else if (ev === 'go') { K.shake = Math.max(K.shake, 5); for (let i = 0; i < 10; i++) puffAdd(K, R.car.x - 60 + Math.random() * 30, GY - 4, -120 - Math.random() * 200, -30 - Math.random() * 60, 0.7, 8 + Math.random() * 6, 'dust', '#cfd3da'); }
+    else if (ev === 'jump' || ev === 'jump2' || ev === 'hop' || ev === 'ramp') { K.jump = 0.22; K.land = 0; }
     else if (ev === 'cone') K.shake = Math.max(K.shake, 2.5);
     else if (ev === 'splash') { K.shake = Math.max(K.shake, 3); for (let i = 0; i < 8; i++) puffAdd(K, R.car.x - 20 + Math.random() * 40, GY - 4, (Math.random() - 0.3) * 260, -120 - Math.random() * 160, 0.5, 5 + Math.random() * 4, 'dust', '#6a4424'); }
     else if (ev === 'pop') K.shake = Math.max(K.shake, 4);
@@ -633,18 +634,24 @@
     const T = ensureTiles(theme);
     const c = R.car;
     const K = camOf(R, vw);
+    // 규칙은 1/120초 간격이라, 그리는 순간의 위치는 앞뒤 칸 사이를 이어 준다 (90Hz 같은 화면에서도 매끈)
+    const al = R.alpha || 0;
+    const ix = c.px == null ? c.x : c.px + (c.x - c.px) * al;
+    const iy = c.py == null ? c.y : c.py + (c.y - c.py) * al;
     const now = performance.now();
     const dt = Math.min(0.05, (now - K.last) / 1000); K.last = now;
     const speed = RC.Run.speedOf(R);
     const fast = speed > D.RUN.speed * 1.3;
-    const targetX = c.x - vw * (R.camFrac || 0.28) + (fast ? 60 : 0);
+    const targetX = ix - vw * (R.camFrac || 0.28) + (fast ? 60 : 0);
     K.x += (targetX - K.x) * Math.min(1, dt * 6);
-    const high = c.y < GY - 170;
-    const targetZ = c.morph > 0 ? 1.12 : high ? 0.9 : 1;
+    // 높이 뜰수록 조금씩 멀리 보기 (단계 없이 이어지게)
+    const lift = Math.max(0, Math.min(1, (GY - 120 - iy) / 320));
+    const targetZ = c.morph > 0 ? 1.12 : 1 - lift * 0.14;
     K.zoom += (targetZ - K.zoom) * Math.min(1, dt * 4);
     K.shake = Math.max(0, K.shake - dt * 30); K.flash = Math.max(0, K.flash - dt); K.land = Math.max(0, K.land - dt);
+    K.jump = Math.max(0, (K.jump || 0) - dt);
     const cam = K.x, t = R.t;
-    const P = palAt(Math.min(1, c.x / R.level.length));
+    const P = palAt(Math.min(1, ix / R.level.length));
     const lw = layerWeights(P.ws, P.wn);
 
     // 배경 (카메라 확대 영향 없음)
@@ -656,7 +663,7 @@
 
     // 월드 (확대·흔들림)
     ctx.save();
-    const fx0 = c.x - cam, fy0 = c.y - 60;
+    const fx0 = ix - cam, fy0 = iy - 60;
     const sh = K.shake;
     ctx.translate(fx0 + (Math.random() - 0.5) * sh, fy0 + (Math.random() - 0.5) * sh);
     ctx.scale(K.zoom, K.zoom);
@@ -669,9 +676,9 @@
     if (!R.freeze) emit(K, R, dt, P, speed);
     particles(ctx, K, cam, R.freeze ? 0 : dt);
     // 차 그림자
-    const cx = c.x - cam;
+    const cx = ix - cam;
     if (!c.fall) {
-      const h = Math.max(0, GY - c.y);
+      const h = Math.max(0, GY - iy);
       ctx.fillStyle = 'rgba(0,0,0,' + (0.38 * Math.max(0.15, 1 - h / 300)) + ')';
       ctx.beginPath(); ctx.ellipse(cx, GY + 2, 80 * Math.max(0.5, 1 - h / 500), 9, 0, 0, TAU); ctx.fill();
     }
@@ -679,26 +686,29 @@
     if (P.lamps > 0.2 && c.form === 'car') {
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = P.lamps * 0.35;
       ctx.fillStyle = lin(ctx, cx + 80, 0, cx + 420, 0, [[0, 'rgba(255,240,200,0.9)'], [1, 'rgba(255,240,200,0)']]);
-      poly(ctx, [80, -24, 420, -70, 420, 30, 80, -14], cx, c.y - 4); ctx.fill();
+      poly(ctx, [80, -24, 420, -70, 420, 30, 80, -14], cx, iy - 4); ctx.fill();
       ctx.restore();
     }
     // 기울기: 공중에서는 속도 방향으로, 경사로에서는 경사를 따라
     let tilt = 0;
-    const onRamp = R.level.items.find(o => o.type === 'ramp' && c.x >= o.x && c.x <= o.x + o.w);
+    const onRamp = R.level.items.find(o => o.type === 'ramp' && ix >= o.x && ix <= o.x + o.w);
     if (onRamp && c.onGround) tilt = -Math.atan(onRamp.h / onRamp.w);
     else if (!c.onGround) tilt = Math.max(-0.3, Math.min(0.3, c.vy / 2600));
+    // 기울기는 바로 꺾지 않고 따라간다 (점프대 끝·착지에서 툭 꺾이지 않게)
+    K.tilt = (K.tilt || 0) + (tilt - (K.tilt || 0)) * Math.min(1, dt * (c.onGround ? 14 : 8));
+    tilt = K.tilt;
     const spin = c.spin > 0 ? (1 - c.spin / 0.9) * TAU : 0;
-    C.drawBot(ctx, R.cfg, cx, c.y, {
+    C.drawBot(ctx, R.cfg, cx, iy, {
       t, form: c.form, morph: c.morph, thrust: c.thrusting, glide: c.gliding, spin, tilt: c.form === 'car' ? tilt : 0,
-      bounce: c.bump > 0 ? Math.sin(c.bump * 40) * 4 : R.t === 0 ? Math.abs(Math.sin(now * 0.028)) * 1.6 : (c.onGround && c.form === 'car' ? Math.sin(c.x * 0.09) * 0.9 + Math.sin(c.x * 0.031) * 0.6 : 0), squash: K.land > 0 ? Math.sin(K.land / 0.25 * Math.PI) : 0,
-      dist: c.x, speed, running: c.onGround, air: !c.onGround, punch: c.punch,
+      bounce: c.bump > 0 ? Math.sin(c.bump * 40) * 4 : R.t === 0 ? Math.abs(Math.sin(now * 0.028)) * 1.6 : (c.onGround && c.form === 'car' ? Math.sin(ix * 0.09) * 0.9 + Math.sin(ix * 0.031) * 0.6 : 0), squash: K.land > 0 ? Math.sin(K.land / 0.25 * Math.PI) : K.jump > 0 ? -Math.sin(K.jump / 0.22 * Math.PI) * 0.8 : 0,
+      dist: ix, speed, running: c.onGround, air: !c.onGround, punch: c.punch,
     });
     // 능력 연출
     if (c.form === 'robot' && R.body.ability === 'water' && c.robotT > D.RUN.robotTime - 0.9) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
       for (const [w, a] of [[16, 0.25], [8, 0.6]]) {
         ctx.strokeStyle = 'rgba(120,210,255,' + a + ')'; ctx.lineWidth = w;
-        ctx.beginPath(); ctx.moveTo(cx + 60, c.y - 118); ctx.quadraticCurveTo(cx + 320, c.y - 200, cx + 560, c.y - 6); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx + 60, iy - 118); ctx.quadraticCurveTo(cx + 320, iy - 200, cx + 560, iy - 6); ctx.stroke();
       }
       ctx.restore();
     }
@@ -706,12 +716,12 @@
       for (let i = 0; i < 2; i++) {
         const k = ((t * 1.4) + i * 0.5) % 1;
         ctx.strokeStyle = (i ? 'rgba(80,140,255,' : 'rgba(255,70,80,') + (1 - k) * 0.8 + ')'; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.arc(cx, c.y - 190, 30 + k * 260, 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, iy - 190, 30 + k * 260, 0, TAU); ctx.stroke();
       }
     }
     if (c.form === 'robot' && R.body.ability === 'dash') {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 5; i++) { ctx.fillStyle = 'rgba(255,90,60,' + (0.25 - i * 0.045) + ')'; ctx.fillRect(cx - 60 - i * 40, c.y - 150 + i * 6, 50, 110 - i * 12); }
+      for (let i = 0; i < 5; i++) { ctx.fillStyle = 'rgba(255,90,60,' + (0.25 - i * 0.045) + ')'; ctx.fillRect(cx - 60 - i * 40, iy - 150 + i * 6, 50, 110 - i * 12); }
       ctx.restore();
     }
     fx(ctx, R, cam);
