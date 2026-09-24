@@ -2,10 +2,21 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=game/">
-  <title>N-GUN</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>게임 고르기</title>
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #1b1e2b; font-family: system-ui, sans-serif; }
+    .pick { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; padding: 24px; }
+    a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 260px; height: 200px; border-radius: 26px; text-decoration: none; font-size: 30px; font-weight: 800; border: 5px solid #fff; }
+    a small { font-size: 15px; font-weight: 500; opacity: .85; }
+    .kid { background: #ffd21a; color: #1b1e2b; }
+    .gun { background: #07080d; color: #5ee7ff; border-color: #5ee7ff; }
+  </style>
 </head>
-<body style="background:#07080d;color:#e8f7ff;font-family:system-ui,sans-serif">
-  <p><a href="game/" style="color:#5ee7ff">N-GUN 게임으로 이동</a></p>
+<body>
+  <div class="pick">
+    <a class="kid" href="robocar/">뚝딱 로봇카<small>5~6세 · 변신 로봇카 달리기</small></a>
+    <a class="gun" href="game/">N-GUN<small>아레나 슈팅</small></a>
+  </div>
 </body>
 </html>

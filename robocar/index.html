@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#6cc8ff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="부품을 끼워 나만의 변신 로봇카를 만들고 도시를 달리는 5~6세용 게임">
+  <title>뚝딱 로봇카</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="stage" aria-label="게임 화면"></canvas>
+
+  <!-- 목소리 안내 자막 -->
+  <div id="say" aria-live="polite"></div>
+
+  <!-- 배터리 (하루 타이머) + 보호자 자물쇠: 모든 화면 공통 -->
+  <div id="corner">
+    <div id="battery" title="오늘 남은 놀이 시간"><i></i><span></span></div>
+    <button id="btn-lock" aria-label="보호자 설정 (3초 누르기)"><svg viewBox="0 0 36 36"><circle class="ring" cx="18" cy="18" r="16"/></svg>🔒</button>
+  </div>
+
+  <!-- 시작 -->
+  <section id="scr-title" class="screen">
+    <div class="title-box">
+      <h1 class="logo"><span class="l1">뚝딱</span><span class="l2">로봇카</span></h1>
+      <p class="sub">만들고! 변신하고! 달리자!</p>
+      <button id="btn-go-garage" class="toy big green">▶ 시작</button>
+      <button id="btn-book" class="toy yellow">⭐ 스티커북</button>
+    </div>
+  </section>
+
+  <!-- 차고: 부품 고르기 -->
+  <section id="scr-garage" class="screen">
+    <div class="garage-top">
+      <h2 class="bubble">로봇카 만들기</h2>
+      <button id="btn-morph" class="toy blue small">🤖 변신 보기</button>
+    </div>
+    <div class="garage-panel">
+      <div class="part-group">
+        <h3>차체</h3>
+        <div class="parts" data-slot="body"></div>
+      </div>
+      <div class="part-group">
+        <h3>바퀴</h3>
+        <div class="parts" data-slot="wheel"></div>
+      </div>
+      <div class="part-group">
+        <h3>장비</h3>
+        <div class="parts" data-slot="gear"></div>
+      </div>
+      <div class="part-group colors-go">
+        <h3>색깔</h3>
+        <div id="colors"></div>
+        <button id="btn-run" class="toy big green">출발!</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 달리기 화면 위 버튼·표시 -->
+  <section id="hud" class="screen">
+    <div id="hud-stars">⭐ <b>0</b></div>
+    <div id="hud-track"><div id="hud-fill"></div><span id="hud-car">🚗</span><span class="flag">🏁</span></div>
+    <button id="btn-transform" class="toy"><span class="t1">변신!</span><span class="t2" id="ability-name">슝 돌진</span></button>
+  </section>
+
+  <!-- 결과 -->
+  <section id="scr-result" class="screen">
+    <div class="card">
+      <h2 class="bubble">도착!</h2>
+      <p class="big-num">⭐ <b id="res-stars">0</b>개</p>
+      <div class="jar-row">
+        <div class="jar"><div id="jar-fill"></div><span id="jar-text">0 / 15</span></div>
+        <div id="new-sticker" class="sticker-reveal"></div>
+      </div>
+      <p id="res-note" class="note"></p>
+      <div class="row">
+        <button id="btn-again" class="toy big green">또 달리기</button>
+        <button id="btn-garage" class="toy blue">차고로</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 스티커북 -->
+  <section id="scr-book" class="screen">
+    <div class="card wide">
+      <h2 class="bubble">스티커북</h2>
+      <div id="book"></div>
+      <p id="book-note" class="note"></p>
+      <button id="btn-book-back" class="toy blue">돌아가기</button>
+    </div>
+  </section>
+
+  <!-- 잠자기 (오늘 시간 끝) -->
+  <section id="scr-sleep" class="screen">
+    <div class="sleep-box">
+      <h2>오늘은 여기까지!</h2>
+      <p>로봇카가 충전 중이에요.<br>내일 또 만나요!</p>
+      <div class="charge"><i></i></div>
+    </div>
+  </section>
+
+  <!-- 보호자 설정 -->
+  <section id="scr-parent" class="screen">
+    <div class="card parent">
+      <h2>보호자 설정</h2>
+      <p class="note">오늘 논 시간: <b id="p-played">0분</b></p>
+      <h3>하루 놀이 시간</h3>
+      <div class="seg" id="p-limit">
+        <button data-min="10">10분</button><button data-min="20">20분</button><button data-min="30">30분</button><button data-min="0">제한 없음</button>
+      </div>
+      <h3>소리</h3>
+      <div class="seg">
+        <button id="p-voice" data-on="1">목소리 안내</button><button id="p-sound" data-on="1">효과음·음악</button>
+      </div>
+      <div class="row">
+        <button id="p-extend" class="toy yellow small">오늘 10분 더 주기</button>
+        <button id="p-close" class="toy blue small">닫기</button>
+      </div>
+      <p class="note small">시간이 다 되면 달리던 판은 끝까지 하고 잠자기 화면으로 넘어갑니다. 이 설정은 자물쇠를 3초 눌러야 열립니다.</p>
+    </div>
+  </section>
+
+  <script src="js/data.js"></script>
+  <script src="js/run.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,374 @@
+'use strict';
+// 화면 전환·입력·하루 타이머·보상. 규칙은 run.js, 그림은 draw.js.
+(function (RC) {
+  const D = RC.DATA, S = RC.Sound;
+  const $ = id => document.getElementById(id);
+  const canvas = $('stage');
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  // ─── 저장 ────────────────────────────────────────────────
+  const cfg = Object.assign({ body: 'racer', wheel: 'normal', gear: 'jet', color: '#ff3b3b' }, RC.store.get('rc.cfg', {}));
+  const prog = Object.assign({ bank: 0, stickers: [], runs: 0 }, RC.store.get('rc.prog', {}));
+  const set = Object.assign({ limit: 20, voice: true, sound: true }, RC.store.get('rc.set', {}));
+  const today = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+  let play = RC.store.get('rc.play', { date: today(), sec: 0, bonus: 0 });
+  if (play.date !== today()) play = { date: today(), sec: 0, bonus: 0 };
+  const saveAll = () => { RC.store.set('rc.cfg', cfg); RC.store.set('rc.prog', prog); RC.store.set('rc.set', set); RC.store.set('rc.play', play); };
+
+  // ─── 화면 크기: 논리 높이 600 기준으로 늘려 그린다 ───────────
+  const view = { w: 0, h: 0, dpr: 1, s: 1, vw: 1000 };
+  function resize() {
+    view.w = window.innerWidth; view.h = window.innerHeight;
+    view.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.2e6 / (view.w * view.h))));
+    view.s = view.h / 600;
+    view.vw = view.w / view.s;
+    canvas.width = Math.round(view.w * view.dpr); canvas.height = Math.round(view.h * view.dpr);
+    canvas.style.width = view.w + 'px'; canvas.style.height = view.h + 'px';
+  }
+  window.addEventListener('resize', resize);
+
+  // ─── 화면 전환 ────────────────────────────────────────────
+  let mode = 'title';
+  let parentOpen = false;
+  const SCREENS = ['scr-title', 'scr-garage', 'hud', 'scr-result', 'scr-book', 'scr-sleep'];
+  function show(id) { for (const s of SCREENS) $(s).classList.toggle('on', s === id); }
+
+  function toTitle() { mode = 'title'; show('scr-title'); S.music(true); }
+  function toGarage() {
+    if (checkSleep()) return;
+    mode = 'garage'; show('scr-garage'); renderParts();
+    S.say('로봇카를 만들어 보자!');
+  }
+  function toBook() { mode = 'book'; renderBook(); show('scr-book'); S.say('스티커북!'); }
+
+  // ─── 차고 ────────────────────────────────────────────────
+  const LISTS = { body: D.BODIES, wheel: D.WHEELS, gear: D.GEAR };
+  let garageForm = 'car', garageMorph = 0, garageBounce = 0;
+
+  function thumb(cv, over) {
+    const c = cv.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, cv.width, cv.height);
+    c.setTransform(2, 0, 0, 2, 0, 0);
+    c.translate(75, 90); c.scale(0.78, 0.78); c.translate(-75, -90);
+    RC.Draw.drawCar(c, Object.assign({}, cfg, over), 75, 90, { t: 0.5 });
+  }
+
+  function buildGarage() {
+    for (const el of document.querySelectorAll('.parts')) {
+      const slot = el.dataset.slot;
+      el.innerHTML = '';
+      for (const p of LISTS[slot]) {
+        const b = document.createElement('button');
+        b.className = 'part'; b.dataset.id = p.id;
+        const cv = document.createElement('canvas'); cv.width = 300; cv.height = 192;
+        b.appendChild(cv);
+        const lb = document.createElement('span'); lb.textContent = p.name; b.appendChild(lb);
+        b.addEventListener('click', () => {
+          cfg[slot] = p.id;
+          if (slot === 'body' && !cfg.colorTouched) cfg.color = p.color;
+          garageBounce = 1; S.play('click'); S.say(p.say);
+          saveAll(); renderParts();
+        });
+        el.appendChild(b);
+      }
+    }
+    const cs = $('colors'); cs.innerHTML = '';
+    for (const c of D.COLORS) {
+      const b = document.createElement('button');
+      b.className = 'swatch'; b.style.background = c; b.dataset.c = c; b.setAttribute('aria-label', '색깔');
+      b.addEventListener('click', () => { cfg.color = c; cfg.colorTouched = true; garageBounce = 1; S.play('click'); saveAll(); renderParts(); });
+      cs.appendChild(b);
+    }
+  }
+  function renderParts() {
+    for (const el of document.querySelectorAll('.parts')) {
+      const slot = el.dataset.slot;
+      for (const b of el.children) {
+        b.setAttribute('aria-pressed', String(cfg[slot] === b.dataset.id));
+        thumb(b.querySelector('canvas'), { [slot]: b.dataset.id });
+      }
+    }
+    for (const b of $('colors').children) b.setAttribute('aria-pressed', String(cfg.color === b.dataset.c));
+  }
+
+  // ─── 달리기 ──────────────────────────────────────────────
+  let R = null, demo = null, tap = false, holding = false, wantTransform = false, readyTold = false, finishT = 0;
+  let endAfterRun = false;
+  let lastSay = 0;
+  const sayOnce = (txt, gap) => { const n = performance.now(); if (n - lastSay > (gap || 1500)) { lastSay = n; S.say(txt, { ms: 1400 }); } };
+
+  function startRun() {
+    if (checkSleep()) return;
+    S.unlock();
+    prog.runs += 1; saveAll();
+    R = RC.Run.createRun(cfg, 1 + (prog.runs % 3));
+    mode = 'run'; finishT = 0; readyTold = false;
+    $('ability-name').textContent = R.body.abilityName;
+    $('hud-car').textContent = { racer: '🏎️', fire: '🚒', police: '🚓' }[cfg.body];
+    show('hud');
+    S.music(true);
+    S.say('출발! 화면을 누르면 점프!');
+  }
+
+  const btnT = $('btn-transform');
+  function updateHud() {
+    const c = R.car;
+    $('hud-stars').querySelector('b').textContent = R.stars;
+    const k = Math.min(1, c.x / R.level.length);
+    $('hud-fill').style.width = (k * 100) + '%';
+    $('hud-car').style.left = (k * 100) + '%';
+    const ready = c.form === 'car' && c.cd <= 0 && !R.done;
+    btnT.disabled = !ready;
+    btnT.classList.toggle('ready', ready);
+    if (ready && !readyTold && R.t > 4) { readyTold = true; S.say('빨간 변신 버튼을 눌러 봐!'); }
+  }
+
+  function handleEvents(Rx, quiet) {
+    for (const ev of Rx.events) {
+      S.play(ev);
+      if (quiet) continue;
+      if (ev === 'star') { const h = $('hud-stars'); h.classList.remove('pop'); void h.offsetWidth; h.classList.add('pop'); }
+      else if (ev === 'transform') { lastSay = performance.now(); S.say(Rx.body.robot + ' 변신!', { ms: 1600 }); }
+      else if (ev === 'smash') sayOnce('와장창!');
+      else if (ev === 'fall') sayOnce('으악!');
+      else if (ev === 'pop') sayOnce('뿅!');
+      else if (ev === 'slip') sayOnce('미끌!');
+      else if (ev === 'hot') sayOnce('앗 뜨거!');
+      else if (ev === 'monkey') sayOnce('장난꾸러기 원숭이다!', 3000);
+      else if (ev === 'finish') { lastSay = performance.now(); S.say('도착! 잘했어!'); }
+    }
+    Rx.events.length = 0;
+  }
+
+  // 시작 화면 뒤에서 혼자 달리는 시연
+  function demoInput(Rx) {
+    const c = Rx.car;
+    const ahead = Rx.level.pits.some(p => p.x - c.x > 0 && p.x - c.x < 80) || Rx.level.items.some(o => (o.type === 'rock' || o.type === 'fire') && !o.out && o.x - c.x > 0 && o.x - c.x < 80);
+    return { tap: ahead, hold: false, transform: c.cd <= 0 && Rx.t % 7 < 0.02 };
+  }
+
+  // ─── 결과·스티커 ─────────────────────────────────────────
+  function showResult() {
+    mode = 'result';
+    show('scr-result');
+    const got = R.stars;
+    $('res-stars').textContent = '0';
+    $('new-sticker').innerHTML = '';
+    $('res-note').textContent = '';
+    let shown = 0, bank = prog.bank;
+    const earned = [];
+    const step = Math.max(1, Math.ceil(got / 45));
+    const setJar = () => { $('jar-fill').style.height = (bank / D.JAR * 100) + '%'; $('jar-text').textContent = bank + ' / ' + D.JAR; };
+    setJar();
+    S.say('별을 ' + got + '개 모았어!');
+    const timer = setInterval(() => {
+      if (mode !== 'result') { clearInterval(timer); return; }
+      const n = Math.min(step, got - shown);
+      shown += n; bank += n;
+      $('res-stars').textContent = shown;
+      S.play('fill');
+      if (bank >= D.JAR) {
+        bank -= D.JAR;
+        const next = D.STICKERS.find(s => !prog.stickers.includes(s.id) && !earned.includes(s.id));
+        if (next) {
+          earned.push(next.id);
+          const el = document.createElement('div');
+          el.className = 'sticker-reveal on';
+          el.innerHTML = '<span class="ico">' + next.icon + '</span><span class="nm">' + next.name + '</span><span class="new">새 스티커!</span>';
+          $('new-sticker').appendChild(el);
+          S.play('sticker');
+        }
+      }
+      setJar();
+      if (shown >= got) {
+        clearInterval(timer);
+        prog.bank = bank;
+        prog.stickers = prog.stickers.concat(earned);
+        saveAll();
+        const left = D.STICKERS.length - prog.stickers.length;
+        $('res-note').textContent = earned.length
+          ? '새 스티커 ' + earned.length + '장! 스티커북에 붙였어요.'
+          : (left ? '별 ' + (D.JAR - bank) + '개만 더 모으면 새 스티커!' : '스티커를 다 모았어요! 챔피언!');
+        if (earned.length) setTimeout(() => { if (mode === 'result') S.say('새 스티커를 받았어!'); }, 700);
+        if (endAfterRun) setTimeout(() => { if (mode === 'result') goSleep(); }, 4500);
+      }
+    }, 70);
+  }
+
+  function renderBook() {
+    const b = $('book'); b.innerHTML = '';
+    for (const s of D.STICKERS) {
+      const have = prog.stickers.includes(s.id);
+      const d = document.createElement('div');
+      d.className = 'slot' + (have ? '' : ' locked');
+      d.innerHTML = '<span class="ico">' + s.icon + '</span><span class="nm">' + (have ? s.name : '?') + '</span>';
+      b.appendChild(d);
+    }
+    $('book-note').textContent = prog.stickers.length + ' / ' + D.STICKERS.length + '장 · 별 병 ' + prog.bank + ' / ' + D.JAR;
+  }
+
+  // ─── 하루 타이머 (배터리) ────────────────────────────────
+  function battery() {
+    if (!set.limit) return 1;
+    return Math.max(0, 1 - play.sec / ((set.limit + (play.bonus || 0)) * 60));
+  }
+  function renderBattery() {
+    const el = $('battery');
+    el.classList.toggle('off', !set.limit);
+    const b = battery();
+    el.style.setProperty('--b', b);
+    el.classList.toggle('mid', b < 0.5 && b >= 0.2);
+    el.classList.toggle('low', b < 0.2);
+    const left = Math.ceil(((set.limit + (play.bonus || 0)) * 60 - play.sec) / 60);
+    el.querySelector('span').textContent = set.limit ? Math.max(0, left) + '분' : '';
+  }
+  let warned = false;
+  function tickTimer(dt) {
+    if (play.date !== today()) { play = { date: today(), sec: 0, bonus: 0 }; warned = false; if (mode === 'sleep') toTitle(); }
+    if (mode === 'sleep' || parentOpen || document.hidden) return;
+    play.sec += dt;
+    if (Math.floor(play.sec) % 5 === 0) RC.store.set('rc.play', play);
+    if (set.limit && !warned && battery() < 2 / (set.limit + (play.bonus || 0)) && battery() > 0) { warned = true; S.say('배터리가 조금 남았어요!'); }
+    if (set.limit && battery() <= 0) {
+      if (mode === 'run' && R && !R.done) endAfterRun = true;       // 달리던 판은 끝까지
+      else if (mode !== 'result') goSleep();
+      else endAfterRun = true;
+    }
+  }
+  function checkSleep() { if (set.limit && battery() <= 0) { goSleep(); return true; } return false; }
+  function goSleep() {
+    mode = 'sleep'; show('scr-sleep'); S.music(false);
+    S.say('오늘은 여기까지! 내일 또 만나!', { ms: 4000 });
+    endAfterRun = false;
+  }
+
+  // ─── 보호자 문 (자물쇠 3초 누르기) ──────────────────────────
+  const lock = $('btn-lock');
+  let lockTimer = 0;
+  const lockStart = e => { e.preventDefault(); lock.classList.add('holding'); lockTimer = setTimeout(openParent, 3000); };
+  const lockEnd = () => { lock.classList.remove('holding'); clearTimeout(lockTimer); };
+  lock.addEventListener('pointerdown', lockStart);
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) lock.addEventListener(ev, lockEnd);
+
+  function openParent() {
+    lockEnd();
+    parentOpen = true;
+    $('scr-parent').classList.add('on');
+    renderParent();
+  }
+  function renderParent() {
+    $('p-played').textContent = Math.floor(play.sec / 60) + '분' + (play.bonus ? ' (오늘 +' + play.bonus + '분 추가)' : '');
+    for (const b of $('p-limit').children) b.setAttribute('aria-pressed', String(Number(b.dataset.min) === set.limit));
+    $('p-voice').dataset.on = set.voice ? '1' : '0';
+    $('p-sound').dataset.on = set.sound ? '1' : '0';
+  }
+  for (const b of $('p-limit').children) b.addEventListener('click', () => { set.limit = Number(b.dataset.min); saveAll(); renderParent(); renderBattery(); });
+  $('p-voice').addEventListener('click', () => { set.voice = !set.voice; S.setVoice(set.voice); saveAll(); renderParent(); });
+  $('p-sound').addEventListener('click', () => { set.sound = !set.sound; S.setSound(set.sound); saveAll(); renderParent(); });
+  $('p-extend').addEventListener('click', () => { play.bonus = (play.bonus || 0) + 10; saveAll(); renderParent(); renderBattery(); });
+  $('p-close').addEventListener('click', () => {
+    parentOpen = false;
+    $('scr-parent').classList.remove('on');
+    if (mode === 'sleep' && battery() > 0) toTitle();
+  });
+
+  // ─── 입력 ────────────────────────────────────────────────
+  canvas.addEventListener('pointerdown', e => {
+    S.unlock();
+    if (mode === 'run') { tap = true; holding = true; }
+    else if (mode === 'garage') {
+      // 로봇카를 누르면 빵빵! 하고 폴짝
+      garageBounce = 1; S.play('honk');
+    }
+  });
+  const release = () => { holding = false; };
+  canvas.addEventListener('pointerup', release);
+  canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('pointerleave', release);
+  btnT.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); wantTransform = true; btnT.classList.add('pressed'); });
+  btnT.addEventListener('pointerup', () => btnT.classList.remove('pressed'));
+  window.addEventListener('pointerdown', () => S.unlock(), { passive: true });
+  window.addEventListener('keydown', e => {
+    if (mode !== 'run') return;
+    if (e.code === 'Space' && !e.repeat) { tap = true; holding = true; }
+    if (e.code === 'KeyX') wantTransform = true;
+  });
+  window.addEventListener('keyup', e => { if (e.code === 'Space') holding = false; });
+
+  $('btn-go-garage').addEventListener('click', () => { S.unlock(); S.play('click'); toGarage(); });
+  $('btn-book').addEventListener('click', () => { S.unlock(); S.play('click'); toBook(); });
+  $('btn-book-back').addEventListener('click', () => { S.play('click'); toTitle(); });
+  $('btn-run').addEventListener('click', () => { S.play('click'); startRun(); });
+  $('btn-again').addEventListener('click', () => { S.play('click'); startRun(); });
+  $('btn-garage').addEventListener('click', () => { S.play('click'); toGarage(); });
+  $('btn-morph').addEventListener('click', () => {
+    garageForm = garageForm === 'car' ? 'robot' : 'car'; garageMorph = 0.35;
+    S.play(garageForm === 'robot' ? 'transform' : 'untransform');
+    S.say(garageForm === 'robot' ? RC.find(D.BODIES, cfg.body).robot + ' 변신!' : '다시 자동차!');
+    $('btn-morph').textContent = garageForm === 'robot' ? '🚗 자동차로' : '🤖 변신 보기';
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { holding = false; saveAll(); } });
+
+  // ─── 루프 ────────────────────────────────────────────────
+  let lastTs = 0, gt = 0;
+  function frame(ts) {
+    const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
+    lastTs = ts;
+    gt += dt;
+    tickTimer(dt);
+    renderBattery();
+    ctx.setTransform(view.dpr * view.s, 0, 0, view.dpr * view.s, 0, 0);
+    const vw = view.vw;
+
+    if (mode === 'run' && R) {
+      if (!parentOpen) {
+        const input = { tap, hold: holding, transform: wantTransform };
+        tap = false; wantTransform = false;
+        RC.Run.stepRun(R, input, dt);
+        handleEvents(R, false);
+        updateHud();
+        if (R.done) { finishT += dt; if (finishT > 1.8) showResult(); }
+      }
+      RC.Draw.drawRun(ctx, R, vw);
+    } else if (mode === 'garage') {
+      garageMorph = Math.max(0, garageMorph - dt);
+      garageBounce = Math.max(0, garageBounce - dt * 3);
+      const ty = 330;
+      RC.Draw.drawGarage(ctx, vw, 600, gt, ty);
+      ctx.save();
+      // 로봇 모습은 키가 커서 조금 작게
+      const robotShown = garageForm === 'robot' ? garageMorph < 0.2 : garageMorph > 0.2;
+      const sc = robotShown ? 1.4 : 1.85, cx = vw / 2, cy = ty;
+      ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-cx, -cy);
+      const hop = Math.sin(garageBounce * Math.PI) * 18;
+      RC.Draw.drawBot(ctx, cfg, cx, cy - hop, { t: gt, form: garageForm, morph: garageMorph, dist: gt * 20, running: garageForm === 'robot' });
+      ctx.restore();
+    } else if (mode === 'sleep') {
+      RC.Draw.drawNight(ctx, cfg, vw, gt);
+    } else {
+      // 시작·결과·스티커북 뒤: 시연 달리기
+      if (!demo || demo.done && demo.doneT > 2) demo = RC.Run.createRun({ body: ['racer', 'fire', 'police'][Math.floor(gt / 20) % 3], wheel: 'monster', gear: 'jet', color: null }, 11);
+      RC.Run.stepRun(demo, demoInput(demo), dt);
+      handleEvents(demo, true);
+      RC.Draw.drawRun(ctx, demo, vw);
+      if (mode === 'result' || mode === 'book') { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = 'rgba(27,30,43,0.35)'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ─── 시작 ────────────────────────────────────────────────
+  S.setVoice(set.voice); S.setSound(set.sound);
+  resize();
+  buildGarage();
+  toTitle();
+  S.say('뚝딱 로봇카! 시작을 눌러 봐!', { ms: 3500 });
+  requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
+
+  // 개발·스크린샷용 손잡이
+  RC.debug = {
+    get mode() { return mode; }, get run() { return R; }, cfg, prog, set, play,
+    toGarage, toBook, startRun, showResult, goSleep, openParent, toTitle,
+    setGarageForm(f) { garageForm = f; },
+  };
+})(RC);
