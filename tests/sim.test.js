@@ -191,5 +191,32 @@ test('관통탄은 여러 마리를, 도탄은 벽에서 튕긴다', () => {
   assert(b.vx < 0 && b.bounce === 0, 'bounced');
 });
 
+
+test('난이도: 체력·적 수·적 체력·점수 배율이 반영된다', () => {
+  const E = createWorld(800, 600, 1, 'easy'), N = createWorld(800, 600, 1), H = createWorld(800, 600, 1, 'hard');
+  assert(E.player.maxHp === 8 && N.player.maxHp === 5 && H.player.maxHp === 4, 'hp');
+  assert(E.spawnQueue.length < N.spawnQueue.length && N.spawnQueue.length < H.spawnQueue.length, 'count');
+  for (const W of [E, N, H]) { W.spawnTimer = 0; step(W, IDLE, DT); }
+  const hp = W => W.enemies[0].maxHp;
+  assert(hp(E) < hp(N) && hp(N) < hp(H), 'enemy hp');
+  assert(createWorld(800, 600, 1, 'nope').diff.id === 'normal', 'unknown -> normal');
+});
+
+test('어려움이 보통보다 빨리 끝난다 (가만히 있는 봇, 시드 8개 평균)', () => {
+  const survive = d => {
+    let total = 0;
+    for (let s = 1; s <= 8; s++) {
+      const W = createWorld(900, 650, s, d);
+      let i = 0;
+      while (W.phase !== 'over' && i++ < 60 * 600) { if (W.phase === 'cards') pickCard(W, 0); step(W, IDLE, DT); W.events.length = 0; }
+      total += W.t;
+    }
+    return total / 8;
+  };
+  const e = survive('easy'), n = survive('normal'), h = survive('hard');
+  console.log('       생존 평균(초) 쉬움 ' + e.toFixed(0) + ' / 보통 ' + n.toFixed(0) + ' / 어려움 ' + h.toFixed(0));
+  assert(e > n && n > h, 'ordering');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

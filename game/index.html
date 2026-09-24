@@ -24,6 +24,17 @@
       <h1 class="logo">N<span>-</span>GUN</h1>
       <p class="tagline">총열을 늘려라. 끝까지 버텨라.</p>
       <p id="best" class="best"></p>
+      <div class="settings">
+        <div class="seg" role="group" aria-label="난이도">
+          <button type="button" data-diff="easy" aria-pressed="false"><b>쉬움</b><small>체력 8 · 적 약함</small></button>
+          <button type="button" data-diff="normal" aria-pressed="true"><b>보통</b><small>체력 5</small></button>
+          <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>체력 4 · 점수 ×1.6</small></button>
+        </div>
+        <div class="toggles">
+          <button type="button" class="toggle" data-audio="music" aria-pressed="true">♪ 음악 <span class="state">켬</span></button>
+          <button type="button" class="toggle" data-audio="sfx" aria-pressed="true">💥 효과음 <span class="state">켬</span></button>
+        </div>
+      </div>
       <button id="btn-start" class="big-btn">시작 <kbd class="only-pc">Enter</kbd></button>
       <div class="help">
         <div class="help-col only-pc">
@@ -58,6 +69,10 @@
     <div class="panel">
       <h2>일시정지</h2>
       <p class="sub">조준 방식: <b id="pause-aim">자동</b> <span class="only-pc">(<kbd>F</kbd>로 전환)</span></p>
+      <div class="toggles">
+        <button type="button" class="toggle" data-audio="music" aria-pressed="true">♪ 음악 <span class="state">켬</span></button>
+        <button type="button" class="toggle" data-audio="sfx" aria-pressed="true">💥 효과음 <span class="state">켬</span></button>
+      </div>
       <button id="btn-resume" class="big-btn">계속하기</button>
       <button id="btn-quit" class="text-btn">처음 화면으로</button>
     </div>
@@ -69,6 +84,7 @@
       <h2>격추됨</h2>
       <p class="score-big"><span id="over-score">0</span><small>점</small></p>
       <p id="over-new" class="new-best">🏆 최고 기록 경신</p>
+      <p class="over-diff">난이도 <b id="over-diff">보통</b></p>
       <dl class="stats">
         <div><dt>웨이브</dt><dd id="over-wave">1</dd></div>
         <div><dt>처치</dt><dd id="over-kills">0</dd></div>

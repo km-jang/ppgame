@@ -6,11 +6,11 @@
   const TAU = Math.PI * 2;
   const MAX_PARTICLES = 700;
 
-  function makePlayer(x, y) {
+  function makePlayer(x, y, diff) {
     const P = D.PLAYER;
     return {
       x, y, r: P.r, vx: 0, vy: 0,
-      hp: P.hp, maxHp: P.hp, iframe: 0,
+      hp: diff.hp, maxHp: diff.hp, iframe: 0, muzzle: 0,
       speed: P.speed,
       dashT: 0, dashCd: 0, dashCdMax: P.dashCd, dashX: 1, dashY: 0,
       aim: -Math.PI / 2, fireCd: 0,
@@ -20,14 +20,16 @@
     };
   }
 
-  function createWorld(w, h, seed) {
+  // diff: 'easy' | 'normal' | 'hard' (생략하면 보통)
+  function createWorld(w, h, seed, diff) {
+    const df = D.DIFFICULTY[diff] || D.DIFFICULTY.normal;
     const W = {
-      w, h, t: 0,
+      w, h, t: 0, diff: df,
       rand: NG.rng(seed == null ? (Date.now() & 0xffffffff) : seed),
       phase: 'play', // play | cards | over
       wave: 0, banner: 0, bossWave: false, bossKills: 0,
       spawnQueue: [], spawnTimer: 0, clearT: -1,
-      player: makePlayer(w / 2, h / 2),
+      player: makePlayer(w / 2, h / 2, df),
       enemies: [], bullets: [], eBullets: [], particles: [], drops: [], texts: [],
       cards: null, events: [], shake: 0, flash: 0,
       score: 0, nextId: 1,
@@ -49,10 +51,11 @@
   }
 
   // ─── 웨이브 ────────────────────────────────────────────────
-  function buildWave(n, rand) {
+  function buildWave(n, rand, diff) {
     const WV = D.WAVE;
+    const df = diff || D.DIFFICULTY.normal;
     const boss = n % WV.bossEvery === 0;
-    const count = boss ? 4 + n : WV.baseCount + Math.floor(n * WV.perWave);
+    const count = Math.round((boss ? 4 + n : WV.baseCount + Math.floor(n * WV.perWave)) * df.count);
     const pool = D.WAVE_POOL.filter(p => n >= p.from);
     const q = [];
     if (boss) q.push('boss');
@@ -63,7 +66,7 @@
   function startWave(W) {
     W.wave += 1;
     W.bossWave = W.wave % D.WAVE.bossEvery === 0;
-    W.spawnQueue = buildWave(W.wave, W.rand);
+    W.spawnQueue = buildWave(W.wave, W.rand, W.diff);
     W.spawnTimer = 0.8;
     W.clearT = -1;
     W.banner = D.WAVE.banner;
@@ -94,10 +97,10 @@
     let hpMul = 1 + (W.wave - 1) * WV.hpPerWave;
     if (type === 'boss') hpMul = 1 + W.bossKills * WV.bossHpPerBoss;
     const spMul = 1 + Math.min(WV.speedMax, (W.wave - 1) * WV.speedPerWave);
-    const hp = def.hp * hpMul;
+    const hp = def.hp * hpMul * W.diff.enemyHp;
     const e = {
       id: W.nextId++, type, def, x, y, r: def.r,
-      hp, maxHp: hp, speed: def.speed * spMul,
+      hp, maxHp: hp, speed: def.speed * spMul * W.diff.enemySpeed,
       vx: 0, vy: 0, spawnT: warn ? D.WAVE.spawnWarn : 0,
       flash: 0, droneHit: 0, dead: false, ang: 0,
       cd: def.fireCd ? def.fireCd * (0.5 + W.rand()) : 0,
@@ -193,7 +196,7 @@
     e.dead = true;
     const p = W.player;
     const mul = 1 + W.bossKills * 0.5;
-    W.score += Math.round(e.def.score * mul);
+    W.score += Math.round(e.def.score * mul * W.diff.score);
     W.stats.kills += 1;
     burst(W, e.x, e.y, e.def.color, e.type === 'boss' ? 80 : 10 + e.r, e.type === 'boss' ? 420 : 220, e.type === 'boss' ? 5 : 3);
 
@@ -269,6 +272,7 @@
       });
     }
     W.stats.shots += n;
+    p.muzzle = 0.05;
     W.events.push('shoot');
   }
 
@@ -306,6 +310,7 @@
     p.x = NG.clamp(p.x + p.vx * dt, p.r, W.w - p.r);
     p.y = NG.clamp(p.y + p.vy * dt, p.r, W.h - p.r);
     p.iframe = Math.max(0, p.iframe - dt);
+    p.muzzle = Math.max(0, p.muzzle - dt);
 
     // 조준: 입력이 있으면 그 방향, 없으면 가장 가까운 적
     let target = null;
@@ -376,6 +381,7 @@
 
   // ─── 적 ────────────────────────────────────────────────────
   function enemyShoot(W, e, angle, speed) {
+    speed *= W.diff.bulletSpeed;
     W.eBullets.push({ x: e.x + Math.cos(angle) * e.r, y: e.y + Math.sin(angle) * e.r,
       vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: 5, life: 6 });
   }
@@ -400,11 +406,11 @@
         e.cd -= dt;
         if (e.cd <= 0 && dist < 650) {
           enemyShoot(W, e, Math.atan2(dy, dx), def.bulletSpeed);
-          e.cd = def.fireCd;
+          e.cd = def.fireCd / W.diff.fireRate;
           W.events.push('eshoot');
         }
       } else if (e.type === 'boss') {
-        const rage = e.hp < e.maxHp * 0.5 ? 0.65 : 1;
+        const rage = (e.hp < e.maxHp * 0.5 ? 0.65 : 1) / W.diff.fireRate;
         e.ringCd -= dt; e.aimCd -= dt; e.summonCd -= dt;
         if (e.ringCd <= 0) {
           const n = def.ringCount + W.bossKills * 2;

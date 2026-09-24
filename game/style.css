@@ -182,6 +182,32 @@ h2 { font-size: 26px; }
 }
 .help-col b { color: var(--text); }
 
+.settings { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.seg button, .toggle {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.seg button b { font-size: 15px; color: var(--text); }
+.seg button small { font-size: 11px; }
+.seg button[aria-pressed="true"] { border-color: var(--cyan); background: rgba(94, 231, 255, 0.14); color: var(--cyan); }
+.seg button[data-diff="hard"][aria-pressed="true"] { border-color: var(--pink); background: rgba(255, 46, 136, 0.14); color: #ffb3d4; }
+.toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.toggle { flex-direction: row; justify-content: center; gap: 6px; font-size: 14px; color: var(--text); }
+.toggle .state { font-weight: 700; color: var(--cyan); }
+.toggle[aria-pressed="false"] { color: var(--muted); }
+.toggle[aria-pressed="false"] .state { color: var(--red); }
+#scr-pause .toggles { margin-bottom: 16px; }
+.over-diff { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+.over-diff b { color: var(--text); }
+.seg button:focus-visible, .toggle:focus-visible, .big-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
 /* ─── 카드 ─── */
 #card-list {
   display: grid;
