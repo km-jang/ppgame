@@ -3,9 +3,13 @@
 (function (NG) {
   const $ = id => document.getElementById(id);
   const canvas = $('game');
-  const ctx = canvas.getContext('2d');
+  // alpha:false = 배경이 불투명하다고 알려 합성 비용을 줄인다
+  const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+  // 터치 기기 판별 (갤럭시탭·폰). PC 조작도 그대로 되지만 화면은 터치 기준으로 맞춘다
+  const isTouch = (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0;
+  if (isTouch) document.body.classList.add('touch');
   const input = NG.createInput(canvas);
-  const view = { dpr: 1, hudTop: 14, hudLeft: 104 };
+  const view = { dpr: 1, hudTop: 14, hudLeft: 104, hudRight: 12, ui: 1, touchHint: isTouch };
   const demoView = Object.create(view, { hud: { value: false } });
   const BEST_KEY = 'ngun.best2';   // 난이도별 {easy:{score,wave}, ...}
   const MUTE_KEY = 'ngun.muted';
@@ -26,6 +30,7 @@
   }
   const bestOf = d => bests[d] || { score: 0, wave: 0 };
   let lastTs = 0;
+  let frozenDrawn = false; // 일시정지·카드 화면에선 한 번만 그리고 쉰다 (배터리)
 
   // ─── 화면 크기 ─────────────────────────────────────────────
   function size() {
@@ -33,7 +38,15 @@
   }
   function resize() {
     const { w, h } = size();
-    view.dpr = Math.min(2, window.devicePixelRatio || 1);
+    // 해상도 상한: 태블릿(2560×1600)을 그대로 그리면 픽셀이 400만 개라 느려진다.
+    // 약 220만 픽셀까지만 그리고 나머지는 브라우저가 늘려 보여 준다 (선명도 차이는 거의 안 보임)
+    view.dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.2e6 / (w * h))));
+    // 터치 기기는 HUD를 키우고, 왼쪽 위 버튼(44px 두 개)만큼 비켜서 그린다
+    view.ui = isTouch ? (Math.min(w, h) >= 600 ? 1.35 : 1.15) : 1;
+    // HUD는 왼쪽 위 버튼 묶음 오른쪽부터 (전체 화면 버튼이 숨겨지면 그만큼 당긴다)
+    view.hudLeft = Math.round($('topbar').getBoundingClientRect().right) + 12;
+    view.hudTop = isTouch ? 16 : 14;
+    frozenDrawn = false;
     canvas.width = Math.round(w * view.dpr);
     canvas.height = Math.round(h * view.dpr);
     canvas.style.width = w + 'px';
@@ -99,6 +112,7 @@
     mode = 'play';
     NG.Audio.setDuck(false);
     NG.Audio.music('play');
+    wakeLock(true);
     show(null);
   }
 
@@ -107,6 +121,7 @@
     mode = 'title';
     NG.Audio.setDuck(false);
     NG.Audio.music('title');
+    wakeLock(false);
     renderBest();
     show('scr-title');
   }
@@ -151,7 +166,8 @@
 
   function choose(i) {
     // 사격하다 실수로 누르는 것 방지
-    if (mode !== 'cards' || performance.now() - cardsShownAt < 350) return;
+    // 터치는 조준하던 손가락이 그대로 카드를 누르기 쉬워서 더 길게 막는다
+    if (mode !== 'cards' || performance.now() - cardsShownAt < (isTouch ? 600 : 350)) return;
     if (NG.World.pickCard(W, i)) {
       input.reset();
       mode = 'play';
@@ -239,11 +255,45 @@
   $('btn-pause').addEventListener('click', () => (mode === 'play' ? pause() : resume()));
   $('btn-mute').addEventListener('click', toggleMute);
   const dashBtn = $('btn-dash');
-  dashBtn.addEventListener('touchstart', e => { e.preventDefault(); input.queueDash(); }, { passive: false });
+  dashBtn.addEventListener('touchstart', e => { e.preventDefault(); input.queueDash(); vibrate(15); }, { passive: false });
   dashBtn.addEventListener('mousedown', () => input.queueDash());
   window.addEventListener('touchstart', () => document.body.classList.add('touch'), { once: true, passive: true });
+  let dashShown = -1;
+  function updateDashBtn() {
+    const p = W.player;
+    const k = Math.round((1 - p.dashCd / p.dashCdMax) * 20) / 20; // 5% 단위로만 스타일 갱신
+    if (k === dashShown) return;
+    dashShown = k;
+    dashBtn.style.setProperty('--k', k);
+    dashBtn.classList.toggle('ready', k >= 1);
+  }
 
-  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  // 게임 중 화면이 어두워지거나 꺼지지 않게 (지원 기기만, 거절되면 무시)
+  let lock = null;
+  function wakeLock(on) {
+    try {
+      if (on && !lock && navigator.wakeLock) {
+        navigator.wakeLock.request('screen').then(l => { lock = l; l.addEventListener('release', () => { lock = null; }); }).catch(() => {});
+      } else if (!on && lock) { lock.release().catch(() => {}); lock = null; }
+    } catch (e) { /* 무시 */ }
+  }
+
+  // 전체 화면 (주소창을 없앤다). 지원 안 하는 환경에선 버튼을 숨긴다
+  const fsBtn = $('btn-fs');
+  const root = document.documentElement;
+  if (!(document.fullscreenEnabled && root.requestFullscreen)) fsBtn.hidden = true;
+  const hideFs = () => { fsBtn.hidden = true; resize(); };
+  fsBtn.addEventListener('click', () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else root.requestFullscreen({ navigationUI: 'hide' }).catch(() => { hideFs(); toast('이 화면에선 전체 화면을 쓸 수 없어요'); });
+    } catch (e) { hideFs(); }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pause();
+    else if (mode === 'play' || mode === 'paused') wakeLock(true); // 돌아오면 다시 요청
+  });
 
   // ─── 루프 ──────────────────────────────────────────────────
   function demoInput(D) {
@@ -273,8 +323,13 @@
         drainEvents(W);
         if (mode === 'play' && W.phase === 'cards') showCards();
         else if (mode === 'play' && W.phase === 'over') gameOver();
+        updateDashBtn();
+        frozenDrawn = false;
       }
-      NG.Render.draw(ctx, W, view, mode === 'play' ? input.touch : null);
+      if (!frozenDrawn) {
+        NG.Render.draw(ctx, W, view, mode === 'play' ? input.touch : null);
+        if (mode === 'paused' || mode === 'cards') frozenDrawn = true;
+      }
     }
     requestAnimationFrame(frame);
   }

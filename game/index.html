@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#07080d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
   <meta name="description" content="총열이 N개로 늘어나는 총으로 웨이브를 버티는 아레나 슈팅 게임">
   <title>N-GUN</title>
   <link rel="stylesheet" href="style.css">
@@ -14,6 +19,7 @@
   <div id="topbar">
     <button id="btn-pause" class="icon-btn" aria-label="일시정지">⏸</button>
     <button id="btn-mute" class="icon-btn" aria-label="소리 켜기/끄기">🔊</button>
+    <button id="btn-fs" class="icon-btn" aria-label="전체 화면">⛶</button>
   </div>
   <button id="btn-dash" aria-label="대시">대시</button>
   <div id="toast" role="status"></div>
@@ -36,21 +42,12 @@
         </div>
       </div>
       <button id="btn-start" class="big-btn">시작 <kbd class="only-pc">Enter</kbd></button>
-      <div class="help">
-        <div class="help-col only-pc">
-          <b>PC</b>
-          <span><kbd>WASD</kbd> 이동</span>
-          <span>마우스 조준 · 사격은 자동</span>
-          <span><kbd>Space</kbd> 대시 (잠깐 무적)</span>
-          <span><kbd>F</kbd> 자동 조준 전환 · <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</span>
-        </div>
-        <div class="help-col only-touch">
-          <b>모바일</b>
-          <span>왼쪽 드래그 이동</span>
-          <span>오른쪽 드래그 조준 (떼면 자동 조준)</span>
-          <span>오른쪽 아래 버튼 대시</span>
-        </div>
-      </div>
+      <ul class="help">
+        <li><b>왼쪽</b> 드래그로 이동</li>
+        <li><b>오른쪽</b> 드래그로 조준 · 떼면 자동 조준</li>
+        <li><b>대시</b> 버튼으로 잠깐 무적 돌진</li>
+      </ul>
+      <p class="pc-line only-pc">PC: <kbd>WASD</kbd> 이동 · 마우스 조준 · <kbd>Space</kbd> 대시 · <kbd>P</kbd> 일시정지</p>
       <p class="hint">웨이브를 넘길 때마다 카드 1장을 골라 총을 키웁니다. 5웨이브마다 보스.</p>
     </div>
   </section>

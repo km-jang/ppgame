@@ -1,0 +1,15 @@
+{
+  "name": "N-GUN",
+  "short_name": "N-GUN",
+  "description": "총열이 N개로 늘어나는 총으로 웨이브를 버티는 아레나 슈팅 게임",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07080d",
+  "theme_color": "#07080d",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
