@@ -421,5 +421,22 @@ test('무한·스테이지 봇을 오래 돌려도 값이 망가지지 않는다
   }
 });
 
+// ─── 쉬움 ───
+test('쉬움: 느리고, 방향을 누를 때까지 기다리고, 판 끝에서 반대편으로 나온다', () => {
+  const W = create(24, 15, 1, { mode: 'endless', easy: true });
+  assert(speed(W) === D.EASY.base && speed(W) < D.SPEED.base, 'slower ' + speed(W));
+  step(W, 5);
+  assert(W.ticks === 0 && W.wait > 0, 'waits for input');
+  assert(turn(W, 'right'), 'same direction starts');
+  assert(W.wait === 0, 'started');
+  W.food = { x: 0, y: 0, gold: false, born: W.t }; W.itemT = 99;
+  W.snake = [{ x: 23, y: 7 }, { x: 22, y: 7 }, { x: 21, y: 7 }, { x: 20, y: 7 }];
+  ticks(W, 1);
+  assert(W.phase === 'play' && W.snake[0].x === 0 && W.snake[0].y === 7, 'wrapped to ' + JSON.stringify(W.snake[0]));
+  assert(W.wraps === 0, 'easy wrap is not the ghost medal');
+  const S = create(24, 15, 1, { mode: 'stage', level: 12, easy: true });
+  assert(speed(S) < levelDef(12).speed, 'stage slower in easy');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -266,6 +266,37 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
 .new-medals .medal { animation: pop .5s var(--back) both; }
 .new-medals .medal:nth-child(2) { animation-delay: .15s; } .new-medals .medal:nth-child(3) { animation-delay: .3s; }
 
+/* ─── 방향 버튼: 게임 중 터치 기기에서 오른쪽(세로 화면은 아래)에 크게 ─── */
+:root { --pad: clamp(64px, 11vmin, 100px); }
+#dpad { display: none; position: fixed; z-index: 6; width: calc(var(--pad) * 3); height: calc(var(--pad) * 3);
+  right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
+  grid-template-columns: repeat(3, var(--pad)); grid-template-rows: repeat(3, var(--pad)); touch-action: none; }
+body.touch.playing #dpad { display: grid; }
+body.left-pad #dpad { right: auto; left: max(14px, env(safe-area-inset-left)); }
+@media (orientation: portrait) { #dpad { right: 50%; transform: translateX(50%); } }
+#dpad button { width: var(--pad); height: var(--pad); padding: 0; border-radius: 22px; border: 2px solid rgba(94, 231, 255, .45);
+  background: radial-gradient(circle at 40% 30%, rgba(94, 231, 255, .28), rgba(12, 22, 38, .85) 70%);
+  box-shadow: 0 6px 0 rgba(4, 30, 40, .9), 0 8px 18px rgba(0, 0, 0, .5), inset 0 2px 0 rgba(255, 255, 255, .25);
+  color: var(--cyan); touch-action: none; cursor: pointer; transition: transform .05s, box-shadow .05s; }
+#dpad button svg { width: 55%; height: 55%; fill: currentColor; filter: drop-shadow(0 0 6px rgba(94, 231, 255, .7)); }
+#dpad [data-dir=up] { grid-column: 2; grid-row: 1; }
+#dpad [data-dir=left] { grid-column: 1; grid-row: 2; }
+#dpad [data-dir=right] { grid-column: 3; grid-row: 2; }
+#dpad [data-dir=down] { grid-column: 2; grid-row: 3; }
+#dpad button.on { color: var(--yellow); border-color: var(--yellow); }
+#dpad button.on svg { filter: drop-shadow(0 0 8px rgba(255, 230, 109, .8)); }
+#dpad button.hit { transform: translateY(4px); box-shadow: 0 2px 0 rgba(4, 30, 40, .9), 0 4px 10px rgba(0, 0, 0, .5), inset 0 2px 0 rgba(255, 255, 255, .25); background: radial-gradient(circle at 40% 30%, rgba(94, 231, 255, .55), rgba(12, 22, 38, .85) 70%); }
+#dpad.wait button:not(.on) { animation: padNudge 1.2s ease-in-out infinite; }
+@keyframes padNudge { 50% { border-color: var(--yellow); color: var(--yellow); } }
+
+/* 쉬움·보통 고르기 */
+.level-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 16px; }
+.level-seg button { min-height: 56px; padding: 6px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .04); color: var(--muted); cursor: pointer; }
+.level-seg b { display: block; font: normal 22px var(--disp); letter-spacing: 1px; }
+.level-seg small { display: block; font-size: 12px; }
+.level-seg [aria-pressed=true] { border-color: var(--cyan); background: rgba(94, 231, 255, .14); color: var(--text); box-shadow: 0 0 0 1px var(--cyan), 0 0 16px rgba(94, 231, 255, .3); }
+.level-seg [aria-pressed=true] b { color: var(--cyan); }
+
 /* ─── 터치 기기: 누르기 쉬운 크기 (최소 44px) ─── */
 body.touch .icon-btn { width: 44px; height: 44px; }
 body.touch .big-btn { padding: 16px; }
@@ -290,8 +321,10 @@ body.touch .text-btn { padding: 10px 16px; }
   #scr-title .logo { font-size: 58px; grid-column: 1; grid-row: 1; }
   #scr-title .tagline { grid-column: 1; grid-row: 2; margin-bottom: 6px; }
   #scr-title .best { grid-column: 1; grid-row: 3; margin-bottom: 10px; }
-  #scr-title .modes { grid-column: 1; grid-row: 4; gap: 10px; }
-  #scr-title .help { grid-column: 2; grid-row: 1 / span 4; margin: 0; }
+  #scr-title .level-seg { grid-column: 1; grid-row: 4; margin-bottom: 10px; }
+  #scr-title .modes { grid-column: 1; grid-row: 5; gap: 10px; }
+  #scr-title .help { grid-column: 2; grid-row: 1 / span 5; margin: 0; }
+  .level-seg button { min-height: 48px; padding: 4px; } .level-seg b { font-size: 18px; }
   .modes .big-btn { padding: 11px; font-size: 21px; }
   #level-list { grid-template-columns: repeat(6, 1fr); gap: 8px; }
   .lvl { min-height: 64px; padding: 8px 4px; } .lvl b { font-size: 24px; } .lvl small { font-size: 12px; }

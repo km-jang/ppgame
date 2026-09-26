@@ -46,11 +46,25 @@
   // ─── 화면 크기 ─────────────────────────────────────────────
   const size = () => ({ w: window.innerWidth, h: window.innerHeight });
   // 판 모양: 가로 화면은 32×20, 세로 화면(폰)은 20×32
-  const boardFor = ({ w, h }) => (h > w * 1.1 ? D.BOARD.port : D.BOARD.land);
+  // 쉬움(기본): 칸이 크고 느리며 판 끝을 넘으면 반대편으로. 이 기기에 기억한다
+  const EASY_KEY = 'snake.easy';
+  let easy = SN.store.get(EASY_KEY, true) !== false;
+  const boardFor = ({ w, h }) => { const B = easy ? D.EASY.board : D.BOARD; return h > w * 1.1 ? B.port : B.land; };
 
-  function fit(world) {
-    const L = SN.Render.layout(world.cols, world.rows, view.w, view.h, view.hudH);
+  // 방향 버튼 자리: 가로 화면은 오른쪽, 세로 화면은 아래를 비워 판이 버튼 밑에 깔리지 않게
+  const padSize = () => Math.max(64, Math.min(100, Math.min(view.w, view.h) * 0.11));
+  function fit(world, withPad) {
+    let right = 0, bottom = 0;
+    if (withPad && isTouch) { const k = padSize() * 3 + 28; if (view.h > view.w * 1.1) bottom = k; else right = k; }
+    const L = SN.Render.layout(world.cols, world.rows, view.w, view.h, view.hudH, right, bottom);
     Object.assign(view, L);
+  }
+  function renderEasy() {
+    for (const b of document.querySelectorAll('[data-easy]')) b.setAttribute('aria-pressed', String((b.dataset.easy === '1') === easy));
+  }
+  function setEasy(on) {
+    easy = !!on; SN.store.set(EASY_KEY, easy); renderEasy();
+    demo = null;
   }
 
   // HUD 줄은 왼쪽 위 버튼 묶음과 같은 높이. 판은 그 아래부터.
@@ -162,8 +176,8 @@
   // ─── 흐름 ──────────────────────────────────────────────────
   function newGame(seed, opts) {
     SN.Audio.unlock();
-    if (opts) lastOpts = opts;
-    const [cols, rows] = boardFor(size());
+    if (opts) lastOpts = Object.assign({}, opts, { easy });
+    const [cols, rows] = lastOpts.easy ? (size().h > size().w * 1.1 ? D.EASY.board.port : D.EASY.board.land) : (size().h > size().w * 1.1 ? D.BOARD.port : D.BOARD.land);
     W = SN.World.create(cols, rows, seed, lastOpts);
     view.best = W.mode === 'stage' ? rec.stage.score : rec.endless.score;
     medalCheckT = 0;
@@ -266,6 +280,26 @@
     SN.Audio.unlock();
     if (mode === 'play' && W) SN.World.turn(W, dir);
   };
+  // 방향 버튼: 누르는 순간 바로 (떼기를 기다리지 않는다)
+  const dpad = $('dpad');
+  for (const b of dpad.querySelectorAll('button')) {
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault(); e.stopPropagation();
+      input.onDir(b.dataset.dir);
+      vibrate(12);
+      b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit');
+      setTimeout(() => b.classList.remove('hit'), 120);
+    });
+  }
+  let padShown = '';
+  function updatePad() {
+    const key = W ? W.dir + (W.wait > 0 ? 'w' : '') : '';
+    if (key === padShown) return;
+    padShown = key;
+    for (const b of dpad.querySelectorAll('button')) b.classList.toggle('on', !!W && b.dataset.dir === W.dir);
+    dpad.classList.toggle('wait', !!W && W.wait > 0);
+  }
+  for (const b of document.querySelectorAll('[data-easy]')) b.addEventListener('click', () => { SN.Audio.unlock(); setEasy(b.dataset.easy === '1'); });
   input.onKey = code => {
     SN.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
@@ -356,12 +390,13 @@
         // 게임 중에 딸 수 있는 메달은 바로 알려 준다
         if ((medalCheckT += dt) > 0.5 && W.phase === 'play') { medalCheckT = 0; checkMedals(true); }
         if (W.phase === 'over') gameOver();
+        updatePad();
         frozenDrawn = false;
       }
       // 결과 화면이 뜨고 연출이 끝나면 그리기를 쉰다 (배터리)
       const idle = mode === 'paused' || (mode === 'over' && performance.now() - overAt > 1200 && !SN.Render.busy());
       if (!idle || !frozenDrawn) {
-        fit(W);
+        fit(W, true);
         SN.Render.draw(ctx, W, view, dt);
         frozenDrawn = idle;
       }
@@ -370,6 +405,7 @@
   }
 
   // ─── 시작 ──────────────────────────────────────────────────
+  renderEasy();
   SN.Audio.setMuted(SN.store.get(MUTE_KEY, false));
   $('btn-mute').classList.toggle('muted', SN.Audio.muted);
   resize();
@@ -392,7 +428,7 @@
     get mode() { return mode; },
     get demo() { return demo; },
     get best() { return best; },
-    get rec() { return rec; },
+    get rec() { return rec; }, get easy() { return easy; }, setEasy,
     newGame, pause, resume, toTitle, openStage, openMedals,
     turn(dir) { return W ? SN.World.turn(W, dir) : false; },
     autopilot(on) { auto = on !== false; return auto; },

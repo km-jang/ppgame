@@ -133,7 +133,7 @@
     for (let i = 0; i < D.START.len; i++) snake.push({ x: s.x - i, y: s.y });
     W.snake = snake; W.prev = copy(snake);
     W.dir = 'right'; W.queue = []; W.grow = 0;
-    W.wait = D.START.wait; W.acc = 0; W.alpha = 0;
+    W.wait = W.easy ? Infinity : D.START.wait; W.acc = 0; W.alpha = 0;   // 쉬움: 방향을 누를 때까지 기다린다
     W.item = null; W.itemT = D.ITEM.first;
     W.eff = { slow: 0, double: 0, ghost: 0 };
     W.lastEat = -99; W.combo = 0; W.mult = 1;
@@ -147,7 +147,7 @@
     const rand = SN.rng(seed == null ? (Date.now() ^ 0x5bd1e995) : seed);
     const mode = opts.mode === 'endless' || opts.mode === 'stage' ? opts.mode : 'classic';
     const W = {
-      cols, rows, rand, mode, fun: mode !== 'classic',
+      cols, rows, rand, mode, fun: mode !== 'classic', easy: !!opts.easy,
       level: mode === 'stage' ? Math.max(1, opts.level || 1) : 0,
       snake: [], prev: [], dir: 'right',
       queue: [],          // 아직 적용 안 된 방향 (최대 D.TURN_QUEUE개)
@@ -173,8 +173,10 @@
 
   // 초당 칸 수. 길어질수록 빨라지고 상한에서 멈춘다. 느린 시계를 먹으면 잠깐 느려진다
   function speed(W) {
-    const len = W.snake.length - D.START.len;
-    let s = W.mode === 'stage'
+    const len = W.snake.length - D.START.len, E = D.EASY;
+    let s = W.easy
+      ? Math.min(E.max, (W.mode === 'stage' ? W.lv.speed * E.stageMul : E.base) + len * E.perGrow)
+      : W.mode === 'stage'
       ? Math.min(D.SPEED.max, W.lv.speed + len * D.SPEED.stagePerGrow)
       : Math.min(D.SPEED.max, D.SPEED.base + len * D.SPEED.perGrow);
     if (W.eff && W.eff.slow > 0) s *= D.ITEM.slowMul;
@@ -216,6 +218,8 @@
   // 방향 넣기. 같은 방향·정반대(내 몸으로 들어가기)·줄이 가득 찬 경우는 무시한다
   function turn(W, dir) {
     if (!DIRS[dir] || W.phase !== 'play') return false;
+    // 쉬움: 출발 전이면 지금 방향을 눌러도 출발 (옆 방향은 아래에서 꺾으며 출발, 정반대는 무시)
+    if (W.easy && W.wait > 0 && dir === W.dir) { W.wait = 0; return true; }
     const last = W.queue.length ? W.queue[W.queue.length - 1] : W.dir;
     if (dir === last || dir === OPP[last]) return false;
     if (W.queue.length >= D.TURN_QUEUE) return false;
@@ -264,10 +268,11 @@
     const h = W.snake[0];
     let nx = h.x + dx, ny = h.y + dy;
     if (nx < 0 || ny < 0 || nx >= C || ny >= R) {
-      if (!ghost) return die(W, 'wall');
-      // 유령: 판 가장자리를 넘으면 반대편에서 나온다
+      if (!ghost && !W.easy) return die(W, 'wall');
+      // 유령·쉬움: 판 가장자리를 넘으면 반대편에서 나온다
       nx = (nx + C) % C; ny = (ny + R) % R;
-      W.wraps++; W.events.push('wrap');
+      if (ghost) W.wraps++;
+      W.events.push('wrap');
     }
     if (W.walls && W.walls[ny * C + nx]) {
       if (!ghost) return die(W, 'wall');

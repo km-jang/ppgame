@@ -7,12 +7,14 @@
   const NUM = '"Rajdhani", system-ui, sans-serif', DISP = '"Black Han Sans", system-ui, sans-serif';
 
   // 판 배치: 위쪽 HUD 줄(top) 아래 남는 자리에 판을 가운데 맞춰 넣는다. 칸은 정수 픽셀
-  function layout(cols, rows, w, h, top) {
+  // right·bottom: 방향 버튼 자리만큼 비운다 (판이 버튼 밑에 깔리지 않게)
+  function layout(cols, rows, w, h, top, right, bottom) {
+    right = right || 0; bottom = bottom || 0;
     const pad = Math.max(8, Math.round(Math.min(w, h) * 0.015));
-    const availW = w - pad * 2, availH = h - top - pad;
+    const availW = w - pad * 2 - right, availH = h - top - pad - bottom;
     const cell = Math.max(6, Math.floor(Math.min(availW / cols, availH / rows)));
     const bw = cell * cols, bh = cell * rows;
-    return { cell, bw, bh, bx: Math.round((w - bw) / 2), by: Math.round(top + (availH - bh) / 2) };
+    return { cell, bw, bh, bx: Math.round(pad + (availW - bw) / 2), by: Math.round(top + (availH - bh) / 2) };
   }
 
   // ─── 미리 그려 두는 것들 ───────────────────────────────────
@@ -484,6 +486,13 @@
       ctx.strokeText(W.lv.name + ' · 구슬 ' + W.goal + '개' + (W.portals.length ? ' · 포털 조심' : ''), cx, cy + fs * 0.55);
       ctx.fillStyle = '#5ee7ff';
       ctx.fillText(W.lv.name + ' · 구슬 ' + W.goal + '개' + (W.portals.length ? ' · 포털 조심' : ''), cx, cy + fs * 0.55);
+      if (W.easy) {
+        const hint = v.touch ? '화살표를 누르면 출발!' : '방향키를 누르면 출발!';
+        ctx.globalAlpha = 0.75 + (v.calm ? 0 : Math.sin(W.t * 5) * 0.25);
+        ctx.strokeText(hint, cx, cy + fs * 1.2);
+        ctx.fillStyle = '#ffe66d'; ctx.fillText(hint, cx, cy + fs * 1.2);
+        ctx.globalAlpha = 1;
+      }
       ctx.textBaseline = 'alphabetic';
       return;
     }
@@ -498,10 +507,14 @@
       glow(ctx, 'rgba(94,231,255,0.35)', cx, cy, fs * 1.6, 0.8);
       ctx.fillText('READY', cx, cy);
     }
-    ctx.globalAlpha = hintA * 0.85;
-    ctx.font = Math.round(Math.max(14, Math.min(20, v.cell * 0.6))) + 'px ' + DISP;
+    ctx.globalAlpha = W.easy && W.wait > 0 ? 0.75 + (v.calm ? 0 : Math.sin(W.t * 5) * 0.25) : hintA * 0.85;
+    ctx.font = Math.round(Math.max(16, Math.min(26, v.cell * 0.7))) + 'px ' + DISP;
     ctx.fillStyle = '#bff8ff';
-    ctx.fillText(v.touch ? '화면을 밀어서 방향 바꾸기' : '방향키 또는 WASD로 방향 바꾸기', cx, cy + Math.min(64, v.bw / 8) * 0.8);
+    const hint = W.easy && W.wait > 0 ? (v.touch ? '화살표를 누르면 출발!' : '방향키를 누르면 출발!') : v.touch ? '화살표를 누르거나 화면을 밀어요' : '방향키 또는 WASD로 방향 바꾸기';
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(5,7,12,0.85)';
+    if (W.easy && W.wait > 0) ctx.fillStyle = '#ffe66d';
+    ctx.strokeText(hint, cx, cy + Math.min(64, v.bw / 8) * 0.85);
+    ctx.fillText(hint, cx, cy + Math.min(64, v.bw / 8) * 0.85);
     ctx.globalAlpha = 1;
     ctx.textBaseline = 'alphabetic';
   }
