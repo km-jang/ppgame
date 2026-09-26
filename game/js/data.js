@@ -100,8 +100,24 @@
   const FALLBACK_CARD = { id: 'patch', icon: '+', name: '응급 수리', desc: '체력 2 회복', w: 0, max: Infinity,
     apply: p => { p.hp = Math.min(p.maxHp, p.hp + 2); } };
 
+  // 필살기 "N-버스트": 적에게 준 피해로 게이지가 찬다. 가득 차면 버튼(PC: Q 또는 E)으로 발동.
+  // 나를 중심으로 충격파가 화면 끝까지 퍼지며 닿는 적에게 큰 피해를 주고 적 탄을 지운다.
+  // 게이지 단위는 "적 기본 체력만큼의 피해" (졸개 1마리 = 3). 웨이브가 올라 적이 단단해져도 차는 속도가 같다
+  const ULT = {
+    need: 90,        // 가득 차는 양 (대략 2~3웨이브에 한 번, 첫 보스 전에 한 번)
+    bossRate: 0.35,  // 보스에게 준 피해는 덜 찬다 (보스전 연속 사용 방지)
+    speed: 1500,     // 충격파가 퍼지는 속도 (px/초)
+    sec: 4,          // 피해 = 지금 총의 4초치 화력 (총열·연사·위력 모두 반영)
+    minMul: 20,      // 최소 피해 = 위력 × 20
+                     // 위 피해에 웨이브 체력 배율을 곱한다 (웨이브가 올라도 일반 적을 쓸어 낸다)
+    bossMul: 0.4,    // 보스는 피해 40%만 (보스 체력의 대략 5분의 1)
+    iframe: 0.9,     // 발동하면 잠깐 무적
+    stop: 0.14,      // 발동 순간 화면 멈춤
+    spokes: 3,       // 충격파에 그리는 빛줄기 수 = 총열 N × 3
+  };
+
   const DRONE = { radius: 46, spin: 2.6, r: 7, dmgMul: 1.5, hitGap: 0.25 };
   const NOVA = { radius: 95, dmgMul: 5 };
 
-  NG.DATA = { IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA };
+  NG.DATA = { ULT, IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA };
 })(NG);

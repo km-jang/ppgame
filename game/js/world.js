@@ -16,6 +16,7 @@
       aim: -Math.PI / 2, fireCd: 0,
       gun: Object.assign({}, D.GUN),
       drones: 0, droneAng: 0, vamp: 0, nova: 0,
+      ult: 0, ultT: 0, // 필살기 게이지 (0 ~ D.ULT.need), 발동 연출 남은 시간
       lvl: {},
     };
   }
@@ -32,9 +33,9 @@
       player: makePlayer(w / 2, h / 2, df),
       enemies: [], bullets: [], eBullets: [], particles: [], drops: [], texts: [],
       cards: null, events: [], shake: 0, flash: 0, whiteFlash: 0,
-      hitstop: 0, lastStop: -1, slow: 0, pulse: 0, booms: [],
+      hitstop: 0, lastStop: -1, slow: 0, pulse: 0, booms: [], shocks: [],
       score: 0, nextId: 1,
-      stats: { kills: 0, shots: 0, time: 0, picks: [] },
+      stats: { kills: 0, shots: 0, time: 0, picks: [], ults: 0 },
     };
     startWave(W);
     return W;
@@ -213,8 +214,10 @@
     if (big) W.pulse = Math.max(W.pulse, 0.5);
   }
 
-  function damageEnemy(W, e, amount, crit, dx, dy) {
+  // src가 'ult'면 필살기 피해라 게이지를 채우지 않는다
+  function damageEnemy(W, e, amount, crit, dx, dy, src) {
     if (e.dead) return;
+    if (src !== 'ult') chargeUlt(W, e, Math.min(amount, e.hp));
     e.hp -= amount;
     e.flash = 0.08;
     if (crit) {
@@ -264,6 +267,60 @@
       p.hp += 1;
       W.texts.push({ x: p.x, y: p.y - 20, txt: '+1', life: 0.8, heal: true });
     }
+  }
+
+  // ─── 필살기 ────────────────────────────────────────────────
+  // 준 피해를 "적 기본 체력" 단위로 바꿔 쌓는다 (웨이브·난이도로 단단해진 만큼 나눈다)
+  function chargeUlt(W, e, amount) {
+    const p = W.player, U = D.ULT;
+    if (amount <= 0 || p.ult >= U.need) return;
+    let gain = amount * e.def.hp / e.maxHp;
+    if (e.type === 'boss') gain *= U.bossRate;
+    p.ult = Math.min(U.need, p.ult + gain);
+    if (p.ult >= U.need) W.events.push('ultReady');
+  }
+
+  function ultDamage(W) {
+    const g = W.player.gun, U = D.ULT;
+    const waveMul = 1 + (W.wave - 1) * D.WAVE.hpPerWave;
+    return Math.max(g.dmg * U.minMul, g.dmg * g.rate * g.barrels * U.sec) * waveMul * W.diff.enemyHp;
+  }
+
+  function useUlt(W) {
+    const p = W.player, U = D.ULT;
+    if (p.ult < U.need || W.phase !== 'play') return false;
+    p.ult = 0;
+    p.ultT = 0.6;
+    p.iframe = Math.max(p.iframe, U.iframe);
+    const max = Math.hypot(Math.max(p.x, W.w - p.x), Math.max(p.y, W.h - p.y)) + 60;
+    W.shocks.push({ x: p.x, y: p.y, r: 0, max, dmg: ultDamage(W), hit: [], n: p.gun.barrels * U.spokes, rot: p.aim });
+    W.stats.ults += 1;
+    W.shake = Math.max(W.shake, 18);
+    W.whiteFlash = Math.max(W.whiteFlash, 0.3);
+    W.pulse = 1;
+    impact(W, U.stop, true);
+    W.events.push('ult');
+    return true;
+  }
+
+  // 충격파가 퍼지며 닿은 적에게 한 번씩 피해, 닿은 적 탄은 지운다
+  function updateShocks(W, dt) {
+    if (!W.shocks.length) return;
+    const U = D.ULT;
+    for (const s of W.shocks) {
+      s.r += U.speed * dt;
+      for (const e of W.enemies) {
+        if (e.dead || e.spawnT > 0 || s.hit.indexOf(e.id) >= 0) continue;
+        const d = Math.hypot(e.x - s.x, e.y - s.y);
+        if (d - e.r > s.r) continue;
+        s.hit.push(e.id);
+        const dx = e.x - s.x, dy = e.y - s.y;
+        damageEnemy(W, e, e.type === 'boss' ? s.dmg * U.bossMul : s.dmg, false, dx, dy, 'ult');
+        if (!e.dead && e.type !== 'boss') { const l = d || 1; e.vx += dx / l * 420; e.vy += dy / l * 420; }
+      }
+      W.eBullets = W.eBullets.filter(b => Math.hypot(b.x - s.x, b.y - s.y) > s.r);
+    }
+    W.shocks = W.shocks.filter(s => s.r < s.max);
   }
 
   function addDrop(W, x, y) {
@@ -327,6 +384,10 @@
     let mx = input.moveX || 0, my = input.moveY || 0;
     const ml = Math.hypot(mx, my);
     if (ml > 1) { mx /= ml; my /= ml; }
+
+    // 필살기
+    p.ultT = Math.max(0, p.ultT - dt);
+    if (input.ult) useUlt(W);
 
     // 대시
     p.dashCd = Math.max(0, p.dashCd - dt);
@@ -594,7 +655,7 @@
     W.banner = Math.max(0, W.banner - dt);
   }
 
-  // 한 프레임 진행. input: {moveX, moveY, aimAngle|null, dash}
+  // 한 프레임 진행. input: {moveX, moveY, aimAngle|null, dash, ult}
   function step(W, input, dt) {
     // 히트스톱: 화면이 멈춘 동안은 흔들림만 풀고 아무것도 움직이지 않는다
     if (W.hitstop > 0) {
@@ -610,10 +671,11 @@
     updatePlayer(W, input, dt);
     updateEnemies(W, dt);
     updateBullets(W, dt);
+    updateShocks(W, dt);
     W.enemies = W.enemies.filter(e => !e.dead);
     updateSpawns(W, dt);
     updateFx(W, dt);
   }
 
-  NG.World = { createWorld, step, pickCard, resize, buildWave, drawCards };
+  NG.World = { createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage };
 })(NG);

@@ -1,5 +1,5 @@
 'use strict';
-// 키보드·마우스·터치 입력을 게임 입력 {moveX, moveY, aimAngle, dash}로 바꾼다.
+// 키보드·마우스·터치 입력을 게임 입력 {moveX, moveY, aimAngle, dash, ult}로 바꾼다.
 (function (NG) {
   const STICK_R = 60;
 
@@ -11,12 +11,14 @@
     let aimMode = 'auto'; // auto | mouse
     let aimModeLocked = false; // F로 직접 고르면 자동 전환하지 않음
     let dashQueued = false;
+    let ultQueued = false;
 
     const S = {
       keys, mouse, touch,
       get aimMode() { return aimMode; },
       toggleAim() { aimMode = aimMode === 'auto' ? 'mouse' : 'auto'; aimModeLocked = true; return aimMode; },
       queueDash() { dashQueued = true; },
+      queueUlt() { ultQueued = true; },
       onKey: null, // main.js가 단축키 처리용으로 채운다
     };
 
@@ -30,6 +32,7 @@
       if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
         if (!e.repeat) dashQueued = true;
       }
+      if ((e.code === 'KeyQ' || e.code === 'KeyE') && !e.repeat) ultQueued = true;
       keys.add(e.code);
       if (S.onKey && !e.repeat) S.onKey(e.code);
     });
@@ -129,13 +132,13 @@
       } else if (!touch.used && aimMode === 'mouse' && mouse.seen && player) {
         aimAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
       }
-      const dash = dashQueued;
-      dashQueued = false;
-      return { moveX: mx, moveY: my, aimAngle, dash };
+      const dash = dashQueued, ult = ultQueued;
+      dashQueued = false; ultQueued = false;
+      return { moveX: mx, moveY: my, aimAngle, dash, ult };
     };
 
     S.reset = function () {
-      touch.move = null; touch.aim = null; dashQueued = false; keys.clear();
+      touch.move = null; touch.aim = null; dashQueued = false; ultQueued = false; keys.clear();
     };
 
     return S;

@@ -173,6 +173,57 @@ body.touch.playing #stick-aim.on { display: block; }
 }
 body.touch.playing #btn-dash { display: block; }
 @media (min-width: 900px) { #btn-dash { --size: 108px; } #btn-dash span { font-size: 17px; } }
+/* 필살기 N-버스트: 대시 버튼 위. 금빛 고리가 공격할수록 차오르고, 가득 차면 머리가 빛나며 맥박친다 */
+#btn-ult {
+  --k: 0;
+  --size: 76px;
+  display: none;
+  position: fixed;
+  right: calc(max(24px, env(safe-area-inset-right)) + 8px);
+  bottom: calc(max(28px, env(safe-area-inset-bottom)) + 92px + 18px);
+  width: var(--size); height: var(--size);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, #0b0f17 82%, transparent 84%),
+    conic-gradient(#ffcf3a calc(var(--k) * 360deg), rgba(255, 207, 58, 0.14) 0);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55);
+  z-index: 5;
+  touch-action: none;
+}
+#btn-ult span {
+  position: absolute;
+  inset: 13%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 50%;
+  font: 700 26px/0.9 "Rajdhani", system-ui, sans-serif;
+  color: #4a5566;
+  background: radial-gradient(circle at 38% 28%, #4a5566 0%, #252e3b 60%, #161c26 100%);
+  box-shadow: 0 5px 0 #0a0d13, inset 0 2px 2px rgba(255, 255, 255, 0.15);
+  transform: translateY(-3px);
+  transition: transform .06s, box-shadow .06s, background .15s, color .15s;
+}
+#btn-ult small { font-size: 10px; letter-spacing: 1px; }
+#btn-ult.ready span {
+  color: #3a2300;
+  background: radial-gradient(circle at 38% 28%, #fff4c2 0%, #ffd23f 40%, #f08c00 85%, #b86400 100%);
+  box-shadow: 0 5px 0 #7a4200, 0 0 22px rgba(255, 190, 40, 0.65), inset 0 2px 3px rgba(255, 255, 255, 0.7);
+  animation: ult-ready 0.9s ease-in-out infinite;
+}
+@keyframes ult-ready { 50% { box-shadow: 0 5px 0 #7a4200, 0 0 34px rgba(255, 190, 40, 0.95), inset 0 2px 3px rgba(255, 255, 255, 0.7); } }
+#btn-ult.ready:active span, #btn-ult.ready.pressed span {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 #7a4200, inset 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+body.touch.playing #btn-ult { display: block; }
+@media (min-width: 900px) {
+  #btn-ult { --size: 88px; bottom: calc(max(28px, env(safe-area-inset-bottom)) + 108px + 18px); right: calc(max(24px, env(safe-area-inset-right)) + 10px); }
+  #btn-ult span { font-size: 30px; }
+}
+@media (prefers-reduced-motion: reduce) { #btn-ult.ready span { animation: none; } }
 body.touch .only-pc { display: none; }
 body:not(.touch) .only-touch { display: none; }
 @media (hover: none) and (pointer: coarse) {

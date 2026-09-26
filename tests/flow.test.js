@@ -251,6 +251,18 @@ async function until(page, fn, arg, ms) {
     await G.tap('#card-list .card:first-child');
     assert(await until(G, () => NG.debug.mode === 'play'), '카드 고른 뒤 게임으로 안 돌아감');
   });
+  await test('필살기: 게이지가 차면 버튼이 빛나고, 누르면 충격파', async () => {
+    await G.evaluate(() => { const p = NG.debug.world.player; p.hp = 1e9; p.ult = 0; });
+    await G.waitForTimeout(200);
+    assert(await G.evaluate(() => !document.getElementById('btn-ult').classList.contains('ready')), '빈 게이지인데 빛남');
+    await G.evaluate(() => { NG.debug.world.player.ult = NG.DATA.ULT.need; });
+    assert(await until(G, () => document.getElementById('btn-ult').classList.contains('ready')), '가득 찼는데 안 빛남');
+    const b = await G.evaluate(() => { const r = document.getElementById('btn-ult').getBoundingClientRect(); const d = document.getElementById('btn-dash').getBoundingClientRect(); return r.width >= 60 && r.bottom <= d.top && r.top >= 0; });
+    assert(b, '필살기 버튼이 대시 버튼 위, 화면 안에 있어야 함');
+    await G.tap('#btn-ult');
+    assert(await until(G, () => NG.debug.world.stats.ults === 1 && NG.debug.world.player.ult < 1), '눌러도 발동 안 됨');
+    await G.evaluate(() => { NG.debug.world.player.hp = 5; });
+  });
   await test('체력이 다하면 게임 오버 → 다시 하기', async () => {
     await G.evaluate(() => { const p = NG.debug.world.player; p.hp = 1; p.iframe = 0; });
     // 적을 모두 플레이어 자리로 옮겨 부딪히게 한다

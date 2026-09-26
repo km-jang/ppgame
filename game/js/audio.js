@@ -96,6 +96,15 @@
       noise(sfxBus, t, 'lowpass', 3000, 60, 0.45, 0.7);
       tone(sfxBus, t, 'sine', 90, 30, 0.4, 0.6);
     } },
+    // 필살기: 짧게 빨려 들어가는 소리 뒤에 저음 폭발, 위로 퍼지는 금속성 울림
+    ult:     { gap: 0.30, fn: t => {
+      tone(sfxBus, t, 'sawtooth', 220, 1400, 0.12, 0.18);
+      noise(sfxBus, t + 0.1, 'lowpass', 5000, 50, 1.2, 0.95);
+      tone(sfxBus, t + 0.1, 'sine', 110, 28, 0.9, 0.8);
+      [660, 880, 1320].forEach((f, i) => tone(sfxBus, t + 0.12 + i * 0.06, 'triangle', f, f * 1.5, 0.4, 0.14));
+    } },
+    // 필살기 게이지가 가득 참
+    ultReady:{ gap: 0.50, fn: t => { [784, 988, 1175, 1568].forEach((f, i) => tone(sfxBus, t + i * 0.055, 'square', f, f, 0.09, 0.1)); } },
     heal:    { gap: 0.05, fn: t => { tone(sfxBus, t, 'sine', 660, 660, 0.08, 0.25); tone(sfxBus, t + 0.07, 'sine', 990, 990, 0.12, 0.25); } },
     eshoot:  { gap: 0.08, fn: t => { tone(sfxBus, t, 'triangle', 700, 350, 0.08, 0.12); } },
     pick:    { gap: 0.05, fn: t => { [523, 659, 784].forEach((f, i) => tone(sfxBus, t + i * 0.05, 'square', f, f, 0.1, 0.12)); } },
@@ -127,6 +136,7 @@
     pick:     { f: 'tile-match', v: 0.6 },
     dash:     { f: 'weapon_change', v: 0.5, r: 1.3 },
     bossDown: { f: 'enemy_destroy', v: 1.1, r: 0.6 },
+    ult:      { f: 'enemy_destroy', v: 1.0, r: 0.5 },
   };
   const FILES = Array.from(new Set(Object.values(SAMPLE).map(s => s.f)));
   function play(name, opt) {

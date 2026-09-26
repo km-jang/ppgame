@@ -250,5 +250,91 @@ test('보스 처치: 느린 화면 + 연쇄 폭발이 끝난 뒤에 카드 화�
   assert(W.booms.length === 0, 'all booms done before cards');
 });
 
+// 필살기
+const U = NG.DATA.ULT;
+function clearWorld(seed) {
+  const W = createWorld(800, 600, seed);
+  W.spawnQueue.length = 0; W.enemies.length = 0; W.banner = 0;
+  return W;
+}
+function putEnemy(W, type, x, y, hp) {
+  const def = NG.DATA.ENEMIES[type];
+  const e = { id: W.nextId++, type, def, x, y, r: def.r, hp: hp == null ? def.hp : hp, maxHp: hp == null ? def.hp : hp, speed: 0,
+    vx: 0, vy: 0, spawnT: 0, flash: 0, droneHit: 0, dead: false, ang: 0, cd: 99, ringCd: 99, aimCd: 99, summonCd: 99, strafe: 1 };
+  W.enemies.push(e);
+  return e;
+}
+
+test('필살기: 적을 때리면 게이지가 차고, 가득 차기 전엔 안 나간다', () => {
+  const W = createWorld(800, 600, 50);
+  assert(W.player.ult === 0, 'starts empty');
+  assert(!NG.World.useUlt(W), 'empty gauge cannot fire');
+  let frames = 0;
+  while (W.player.ult < U.need && frames++ < 60 * 120) {
+    if (W.phase === 'cards') pickCard(W, 0);
+    W.player.hp = W.player.maxHp;
+    step(W, bot(W), DT);
+    W.events.length = 0;
+  }
+  assert(W.player.ult >= U.need, 'gauge fills from attacks: ' + W.player.ult.toFixed(1));
+  // 첫 보스(5웨이브) 전에 한 번은 쓸 수 있어야 한다
+  assert(W.wave <= 4, 'ready by wave 4, got wave ' + W.wave);
+});
+
+test('필살기: 웨이브가 올라 적이 단단해져도 한 마리당 차는 양은 같다', () => {
+  const W = clearWorld(51);
+  const a = putEnemy(W, 'grunt', 100, 100, 3);
+  W.bullets.push({ x: 100, y: 100, vx: 0, vy: -1, r: 4, dmg: 100, life: 1, pierce: 0, bounce: 0, hits: [] });
+  step(W, IDLE, DT);
+  const g1 = W.player.ult;
+  const W2 = clearWorld(52);
+  W2.wave = 12;
+  putEnemy(W2, 'grunt', 100, 100, 3 * 2.65);
+  W2.bullets.push({ x: 100, y: 100, vx: 0, vy: -1, r: 4, dmg: 100, life: 1, pierce: 0, bounce: 0, hits: [] });
+  step(W2, IDLE, DT);
+  assert(a.dead && Math.abs(g1 - 3) < 1e-6, 'grunt = 3: ' + g1);
+  assert(Math.abs(W2.player.ult - g1) < 1e-6, 'same gain: ' + W2.player.ult);
+});
+
+test('필살기: 발동하면 충격파가 퍼져 화면의 적을 치고 적 탄을 지운다, 게이지는 0으로', () => {
+  const W = clearWorld(53);
+  const p = W.player;
+  p.ult = U.need;
+  p.fireCd = 1e9; // 총은 쉬게 해서 충격파 피해만 잰다
+  const near = putEnemy(W, 'grunt', p.x + 60, p.y);
+  const far = putEnemy(W, 'tank', 20 + 26, 20 + 26);
+  const boss = putEnemy(W, 'boss', 700, 500, 1000);
+  for (let i = 0; i < 10; i++) W.eBullets.push({ x: 50 + i * 70, y: 560, vx: 0, vy: 0, r: 5, life: 6 });
+  step(W, Object.assign({}, IDLE, { ult: true }), DT);
+  assert(p.ult === 0 && W.shocks.length === 1 && W.stats.ults === 1, 'fired');
+  assert(p.iframe > 0.5, 'invulnerable while it goes');
+  for (let i = 0; i < 90; i++) step(W, IDLE, DT);
+  assert(near.dead && far.dead, 'all normal enemies on screen hit');
+  const dmg = NG.World.ultDamage(W);
+  assert(Math.abs((1000 - boss.hp) - dmg * U.bossMul) < 1e-6, 'boss takes reduced damage once: ' + (1000 - boss.hp));
+  assert(W.eBullets.length === 0, 'enemy bullets cleared');
+  assert(W.shocks.length === 0, 'shock done');
+  assert(p.ult === 0, 'ult damage does not refill the gauge: ' + p.ult);
+});
+
+test('필살기: 피해는 총이 셀수록, 웨이브가 오를수록 크다', () => {
+  const W = createWorld(800, 600, 54);
+  const base = NG.World.ultDamage(W);
+  assert(base === NG.DATA.GUN.dmg * U.minMul, 'min damage at start: ' + base);
+  assert(base > NG.DATA.ENEMIES.tank.hp, 'first special clears a wave-1 heavy');
+  W.player.gun.barrels = 6; W.player.gun.rate = 8; W.player.gun.dmg = 2;
+  assert(NG.World.ultDamage(W) === 2 * 8 * 6 * U.sec, 'scales with gun');
+  W.wave = 11;
+  assert(Math.abs(NG.World.ultDamage(W) - 2 * 8 * 6 * U.sec * 2.5) < 1e-9, 'and with wave');
+});
+
+test('필살기: 보스에게 준 피해는 덜 찬다', () => {
+  const W = clearWorld(55);
+  putEnemy(W, 'boss', 100, 100, 320);
+  W.bullets.push({ x: 100, y: 100, vx: 0, vy: -1, r: 4, dmg: 10, life: 1, pierce: 0, bounce: 0, hits: [] });
+  step(W, IDLE, DT);
+  assert(Math.abs(W.player.ult - 10 * U.bossRate) < 1e-6, 'boss rate: ' + W.player.ult);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -226,6 +226,8 @@
         if (ev === 'boss') NG.Audio.music('boss');
         else if (ev === 'bossDown') NG.Audio.music('play');
         else if (ev === 'hurt' || ev === 'over') vibrate(ev === 'over' ? 300 : 60);
+        else if (ev === 'ult') vibrate([30, 40, 90]);
+        else if (ev === 'ultReady') vibrate(25);
       }
     }
     world.events.length = 0;
@@ -274,6 +276,10 @@
   dashBtn.addEventListener('touchstart', e => { e.preventDefault(); input.queueDash(); vibrate(15); dashBtn.classList.add('pressed'); }, { passive: false });
   for (const ev of ['touchend', 'touchcancel']) dashBtn.addEventListener(ev, () => dashBtn.classList.remove('pressed'));
   dashBtn.addEventListener('mousedown', () => input.queueDash());
+  const ultBtn = $('btn-ult');
+  ultBtn.addEventListener('touchstart', e => { e.preventDefault(); input.queueUlt(); ultBtn.classList.add('pressed'); }, { passive: false });
+  for (const ev of ['touchend', 'touchcancel']) ultBtn.addEventListener(ev, () => ultBtn.classList.remove('pressed'));
+  ultBtn.addEventListener('mousedown', () => input.queueUlt());
   window.addEventListener('touchstart', () => document.body.classList.add('touch'), { once: true, passive: true });
   // 스틱 그리기: 손가락 입력 상태를 DOM 위치로 옮긴다
   function placeStick(el, s, fallback) {
@@ -299,6 +305,16 @@
     dashShown = k;
     dashBtn.style.setProperty('--k', k);
     dashBtn.classList.toggle('ready', k >= 1);
+  }
+
+  let ultShown = -1;
+  function updateUltBtn() {
+    const p = W.player;
+    const k = Math.floor(p.ult / NG.DATA.ULT.need * 20) / 20;
+    if (k === ultShown) return;
+    ultShown = k;
+    ultBtn.style.setProperty('--k', k);
+    ultBtn.classList.toggle('ready', k >= 1);
   }
 
   // 게임 중 화면이 어두워지거나 꺼지지 않게 (지원 기기만, 거절되면 무시)
@@ -331,7 +347,7 @@
   // ─── 루프 ──────────────────────────────────────────────────
   function demoInput(D) {
     const t = D.t;
-    return { moveX: Math.cos(t * 0.5), moveY: Math.sin(t * 0.7), aimAngle: null, dash: false };
+    return { moveX: Math.cos(t * 0.5), moveY: Math.sin(t * 0.7), aimAngle: null, dash: false, ult: D.player.ult >= NG.DATA.ULT.need };
   }
 
   function frame(ts) {
@@ -351,12 +367,13 @@
         // 프레임이 길면 두 번에 나눠 진행 (빠른 탄이 적을 뚫고 지나가지 않게)
         const n = dt > 1 / 50 ? 2 : 1;
         for (let i = 0; i < n; i++) {
-          NG.World.step(W, i === 0 ? inp : Object.assign({}, inp, { dash: false }), dt / n);
+          NG.World.step(W, i === 0 ? inp : Object.assign({}, inp, { dash: false, ult: false }), dt / n);
         }
         drainEvents(W);
         if (mode === 'play' && W.phase === 'cards') showCards();
         else if (mode === 'play' && W.phase === 'over') gameOver();
         updateDashBtn();
+        updateUltBtn();
         if (isTouch) updateSticks();
         frozenDrawn = false;
       }

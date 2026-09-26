@@ -297,6 +297,11 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
+    // 필살기 준비됨: 금빛 기운이 맥박친다. 발동 직후엔 크게 번쩍
+    if (p.ult >= D.ULT.need || p.ultT > 0) {
+      const pulse = p.ultT > 0 ? 1 : 0.55 + Math.sin(W.t * 7) * 0.25;
+      glow(ctx, 'rgba(255,207,58,0.7)', p.x, p.y, p.ultT > 0 ? 70 : 46, pulse);
+    }
     glow(ctx, 'rgba(94,231,255,0.6)', p.x, p.y, 34, p.dashT > 0 ? 1 : 0.7);
     ctx.fillStyle = p.dashT > 0 ? '#ffffff' : '#5ee7ff';
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
@@ -305,6 +310,40 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(n), p.x, p.y + 0.5);
+  }
+
+  // 필살기 충격파: 금빛 굵은 고리 + 총열 N×3개의 빛줄기가 함께 퍼진다
+  function drawShocks(ctx, W) {
+    if (!W.shocks || !W.shocks.length) return;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of W.shocks) {
+      const k = s.r / s.max, a = Math.max(0, 1 - k);
+      // 안쪽 옅은 빛
+      ctx.globalAlpha = 0.18 * a;
+      ctx.fillStyle = '#ffcf3a';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.fill();
+      // 굵은 고리 두 겹
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = '#ffd23f';
+      ctx.lineWidth = 14 * a + 4;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(0, s.r - 10), 0, TAU); ctx.stroke();
+      // 빛줄기
+      ctx.strokeStyle = '#fff4c2';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let i = 0; i < s.n; i++) {
+        const ang = s.rot + TAU * i / s.n;
+        const c = Math.cos(ang), sn = Math.sin(ang);
+        ctx.moveTo(s.x + c * s.r * 0.72, s.y + sn * s.r * 0.72);
+        ctx.lineTo(s.x + c * (s.r + 18), s.y + sn * (s.r + 18));
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   function drawBullets(ctx, W) {
@@ -400,6 +439,16 @@
     ctx.font = '700 ' + Math.round(11 * s) + 'px ' + NUM;
     ctx.fillStyle = k >= 1 ? '#5ee7ff' : '#4a7f8c';
     ctx.fillText('DASH', x0 + 80 * s, gy - 3 * s);
+    // 필살기 게이지
+    const u = Math.min(1, p.ult / D.ULT.need), uy = gy + 14 * s, full = u >= 1;
+    ctx.fillStyle = 'rgba(255,207,58,0.16)';
+    ctx.fillRect(x0, uy, 76 * s, 5 * s);
+    ctx.fillStyle = full ? '#ffd23f' : '#a67c12';
+    if (full) { ctx.shadowColor = '#ffcf3a'; ctx.shadowBlur = 10; }
+    ctx.fillRect(x0, uy, 76 * s * u, 5 * s);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = full ? (Math.floor(W.t * 3) % 2 ? '#fff4c2' : '#ffd23f') : '#8a6d2a';
+    ctx.fillText(full ? (view.ui > 1 ? 'N-BURST!' : 'N-BURST [Q]') : 'N-BURST', x0 + 80 * s, uy - 3 * s);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8f7ff';
@@ -422,7 +471,7 @@
     // 보스 체력바
     const boss = W.enemies.find(e => e.type === 'boss' && e.spawnT <= 0);
     if (boss) {
-      const bw = Math.min(420, W.w - 40), bx = (W.w - bw) / 2, by = Math.max(top + 44 * s, gy + 14);
+      const bw = Math.min(420, W.w - 40), bx = (W.w - bw) / 2, by = Math.max(top + 44 * s, gy + 28 * s);
       ctx.fillStyle = 'rgba(255,46,136,0.2)';
       ctx.fillRect(bx, by, bw, 8);
       ctx.fillStyle = '#ff2e88';
@@ -485,6 +534,7 @@
     drawFx(ctx, W);
     drawEnemies(ctx, W);
     drawBullets(ctx, W);
+    drawShocks(ctx, W);
     drawPlayer(ctx, W);
     ctx.restore();
     drawDanger(ctx, W);
