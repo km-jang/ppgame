@@ -532,5 +532,25 @@ test('긴 판: 봇으로 돌려도 통계가 숫자로 남고 메달 검사가 �
   R.newMedals(rec, run, true);
 });
 
+test('보스는 웨이브마다 모습·색이 다르고, 한 바퀴 돌면 MK2', () => {
+  const B = NG.DATA.BOSSES;
+  assert(new Set(B.map(b => b.shape)).size === B.length && new Set(B.map(b => b.color)).size === B.length, 'all different');
+  const looks = [];
+  for (let k = 0; k < B.length + 1; k++) {
+    const W = createWorld(800, 600, 60 + k);
+    W.bossKills = k;
+    W.spawnQueue.length = 0; W.enemies.length = 0;
+    W.wave = 5 * (k + 1) - 1; W.clearT = -1;
+    for (let f = 0; f < 60 * 3 && W.phase === 'play'; f++) step(W, IDLE, DT);
+    if (W.phase === 'cards') pickCard(W, 0);
+    let boss = null;
+    for (let f = 0; f < 60 * 3 && !boss; f++) { step(W, IDLE, DT); boss = W.enemies.find(e => e.type === 'boss'); }
+    assert(boss && boss.look, 'boss spawned with look at wave ' + W.wave);
+    looks.push(boss.look.id + ':' + boss.mk);
+  }
+  assert(looks.slice(0, B.length).join(',') === B.map(b => b.id + ':1').join(','), 'order ' + looks.join(','));
+  assert(looks[B.length] === B[0].id + ':2', 'mk2 ' + looks[B.length]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -115,9 +115,15 @@
       ringCd: def.ringCd || 0, aimCd: def.aimCd || 0, summonCd: def.summonCd || 0,
       strafe: W.rand() < 0.5 ? 1 : -1,
     };
+    // 보스는 몇 번째 보스냐에 따라 모습·색이 다르다
+    if (type === 'boss') { e.look = bossLook(W.bossKills); e.mk = Math.floor(W.bossKills / D.BOSSES.length) + 1; }
     W.enemies.push(e);
     return e;
   }
+
+  // n번째(0부터) 보스의 모습. 적의 색은 colorOf로 읽는다 (보스는 모습 색)
+  function bossLook(n) { return D.BOSSES[((n % D.BOSSES.length) + D.BOSSES.length) % D.BOSSES.length]; }
+  const colorOf = e => (e.look ? e.look.color : e.def.color);
 
   function spawnEnemy(W, type) {
     const pt = spawnPoint(W, D.ENEMIES[type].r);
@@ -218,11 +224,11 @@
         shard: true, x: e.x + Math.cos(a) * e.r * 0.4, y: e.y + Math.sin(a) * e.r * 0.4,
         vx: Math.cos(a) * s + bx * 180, vy: Math.sin(a) * s + by * 180,
         rot: W.rand() * TAU, vr: (W.rand() - 0.5) * 18,
-        size: e.r * (0.35 + W.rand() * 0.35), life, max: life, color: e.def.color,
+        size: e.r * (0.35 + W.rand() * 0.35), life, max: life, color: colorOf(e),
       });
     }
     W.particles.push({ pop: true, x: e.x, y: e.y, r: e.r * 1.3, life: 0.12, max: 0.12, color: '#ffffff' });
-    W.particles.push({ ring: true, x: e.x, y: e.y, r: e.r * (big ? 3.2 : 2.4), life: big ? 0.4 : 0.3, max: big ? 0.4 : 0.3, color: e.def.color });
+    W.particles.push({ ring: true, x: e.x, y: e.y, r: e.r * (big ? 3.2 : 2.4), life: big ? 0.4 : 0.3, max: big ? 0.4 : 0.3, color: colorOf(e) });
     if (big) W.pulse = Math.max(W.pulse, 0.5);
   }
 
@@ -253,7 +259,7 @@
     W.score += Math.round(e.def.score * mul * W.diff.score * D.comboMul(W.combo));
     W.stats.kills += 1;
     shatter(W, e, dx, dy);
-    burst(W, e.x, e.y, e.def.color, e.type === 'boss' ? 60 : 4 + Math.round(e.r / 3), e.type === 'boss' ? 420 : 200, e.type === 'boss' ? 5 : 2.5);
+    burst(W, e.x, e.y, colorOf(e), e.type === 'boss' ? 60 : 4 + Math.round(e.r / 3), e.type === 'boss' ? 420 : 200, e.type === 'boss' ? 5 : 2.5);
     impact(W, D.IMPACT.stop[e.type], e.type === 'boss');
 
     if (e.def.splitInto) {
@@ -273,7 +279,7 @@
       // 연쇄 폭발: 보스 자리 주변에서 시간차로 터진다
       for (let i = 0; i < D.IMPACT.bossBooms; i++) {
         const a = W.rand() * TAU, r = e.r * (0.3 + W.rand() * 1.1);
-        W.booms.push({ delay: 0.12 + i * 0.13, x: e.x + Math.cos(a) * r, y: e.y + Math.sin(a) * r, color: i % 2 ? '#ffe66d' : e.def.color });
+        W.booms.push({ delay: 0.12 + i * 0.13, x: e.x + Math.cos(a) * r, y: e.y + Math.sin(a) * r, color: i % 2 ? '#ffe66d' : colorOf(e) });
       }
       for (let i = 0; i < 2; i++) addDrop(W, e.x + (i ? 20 : -20), e.y);
       W.events.push('bossDown');
@@ -728,5 +734,5 @@
     updateFx(W, dt);
   }
 
-  NG.World = { createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage };
+  NG.World = { bossLook, createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage };
 })(NG);

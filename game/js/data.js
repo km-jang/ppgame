@@ -54,6 +54,21 @@
   };
 
   // 타격감: 큰 적을 잡는 순간 화면을 아주 잠깐 멈춘다 (초). 연달아 걸리지 않게 간격을 둔다
+  // 보스 모습: 5웨이브마다 차례로 바뀐다 (한 바퀴 돌면 같은 모습에 "MK2", "MK3"…). 규칙(체력·탄막)은 같다
+  // color: 몸 색 · glow: 발광·보스전 배경 색(r,g,b) · shape: 그리기 모양 · theme: 보스전 배경
+  const BOSSES = [
+    { id: 'octa',  name: '옥타 코어',   color: '#ff2e88', glow: '255,46,136',  shape: 'octa',
+      theme: { base: '#0b0406', a: '#6b0a26', b: '#2a0712', grid: '255,70,120' } },
+    { id: 'star',  name: '스타 크러셔', color: '#ffb703', glow: '255,183,3',   shape: 'star',
+      theme: { base: '#0b0803', a: '#6b4200', b: '#3a1a05', grid: '255,190,80' } },
+    { id: 'hex',   name: '헥사 가디언', color: '#06d6a0', glow: '6,214,160',   shape: 'hex',
+      theme: { base: '#03090a', a: '#0a5a48', b: '#06303a', grid: '90,255,200' } },
+    { id: 'eye',   name: '보이드 아이', color: '#9b6bff', glow: '155,107,255', shape: 'eye',
+      theme: { base: '#06040d', a: '#3a1a7a', b: '#1a0b3a', grid: '180,150,255' } },
+    { id: 'saw',   name: '톱날 군주',   color: '#dfe7f2', glow: '210,225,255', shape: 'saw',
+      theme: { base: '#06070a', a: '#3a4458', b: '#1a1f2c', grid: '210,225,255' } },
+  ];
+
   const IMPACT = {
     stop: { shooter: 0.03, splitter: 0.045, tank: 0.07, boss: 0.32 },
     hurtStop: 0.09,
@@ -155,5 +170,5 @@
     { id: 'games10', tier: 1, icon: '10판', name: '단골',          desc: '10판 플레이',                           check: (r, L) => L.games >= 10 },
   ];
 
-  NG.DATA = { ULT, IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
+  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
 })(NG);

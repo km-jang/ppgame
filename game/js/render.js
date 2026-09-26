@@ -14,8 +14,39 @@
     ctx.closePath();
   }
 
+  // 뾰족 별 (보스 스타 크러셔)
+  function star(ctx, x, y, r, n, inner, rot) {
+    ctx.beginPath();
+    for (let i = 0; i < n * 2; i++) {
+      const a = rot + Math.PI * i / n, rr = i % 2 ? r * inner : r;
+      const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+  // 톱니 (보스 톱날 군주): 이빨이 한쪽으로 기운 원
+  function saw(ctx, x, y, r, n, rot) {
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const a0 = rot + TAU * i / n, a1 = rot + TAU * (i + 0.7) / n;
+      const p0x = x + Math.cos(a0) * r * 0.78, p0y = y + Math.sin(a0) * r * 0.78;
+      if (i === 0) ctx.moveTo(p0x, p0y); else ctx.lineTo(p0x, p0y);
+      ctx.lineTo(x + Math.cos(a1) * r * 1.12, y + Math.sin(a1) * r * 1.12);
+    }
+    ctx.closePath();
+  }
+
   function shapePath(ctx, e) {
     const { x, y, r } = e;
+    if (e.look) {
+      switch (e.look.shape) {
+        case 'star': star(ctx, x, y, r * 1.18, 6, 0.58, e.ang * 0.6); return;
+        case 'hex': poly(ctx, x, y, r * 1.02, 6, e.ang * 0.15); return;
+        case 'eye': ctx.beginPath(); ctx.ellipse(x, y, r * 1.1, r * 0.82, 0, 0, TAU); return;
+        case 'saw': saw(ctx, x, y, r, 12, e.ang * 1.6); return;
+        default: poly(ctx, x, y, r, 8, e.ang * 0.3); return;
+      }
+    }
     switch (e.def.shape) {
       case 'tri': poly(ctx, x, y, r * 1.2, 3, Math.atan2(e.vy, e.vx)); break;
       case 'diamond': poly(ctx, x, y, r * 1.15, 4, 0); break;
@@ -38,8 +69,16 @@
   ];
   const BOSS_THEME = { base: '#0b0406', a: '#6b0a26', b: '#2a0712', grid: '255,70,120' };
 
+  // 보스마다 배경색이 다르다 (같은 객체를 돌려줘야 배경을 다시 그리지 않는다)
+  const bossThemes = {};
+  function bossTheme(look) {
+    if (!look) return BOSS_THEME;
+    if (!bossThemes[look.id]) bossThemes[look.id] = Object.assign({ from: 100 + D.BOSSES.indexOf(look) }, look.theme);
+    return bossThemes[look.id];
+  }
+  const bossOf = W => W.enemies.find(e => e.type === 'boss');
   function themeFor(W) {
-    if (W.bossWave && W.enemies.some(e => e.type === 'boss')) return BOSS_THEME;
+    if (W.bossWave && bossOf(W)) return bossTheme(bossOf(W).look);
     let t = THEMES[0];
     for (const th of THEMES) if (W.wave >= th.from) t = th;
     return t;
@@ -174,19 +213,21 @@
   // 보스전: 화면 가장자리가 심장 박동처럼 붉게 뛴다
   let dangerCache = null;
   function drawDanger(ctx, W) {
-    if (!(W.bossWave && W.enemies.some(e => e.type === 'boss'))) return;
-    if (!dangerCache || dangerCache.w !== W.w || dangerCache.h !== W.h) {
+    const boss = W.bossWave && bossOf(W);
+    if (!boss) return;
+    const tint = boss.look ? boss.look.glow : '255,30,80';
+    if (!dangerCache || dangerCache.w !== W.w || dangerCache.h !== W.h || dangerCache.tint !== tint) {
       const s = 0.25;
       const c = document.createElement('canvas');
       c.width = Math.max(8, Math.round(W.w * s)); c.height = Math.max(8, Math.round(W.h * s));
       const g = c.getContext('2d');
       g.scale(s, s);
       const v = g.createRadialGradient(W.w / 2, W.h / 2, Math.min(W.w, W.h) * 0.35, W.w / 2, W.h / 2, Math.hypot(W.w, W.h) * 0.55);
-      v.addColorStop(0, 'rgba(255,30,80,0)');
-      v.addColorStop(1, 'rgba(255,30,80,0.55)');
+      v.addColorStop(0, 'rgba(' + tint + ',0)');
+      v.addColorStop(1, 'rgba(' + tint + ',0.55)');
       g.fillStyle = v;
       g.fillRect(0, 0, W.w, W.h);
-      dangerCache = { c, w: W.w, h: W.h };
+      dangerCache = { c, w: W.w, h: W.h, tint };
     }
     const beat = Math.pow(Math.max(0, Math.sin(performance.now() / 1000 * 2.4 * Math.PI)), 6);
     ctx.globalAlpha = 0.35 + beat * 0.5;
@@ -229,14 +270,16 @@
         ctx.globalAlpha = 1;
         continue;
       }
-      if (e.type === 'boss') glow(ctx, 'rgba(255,46,136,0.55)', e.x, e.y, Math.round(e.r * 1.8), 1);
+      if (e.type === 'boss') glow(ctx, 'rgba(' + (e.look ? e.look.glow : '255,46,136') + ',0.55)', e.x, e.y, Math.round(e.r * 1.8), 1);
+      if (e.look) bossBack(ctx, e, W);
       shapePath(ctx, e);
-      ctx.fillStyle = e.flash > 0 ? '#ffffff' : e.def.color;
+      ctx.fillStyle = e.flash > 0 ? '#ffffff' : e.look ? e.look.color : e.def.color;
       ctx.fill();
       ctx.lineWidth = 2;
       ctx.strokeStyle = 'rgba(0,0,0,0.35)';
       ctx.stroke();
-      // 사수·보스는 눈으로 조준 방향 표시
+      if (e.look) { bossFront(ctx, e, W); continue; }
+      // 사수는 눈으로 조준 방향 표시
       if (e.type === 'shooter' || e.type === 'boss') {
         const a = Math.atan2(W.player.y - e.y, W.player.x - e.x);
         ctx.fillStyle = '#07080d';
@@ -251,6 +294,57 @@
         ctx.fillRect(e.x - w / 2, e.y - e.r - 8, w * Math.max(0, e.hp / e.maxHp), 3);
       }
     }
+  }
+
+  // ─── 보스 꾸밈: 모양마다 뒤(몸 아래)와 앞(몸 위)에 한 겹씩 ───
+  function bossBack(ctx, e, W) {
+    const { x, y, r } = e, L = e.look;
+    ctx.strokeStyle = L.color;
+    if (L.shape === 'hex') {
+      // 바깥을 도는 방패 조각 6개
+      ctx.lineWidth = r * 0.14;
+      for (let i = 0; i < 6; i++) { const a = -e.ang * 0.9 + TAU * i / 6; ctx.beginPath(); ctx.arc(x, y, r * 1.42, a, a + 0.62); ctx.stroke(); }
+    } else if (L.shape === 'eye') {
+      // 속눈썹 가시 10개
+      ctx.lineWidth = r * 0.1; ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) { const a = e.ang * 0.4 + TAU * i / 10; ctx.moveTo(x + Math.cos(a) * r * 0.9, y + Math.sin(a) * r * 0.7); ctx.lineTo(x + Math.cos(a) * r * 1.45, y + Math.sin(a) * r * 1.15); }
+      ctx.stroke(); ctx.lineCap = 'butt';
+    } else if (L.shape === 'star') {
+      // 뒤에서 반대로 도는 옅은 별
+      ctx.globalAlpha = 0.35; star(ctx, x, y, r * 1.45, 6, 0.5, -e.ang * 0.4 + 0.5); ctx.fillStyle = L.color; ctx.fill(); ctx.globalAlpha = 1;
+    }
+  }
+  function bossFront(ctx, e, W) {
+    const { x, y, r } = e, L = e.look;
+    const a = Math.atan2(W.player.y - y, W.player.x - x);
+    const dark = '#07080d';
+    if (L.shape === 'eye') {
+      // 흰자 · 큰 눈동자가 플레이어를 따라본다
+      ctx.fillStyle = '#f2ecff'; ctx.beginPath(); ctx.ellipse(x, y, r * 0.78, r * 0.55, 0, 0, TAU); ctx.fill();
+      const ix = x + Math.cos(a) * r * 0.3, iy = y + Math.sin(a) * r * 0.2;
+      ctx.fillStyle = L.color; ctx.beginPath(); ctx.arc(ix, iy, r * 0.36, 0, TAU); ctx.fill();
+      ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(ix, iy, r * 0.18, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ix - r * 0.1, iy - r * 0.1, r * 0.06, 0, TAU); ctx.fill();
+      return;
+    }
+    if (L.shape === 'saw') {
+      // 가운데 볼트와 회전 무늬
+      ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(x, y, r * 0.42, 0, TAU); ctx.fill();
+      ctx.strokeStyle = L.color; ctx.lineWidth = r * 0.07;
+      for (let i = 0; i < 3; i++) { const b = e.ang * 1.6 + TAU * i / 3; ctx.beginPath(); ctx.arc(x, y, r * 0.62, b, b + 1.2); ctx.stroke(); }
+    } else if (L.shape === 'hex') {
+      ctx.fillStyle = dark; poly(ctx, x, y, r * 0.55, 6, e.ang * 0.15 + Math.PI / 6); ctx.fill();
+      ctx.strokeStyle = L.color; ctx.lineWidth = 3; ctx.stroke();
+    } else if (L.shape === 'star') {
+      ctx.fillStyle = dark; ctx.beginPath(); ctx.arc(x, y, r * 0.45, 0, TAU); ctx.fill();
+    } else {
+      ctx.fillStyle = dark; poly(ctx, x, y, r * 0.5, 8, e.ang * 0.3); ctx.fill();
+    }
+    // 조준하는 눈 (보스 색으로 빛남)
+    const ex = x + Math.cos(a) * r * 0.2, ey = y + Math.sin(a) * r * 0.2;
+    glow(ctx, 'rgba(' + L.glow + ',0.9)', ex, ey, Math.round(r * 0.5), 0.9);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex, ey, r * 0.16, 0, TAU); ctx.fill();
   }
 
   function drawPlayer(ctx, W) {
@@ -473,14 +567,21 @@
     const by = Math.max(top + 44 * s, gy + 28 * s);
     if (boss) {
       const bw = Math.min(420, W.w - 40), bx = (W.w - bw) / 2;
-      ctx.fillStyle = 'rgba(255,46,136,0.2)';
+      const L = boss.look, col = L ? L.color : '#ff2e88', rgb = L ? L.glow : '255,46,136';
+      ctx.fillStyle = 'rgba(' + rgb + ',0.2)';
       ctx.fillRect(bx, by, bw, 8);
-      ctx.fillStyle = '#ff2e88';
+      ctx.fillStyle = col;
       ctx.fillRect(bx, by, bw * Math.max(0, boss.hp / boss.maxHp), 8);
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffb3d4';
+      ctx.fillStyle = col;
       ctx.font = '700 13px ' + NUM;
-      ctx.fillText('BOSS #' + (W.bossKills + 1), W.w / 2, by + 12);
+      ctx.fillText('BOSS #' + (W.bossKills + 1), W.w / 2 - 6, by + 12);
+      if (L) {
+        ctx.font = Math.round(14) + 'px ' + DISP;
+        ctx.textAlign = 'left';
+        ctx.fillText(L.name + (boss.mk > 1 ? ' MK' + boss.mk : ''), W.w / 2 + 34, by + 12);
+        ctx.textAlign = 'center';
+      }
     }
 
     drawCombo(ctx, W, view, right, boss ? by + 26 : top + 50 * s);
@@ -494,13 +595,14 @@
       const fs = Math.min(64, Math.round(W.w / 7));
       const ty = W.h * 0.38, slide = view.calm ? 0 : (1 - Math.min(1, (D.WAVE.banner - W.banner) * 3)) * 40;
       ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
-      ctx.fillStyle = W.bossWave ? '#ff2e88' : '#e8f7ff';
-      ctx.shadowColor = W.bossWave ? 'rgba(255,46,136,0.8)' : 'rgba(94,231,255,0.7)'; ctx.shadowBlur = 20;
+      const nb = NG.World.bossLook(W.bossKills);   // 이번 웨이브에 나올 보스
+      ctx.fillStyle = W.bossWave ? nb.color : '#e8f7ff';
+      ctx.shadowColor = W.bossWave ? 'rgba(' + nb.glow + ',0.8)' : 'rgba(94,231,255,0.7)'; ctx.shadowBlur = 20;
       ctx.fillText(W.bossWave ? 'BOSS WAVE' : 'WAVE ' + W.wave, W.w / 2 + slide, ty);
       ctx.shadowBlur = 0;
       ctx.font = Math.round(fs * 0.32) + 'px ' + DISP;
-      ctx.fillStyle = W.bossWave ? '#ffb3d4' : '#8aa4b8';
-      ctx.fillText(W.bossWave ? '보스가 나타났다!' : '끝까지 버텨라', W.w / 2 - slide, ty + fs * 0.62);
+      ctx.fillStyle = W.bossWave ? '#ffffff' : '#8aa4b8';
+      ctx.fillText(W.bossWave ? nb.name + (W.bossKills >= D.BOSSES.length ? ' MK' + (Math.floor(W.bossKills / D.BOSSES.length) + 1) : '') + ' 등장!' : '끝까지 버텨라', W.w / 2 - slide, ty + fs * 0.62);
       ctx.globalAlpha = 1;
     }
     ctx.textBaseline = 'alphabetic';
