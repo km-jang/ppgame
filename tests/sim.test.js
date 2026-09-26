@@ -6,7 +6,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
-for (const f of ['util.js', 'data.js', 'world.js']) {
+for (const f of ['util.js', 'data.js', 'world.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game', 'js', f), 'utf8'), ctx, { filename: f });
 }
 const NG = vm.runInContext('NG', ctx);
@@ -647,6 +647,295 @@ test('보스 공격: 다섯 보스 모두 오래 싸워도 값이 망가지지 �
       for (const b of W.eBullets) assert(Number.isFinite(b.x + b.y), 'finite bullet');
     }
     assert(e.dead, NG.DATA.BOSSES[k].id + ' killable (hp ' + e.hp.toFixed(0) + ')');
+  }
+});
+
+// ─── 기체 · 상점 · 미션 · 아이템 (shop.js, 2026-09-26) ─────────────
+const SH = NG.Shop;
+const DA = NG.DATA;
+// 적이 안 나오지만 웨이브도 안 끝나게 (대기열에 하나를 아주 늦게)
+function clearArena(W) { W.spawnQueue = ['grunt']; W.spawnTimer = 1e9; W.enemies.length = 0; W.eBullets.length = 0; if (W.lasers) W.lasers.length = 0; W.banner = 0; }
+
+test('기체: 6종, 이름·설명·모양·색이 모두 다르고 무료는 2종', () => {
+  const S = DA.SHIPS;
+  assert(S.length === 6, 'six ships');
+  assert(new Set(S.map(s => s.id)).size === 6 && new Set(S.map(s => s.shape)).size === 6 && new Set(S.map(s => s.color)).size === 6, 'distinct');
+  for (const s of S) assert(s.name && s.desc && s.glow, 'shape ' + s.id);
+  assert(S.filter(s => !s.price).length === 2, 'two free');
+});
+
+test('기체: 고른 기체의 능력치가 makePlayer에 들어간다', () => {
+  const df = DA.DIFFICULTY.normal, G = DA.GUN;
+  for (const s of DA.SHIPS) {
+    const p = NG.World.makePlayer(400, 300, df, { ship: s.id });
+    const g = s.gun || {};
+    assert(p.ship === s.id && p.look === s, 'ship ' + s.id);
+    assert(p.maxHp === df.hp + s.hp && p.hp === p.maxHp, 'hp ' + s.id + ' ' + p.maxHp);
+    assert(Math.abs(p.speed - DA.PLAYER.speed * s.speed) < 1e-9, 'speed ' + s.id);
+    assert(Math.abs(p.dashCdMax - DA.PLAYER.dashCd * s.dashCd) < 1e-9, 'dash ' + s.id);
+    assert(p.gun.barrels === G.barrels + (g.barrels || 0), 'barrels ' + s.id);
+    assert(Math.abs(p.gun.rate - G.rate * (g.rate || 1)) < 1e-9 && Math.abs(p.gun.dmg - G.dmg * (g.dmg || 1)) < 1e-9, 'rate/dmg ' + s.id);
+    assert(p.gun.pierce === G.pierce + (g.pierce || 0) && p.gun.critMul === (g.critMul || G.critMul), 'pierce/crit ' + s.id);
+    assert(p.drones === (s.drones || 0), 'drones ' + s.id);
+  }
+  // 특기
+  const P = id => NG.World.makePlayer(0, 0, df, { ship: id });
+  assert(P('lancer').gun.critMul === 3.5 && P('lancer').gun.pierce === 1, 'lancer');
+  assert(P('titan').iframeMul === 1.5 && P('nova').ultMul === DA.SHIPS.find(s => s.id === 'nova').ultMul && P('nova').gun.barrels === 2 && P('core').healMul === 1.5, 'passives');
+  // 너무 센 기체가 없게: 체력·속도·화력 어림 곱이 코어의 0.7~1.5배 (실제 비교는 봇 실측, PLAN.md 5.10)
+  const power = s => (5 + s.hp) * s.speed * (1 + ((s.gun.barrels) || 0)) * (s.gun.rate || 1) * (s.gun.dmg || 1) * (1 + 0.15 * ((s.gun.pierce || 0) + (s.drones || 0)));
+  const base = power(DA.SHIPS[0]);
+  for (const s of DA.SHIPS) { const k = power(s) / base; assert(k > 0.7 && k < 1.5, 'balance ' + s.id + ' ' + k.toFixed(2)); }
+});
+
+test('기체 특기: 타이탄은 맞은 뒤 무적이 길고, 노바는 게이지가 빨리 차고(ultMul배), 하이브는 5웨이브에 드론 +1', () => {
+  const W = createWorld(800, 600, 301, 'normal', { ship: 'titan' });
+  clearArena(W);
+  W.eBullets.push({ x: W.player.x, y: W.player.y, vx: 0, vy: 0, r: 5, life: 5 });
+  step(W, IDLE, DT);
+  assert(W.player.hp === W.player.maxHp - 1 && Math.abs(W.player.iframe - DA.PLAYER.iframe * 1.5) < 0.05, 'titan iframe ' + W.player.iframe);
+  const a = createWorld(800, 600, 302, 'normal', { ship: 'core' }), b = createWorld(800, 600, 302, 'normal', { ship: 'nova' });
+  for (const X of [a, b]) { clearArena(X); X.enemies.push({ id: 999, type: 'grunt', def: DA.ENEMIES.grunt, x: 100, y: 100, r: 14, hp: 1e9, maxHp: 3, spawnT: 0, flash: 0, droneHit: 0, vx: 0, vy: 0, ang: 0, cd: 0 }); }
+  // 같은 피해를 주면 노바 게이지가 1.3배
+  const gain = X => { const e = X.enemies[0]; const before = X.player.ult; X.player.fireCd = 99; X.bullets.push({ x: e.x, y: e.y, vx: 0, vy: 0, r: 4, dmg: 3, life: 1, pierce: 0, bounce: 0, hits: [] }); X.rand = () => 0.99; step(X, { moveX: 0, moveY: 0, aimAngle: 0, dash: false }, 1e-4); return X.player.ult - before; };
+  const ga = gain(a), gb = gain(b);
+  assert(ga > 0 && Math.abs(gb / ga - DA.SHIPS.find(s => s.id === 'nova').ultMul) < 1e-6, 'nova ult ' + ga + ' ' + gb);
+  const H = createWorld(800, 600, 303, 'normal', { ship: 'hive' });
+  assert(H.player.drones === 2, 'hive start');
+  H.wave = 4; clearArena(H); H.spawnQueue.length = 0; H.clearT = -1;
+  for (let f = 0; f < 60 * 3 && H.phase === 'play'; f++) step(H, IDLE, DT);
+  pickCard(H, 0);
+  assert(H.wave === 5 && H.player.drones >= 3, 'hive wave 5 drones ' + H.player.drones);
+});
+
+test('상점 없이 만든 판(시연·옛 테스트)은 예전과 같은 기본 기체', () => {
+  const W = createWorld(800, 600, 11);
+  const p = W.player, G = DA.GUN;
+  assert(p.maxHp === 5 && p.hp === 5 && p.speed === DA.PLAYER.speed && p.dashCdMax === DA.PLAYER.dashCd, 'base');
+  for (const k of Object.keys(G)) assert(p.gun[k] === G[k], 'gun ' + k);
+  assert(p.drones === 0 && p.ult === 0 && p.shield === 0 && p.heatT === 0 && p.magT === 0 && p.healMul === 1, 'no extras');
+  const E = createWorld(800, 600, 11, 'easy');
+  assert(E.player.maxHp === 8, 'easy hp');
+});
+
+test('코인: 점수÷40 + (웨이브-1)×4 + 보스×40 + 주운 코인, 코인 보너스 강화는 10%씩', () => {
+  const run = { score: 4000, wave: 6, bosses: 1, runCoins: 21 };
+  const c = SH.coinsFor(run, SH.blank());
+  assert(c.parts.score === 100 && c.parts.wave === 20 && c.parts.boss === 40 && c.parts.pickup === 21 && c.parts.bonus === 0 && c.total === 181, JSON.stringify(c));
+  const st = SH.blank(); st.up.coin = 3;
+  assert(SH.coinsFor(run, st).total === 181 + Math.floor(181 * 0.3), 'bonus');
+  assert(SH.coinsFor({ score: -5, wave: 0 }, st).total === 0, 'no negatives');
+});
+
+test('상점: 사면 코인이 줄고, 모자라면 못 사며 음수가 되지 않는다', () => {
+  const st = SH.blank();
+  assert(st.coins === 0 && st.ships.core && st.ships.viper && !st.ships.titan && st.ship === 'core', 'blank');
+  let r = SH.buy(st, 'titan');
+  assert(!r.ok && r.reason === 'coins' && st.coins === 0 && !st.ships.titan, 'poor');
+  st.coins = 650;
+  r = SH.buy(st, 'titan');
+  assert(r.ok && st.coins === 50 && st.ships.titan && st.ship === 'titan', 'bought and selected');
+  assert(SH.buy(st, 'titan').reason === 'owned' && st.coins === 50, 'no double buy');
+  assert(!SH.buy(st, 'nope').ok, 'unknown');
+  assert(SH.selectShip(st, 'viper') && st.ship === 'viper' && !SH.selectShip(st, 'nova') && st.ship === 'viper', 'select only owned');
+  st.coins = 100;
+  assert(!SH.buy(st, 'dmg').ok && st.coins === 100, 'upgrade too expensive');
+});
+
+test('강화: 5단계에서 멈추고 값이 오르며, 판을 만들 때 적용된다', () => {
+  const st = SH.blank();
+  st.coins = 1e6;
+  const paid = [];
+  for (let i = 0; i < 7; i++) { const r = SH.buy(st, 'hp'); if (r.ok) paid.push(r.cost); }
+  assert(st.up.hp === 5 && paid.length === 5 && SH.price(st, 'hp') == null, 'cap 5');
+  for (let i = 1; i < paid.length; i++) assert(paid[i] > paid[i - 1], 'rising prices');
+  for (const id of ['dmg', 'ultStart', 'magnet']) for (let i = 0; i < 5; i++) SH.buy(st, id);
+  const W = createWorld(800, 600, 5, 'normal', SH.worldOpts(st, {}));
+  const p = W.player;
+  assert(p.maxHp === 10 && p.hp === 10, 'hp +5 ' + p.maxHp);
+  assert(Math.abs(p.gun.dmg - 1.3) < 1e-9, 'dmg +30%');
+  assert(Math.abs(p.ult - DA.ULT.need * 0.6) < 1e-9, 'ult start 60%');
+  assert(Math.abs(p.magnetMul - 2.25) < 1e-9, 'magnet');
+  // 망가진 단계 값도 5를 못 넘는다
+  const q = NG.World.makePlayer(0, 0, DA.DIFFICULTY.normal, { upgrades: { hp: 99, dmg: 'x' } });
+  assert(q.maxHp === 10 && q.gun.dmg === 1, 'clamped');
+});
+
+test('시작 아이템: 사 둔 만큼 판마다 하나씩 쓰이고, 한 번만 적용된다', () => {
+  const st = SH.blank();
+  st.coins = 1000;
+  assert(SH.buy(st, 'shield').ok && SH.buy(st, 'barrel').ok && SH.buy(st, 'fullult').ok && SH.buy(st, 'shield').ok, 'buy');
+  assert(st.items.shield === 2 && st.coins === 1000 - 80 * 2 - 150 - 120, 'counts');
+  const lo1 = SH.takeLoadout(st);
+  assert(lo1.shield && lo1.barrel && lo1.fullult, 'first run gets all');
+  const W = createWorld(800, 600, 9, 'normal', SH.worldOpts(st, lo1));
+  assert(W.player.shield === 1 && W.player.gun.barrels === 2 && W.player.ult === DA.ULT.need, 'applied');
+  const lo2 = SH.takeLoadout(st);
+  assert(lo2.shield && !lo2.barrel && !lo2.fullult, 'second run: only the extra shield');
+  assert(Object.keys(SH.takeLoadout(st)).length === 0 && st.items.shield === 0, 'then none');
+  st.coins = 1000;
+  for (let i = 0; i < 5; i++) SH.buy(st, 'barrel');
+  assert(st.items.barrel === 3, 'stack max 3');
+});
+
+test('미션: 늘 3개, 누적은 판마다 더하고 한 판 미션은 그 판 값으로, 받으면 코인 + 새 미션', () => {
+  const st = SH.blank();
+  assert(st.missions.length === DA.MISSION_SLOTS && new Set(st.missions.map(m => m.id)).size === 3, 'three');
+  st.missions = [{ id: 'k300', prog: 0, done: false }, { id: 'c20', prog: 0, done: false }, { id: 'lancer8', prog: 0, done: false }];
+  const run = (o) => Object.assign({ ship: 'core', kills: 0, bestCombo: 0, wave: 1 }, o);
+  SH.progressMissions(st, run({ kills: 120, bestCombo: 12, wave: 9 }));
+  SH.progressMissions(st, run({ kills: 150, bestCombo: 8 }));
+  assert(st.missions[0].prog === 270 && !st.missions[0].done, 'cumulative adds');
+  assert(st.missions[1].prog === 12 && !st.missions[1].done, 'single run keeps best, no sum');
+  assert(st.missions[2].prog === 0, 'ship mission ignores other ships');
+  const fresh = SH.progressMissions(st, run({ kills: 40, bestCombo: 20 }));
+  assert(fresh.join() === 'k300,c20' && st.missions[0].done && st.missions[0].prog === 300, 'done ' + fresh);
+  SH.progressMissions(st, run({ ship: 'lancer', wave: 8 }));
+  assert(st.missions[2].done, 'lancer mission');
+  const coins = st.coins;
+  assert(SH.claim(st, 0) === 120 && st.coins === coins + 120, 'claim reward');
+  assert(st.missions.length === 3 && st.missions[0].id !== 'k300' && !st.missions[0].done && st.missions[0].prog === 0, 'replaced in same slot');
+  assert(SH.claim(st, 0) === 0, 'cannot claim unfinished');
+  assert(new Set(st.missions.map(m => m.id)).size === 3, 'no duplicates');
+  // 기체 미션은 가진 기체만
+  for (let k = 0; k < 40; k++) { const s2 = SH.blank(); s2.mseed = k * 7919 + 1; s2.missions = []; SH.fillMissions(s2); for (const m of s2.missions) { const d = SH.missionDef(m.id); assert(!d.ship || s2.ships[d.ship], 'owned ship only ' + m.id); } }
+});
+
+test('판 끝: finishRun이 코인을 주고 미션을 진행한다 (runOf는 판 통계를 읽는다)', () => {
+  const st = SH.blank();
+  st.missions = [{ id: 'games5', prog: 4, done: false }, { id: 'coin20', prog: 0, done: false }, { id: 'boss2', prog: 0, done: false }];
+  const W = createWorld(800, 600, 17, 'normal', SH.worldOpts(st, {}));
+  W.score = 800; W.wave = 3; W.stats.coinPicks = 5; W.stats.coins = 15;
+  const res = SH.finishRun(st, SH.runOf(W));
+  assert(res.coins === 20 + 8 + 15 && st.coins === res.coins && st.life.games === 1, 'coins ' + res.coins);
+  assert(res.done.join() === 'games5' && st.missions[1].prog === 5, 'missions');
+});
+
+test('저장: 망가진 상점 저장본은 기본값으로, 정상 값은 그대로 되살아난다', () => {
+  for (const junk of ['"x"', '123', '[1,2]', 'null', '{"coins":"abc","ships":7,"up":{"hp":-3},"items":{"shield":1e9},"missions":[5,{"id":"zzz"}]}']) {
+    const s = SH.load(fakeStore({ 'ngun.shop1': junk }));
+    assert(s.coins === 0 && s.ship === 'core' && s.up.hp === 0 && s.items.shield <= 3 && s.missions.length === 3, 'junk ' + junk);
+  }
+  const bad = SH.load(fakeStore({ 'ngun.shop1': '{"coins":50.7,"ship":"nova","ships":{"nova":"yes"},"up":{"dmg":9}}' }));
+  assert(bad.coins === 50 && bad.ship === 'core' && !bad.ships.nova && bad.up.dmg === 5, 'sanitized');
+  const st = fakeStore({});
+  const a = SH.blank(); a.coins = 777; a.ships.lancer = true; a.ship = 'lancer'; a.up.coin = 2; a.items.fullult = 1;
+  SH.save(a, st);
+  const b = SH.load(st);
+  assert(b.coins === 777 && b.ship === 'lancer' && b.up.coin === 2 && b.items.fullult === 1 && JSON.stringify(b.missions) === JSON.stringify(a.missions), 'round trip');
+});
+
+test('아이템: 코인을 주우면 수·값이 쌓이고, 코인은 자석 범위에서 끌려온다', () => {
+  const W = createWorld(800, 600, 21, 'normal', {});
+  clearArena(W);
+  const p = W.player;
+  NG.World.addDrop(W, p.x + 10, p.y, 'coin');
+  NG.World.addDrop(W, p.x + 70, p.y, 'coin');   // 자석 범위(90) 안: 끌려와서 주워진다
+  NG.World.addDrop(W, p.x + 300, p.y, 'coin');  // 멀리: 그대로
+  for (let f = 0; f < 60; f++) step(W, IDLE, DT);
+  assert(W.stats.coinPicks === 2 && W.stats.coins === 2 * DA.ITEMS.coin.value, 'picked ' + W.stats.coinPicks);
+  assert(W.drops.length === 1 && W.drops[0].x === p.x + 300, 'far coin stays');
+  assert(W.events.includes('coin'), 'event');
+});
+
+test('아이템: 방패는 딱 한 대를 막고, 두 번째는 맞는다', () => {
+  const W = createWorld(800, 600, 22, 'normal', {});
+  clearArena(W);
+  const p = W.player;
+  NG.World.addDrop(W, p.x, p.y, 'shield');
+  step(W, IDLE, DT);
+  assert(p.shield === 1 && W.stats.items === 1, 'got shield');
+  const hp = p.hp;
+  W.eBullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
+  step(W, IDLE, DT);
+  assert(p.hp === hp && p.shield === 0 && W.stats.blocks === 1 && W.events.includes('block') && !W.waveHit, 'blocked');
+  p.iframe = 0;
+  W.eBullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
+  step(W, IDLE, DT);
+  assert(p.hp === hp - 1 && W.stats.blocks === 1, 'second hit hurts');
+});
+
+test('아이템: 과열은 정해진 시간 동안 연사를 2배로', () => {
+  const shots = heat => {
+    const W = createWorld(800, 600, 23, 'normal', {});
+    clearArena(W);
+    if (heat) NG.World.addDrop(W, W.player.x, W.player.y, 'heat');
+    let n = 0;
+    for (let f = 0; f < 60 * 3; f++) { W.player.hp = 5; step(W, { moveX: 0, moveY: 0, aimAngle: 0, dash: false }, DT); }
+    n = W.stats.shots;
+    return { n, W };
+  };
+  const a = shots(false), b = shots(true);
+  assert(Math.abs(b.n / a.n - 2) < 0.1, 'double rate ' + a.n + ' ' + b.n);
+  assert(Math.abs(b.W.player.heatT - (DA.ITEMS.heat.time - 3)) < 0.05, 'timer runs ' + b.W.player.heatT);
+  for (let f = 0; f < 60 * 4; f++) step(b.W, IDLE, DT);
+  assert(b.W.player.heatT === 0, 'ends');
+});
+
+test('아이템: 자석은 화면 어디의 아이템이든 끌어온다 (시간이 지나면 끝)', () => {
+  const W = createWorld(800, 600, 24, 'normal', {});
+  clearArena(W);
+  const p = W.player;
+  NG.World.addDrop(W, p.x, p.y, 'magnet');
+  NG.World.addDrop(W, 20, 20, 'coin');
+  NG.World.addDrop(W, 780, 580, 'bomb');
+  step(W, IDLE, DT);
+  assert(p.magT > 0, 'magnet on');
+  for (let f = 0; f < 60 * 2; f++) step(W, IDLE, DT);
+  assert(W.stats.coinPicks === 1 && W.stats.items === 2 && W.drops.length === 0, 'all pulled ' + W.drops.length);
+  p.magT = 0;
+  NG.World.addDrop(W, 20, 20, 'coin');
+  for (let f = 0; f < 60; f++) step(W, IDLE, DT);
+  assert(W.drops.length === 1, 'no pull after magnet ends');
+});
+
+test('아이템: 폭탄은 적 탄을 모두 지우고 둘레 안 적을 쓸어 낸다 (먼 적은 멀쩡)', () => {
+  const W = createWorld(800, 600, 25, 'normal', {});
+  clearArena(W);
+  const p = W.player;
+  for (let i = 0; i < 12; i++) W.eBullets.push({ x: 50 + i * 60, y: 40, vx: 0, vy: 0, r: 5, life: 5 });
+  const mk = (x, y) => { const e = { id: W.nextId++, type: 'grunt', def: DA.ENEMIES.grunt, x, y, r: 14, hp: 3, maxHp: 3, spawnT: 0, flash: 0, droneHit: 0, vx: 0, vy: 0, ang: 0, cd: 0, dead: false }; W.enemies.push(e); return e; };
+  const near = [mk(p.x + 120, p.y), mk(p.x - 150, p.y + 60)], far = mk(p.x + 395, p.y + 290);
+  NG.World.addDrop(W, p.x, p.y, 'bomb');
+  step(W, { moveX: 0, moveY: 0, aimAngle: Math.PI, dash: false }, DT);
+  assert(W.eBullets.length === 0, 'bullets cleared');
+  assert(near.every(e => e.dead) && !far.dead && W.stats.bombKills === 2 && W.events.includes('bomb'), 'bomb radius');
+});
+
+test('아이템 드롭: 일반 적 처치에서 코인이 가장 흔하고 다섯 종류가 모두 나온다, 보스는 코인을 흩뿌린다', () => {
+  const W = runLong(88, 60 * 60 * 3, false);
+  assert(W.stats.coinPicks + W.drops.filter(d => d.type === 'coin').length > 0, 'coins dropped');
+  const seen = {};
+  const V = createWorld(800, 600, 90, 'normal', {});
+  for (let i = 0; i < 4000; i++) {
+    clearArena(V); V.drops.length = 0;
+    const e = { id: V.nextId++, type: 'grunt', def: DA.ENEMIES.grunt, x: 100, y: 100, r: 14, hp: 1, maxHp: 1, spawnT: 0, flash: 0, droneHit: 0, vx: 0, vy: 0, ang: 0, cd: 0, dead: false };
+    V.enemies.push(e);
+    V.bullets.push({ x: 100, y: 100, vx: 0, vy: 0, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+    V.hitstop = 0; step(V, { moveX: 0, moveY: 0, aimAngle: 0, dash: false }, 1e-4);
+    for (const d of V.drops) seen[d.type] = (seen[d.type] || 0) + 1;
+  }
+  for (const t of ['heal', 'coin', 'shield', 'heat', 'magnet', 'bomb']) assert(seen[t] > 0, 'dropped ' + t + ' ' + JSON.stringify(seen));
+  assert(seen.coin > seen.heal && seen.coin > seen.shield * 4, 'coin most common ' + JSON.stringify(seen));
+  assert(Math.abs(seen.coin / 4000 - DA.ITEMS.coin.chance * (1 - DA.DROP.healChance)) < 0.02, 'coin rate');
+  const B = createWorld(800, 600, 91, 'normal', {});
+  clearArena(B);
+  const boss = { id: 1, type: 'boss', def: DA.ENEMIES.boss, look: DA.BOSSES[0], x: 400, y: 200, r: 58, hp: 1, maxHp: 100, spawnT: 0, flash: 0, droneHit: 0, vx: 0, vy: 0, ang: 0, dead: false };
+  B.enemies.push(boss);
+  B.bullets.push({ x: 400, y: 200, vx: 0, vy: 0, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+  step(B, { moveX: 0, moveY: 0, aimAngle: 0, dash: false }, 1e-4);
+  assert(B.drops.filter(d => d.type === 'coin').length === DA.ITEMS.coin.bossCoins, 'boss coins');
+});
+
+test('미션 목록: 15개 안팎, id 중복 없음, 누적·한 판이 섞이고 칸 이름이 runOf에 있다', () => {
+  const M = DA.MISSIONS;
+  assert(M.length >= 15 && new Set(M.map(m => m.id)).size === M.length, 'count ' + M.length);
+  assert(M.some(m => m.kind === 'life') && M.some(m => m.kind === 'run'), 'both kinds');
+  const run = SH.runOf(createWorld(800, 600, 1));
+  for (const m of M) {
+    assert(m.stat in run, 'stat ' + m.stat);
+    assert(m.goal > 0 && m.reward > 0 && m.text, 'shape ' + m.id);
+    if (m.ship) assert(DA.SHIPS.some(s => s.id === m.ship), 'ship ' + m.id);
   }
 });
 

@@ -28,6 +28,7 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z"/></symbol>
     <symbol id="i-again" viewBox="0 0 24 24"><path d="M12 4V1.5a.5.5 0 0 0-.8-.4L6.6 4.6a.5.5 0 0 0 0 .8l4.6 3.5a.5.5 0 0 0 .8-.4V6a6 6 0 1 1-6 6 1 1 0 1 0-2 0 8 8 0 1 0 8-8z"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M2 3h3.2l.7 3H21a1 1 0 0 1 1 1.2l-1.4 7A2 2 0 0 1 18.6 16H8.4a2 2 0 0 1-2-1.6L4.4 5H2zm7 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
     <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 15v3h3v3H8v-3h3v-3a5 5 0 0 1-3.7-3H7a4 4 0 0 1-4-4V6a1 1 0 0 1 1-1h3zm10 4v3a2 2 0 0 0 2-2V7zM5 7v1a2 2 0 0 0 2 2V7z"/></symbol>
   </svg>
 
@@ -44,34 +45,66 @@
   <div id="toast" role="status"></div>
   <div id="medal-toast" role="status" aria-live="polite"></div>
 
-  <!-- 시작 화면 -->
+  <!-- 시작 화면: 왼쪽 로고·기체·미션 / 오른쪽 설정·시작·상점·메달 -->
   <section id="scr-title" class="screen">
-    <div class="panel">
-      <h1 class="logo">N<span>-</span>GUN</h1>
-      <p class="tagline">총열을 늘려라. 끝까지 버텨라.</p>
-      <p id="best" class="best"></p>
-      <div class="settings">
-        <div class="seg" role="group" aria-label="난이도">
-          <button type="button" data-diff="easy" aria-pressed="false"><b>쉬움</b><small>체력 8 · 적 약함</small></button>
-          <button type="button" data-diff="normal" aria-pressed="true"><b>보통</b><small>체력 5</small></button>
-          <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>체력 4 · 점수 ×1.6</small></button>
-        </div>
-        <div class="toggles">
-          <button type="button" class="toggle" data-audio="music" aria-pressed="true"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg> 음악 <span class="state">켬</span></button>
-          <button type="button" class="toggle" data-audio="sfx" aria-pressed="true"><svg class="i" aria-hidden="true"><use href="#i-boom"/></svg> 효과음 <span class="state">켬</span></button>
-        </div>
+    <div class="panel tpanel">
+      <div class="t-left">
+        <h1 class="logo">N<span>-</span>GUN</h1>
+        <p class="tagline">총열을 늘려라. 끝까지 버텨라.</p>
+        <p id="best" class="best"></p>
+        <button id="btn-ship" type="button" class="ship-card" aria-label="기체 바꾸기">
+          <canvas id="ship-preview" class="ship-cv" width="128" height="128" aria-hidden="true"></canvas>
+          <span class="sc-txt"><small>내 기체</small><b id="ship-name">코어</b><em id="ship-desc"></em></span>
+          <span class="sc-go">기체 바꾸기</span>
+        </button>
+        <div id="title-missions" class="mcard"></div>
       </div>
-      <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>시작</span> <kbd class="only-pc">Enter</kbd></button>
-      <button id="btn-medals" class="medal-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달 <b id="medal-count">0/0</b></span><span class="sep">·</span><span>기록</span></button>
-      <ul class="help">
-        <li><b>왼쪽 스틱</b> 엄지로 밀어서 이동</li>
-        <li><b>오른쪽</b> 드래그로 조준 · 떼면 자동 조준</li>
-        <li><b>대시</b> 버튼으로 잠깐 무적 돌진</li>
-        <li><b>N-버스트</b> 적을 맞히면 게이지가 차고, 가득 차면 눌러서 화면 전체 충격파</li>
-        <li><b>콤보</b> 쉬지 않고 잡으면 점수가 최대 2배</li>
-      </ul>
-      <p class="pc-line only-pc">PC: <kbd>WASD</kbd> 이동 · 마우스 조준 · <kbd>Space</kbd> 대시 · <kbd>Q</kbd> 필살기 · <kbd>P</kbd> 일시정지</p>
-      <p class="hint">웨이브를 넘길 때마다 카드 1장을 골라 총을 키웁니다. 5웨이브마다 보스.</p>
+      <div class="t-right">
+        <div class="settings">
+          <div class="seg" role="group" aria-label="난이도">
+            <button type="button" data-diff="easy" aria-pressed="false"><b>쉬움</b><small>체력 8 · 적 약함</small></button>
+            <button type="button" data-diff="normal" aria-pressed="true"><b>보통</b><small>체력 5</small></button>
+            <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>체력 4 · 점수 ×1.6</small></button>
+          </div>
+          <div class="toggles">
+            <button type="button" class="toggle" data-audio="music" aria-pressed="true"><svg class="i" aria-hidden="true"><use href="#i-music"/></svg> 음악 <span class="state">켬</span></button>
+            <button type="button" class="toggle" data-audio="sfx" aria-pressed="true"><svg class="i" aria-hidden="true"><use href="#i-boom"/></svg> 효과음 <span class="state">켬</span></button>
+          </div>
+        </div>
+        <p id="loadout-line" class="loadout-line"></p>
+        <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>시작</span> <kbd class="only-pc">Enter</kbd></button>
+        <div class="t-row">
+          <button id="btn-shop" type="button" class="shop-btn"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg><span>상점</span><span class="coin-pill"><i class="cn" aria-hidden="true"></i><b id="coin-count">0</b></span></button>
+          <button id="btn-medals" class="medal-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달 <b id="medal-count">0/0</b></span><span class="sep">·</span><span>기록</span></button>
+        </div>
+        <ul class="help">
+          <li><b>왼쪽 스틱</b> 엄지로 밀어서 이동</li>
+          <li><b>오른쪽</b> 드래그로 조준 · 떼면 자동 조준</li>
+          <li><b>대시</b> 버튼으로 잠깐 무적 돌진</li>
+          <li><b>N-버스트</b> 게이지가 가득 차면 화면 전체 충격파</li>
+          <li><b>아이템</b> 코인·방패·과열·자석·폭탄을 주워라</li>
+          <li><b>카드</b> 웨이브마다 1장 골라 총을 키운다 · 5웨이브마다 보스</li>
+        </ul>
+        <p class="pc-line only-pc">PC: <kbd>WASD</kbd> 이동 · 마우스 조준 · <kbd>Space</kbd> 대시 · <kbd>Q</kbd> 필살기 · <kbd>P</kbd> 일시정지</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 상점 -->
+  <section id="scr-shop" class="screen">
+    <div class="panel wide spanel">
+      <div class="shop-head">
+        <h2>상점</h2>
+        <span class="coin-pill big"><i class="cn" aria-hidden="true"></i><b id="shop-coins">0</b></span>
+      </div>
+      <div class="tabs" role="tablist" aria-label="상점 칸">
+        <button type="button" role="tab" data-tab="ships" aria-selected="true">기체</button>
+        <button type="button" role="tab" data-tab="up" aria-selected="false">강화</button>
+        <button type="button" role="tab" data-tab="items" aria-selected="false">시작 아이템</button>
+      </div>
+      <p id="shop-sub" class="sub shop-sub"></p>
+      <div id="shop-list" class="shop-list"></div>
+      <button id="btn-shop-back" class="big-btn"><span>닫기</span></button>
     </div>
   </section>
 
@@ -114,24 +147,34 @@
     </div>
   </section>
 
-  <!-- 게임 오버 -->
+  <!-- 게임 오버: 왼쪽 점수·기록 / 오른쪽 코인·미션·메달·버튼 -->
   <section id="scr-over" class="screen">
-    <div class="panel">
-      <h2>격추됨</h2>
-      <p class="score-big"><span id="over-score">0</span><small>점</small></p>
-      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 신기록! 최고 점수</p>
-      <p class="over-diff">난이도 <b id="over-diff">보통</b></p>
-      <dl class="stats">
-        <div data-rec="wave"><dt>웨이브</dt><dd id="over-wave">1</dd></div>
-        <div data-rec="kills"><dt>처치</dt><dd id="over-kills">0</dd></div>
-        <div data-rec="time"><dt>생존</dt><dd id="over-time">0:00</dd></div>
-        <div data-rec="combo"><dt>최고 콤보</dt><dd id="over-combo">0</dd></div>
-        <div><dt>총열 N</dt><dd id="over-n">1</dd></div>
-      </dl>
-      <div id="over-medals" class="new-medals"></div>
-      <div id="over-picks" class="picks"></div>
-      <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
-      <button id="btn-home" class="text-btn">처음 화면으로</button>
+    <div class="panel opanel">
+      <div class="o-left">
+        <h2>격추됨</h2>
+        <p class="score-big"><span id="over-score">0</span><small>점</small></p>
+        <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 신기록! 최고 점수</p>
+        <p class="over-diff">난이도 <b id="over-diff">보통</b> · 기체 <b id="over-ship">코어</b></p>
+        <dl class="stats">
+          <div data-rec="wave"><dt>웨이브</dt><dd id="over-wave">1</dd></div>
+          <div data-rec="kills"><dt>처치</dt><dd id="over-kills">0</dd></div>
+          <div data-rec="time"><dt>생존</dt><dd id="over-time">0:00</dd></div>
+          <div data-rec="combo"><dt>최고 콤보</dt><dd id="over-combo">0</dd></div>
+          <div><dt>총열 N</dt><dd id="over-n">1</dd></div>
+        </dl>
+        <div id="over-picks" class="picks"></div>
+      </div>
+      <div class="o-right">
+        <div class="coin-earn">
+          <span class="ce-head"><i class="cn" aria-hidden="true"></i>얻은 코인</span>
+          <b id="over-coins">+0</b>
+          <span id="over-coin-parts" class="ce-parts"></span>
+        </div>
+        <div id="over-missions" class="mcard"></div>
+        <div id="over-medals" class="new-medals"></div>
+        <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
+        <button id="btn-home" class="text-btn">처음 화면으로</button>
+      </div>
     </div>
   </section>
 
@@ -139,6 +182,7 @@
   <script src="js/data.js"></script>
   <script src="js/world.js"></script>
   <script src="js/records.js"></script>
+  <script src="js/shop.js"></script>
   <script src="js/render.js"></script>
   <script src="js/input.js"></script>
   <script src="js/samples.js"></script>

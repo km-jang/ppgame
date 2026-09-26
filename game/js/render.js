@@ -356,7 +356,7 @@
     // 드론
     if (p.drones > 0) {
       const DR = D.DRONE;
-      ctx.fillStyle = '#b8f2ff';
+      ctx.fillStyle = p.passive === 'hive' && p.look ? '#a6ffc9' : '#b8f2ff';
       for (let i = 0; i < p.drones; i++) {
         const a = p.droneAng + TAU * i / p.drones;
         ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * DR.radius, p.y + Math.sin(a) * DR.radius, DR.r, 0, TAU); ctx.fill();
@@ -396,14 +396,53 @@
       const pulse = p.ultT > 0 ? 1 : 0.55 + Math.sin(W.t * 7) * 0.25;
       glow(ctx, 'rgba(255,207,58,0.7)', p.x, p.y, p.ultT > 0 ? 70 : 46, pulse);
     }
-    glow(ctx, 'rgba(94,231,255,0.6)', p.x, p.y, 34, p.dashT > 0 ? 1 : 0.7);
-    ctx.fillStyle = p.dashT > 0 ? '#ffffff' : '#5ee7ff';
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+    // 과열: 붉은 기운
+    if (p.heatT > 0) glow(ctx, 'rgba(255,122,61,0.7)', p.x, p.y, 40, 0.6 + 0.3 * Math.sin(W.t * 18));
+    const look = p.look || SHIP0;
+    glow(ctx, 'rgba(' + look.glow + ',0.6)', p.x, p.y, 34, p.dashT > 0 ? 1 : 0.7);
+    drawShip(ctx, look, p.x, p.y, p.r, p.aim, p.dashT > 0);
+    // 방패: 기체를 감싸는 푸른 육각 고리
+    if (p.shield > 0) {
+      ctx.strokeStyle = 'rgba(94,231,255,0.85)';
+      ctx.lineWidth = 2.5;
+      poly(ctx, p.x, p.y, p.r + 11, 6, W.t * 1.2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#5ee7ff';
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 기체 모양 (게임 안 + 상점·시작 화면 미리보기). look: data.js SHIPS 한 칸, rot: 앞 방향, white: 대시 중 흰색
+  const SHIP0 = { shape: 'circle', color: '#5ee7ff', glow: '94,231,255' };
+  function drawShip(ctx, look, x, y, r, rot, white) {
+    const L = look || SHIP0;
+    ctx.fillStyle = white ? '#ffffff' : L.color;
+    switch (L.shape) {
+      case 'tri': poly(ctx, x, y, r * 1.45, 3, rot); break;
+      case 'square': poly(ctx, x, y, r * 1.4, 4, rot + Math.PI / 4); break;
+      case 'diamond':
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(rot) * r * 1.75, y + Math.sin(rot) * r * 1.75);
+        ctx.lineTo(x + Math.cos(rot + 1.57) * r * 0.85, y + Math.sin(rot + 1.57) * r * 0.85);
+        ctx.lineTo(x - Math.cos(rot) * r * 1.05, y - Math.sin(rot) * r * 1.05);
+        ctx.lineTo(x + Math.cos(rot - 1.57) * r * 0.85, y + Math.sin(rot - 1.57) * r * 0.85);
+        ctx.closePath();
+        break;
+      case 'hex': poly(ctx, x, y, r * 1.25, 6, rot); break;
+      case 'star': star(ctx, x, y, r * 1.5, 5, 0.5, rot); break;
+      default: ctx.beginPath(); ctx.arc(x, y, r, 0, TAU);
+    }
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.stroke();
+    // 가운데 조종석: 어두운 알 + 앞쪽 빛
     ctx.fillStyle = '#07080d';
-    ctx.font = 'bold 11px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(n), p.x, p.y + 0.5);
+    ctx.beginPath(); ctx.arc(x, y, r * 0.42, 0, TAU); ctx.fill();
+    ctx.fillStyle = white ? '#5ee7ff' : L.color;
+    ctx.beginPath(); ctx.arc(x + Math.cos(rot) * r * 0.16, y + Math.sin(rot) * r * 0.16, r * 0.17, 0, TAU); ctx.fill();
   }
 
   // 필살기 충격파: 금빛 굵은 고리 + 총열 N×3개의 빛줄기가 함께 퍼진다
@@ -510,13 +549,57 @@
     }
   }
 
+  // 게임 중 아이템: 코인은 도는 금화, 나머지는 색 고리 안에 그림 (방패 육각·과열 겹화살·자석 말굽·폭탄)
+  function drawItem(ctx, d, t) {
+    const I = D.ITEMS[d.type];
+    if (!I) return;
+    const bob = Math.sin(t * 4 + (d.ph || 0)) * 2;
+    const x = d.x, y = d.y + bob;
+    if (d.type === 'coin') {
+      const sx = Math.max(0.25, Math.abs(Math.cos(t * 5 + (d.ph || 0))));
+      glow(ctx, 'rgba(255,210,63,0.55)', x, y, 16, 0.8);
+      ctx.fillStyle = '#ffd23f';
+      ctx.beginPath(); ctx.ellipse(x, y, 7 * sx, 7, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#b37a00';
+      ctx.beginPath(); ctx.ellipse(x, y, 3.2 * sx, 3.2, 0, 0, TAU); ctx.fill();
+      return;
+    }
+    glow(ctx, I.color, x, y, 22, 0.45 + 0.2 * Math.sin(t * 6 + (d.ph || 0)));
+    ctx.fillStyle = 'rgba(7,8,13,0.85)';
+    ctx.beginPath(); ctx.arc(x, y, 11, 0, TAU); ctx.fill();
+    ctx.strokeStyle = I.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = I.color;
+    ctx.lineCap = 'round';
+    if (d.type === 'shield') {
+      poly(ctx, x, y, 6.5, 6, Math.PI / 6); ctx.lineWidth = 2; ctx.stroke();
+    } else if (d.type === 'heat') {
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      for (const o of [-3, 2]) { ctx.moveTo(x + o - 2.5, y - 5); ctx.lineTo(x + o + 2.5, y); ctx.lineTo(x + o - 2.5, y + 5); }
+      ctx.stroke();
+    } else if (d.type === 'magnet') {
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y - 0.5, 4.5, Math.PI, 0, true); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 4.5, y - 0.5); ctx.lineTo(x - 4.5, y - 5); ctx.moveTo(x + 4.5, y - 0.5); ctx.lineTo(x + 4.5, y - 5); ctx.stroke();
+    } else if (d.type === 'bomb') {
+      ctx.beginPath(); ctx.arc(x - 1, y + 1.5, 4.8, 0, TAU); ctx.fill();
+      ctx.lineWidth = 1.6; ctx.strokeStyle = '#ffe66d';
+      ctx.beginPath(); ctx.moveTo(x + 2, y - 2); ctx.lineTo(x + 4.5, y - 6); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+
   function drawFx(ctx, W) {
     for (const d of W.drops) {
       const blink = d.life < 3 && Math.floor(d.life * 8) % 2 === 0;
       if (blink) continue;
-      ctx.fillStyle = '#3dff8b';
-      ctx.fillRect(d.x - 3, d.y - 9, 6, 18);
-      ctx.fillRect(d.x - 9, d.y - 3, 18, 6);
+      if (!d.type || d.type === 'heal') {
+        ctx.fillStyle = '#3dff8b';
+        ctx.fillRect(d.x - 3, d.y - 9, 6, 18);
+        ctx.fillRect(d.x - 9, d.y - 3, 18, 6);
+      } else drawItem(ctx, d, W.t);
     }
     for (const q of W.particles) {
       const a = Math.max(0, q.life / q.max);
@@ -549,13 +632,46 @@
     ctx.textAlign = 'center';
     for (const t of W.texts) {
       ctx.globalAlpha = Math.min(1, t.life * 2);
-      ctx.fillStyle = t.heal ? '#3dff8b' : '#ffe66d';
+      ctx.fillStyle = t.col || (t.heal ? '#3dff8b' : '#ffe66d');
       ctx.fillText(t.txt, t.x, t.y);
     }
     ctx.globalAlpha = 1;
   }
 
   const NUM = '"Rajdhani", system-ui, sans-serif', DISP = '"Black Han Sans", system-ui, sans-serif';
+  // 켜져 있는 아이템 효과: 게이지 아래 작은 칸을 세로로 (방패 · 과열 남은 초 · 자석 남은 초, 남은 시간 막대)
+  function drawEffectChips(ctx, W, x, y, s) {
+    const p = W.player, I = D.ITEMS;
+    if (!I) return;
+    const list = [];
+    if (p.shield > 0) list.push([I.shield.color, '방패', '', 1]);
+    if (p.heatT > 0) list.push([I.heat.color, '과열', p.heatT.toFixed(1), p.heatT / I.heat.time]);
+    if (p.magT > 0) list.push([I.magnet.color, '자석', p.magT.toFixed(1), p.magT / I.magnet.time]);
+    const h = 17 * s, w = 76 * s;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    list.forEach((c, i) => {
+      const cy = y + i * (h + 3 * s);
+      ctx.fillStyle = 'rgba(12,16,26,0.78)';
+      ctx.fillRect(x, cy, w, h);
+      ctx.fillStyle = c[0];
+      ctx.fillRect(x, cy, 3 * s, h);
+      ctx.globalAlpha = 0.28;
+      ctx.fillRect(x + 3 * s, cy + h - 2 * s, (w - 3 * s) * Math.max(0, Math.min(1, c[3])), 2 * s);
+      ctx.globalAlpha = 1;
+      ctx.font = Math.round(12 * s) + 'px ' + DISP;
+      ctx.fillText(c[1], x + 8 * s, cy + h / 2 + 0.5);
+      if (c[2]) {
+        ctx.textAlign = 'right';
+        ctx.font = '700 ' + Math.round(12 * s) + 'px ' + NUM;
+        ctx.fillStyle = '#e8f7ff';
+        ctx.fillText(c[2], x + w - 5 * s, cy + h / 2 + 0.5);
+        ctx.textAlign = 'left';
+      }
+    });
+    ctx.textBaseline = 'top';
+  }
+
   function drawHud(ctx, W, view) {
     const p = W.player;
     const top = view.hudTop;
@@ -598,6 +714,7 @@
     ctx.shadowBlur = 0;
     ctx.fillStyle = full ? (Math.floor(W.t * 3) % 2 ? '#fff4c2' : '#ffd23f') : '#8a6d2a';
     ctx.fillText(full ? (view.ui > 1 ? 'N-BURST!' : 'N-BURST [Q]') : 'N-BURST', x0 + 80 * s, uy - 3 * s);
+    drawEffectChips(ctx, W, x0, uy + 12 * s, s);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8f7ff';
@@ -743,5 +860,5 @@
     if (touch && view.touchHint) drawTouchHint(ctx, W, touch);
   }
 
-  NG.Render = { draw };
+  NG.Render = { draw, drawShip };
 })(NG);

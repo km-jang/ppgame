@@ -341,6 +341,26 @@ async function takeGift(page) {
     await G.tap('#btn-retry');
     assert(await until(G, () => NG.debug.mode === 'play'), '다시 하기 안 됨');
   });
+  await test('상점: 코인이 모자라면 못 사고, 모으면 기체를 사서 고르고 그 기체로 출발', async () => {
+    await G.tap('#btn-pause');
+    assert(await until(G, () => NG.debug.mode === 'paused'), '일시정지 안 됨');
+    await G.tap('#btn-quit');
+    assert(await on(G, 'scr-title'), '처음 화면으로 안 감');
+    await G.tap('#btn-shop');
+    assert(await until(G, () => NG.debug.mode === 'shop'), '상점이 안 열림');
+    await G.evaluate(() => { NG.debug.shop.coins = 0; NG.debug.giveCoins(0); });
+    await G.tap('#shop-list [data-buy="titan"]');
+    assert(await G.evaluate(() => !NG.debug.shop.ships.titan), '코인 없이 샀음');
+    await G.evaluate(() => NG.debug.giveCoins(600));
+    await G.tap('#shop-list [data-buy="titan"]');
+    assert(await until(G, () => NG.debug.shop.ships.titan && NG.debug.shop.coins === 0), '못 삼');
+    if (await G.evaluate(() => NG.debug.shop.ship !== 'titan')) await G.tap('#shop-list [data-use="titan"]');
+    assert(await until(G, () => NG.debug.shop.ship === 'titan'), '기체가 안 골라짐');
+    await G.tap('#btn-shop-back');
+    assert(await on(G, 'scr-title'), '상점 닫기 안 됨');
+    await G.tap('#btn-start');
+    assert(await until(G, () => NG.debug.mode === 'play' && NG.debug.world.player.ship === 'titan'), '고른 기체로 시작 안 함');
+  });
   await test('N-GUN 콘솔 오류 없음', async () => { assert(!ng.errors.length, ng.errors.join(' | ')); });
   await ng.ctx.close();
 
