@@ -202,19 +202,24 @@ test('난이도: 체력·적 수·적 체력·점수 배율이 반영된다', ()
   assert(createWorld(800, 600, 1, 'nope').diff.id === 'normal', 'unknown -> normal');
 });
 
-test('어려움이 보통보다 빨리 끝난다 (가만히 있는 봇, 시드 8개 평균)', () => {
-  const survive = d => {
+// 생존 시간은 카드 운(총열이 몇 번 나오나)과 진행 속도(쉬움은 빨리 잡아 보스를 일찍 만남)에 흔들리고,
+// 맞은 횟수는 맞은 뒤 무적 시간 때문에 천장이 있다. 그래서 첫 웨이브에 붙잡아 두고(위력 0)
+// 처음 맞기까지 걸린 시간을 잰다 (가만히 있는 봇, 시드 16개 평균)
+test('어려울수록 빨리 맞는다 (첫 웨이브에 가만히 있는 봇, 처음 맞기까지 걸린 시간)', () => {
+  const first = d => {
     let total = 0;
-    for (let s = 1; s <= 8; s++) {
+    for (let s = 1; s <= 16; s++) {
       const W = createWorld(900, 650, s, d);
+      const p = W.player, hp0 = p.hp;
+      p.gun.dmg = 0;
       let i = 0;
-      while (W.phase !== 'over' && i++ < 60 * 600) { if (W.phase === 'cards') pickCard(W, 0); step(W, IDLE, DT); W.events.length = 0; }
+      while (p.hp === hp0 && W.phase !== 'over' && i++ < 60 * 120) { step(W, IDLE, DT); W.events.length = 0; }
       total += W.t;
     }
-    return total / 8;
+    return total / 16;
   };
-  const e = survive('easy'), n = survive('normal'), h = survive('hard');
-  console.log('       생존 평균(초) 쉬움 ' + e.toFixed(0) + ' / 보통 ' + n.toFixed(0) + ' / 어려움 ' + h.toFixed(0));
+  const e = first('easy'), n = first('normal'), h = first('hard');
+  console.log('       처음 맞기까지(초) 쉬움 ' + e.toFixed(1) + ' / 보통 ' + n.toFixed(1) + ' / 어려움 ' + h.toFixed(1));
   assert(e > n && n > h, 'ordering');
 });
 

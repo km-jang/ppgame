@@ -94,7 +94,7 @@
 
   // 카드. apply(p): 플레이어 상태를 바꾼다. max: 최대 선택 횟수
   const CARDS = [
-    { id: 'barrel', icon: 'N+', name: '총열 추가', desc: '총열 +1. 부채꼴 탄막이 넓어진다', w: 2, max: 11,
+    { id: 'barrel', icon: 'N+', name: '총열 추가', desc: '총열 +1. 부채꼴 탄막이 넓어진다', w: 6, max: 11,
       apply: p => { p.gun.barrels += 1; } },
     { id: 'rate', icon: '≫', name: '연사', desc: '연사 속도 +20%', w: 5, max: 8,
       apply: p => { p.gun.rate *= 1.2; } },
