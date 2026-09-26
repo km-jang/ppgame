@@ -266,28 +266,6 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
 .new-medals .medal { animation: pop .5s var(--back) both; }
 .new-medals .medal:nth-child(2) { animation-delay: .15s; } .new-medals .medal:nth-child(3) { animation-delay: .3s; }
 
-/* ─── 방향 버튼: 게임 중 터치 기기에서 오른쪽(세로 화면은 아래)에 크게 ─── */
-:root { --pad: clamp(64px, 11vmin, 100px); }
-#dpad { display: none; position: fixed; z-index: 6; width: calc(var(--pad) * 3); height: calc(var(--pad) * 3);
-  right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
-  grid-template-columns: repeat(3, var(--pad)); grid-template-rows: repeat(3, var(--pad)); touch-action: none; }
-body.touch.playing #dpad { display: grid; }
-body.left-pad #dpad { right: auto; left: max(14px, env(safe-area-inset-left)); }
-@media (orientation: portrait) { #dpad { right: 50%; transform: translateX(50%); } }
-#dpad button { width: var(--pad); height: var(--pad); padding: 0; border-radius: 22px; border: 2px solid rgba(94, 231, 255, .45);
-  background: radial-gradient(circle at 40% 30%, rgba(94, 231, 255, .28), rgba(12, 22, 38, .85) 70%);
-  box-shadow: 0 6px 0 rgba(4, 30, 40, .9), 0 8px 18px rgba(0, 0, 0, .5), inset 0 2px 0 rgba(255, 255, 255, .25);
-  color: var(--cyan); touch-action: none; cursor: pointer; transition: transform .05s, box-shadow .05s; }
-#dpad button svg { width: 55%; height: 55%; fill: currentColor; filter: drop-shadow(0 0 6px rgba(94, 231, 255, .7)); }
-#dpad [data-dir=up] { grid-column: 2; grid-row: 1; }
-#dpad [data-dir=left] { grid-column: 1; grid-row: 2; }
-#dpad [data-dir=right] { grid-column: 3; grid-row: 2; }
-#dpad [data-dir=down] { grid-column: 2; grid-row: 3; }
-#dpad button.on { color: var(--yellow); border-color: var(--yellow); }
-#dpad button.on svg { filter: drop-shadow(0 0 8px rgba(255, 230, 109, .8)); }
-#dpad button.hit { transform: translateY(4px); box-shadow: 0 2px 0 rgba(4, 30, 40, .9), 0 4px 10px rgba(0, 0, 0, .5), inset 0 2px 0 rgba(255, 255, 255, .25); background: radial-gradient(circle at 40% 30%, rgba(94, 231, 255, .55), rgba(12, 22, 38, .85) 70%); }
-#dpad.wait button:not(.on) { animation: padNudge 1.2s ease-in-out infinite; }
-@keyframes padNudge { 50% { border-color: var(--yellow); color: var(--yellow); } }
 
 /* 쉬움·보통 고르기 */
 .level-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 16px; }
@@ -347,3 +325,6 @@ body.touch .text-btn { padding: 10px 16px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* 시작 화면 도움말: 피해야 할 것 */
+.help b.danger { color: #ff6b7a; }

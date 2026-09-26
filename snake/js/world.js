@@ -437,6 +437,28 @@
     return best || W.dir;
   }
 
+  // 앞길 위험 살피기 (그리기용 경고): 지금 방향(줄 선 방향이 있으면 그 방향)으로 max칸 안에
+  // 부딪히면 끝나는 칸(벽·판 끝·내 몸)이 있으면 {dist, x, y, cause}, 없으면 null.
+  // 몸은 그 칸에 닿을 때쯤 꼬리가 빠져 있으면 위험이 아니다. 유령일 때는 늘 null
+  function dangerAhead(W, max) {
+    if (!W || W.phase !== 'play' || (W.eff && W.eff.ghost > 0)) return null;
+    let dir = W.dir;
+    if (W.queue.length && W.queue[0] !== OPP[W.dir]) dir = W.queue[0];
+    const [dx, dy] = DIRS[dir], C = W.cols, R = W.rows, n = W.snake.length;
+    let x = W.snake[0].x, y = W.snake[0].y;
+    for (let k = 1; k <= (max || 3); k++) {
+      x += dx; y += dy;
+      if (x < 0 || y < 0 || x >= C || y >= R) {
+        if (!W.easy) return { dist: k, x: Math.max(0, Math.min(C - 1, x)), y: Math.max(0, Math.min(R - 1, y)), cause: 'edge' };
+        x = (x + C) % C; y = (y + R) % R;
+      }
+      if (W.walls && W.walls[y * C + x]) return { dist: k, x, y, cause: 'wall' };
+      if (W.portalAt && W.portalAt[y * C + x] >= 0) return null;   // 포털 너머는 살피지 않는다
+      for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return { dist: k, x, y, cause: 'self' };
+    }
+    return null;
+  }
+
   // 이번 판 기록 (메달 확인용)
   function runStats(W) {
     return {
@@ -446,5 +468,5 @@
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, DIRS, OPP };
 })(SN);

@@ -71,34 +71,40 @@
     // 칸 교차점에 작은 점
     g.fillStyle = 'rgba(94,231,255,0.22)';
     for (let x = 4; x < cols; x += 4) for (let y = 4; y < rows; y += 4) g.fillRect(x * cell - 1, y * cell - 1, 3, 3);
-    // 안쪽 벽 (스테이지): 분홍 네온 블록. 발광은 여기서 한 번만
+    // 안쪽 벽 (스테이지): 부딪히면 끝나는 위험 블록. 빨간 테두리 + 노랑·검정 사선 줄무늬로
+    // 먹이·아이템(둥근 구슬)과 한눈에 구별되게. 발광은 여기서 한 번만
     if (W && W.walls) {
-      const pad = Math.max(1, Math.round(cell * 0.08));
-      g.shadowColor = 'rgba(255,46,136,0.85)';
+      const pad = Math.max(1, Math.round(cell * 0.06));
+      g.shadowColor = 'rgba(255,59,78,0.9)';
       g.shadowBlur = cell * 0.6;
-      g.fillStyle = '#3a0f2c';
+      g.fillStyle = '#3a0a10';
       for (let i = 0; i < W.walls.length; i++) if (W.walls[i]) g.fillRect((i % cols) * cell + pad, Math.floor(i / cols) * cell + pad, cell - pad * 2, cell - pad * 2);
       g.shadowBlur = 0;
       for (let i = 0; i < W.walls.length; i++) {
         if (!W.walls[i]) continue;
         const x = (i % cols) * cell + pad, y = Math.floor(i / cols) * cell + pad, w = cell - pad * 2;
-        const gr = g.createLinearGradient(0, y, 0, y + w);
-        gr.addColorStop(0, '#7a1f5c'); gr.addColorStop(1, '#2a0a20');
-        g.fillStyle = gr; g.fillRect(x, y, w, w);
-        g.strokeStyle = '#ff5fa8'; g.lineWidth = Math.max(1, cell * 0.07); g.strokeRect(x + 0.5, y + 0.5, w - 1, w - 1);
-        g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x + 2, y + 2, w - 4, Math.max(1, w * 0.12));
+        g.fillStyle = '#2a070c'; g.fillRect(x, y, w, w);
+        g.save();
+        g.beginPath(); g.rect(x, y, w, w); g.clip();
+        g.strokeStyle = 'rgba(255,200,40,0.55)'; g.lineWidth = Math.max(2, w * 0.16);
+        g.beginPath();
+        for (let k = -w; k < w * 2; k += w * 0.45) { g.moveTo(x + k, y + w); g.lineTo(x + k + w, y); }
+        g.stroke();
+        g.restore();
+        g.strokeStyle = '#ff3b4e'; g.lineWidth = Math.max(1.5, cell * 0.09); g.strokeRect(x + 0.5, y + 0.5, w - 1, w - 1);
       }
     }
     // 네온 테두리
-    g.shadowColor = 'rgba(94,231,255,0.9)';
+    const deadly = W && !W.easy;   // 보통: 판 끝에 닿으면 끝 → 빨간 테두리
+    g.shadowColor = deadly ? 'rgba(255,59,78,0.9)' : 'rgba(94,231,255,0.9)';
     g.shadowBlur = 18;
-    g.strokeStyle = 'rgba(94,231,255,0.7)';
+    g.strokeStyle = deadly ? 'rgba(255,90,105,0.8)' : 'rgba(94,231,255,0.7)';
     g.lineWidth = 2;
     g.strokeRect(-1, -1, bw + 2, bh + 2);
     g.shadowBlur = 0;
     // 모서리 꺾쇠
     const k = Math.min(28, cell * 1.4);
-    g.strokeStyle = '#bff8ff';
+    g.strokeStyle = deadly ? '#ffc2c8' : '#bff8ff';
     g.lineWidth = 3;
     g.lineCap = 'square';
     g.beginPath();
@@ -255,7 +261,7 @@
       ctx.fillRect(s.x, s.y, s.s, s.s);
     }
     ctx.globalAlpha = 1;
-    const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0].join(',');
+    const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.easy ? 1 : 0].join(',');
     if (R.boardKey !== key || R.boardWalls !== W.walls) { R.boardKey = key; R.boardWalls = W.walls; R.board = paintBoard(v, W.cols, W.rows, v.dpr, W); }
     ctx.drawImage(R.board, v.bx - BM, v.by - BM, v.bw + BM * 2, v.bh + BM * 2);
   }
@@ -338,7 +344,85 @@
     ctx.font = '700 ' + Math.round(c * (K.glyph.length > 1 ? 0.46 : 0.6)) + 'px ' + NUM;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(K.glyph, p.x, p.y + bob + c * 0.03);
+    // 나타난 뒤 3초 동안 이름표 (좋은 아이템이라는 것을 알 수 있게)
+    const age = W.t - it.born;
+    if (age < 3) {
+      ctx.globalAlpha = Math.min(1, (3 - age) * 2);
+      ctx.font = Math.round(Math.max(13, c * 0.42)) + 'px ' + DISP;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.9)';
+      ctx.strokeText(K.name, p.x, p.y + bob - c * 0.95);
+      ctx.fillStyle = K.color; ctx.fillText(K.name, p.x, p.y + bob - c * 0.95);
+      ctx.globalAlpha = 1;
+    }
     ctx.textBaseline = 'alphabetic';
+  }
+
+  // ─── 위험 경고: 머리 앞 3칸 안에 부딪힐 것(벽·판 끝·내 몸)이 있으면 그 칸에 빨간 X와 "위험!" ───
+  const WARN_TXT = { wall: '위험! 벽', edge: '위험! 끝', self: '위험! 내 몸' };
+  function drawDanger(ctx, W, v) {
+    const d = v.danger;
+    if (!d || W.phase !== 'play' || W.wait > 0) return;
+    const c = v.cell, p = toPx(v, d.x, d.y);
+    const near = d.dist === 1, blink = v.calm ? 1 : 0.6 + Math.sin(W.t * (near ? 22 : 12)) * 0.4;
+    const a = (near ? 1 : d.dist === 2 ? 0.75 : 0.45) * blink;
+    ctx.globalAlpha = a;
+    glow(ctx, '#ff3b4e', p.x, p.y, c * 1.6, 0.8);
+    ctx.strokeStyle = '#ff3b4e'; ctx.lineWidth = Math.max(2, c * 0.12); ctx.lineCap = 'round';
+    const r = c * 0.32;
+    ctx.beginPath(); ctx.moveTo(p.x - r, p.y - r); ctx.lineTo(p.x + r, p.y + r); ctx.moveTo(p.x + r, p.y - r); ctx.lineTo(p.x - r, p.y + r); ctx.stroke();
+    ctx.strokeRect(p.x - c / 2 + 1, p.y - c / 2 + 1, c - 2, c - 2);
+    if (d.dist <= 2) {
+      // 말풍선: 머리 쪽이 아닌 방향으로, 판 안에 들어오게
+      const fs = Math.round(Math.max(15, Math.min(26, c * 0.62)));
+      ctx.font = fs + 'px ' + DISP;
+      const txt = WARN_TXT[d.cause] || '위험!';
+      const tw = ctx.measureText(txt).width + fs;
+      let tx = Math.max(v.bx + tw / 2, Math.min(v.bx + v.bw - tw / 2, p.x));
+      let ty = p.y - c * 1.2;
+      if (ty - fs < v.by) ty = p.y + c * 1.25;
+      ctx.fillStyle = 'rgba(40,4,10,0.88)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(tx - tw / 2, ty - fs * 0.75, tw, fs * 1.5, fs * 0.4); else ctx.rect(tx - tw / 2, ty - fs * 0.75, tw, fs * 1.5);
+      ctx.fill();
+      ctx.strokeStyle = '#ff3b4e'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#ffd0d5'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(txt, tx, ty + 1);
+      ctx.textBaseline = 'alphabetic';
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ─── 조이스틱 (터치 기기, 게임 중): 화면 구석에 작게 겹쳐 그린다. 판을 가리지 않게 반투명 ───
+  function drawStick(ctx, W, v) {
+    const I = v.pad;
+    if (!I || !v.touch || W.phase === 'over') return;
+    const R = I.radius, s = I.stick;
+    const ox = s ? s.ox : I.home.x, oy = s ? s.oy : I.home.y;
+    const kx = s ? s.kx : ox, ky = s ? s.ky : oy;
+    const wait = W.wait > 0, pulse = wait && !v.calm ? 0.5 + Math.sin(W.t * 6) * 0.5 : 0;
+    ctx.globalAlpha = s ? 0.85 : 0.55 + pulse * 0.3;
+    ctx.fillStyle = 'rgba(12,22,38,0.45)';
+    ctx.beginPath(); ctx.arc(ox, oy, R, 0, TAU); ctx.fill();
+    ctx.strokeStyle = wait ? 'rgba(255,230,109,0.8)' : 'rgba(94,231,255,0.55)'; ctx.lineWidth = 2; ctx.stroke();
+    // 네 방향 작은 화살표: 지금 가는 방향은 노랗게
+    const a = R * 0.72, t = R * 0.16;
+    for (const [dir, dx, dy] of [['up', 0, -1], ['down', 0, 1], ['left', -1, 0], ['right', 1, 0]]) {
+      const cx = ox + dx * a, cy = oy + dy * a;
+      ctx.fillStyle = dir === W.dir && !wait ? '#ffe66d' : wait ? 'rgba(255,230,109,0.85)' : 'rgba(191,248,255,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(cx + dx * t, cy + dy * t);
+      ctx.lineTo(cx - dx * t + dy * t, cy - dy * t + dx * t);
+      ctx.lineTo(cx - dx * t - dy * t, cy - dy * t - dx * t);
+      ctx.closePath(); ctx.fill();
+    }
+    // 손잡이
+    const kr = R * 0.42;
+    const gr = ctx.createRadialGradient(kx - kr * 0.3, ky - kr * 0.3, kr * 0.1, kx, ky, kr);
+    gr.addColorStop(0, 'rgba(191,248,255,0.95)'); gr.addColorStop(1, 'rgba(40,120,160,0.85)');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.arc(kx, ky, kr, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   // ─── 뱀 ───────────────────────────────────────────────────
@@ -486,8 +570,18 @@
       ctx.strokeText(W.lv.name + ' · 구슬 ' + W.goal + '개' + (W.portals.length ? ' · 포털 조심' : ''), cx, cy + fs * 0.55);
       ctx.fillStyle = '#5ee7ff';
       ctx.fillText(W.lv.name + ' · 구슬 ' + W.goal + '개' + (W.portals.length ? ' · 포털 조심' : ''), cx, cy + fs * 0.55);
+      if (W.walls && W.walls.some(Boolean)) {
+        const wt = '빨간 줄무늬 벽은 피해요!', ww = ctx.measureText(wt).width + fs * 0.8, wy = cy + fs * 1.85;
+        ctx.fillStyle = 'rgba(30,4,10,0.9)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(cx - ww / 2, wy - fs * 0.38, ww, fs * 0.76, fs * 0.2); else ctx.rect(cx - ww / 2, wy - fs * 0.38, ww, fs * 0.76);
+        ctx.fill(); ctx.strokeStyle = '#ff3b4e'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(5,7,12,0.9)';
+        ctx.strokeText(wt, cx, cy + fs * 1.85);
+        ctx.fillStyle = '#ff8a96'; ctx.fillText(wt, cx, cy + fs * 1.85);
+      }
       if (W.easy) {
-        const hint = v.touch ? '화살표를 누르면 출발!' : '방향키를 누르면 출발!';
+        const hint = v.touch ? '조이스틱을 밀면 출발!' : '방향키를 누르면 출발!';
         ctx.globalAlpha = 0.75 + (v.calm ? 0 : Math.sin(W.t * 5) * 0.25);
         ctx.strokeText(hint, cx, cy + fs * 1.2);
         ctx.fillStyle = '#ffe66d'; ctx.fillText(hint, cx, cy + fs * 1.2);
@@ -510,7 +604,7 @@
     ctx.globalAlpha = W.easy && W.wait > 0 ? 0.75 + (v.calm ? 0 : Math.sin(W.t * 5) * 0.25) : hintA * 0.85;
     ctx.font = Math.round(Math.max(16, Math.min(26, v.cell * 0.7))) + 'px ' + DISP;
     ctx.fillStyle = '#bff8ff';
-    const hint = W.easy && W.wait > 0 ? (v.touch ? '화살표를 누르면 출발!' : '방향키를 누르면 출발!') : v.touch ? '화살표를 누르거나 화면을 밀어요' : '방향키 또는 WASD로 방향 바꾸기';
+    const hint = W.easy && W.wait > 0 ? (v.touch ? '조이스틱을 밀면 출발!' : '방향키를 누르면 출발!') : v.touch ? '조이스틱이나 화면을 밀어요' : '방향키 또는 WASD로 방향 바꾸기';
     ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(5,7,12,0.85)';
     if (W.easy && W.wait > 0) ctx.fillStyle = '#ffe66d';
     ctx.strokeText(hint, cx, cy + Math.min(64, v.bw / 8) * 0.85);
@@ -531,6 +625,7 @@
     drawFood(ctx, W, v);
     drawItem(ctx, W, v);
     drawSnake(ctx, W, v);
+    if (v.hud !== false) drawDanger(ctx, W, v);
     drawFx(ctx);
     ctx.restore();
     if (R.flash > 0) {
@@ -539,7 +634,7 @@
     }
     // 느린 시계: 화면 가장자리가 푸르게
     if (W.eff && W.eff.slow > 0) { ctx.fillStyle = 'rgba(127,211,255,' + (0.06 + Math.min(1, W.eff.slow) * 0.05) + ')'; ctx.fillRect(0, 0, v.w, v.h); }
-    if (v.hud !== false) { drawHud(ctx, W, v); drawIntro(ctx, W, v); }
+    if (v.hud !== false) { drawHud(ctx, W, v); drawIntro(ctx, W, v); drawStick(ctx, W, v); }
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)

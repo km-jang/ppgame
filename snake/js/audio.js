@@ -85,6 +85,8 @@
     power: { gap: 0.1, fn(t) { tone(t, 'sawtooth', 300, 1200, 0.25, 0.1); [1047, 1319, 1568].forEach((f, i) => tone(t + 0.1 + i * 0.05, 'triangle', f, f, 0.2, 0.1)); } },
     // 포털: 휘익 빨려 들어갔다 나옴
     portal: { gap: 0.08, fn(t) { tone(t, 'sine', 1600, 200, 0.18, 0.12); tone(t + 0.12, 'sine', 200, 1400, 0.16, 0.1); } },
+    // 앞에 부딪힐 것이 있음: 짧은 경고음 두 번
+    warn: { gap: 0.6, fn(t) { tone(t, 'square', 880, 880, 0.06, 0.07); tone(t + 0.1, 'square', 880, 880, 0.06, 0.07); } },
     wrap: { gap: 0.08, fn(t) { noise(t, 'bandpass', 800, 3000, 0.15, 0.1); } },
     // 황금 구슬이 식음
     cool: { gap: 0.3, fn(t) { tone(t, 'triangle', 700, 350, 0.25, 0.08); } },

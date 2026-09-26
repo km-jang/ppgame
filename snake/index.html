@@ -41,13 +41,6 @@
     <button id="btn-fs" class="icon-btn" aria-label="전체 화면"><svg class="i" aria-hidden="true"><use href="#i-fs"/></svg></button>
   </div>
   <div id="toast" role="status"></div>
-  <!-- 방향 버튼 (터치 기기, 게임 중): 아이도 누르기 쉽게 크게 -->
-  <div id="dpad" aria-label="방향 버튼">
-    <button data-dir="up" aria-label="위"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5 4 15h16z"/></svg></button>
-    <button data-dir="left" aria-label="왼쪽"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l10-8v16z"/></svg></button>
-    <button data-dir="right" aria-label="오른쪽"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12 9 4v16z"/></svg></button>
-    <button data-dir="down" aria-label="아래"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19 4 9h16z"/></svg></button>
-  </div>
 
   <!-- 시작 화면 -->
   <section id="scr-title" class="screen">
@@ -65,11 +58,11 @@
         <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
       </div>
       <ul class="help">
-        <li><svg class="i" aria-hidden="true"><use href="#i-swipe"/></svg><span><b class="only-touch">화살표</b><b class="only-pc">방향키</b> 눌러서 방향 바꾸기</span></li>
+        <li><svg class="i" aria-hidden="true"><use href="#i-swipe"/></svg><span><b class="only-touch">조이스틱</b><b class="only-pc">방향키</b>로 방향 바꾸기</span></li>
         <li><svg class="i pink" aria-hidden="true"><use href="#i-orb"/></svg><span><b>구슬</b> 먹으면 길어져요</span></li>
         <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>황금 구슬</b> 빨리 먹으면 큰 점수</span></li>
-        <li><svg class="i red" aria-hidden="true"><use href="#i-wall"/></svg><span><b>내 몸</b> 부딪히면 끝</span></li>
-        <li><span class="glyphs"><i style="color:#7fd3ff">◷</i><i style="color:#ffe66d">×2</i><i style="color:#c7a6ff">◌</i><i style="color:#3dff8b">✂</i></span><span><b>아이템</b> 먹어 보면 알아요</span></li>
+        <li><svg class="i red" aria-hidden="true"><use href="#i-wall"/></svg><span><b class="danger">위험! 피해요</b> 빨간 줄무늬 벽 · 내 몸 · (보통) 빨간 테두리</span></li>
+        <li><span class="glyphs"><i style="color:#7fd3ff">◷</i><i style="color:#ffe66d">×2</i><i style="color:#c7a6ff">◌</i><i style="color:#3dff8b">✂</i></span><span><b>아이템</b> 모두 좋은 것, 먹어도 돼요</span></li>
       </ul>
       <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
     </div>

@@ -438,5 +438,36 @@ test('쉬움: 느리고, 방향을 누를 때까지 기다리고, 판 끝에서 
   assert(speed(S) < levelDef(12).speed, 'stage slower in easy');
 });
 
+// ─── 앞길 위험 경고 ───
+test('위험 경고: 앞에 판 끝·벽·내 몸이 있으면 알려 주고, 쉬움·유령·빠질 꼬리는 위험이 아니다', () => {
+  const dz = SN.World.dangerAhead;
+  const W = create(20, 12, 1, { mode: 'endless' });
+  W.wait = 0; W.dir = 'right'; W.queue = [];
+  W.snake = [{ x: 18, y: 5 }, { x: 17, y: 5 }, { x: 16, y: 5 }, { x: 15, y: 5 }];
+  const e = dz(W, 3);
+  assert(e && e.cause === 'edge' && e.dist === 2, 'edge ' + JSON.stringify(e));
+  W.snake = [{ x: 5, y: 5 }, { x: 4, y: 5 }, { x: 3, y: 5 }, { x: 2, y: 5 }];
+  assert(dz(W, 3) === null, 'open road');
+  W.walls = new Uint8Array(20 * 12); W.walls[5 * 20 + 7] = 1;
+  const w = dz(W, 3);
+  assert(w && w.cause === 'wall' && w.dist === 2 && w.x === 7, 'wall ' + JSON.stringify(w));
+  W.queue = ['down'];
+  assert(dz(W, 3) === null, 'looks where the queued turn goes');
+  W.queue = []; W.walls = null;
+  // 몸으로 둘러싼 고리: 머리 바로 앞 칸이 몸 가운데
+  W.snake = [{ x: 5, y: 5 }, { x: 5, y: 4 }, { x: 6, y: 4 }, { x: 6, y: 5 }, { x: 6, y: 6 }, { x: 7, y: 6 }];
+  const b = dz(W, 3);
+  assert(b && b.cause === 'self' && b.dist === 1, 'body ' + JSON.stringify(b));
+  W.snake = [{ x: 5, y: 5 }, { x: 5, y: 4 }, { x: 6, y: 4 }, { x: 6, y: 5 }];
+  assert(dz(W, 3) === null, 'tail leaves before we get there');
+  W.eff = { ghost: 3 };
+  W.snake = [{ x: 19, y: 5 }, { x: 18, y: 5 }, { x: 17, y: 5 }, { x: 16, y: 5 }];
+  assert(dz(W, 3) === null, 'ghost passes');
+  const E = create(20, 12, 1, { mode: 'endless', easy: true });
+  E.wait = 0; E.dir = 'right'; E.queue = [];
+  E.snake = [{ x: 19, y: 5 }, { x: 18, y: 5 }, { x: 17, y: 5 }, { x: 16, y: 5 }];
+  assert(dz(E, 3) === null, 'easy wraps, no edge danger');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

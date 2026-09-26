@@ -11,10 +11,12 @@
   if (isTouch) document.body.classList.add('touch');
   const calmQuery = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   const input = SN.createInput(canvas);
+  let warnKey = '';
   const BEST_KEY = 'snake.best';   // {score, len}
   const MUTE_KEY = 'snake.muted';
 
   const view = { dpr: 1, w: 0, h: 0, ui: 1, hudMid: 32, hudLeft: 150, hudRight: 14, touch: isTouch, calm: false, best: 0 };
+  view.pad = input;   // 조이스틱 그리기용 (render.js가 읽기만 한다)
   const demoView = Object.create(view, { hud: { value: false } });
 
   let W = null;        // 실제 판
@@ -51,13 +53,17 @@
   let easy = SN.store.get(EASY_KEY, true) !== false;
   const boardFor = ({ w, h }) => { const B = easy ? D.EASY.board : D.BOARD; return h > w * 1.1 ? B.port : B.land; };
 
-  // 방향 버튼 자리: 가로 화면은 오른쪽, 세로 화면은 아래를 비워 판이 버튼 밑에 깔리지 않게
-  const padSize = () => Math.max(64, Math.min(100, Math.min(view.w, view.h) * 0.11));
-  function fit(world, withPad) {
-    let right = 0, bottom = 0;
-    if (withPad && isTouch) { const k = padSize() * 3 + 28; if (view.h > view.w * 1.1) bottom = k; else right = k; }
-    const L = SN.Render.layout(world.cols, world.rows, view.w, view.h, view.hudH, right, bottom);
+  // 조이스틱은 판 위에 겹쳐 그리므로 판 자리를 따로 비우지 않는다 (판이 작아지지 않게)
+  function fit(world) {
+    const L = SN.Render.layout(world.cols, world.rows, view.w, view.h, view.hudH);
     Object.assign(view, L);
+  }
+  // 조이스틱 자리: 오른쪽 아래 구석(세로 화면은 아래 가운데), 작게
+  function placeStick() {
+    const R = Math.round(Math.max(40, Math.min(62, Math.min(view.w, view.h) * 0.075)));
+    input.radius = R;
+    const m = R + Math.max(22, R * 0.45);
+    input.home = view.h > view.w * 1.1 ? { x: view.w / 2, y: view.h - m } : { x: view.w - m, y: view.h - m };
   }
   function renderEasy() {
     for (const b of document.querySelectorAll('[data-easy]')) b.setAttribute('aria-pressed', String((b.dataset.easy === '1') === easy));
@@ -86,6 +92,7 @@
     view.ui = isTouch ? (Math.min(w, h) >= 600 ? 1.3 : 1.1) : 1;
     measureHud();
     input.threshold = Math.max(D.SWIPE.min, Math.min(w, h) * D.SWIPE.ratio);
+    placeStick();
     view.calm = !!(calmQuery && calmQuery.matches);
     frozenDrawn = false;
     canvas.width = Math.round(w * view.dpr);
@@ -182,6 +189,7 @@
     view.best = W.mode === 'stage' ? rec.stage.score : rec.endless.score;
     medalCheckT = 0;
     input.reset();
+    view.danger = null; warnKey = '';
     mode = 'play';
     wakeLock(true);
     show(null);
@@ -278,27 +286,8 @@
   // ─── 입력 연결 ─────────────────────────────────────────────
   input.onDir = dir => {
     SN.Audio.unlock();
-    if (mode === 'play' && W) SN.World.turn(W, dir);
+    if (mode === 'play' && W && SN.World.turn(W, dir) && input.stick) vibrate(10);
   };
-  // 방향 버튼: 누르는 순간 바로 (떼기를 기다리지 않는다)
-  const dpad = $('dpad');
-  for (const b of dpad.querySelectorAll('button')) {
-    b.addEventListener('pointerdown', e => {
-      e.preventDefault(); e.stopPropagation();
-      input.onDir(b.dataset.dir);
-      vibrate(12);
-      b.classList.remove('hit'); void b.offsetWidth; b.classList.add('hit');
-      setTimeout(() => b.classList.remove('hit'), 120);
-    });
-  }
-  let padShown = '';
-  function updatePad() {
-    const key = W ? W.dir + (W.wait > 0 ? 'w' : '') : '';
-    if (key === padShown) return;
-    padShown = key;
-    for (const b of dpad.querySelectorAll('button')) b.classList.toggle('on', !!W && b.dataset.dir === W.dir);
-    dpad.classList.toggle('wait', !!W && W.wait > 0);
-  }
   for (const b of document.querySelectorAll('[data-easy]')) b.addEventListener('click', () => { SN.Audio.unlock(); setEasy(b.dataset.easy === '1'); });
   input.onKey = code => {
     SN.Audio.unlock();
@@ -390,13 +379,17 @@
         // 게임 중에 딸 수 있는 메달은 바로 알려 준다
         if ((medalCheckT += dt) > 0.5 && W.phase === 'play') { medalCheckT = 0; checkMedals(true); }
         if (W.phase === 'over') gameOver();
-        updatePad();
+        // 앞길 경고: 바로 앞 칸이 위험해지는 순간 짧은 경고음·진동 (같은 위험에는 한 번만)
+        view.danger = SN.World.dangerAhead(W, 3);
+        const dk = view.danger && view.danger.dist === 1 ? view.danger.x + ',' + view.danger.y : '';
+        if (dk && dk !== warnKey) { SN.Audio.play('warn'); vibrate(30); }
+        warnKey = dk;
         frozenDrawn = false;
       }
       // 결과 화면이 뜨고 연출이 끝나면 그리기를 쉰다 (배터리)
       const idle = mode === 'paused' || (mode === 'over' && performance.now() - overAt > 1200 && !SN.Render.busy());
       if (!idle || !frozenDrawn) {
-        fit(W, true);
+        fit(W);
         SN.Render.draw(ctx, W, view, dt);
         frozenDrawn = idle;
       }
@@ -432,5 +425,6 @@
     newGame, pause, resume, toTitle, openStage, openMedals,
     turn(dir) { return W ? SN.World.turn(W, dir) : false; },
     autopilot(on) { auto = on !== false; return auto; },
+    get pad() { return input; }, get view() { return view; },
   };
 })(SN);
