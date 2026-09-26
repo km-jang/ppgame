@@ -56,16 +56,29 @@
   // 타격감: 큰 적을 잡는 순간 화면을 아주 잠깐 멈춘다 (초). 연달아 걸리지 않게 간격을 둔다
   // 보스 모습: 5웨이브마다 차례로 바뀐다 (한 바퀴 돌면 같은 모습에 "MK2", "MK3"…). 규칙(체력·탄막)은 같다
   // color: 몸 색 · glow: 발광·보스전 배경 색(r,g,b) · shape: 그리기 모양 · theme: 보스전 배경
+  // atk: 보스마다 다른 공격 (world.js bossAttack). 간격(초)은 체력 절반 아래에서 rage만큼 짧아진다
   const BOSSES = [
     { id: 'octa',  name: '옥타 코어',   color: '#ff2e88', glow: '255,46,136',  shape: 'octa',
+      desc: '둥근 탄막 + 세 갈래 조준 + 졸개 부르기',
       theme: { base: '#0b0406', a: '#6b0a26', b: '#2a0712', grid: '255,70,120' } },
     { id: 'star',  name: '스타 크러셔', color: '#ffb703', glow: '255,183,3',   shape: 'star',
+      desc: '팔에서 도는 소용돌이 탄 + 예고선 뒤 돌진',
+      atk: { spiralGap: 0.22, arms: 4, spin: 1.5, spiralSpeed: 160, spiralOn: 3.5, spiralOff: 1.5,
+             chargeCd: 5.5, chargeWarn: 0.8, chargeSpeed: 540, chargeTime: 0.6 },
       theme: { base: '#0b0803', a: '#6b4200', b: '#3a1a05', grid: '255,190,80' } },
     { id: 'hex',   name: '헥사 가디언', color: '#06d6a0', glow: '6,214,160',   shape: 'hex',
+      desc: '도는 방패가 내 총알을 막음 + 여섯 방향 연발 + 사수 부르기',
+      atk: { shieldR: 1.42, shieldBand: 0.25, shieldArc: 0.5, shieldSpin: 1.8,
+             volleyCd: 1.8, volleySpeeds: [150, 190, 230], summonCd: 9 },
       theme: { base: '#03090a', a: '#0a5a48', b: '#06303a', grid: '90,255,200' } },
     { id: 'eye',   name: '보이드 아이', color: '#9b6bff', glow: '155,107,255', shape: 'eye',
+      desc: '예고선 뒤 레이저 + 따라오는 구슬',
+      atk: { laserCd: 3.8, laserWarn: 1.0, laserTrack: 0.6, laserOn: 0.55, laserW: 30, rageSplit: 0.38,
+             orbCd: 2.2, orbs: 3, orbSpeed: 155, orbTurn: 2.1, orbHome: 3.5, keep: 300 },
       theme: { base: '#06040d', a: '#3a1a7a', b: '#1a0b3a', grid: '180,150,255' } },
     { id: 'saw',   name: '톱날 군주',   color: '#dfe7f2', glow: '210,225,255', shape: 'saw',
+      desc: '벽에 튕기며 날아다님 + 휘어 도는 톱날 고리 + 돌격병 부르기',
+      atk: { bounceSpeed: 150, rageSpeed: 215, ringCd: 2.6, ring: 10, ringSpeed: 160, curve: 0.9, summonCd: 8 },
       theme: { base: '#06070a', a: '#3a4458', b: '#1a1f2c', grid: '210,225,255' } },
   ];
 
@@ -171,4 +184,86 @@
   ];
 
   NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
+
+  // ═══ 기체 · 상점 · 미션 · 아이템 (2026-09-26, 소유자: "캐릭터 고를 수 있게, 상점·미션·아이템") ═══
+  // 기체. hp: 체력 더하기, speed·dashCd: 배율, gun: 총 바꾸기(barrels 더하기, rate·dmg·speed 배율, crit 더하기,
+  // critMul·pierce 바꾸기), drones: 시작 드론, passive: 작은 특기 (world.js makePlayer가 읽는다)
+  // price 0 = 처음부터 있음. shape: 그리기 모양 (render.js drawShip)
+  const SHIPS = [
+    { id: 'core', name: '코어', shape: 'circle', color: '#5ee7ff', glow: '94,231,255', price: 0,
+      desc: '균형형. 회복 아이템이 1.5배 자주 나온다',
+      hp: 0, speed: 1, dashCd: 1, gun: {}, drones: 0, passive: 'heal', healMul: 1.5 },
+    { id: 'viper', name: '바이퍼', shape: 'tri', color: '#b6ff5c', glow: '182,255,92', price: 0,
+      desc: '빠르고 대시가 자주. 체력 -1, 위력 조금 약함',
+      hp: -1, speed: 1.18, dashCd: 0.7, gun: { rate: 1.1, dmg: 0.88 }, drones: 0 },
+    { id: 'titan', name: '타이탄', shape: 'square', color: '#ff9f43', glow: '255,159,67', price: 600,
+      desc: '체력 +3, 위력 ×1.3. 느리고 연사가 느리다. 맞은 뒤 무적 1.5배',
+      hp: 3, speed: 0.86, dashCd: 1.25, gun: { rate: 0.8, dmg: 1.3 }, drones: 0, passive: 'armor', iframeMul: 1.5 },
+    { id: 'lancer', name: '랜서', shape: 'diamond', color: '#b388ff', glow: '179,136,255', price: 800,
+      desc: '한 발이 무겁다. 관통 +1, 치명타 15%·3.5배. 연사 느림',
+      hp: 0, speed: 1, dashCd: 1, gun: { rate: 0.55, dmg: 2.1, speed: 1.35, crit: 0.1, critMul: 3.5, pierce: 1 }, drones: 0 },
+    { id: 'hive', name: '하이브', shape: 'hex', color: '#3dff8b', glow: '61,255,139', price: 1000,
+      desc: '드론 2개로 시작, 5웨이브에 1개 더. 총은 조금 약함',
+      hp: 0, speed: 0.95, dashCd: 1, gun: { dmg: 0.8 }, drones: 2, passive: 'hive' },
+    { id: 'nova', name: '노바', shape: 'star', color: '#ff5ec8', glow: '255,94,200', price: 1400,
+      desc: '총열 2개로 시작, 필살기가 1.3배 빨리 찬다. 체력 -1, 위력 약함',
+      hp: -1, speed: 1.05, dashCd: 1, gun: { barrels: 1, dmg: 0.72, rate: 0.9 }, drones: 0, passive: 'ult', ultMul: 1.3 },
+  ];
+
+  // 영구 강화 (5단계). per: 한 단계 효과. prices: 단계별 값 (1단계부터)
+  const UPGRADES = [
+    { id: 'hp',       icon: '♥', name: '체력',          desc: '최대 체력 +1',            per: 1,    prices: [150, 300, 500, 800, 1200] },
+    { id: 'dmg',      icon: '✦', name: '공격력',        desc: '탄 위력 +6%',             per: 0.06, prices: [200, 400, 700, 1100, 1600] },
+    { id: 'ultStart', icon: 'N', name: '필살기 시작',   desc: '필살기 게이지 12% 찬 채로 시작', per: 0.12, prices: [120, 250, 450, 700, 1000] },
+    { id: 'coin',     icon: '¢', name: '코인 보너스',   desc: '판이 끝날 때 코인 +10%',   per: 0.1,  prices: [150, 300, 550, 900, 1400] },
+    { id: 'magnet',   icon: '◉', name: '줍기 자석',     desc: '아이템을 끌어오는 범위 +25%', per: 0.25, prices: [100, 200, 350, 550, 800] },
+  ];
+  const UPGRADE_MAX = 5;
+
+  // 시작 아이템: 판 시작 전에 사 두면 다음 판 한 번에 쓰고 사라진다. max: 쌓아 둘 수 있는 개수
+  const START_ITEMS = [
+    { id: 'shield',  icon: '◯', name: '방패',         desc: '처음 맞는 한 대를 막는다',   price: 80,  max: 3 },
+    { id: 'barrel',  icon: 'N+', name: '총열 +1 시작', desc: '총열 하나를 더 달고 시작',   price: 150, max: 3 },
+    { id: 'fullult', icon: 'Q',  name: '필살기 가득',  desc: '필살기 게이지가 가득 찬 채로 시작', price: 120, max: 3 },
+  ];
+
+  // 판이 끝날 때 받는 코인 = 점수 ÷ 40 + (웨이브-1) × 4 + 보스 × 40 + 주운 코인. 그 뒤 코인 보너스 강화만큼 더
+  const COINS = { perScore: 40, perWave: 4, perBoss: 40 };
+
+  // 게임 중 떨어지는 아이템 (일반 적 처치마다, 회복 다음에 한 번 굴림). chance: 처치당 확률
+  // coin: value 코인, 보스는 bossCoins개를 흩뿌림 · heat: time초 동안 연사 mul배 · magnet: time초 동안 모든 아이템을 끌어옴
+  // bomb: radius 안 적에게 필살기 피해의 dmgMul배(보스는 bossCap까지), 화면의 적 탄 모두 지움
+  const ITEMS = {
+    coin:   { name: '코인',  chance: 0.09,  value: 3, life: 8, color: '#ffd23f', bossCoins: 6 },
+    shield: { name: '방패',  chance: 0.012, life: 10, color: '#5ee7ff' },
+    heat:   { name: '과열',  chance: 0.015, life: 10, color: '#ff7a3d', time: 6, mul: 2 },
+    magnet: { name: '자석',  chance: 0.012, life: 10, color: '#c77dff', time: 8, speed: 620 },
+    bomb:   { name: '폭탄',  chance: 0.01,  life: 10, color: '#ff4d6d', radius: 260, dmgMul: 0.6, bossCap: 0.05 },
+  };
+
+  // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름
+  // ship: 그 기체로 할 때만 (가진 기체일 때만 나온다). 다 채우면 받기 버튼 → reward 코인, 새 미션으로 바뀜
+  const MISSIONS = [
+    { id: 'k300',   kind: 'life', stat: 'kills',     goal: 300,  reward: 120, text: '적 300마리 처치 (누적)' },
+    { id: 'boss2',  kind: 'life', stat: 'bosses',    goal: 2,    reward: 150, text: '보스 2마리 격파 (누적)' },
+    { id: 'ult5',   kind: 'life', stat: 'ults',      goal: 5,    reward: 100, text: '필살기 5번 쓰기 (누적)' },
+    { id: 'dash40', kind: 'life', stat: 'dashes',    goal: 40,   reward: 80,  text: '대시 40번 (누적)' },
+    { id: 'coin20', kind: 'life', stat: 'coinPicks', goal: 20,   reward: 80,  text: '코인 아이템 20개 줍기 (누적)' },
+    { id: 'item8',  kind: 'life', stat: 'items',     goal: 8,    reward: 90,  text: '방패·과열·자석·폭탄 8개 줍기 (누적)' },
+    { id: 'block3', kind: 'life', stat: 'blocks',    goal: 3,    reward: 100, text: '방패로 3번 막기 (누적)' },
+    { id: 'bomb15', kind: 'life', stat: 'bombKills', goal: 15,   reward: 100, text: '폭탄으로 적 15마리 (누적)' },
+    { id: 'games5', kind: 'life', stat: 'games',     goal: 5,    reward: 80,  text: '5판 플레이 (누적)' },
+    { id: 'c20',    kind: 'run',  stat: 'bestCombo', goal: 20,   reward: 120, text: '한 판에 20콤보' },
+    { id: 'w10',    kind: 'run',  stat: 'wave',      goal: 10,   reward: 200, text: '한 판에 웨이브 10 도달' },
+    { id: 'clean3', kind: 'run',  stat: 'cleanWaves', goal: 3,   reward: 120, text: '한 판에 안 맞고 웨이브 3번 클리어' },
+    { id: 'n4',     kind: 'run',  stat: 'maxN',      goal: 4,    reward: 150, text: '한 판에 총열 N 4' },
+    { id: 's5000',  kind: 'run',  stat: 'score',     goal: 5000, reward: 150, text: '한 판에 5,000점' },
+    { id: 't300',   kind: 'run',  stat: 'time',      goal: 300,  reward: 120, text: '한 판에 5분 버티기' },
+    { id: 'viper6', kind: 'run',  stat: 'wave',      goal: 6,    reward: 130, text: '바이퍼로 웨이브 6 도달', ship: 'viper' },
+    { id: 'titanB', kind: 'run',  stat: 'bossKills', goal: 1,    reward: 160, text: '타이탄으로 보스 격파', ship: 'titan' },
+    { id: 'lancer8', kind: 'run', stat: 'wave',      goal: 8,    reward: 180, text: '랜서로 웨이브 8 도달', ship: 'lancer' },
+  ];
+  const MISSION_SLOTS = 3;
+
+  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS });
 })(NG);

@@ -552,5 +552,103 @@ test('보스는 웨이브마다 모습·색이 다르고, 한 바퀴 돌면 MK2'
   assert(looks[B.length] === B[0].id + ':2', 'mk2 ' + looks[B.length]);
 });
 
+// ─── 보스마다 다른 공격 ───
+function bossWorld(k, seed) {
+  const W = createWorld(1280, 800, seed || 70 + k);
+  W.spawnQueue.length = 0; W.enemies.length = 0; W.banner = 0;
+  W.bossKills = k; W.wave = 5; W.bossWave = true;
+  const e = { id: W.nextId++, type: 'boss', def: NG.DATA.ENEMIES.boss, look: NG.World.bossLook(k), mk: 1, x: 900, y: 300, r: 58, hp: 1e6, maxHp: 1e6, speed: 42,
+    vx: 0, vy: 0, spawnT: 0, flash: 0, droneHit: 0, dead: false, ang: 0, cd: 0, ringCd: 3, aimCd: 1.4, summonCd: 6.5, strafe: 1 };
+  W.enemies.push(e);
+  W.player.hp = W.player.maxHp = 1e6; W.player.x = 300; W.player.y = 500; W.player.fireCd = 1e9;
+  return { W, e };
+}
+const HOLD = { moveX: 0, moveY: 0, aimAngle: 0, dash: false };
+function runFor(W, sec, fn) { for (let i = 0; i < sec * 60; i++) { step(W, HOLD, DT); if (fn) fn(W); W.events.length = 0; W.player.hp = W.player.maxHp; } }
+
+test('보스 공격: 스타 크러셔는 소용돌이 별 탄을 쏘고, 예고선 뒤 빠르게 돌진한다', () => {
+  const { W, e } = bossWorld(1);
+  let kinds = new Set(), warned = false, maxV = 0, warns = [];
+  runFor(W, 9, W => { for (const b of W.eBullets) kinds.add(b.k); if (e.warnT > 0) warned = true; maxV = Math.max(maxV, Math.hypot(e.vx, e.vy)); });
+  assert(kinds.has('star'), 'star bullets');
+  assert(warned, 'charge warning shown');
+  assert(maxV > 400, 'charged fast: ' + maxV.toFixed(0));
+});
+
+test('보스 공격: 헥사 가디언 방패는 내 총알 일부를 막고, 여섯 방향 연발을 쏜다', () => {
+  const { W, e } = bossWorld(2);
+  let blocked = 0, hitHp = e.hp, kinds = new Set();
+  W.player.fireCd = 0;
+  for (let i = 0; i < 60 * 6; i++) {
+    step(W, { moveX: 0, moveY: 0, aimAngle: Math.atan2(e.y - W.player.y, e.x - W.player.x), dash: false }, DT);
+    blocked += W.events.filter(x => x === 'block').length; W.events.length = 0; W.player.hp = W.player.maxHp;
+    for (const b of W.eBullets) kinds.add(b.k);
+  }
+  assert(blocked > 3, 'shield blocked ' + blocked);
+  assert(e.hp < hitHp, 'but some bullets get through');
+  assert(kinds.has('hex'), 'hex volley');
+});
+
+test('보스 공격: 보이드 아이 레이저는 예고 뒤 줄 위에 있으면 맞고, 비키면 안 맞는다', () => {
+  const a = bossWorld(3, 91);
+  let hurtA = 0;
+  a.e.laserT = 0.01; a.e.orbT = 99;
+  for (let i = 0; i < 60 * 2; i++) { step(a.W, HOLD, DT); hurtA += a.W.events.filter(x => x === 'hurt').length; a.W.events.length = 0; a.W.player.iframe = 0; a.W.eBullets.length = 0; }
+  assert(hurtA >= 1, 'standing in the beam hurts');
+  const b = bossWorld(3, 92);
+  let hurtB = 0;
+  b.e.laserT = 0.01; b.e.orbT = 99;
+  for (let i = 0; i < 60 * 2; i++) {
+    // 예고가 굳은 뒤(0.6초) 옆으로 비킨다
+    const mv = b.W.lasers.length && b.W.lasers[0].t > 0.65 ? 1 : 0;
+    step(b.W, { moveX: 0, moveY: mv, aimAngle: 0, dash: false }, DT);
+    hurtB += b.W.events.filter(x => x === 'hurt').length; b.W.events.length = 0; b.W.player.iframe = 0; b.W.eBullets.length = 0;
+  }
+  assert(hurtB === 0, 'dodged the locked beam: ' + hurtB);
+});
+
+test('보스 공격: 보이드 아이 구슬은 플레이어 쪽으로 휘어 온다', () => {
+  const { W, e } = bossWorld(3, 93);
+  e.laserT = 99; e.orbT = 0.01;
+  runFor(W, 0.2);
+  const orb = W.eBullets.find(b => b.k === 'orb');
+  assert(orb, 'orb fired');
+  const d0 = Math.hypot(orb.x - W.player.x, orb.y - W.player.y);
+  W.player.x = 300; W.player.y = 700;
+  runFor(W, 2);
+  const d1 = Math.hypot(orb.x - W.player.x, orb.y - W.player.y);
+  assert(d1 < d0, 'homing closes in: ' + d0.toFixed(0) + ' -> ' + d1.toFixed(0));
+});
+
+test('보스 공격: 톱날 군주는 벽에 튕기며 날고, 휘어 도는 톱날 고리를 쏜다', () => {
+  const { W, e } = bossWorld(4);
+  let bounces = 0, lastVx = null, curved = false;
+  runFor(W, 12, () => {
+    if (lastVx != null && Math.sign(lastVx) !== Math.sign(e.vx)) bounces++;
+    lastVx = e.vx;
+    for (const b of W.eBullets) if (b.k === 'blade' && b.curve) curved = true;
+  });
+  assert(e.free && bounces >= 1, 'bounced ' + bounces);
+  assert(curved, 'curving blades');
+  assert(e.x >= e.r && e.x <= W.w - e.r && e.y >= e.r && e.y <= W.h - e.r, 'stays inside');
+});
+
+test('보스 공격: 다섯 보스 모두 오래 싸워도 값이 망가지지 않고 잡을 수 있다', () => {
+  for (let k = 0; k < NG.DATA.BOSSES.length; k++) {
+    const { W, e } = bossWorld(k, 200 + k);
+    e.hp = e.maxHp = 400;
+    W.player.fireCd = 0; W.player.gun.dmg = 3; W.player.gun.barrels = 3;
+    let f = 0;
+    while (!e.dead && f++ < 60 * 90) {
+      const p = W.player;
+      step(W, { moveX: Math.cos(W.t * 0.7), moveY: Math.sin(W.t * 0.9), aimAngle: null, dash: f % 90 === 0 }, DT);
+      W.events.length = 0; p.hp = p.maxHp;
+      assert(Number.isFinite(e.x + e.y + e.vx + e.vy), 'finite boss ' + k);
+      for (const b of W.eBullets) assert(Number.isFinite(b.x + b.y), 'finite bullet');
+    }
+    assert(e.dead, NG.DATA.BOSSES[k].id + ' killable (hp ' + e.hp.toFixed(0) + ')');
+  }
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -115,6 +115,10 @@
     combo:   { gap: 0.20, fn: t => { tone(sfxBus, t, 'square', 880, 1320, 0.07, 0.09); tone(sfxBus, t + 0.06, 'square', 1320, 1760, 0.09, 0.09); } },
     heal:    { gap: 0.05, fn: t => { tone(sfxBus, t, 'sine', 660, 660, 0.08, 0.25); tone(sfxBus, t + 0.07, 'sine', 990, 990, 0.12, 0.25); } },
     eshoot:  { gap: 0.08, fn: t => { tone(sfxBus, t, 'triangle', 700, 350, 0.08, 0.12); } },
+    // 보스 예고(돌진·레이저) · 레이저 발사 · 헥사 방패가 총알을 막음
+    warn:    { gap: 0.3, fn: t => { for (let i = 0; i < 3; i++) tone(sfxBus, t + i * 0.12, 'square', 1200, 1200, 0.07, 0.07); } },
+    laser:   { gap: 0.2, fn: t => { tone(sfxBus, t, 'sawtooth', 120, 60, 0.5, 0.25); noise(sfxBus, t, 'bandpass', 3000, 800, 0.45, 0.3, 1); } },
+    block:   { gap: 0.06, fn: t => { tone(sfxBus, t, 'triangle', 1800, 1400, 0.04, 0.05); } },
     pick:    { gap: 0.05, fn: t => { [523, 659, 784].forEach((f, i) => tone(sfxBus, t + i * 0.05, 'square', f, f, 0.1, 0.12)); } },
     clear:   { gap: 0.10, fn: t => { [440, 554, 659, 880].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.18, 0.25)); } },
     wave:    { gap: 0.10, fn: t => { tone(sfxBus, t, 'triangle', 330, 660, 0.25, 0.22); } },

@@ -303,7 +303,7 @@
     if (L.shape === 'hex') {
       // 바깥을 도는 방패 조각 6개
       ctx.lineWidth = r * 0.14;
-      for (let i = 0; i < 6; i++) { const a = -e.ang * 0.9 + TAU * i / 6; ctx.beginPath(); ctx.arc(x, y, r * 1.42, a, a + 0.62); ctx.stroke(); }
+      for (let i = 0; i < 6; i++) { const a = -e.ang * 0.9 + TAU * i / 6; ctx.beginPath(); ctx.arc(x, y, r * L.atk.shieldR, a, a + L.atk.shieldArc); ctx.stroke(); }
     } else if (L.shape === 'eye') {
       // 속눈썹 가시 10개
       ctx.lineWidth = r * 0.1; ctx.lineCap = 'round';
@@ -448,10 +448,65 @@
     }
     ctx.globalCompositeOperation = 'source-over';
     for (const b of W.eBullets) {
-      ctx.fillStyle = '#ff3df2';
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 1.5, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#ffd6fb';
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 1.5, 0, TAU); ctx.fill();
+      // 보스마다 탄 모양이 다르다: 별(호박) · 육각(민트) · 따라오는 구슬(보라) · 톱날(은)
+      if (b.k === 'star') {
+        ctx.fillStyle = '#ffb703'; ctx.beginPath();
+        for (let i = 0; i < 8; i++) { const a = W.t * 6 + Math.PI * i / 4, rr = i % 2 ? b.r * 0.6 : b.r * 1.7; ctx.lineTo(b.x + Math.cos(a) * rr, b.y + Math.sin(a) * rr); }
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff4c2'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.5, 0, TAU); ctx.fill();
+      } else if (b.k === 'hex') {
+        ctx.fillStyle = '#06d6a0'; ctx.beginPath();
+        for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + TAU * i / 6; ctx.lineTo(b.x + Math.cos(a) * (b.r + 2), b.y + Math.sin(a) * (b.r + 2)); }
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#d9fff3'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 2, 0, TAU); ctx.fill();
+      } else if (b.k === 'orb') {
+        glow(ctx, 'rgba(155,107,255,0.8)', b.x, b.y, 22, 0.9);
+        ctx.fillStyle = '#9b6bff'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#07080d'; ctx.beginPath(); ctx.arc(b.x + b.vx * 0.012, b.y + b.vy * 0.012, b.r * 0.45, 0, TAU); ctx.fill();
+      } else if (b.k === 'blade') {
+        const a0 = W.t * 14;
+        ctx.fillStyle = '#dfe7f2'; ctx.beginPath();
+        for (let i = 0; i < 4; i++) { const a = a0 + i * Math.PI / 2; ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + Math.cos(a) * (b.r + 5), b.y + Math.sin(a) * (b.r + 5)); ctx.lineTo(b.x + Math.cos(a + 0.9) * (b.r + 1), b.y + Math.sin(a + 0.9) * (b.r + 1)); }
+        ctx.fill();
+        ctx.fillStyle = '#6b7a90'; ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, TAU); ctx.fill();
+      } else {
+        ctx.fillStyle = '#ff3df2';
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 1.5, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ffd6fb';
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 1.5, 0, TAU); ctx.fill();
+      }
+    }
+  }
+
+  // 보스 예고선: 스타 크러셔 돌진 방향, 보이드 아이 레이저 (예고 → 발사)
+  function drawWarnings(ctx, W) {
+    const far = Math.hypot(W.w, W.h);
+    for (const e of W.enemies) {
+      if (!(e.warnT > 0)) continue;
+      const k = 1 - e.warnT / e.look.atk.chargeWarn, c = Math.cos(e.chargeA), s = Math.sin(e.chargeA);
+      ctx.strokeStyle = 'rgba(255,183,3,' + (0.25 + k * 0.6) + ')';
+      ctx.lineWidth = e.r * 1.6 * (0.3 + k * 0.7);
+      ctx.setLineDash([18, 12]);
+      ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + c * far, e.y + s * far); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    for (const L of W.lasers) {
+      if (L.x == null) continue;
+      const c = Math.cos(L.ang), s = Math.sin(L.ang), x2 = L.x + c * far, y2 = L.y + s * far;
+      if (L.t < L.warn) {
+        const k = L.t / L.warn, blink = Math.floor(L.t * (k > 0.6 ? 16 : 8)) % 2;
+        ctx.strokeStyle = 'rgba(155,107,255,' + (0.3 + k * 0.5 + blink * 0.15) + ')';
+        ctx.lineWidth = 2 + k * 3;
+        ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(x2, y2); ctx.stroke();
+      } else {
+        const k = 1 - (L.t - L.warn) / L.on;
+        ctx.globalCompositeOperation = 'lighter';
+        for (const [w, col] of [[L.w * 1.8, 'rgba(155,107,255,0.35)'], [L.w, 'rgba(200,170,255,0.8)'], [L.w * 0.35, 'rgba(255,255,255,0.95)']]) {
+          ctx.strokeStyle = col; ctx.lineWidth = w * (0.6 + k * 0.4);
+          ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(x2, y2); ctx.stroke();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
     }
   }
 
@@ -670,6 +725,7 @@
     }
     drawFx(ctx, W);
     drawEnemies(ctx, W);
+    drawWarnings(ctx, W);
     drawBullets(ctx, W);
     drawShocks(ctx, W);
     drawPlayer(ctx, W);
