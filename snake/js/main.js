@@ -25,6 +25,21 @@
   let overAt = 0;
   let best = SN.store.get(BEST_KEY, { score: 0, len: 0 });
   if (!best || typeof best.score !== 'number') best = { score: 0, len: 0 };
+  // 기록 장부: 무한·스테이지 최고, 모두 합친 수, 받은 메달 (이 기기 안에만)
+  const REC_KEY = 'snake.rec';
+  const blankRec = () => ({ endless: { score: 0, len: 0, combo: 0 }, stage: { max: 0, score: 0, level: 0 }, total: { games: 0, orbs: 0, golds: 0, powers: 0, portals: 0, levels: 0 }, medals: {} });
+  function loadRec() {
+    const r = blankRec(), got = SN.store.get(REC_KEY, null);
+    if (got && typeof got === 'object') for (const k of Object.keys(r)) Object.assign(r[k], got[k] || {});
+    // 예전 최고 기록(snake.best)을 무한 모드 기록으로 이어받는다
+    r.endless.score = Math.max(r.endless.score, best.score || 0);
+    r.endless.len = Math.max(r.endless.len, best.len || 0);
+    return r;
+  }
+  let rec = loadRec();
+  const saveRec = () => SN.store.set(REC_KEY, rec);
+  let lastOpts = { mode: 'endless' };
+  let medalCheckT = 0;
   let lastTs = 0;
   let frozenDrawn = false; // 일시정지 화면에선 한 번만 그리고 쉰다 (배터리)
 
@@ -69,7 +84,7 @@
   window.addEventListener('resize', resize);
 
   // ─── 오버레이 ──────────────────────────────────────────────
-  const screens = ['scr-title', 'scr-pause', 'scr-over'];
+  const screens = ['scr-title', 'scr-pause', 'scr-over', 'scr-stage', 'scr-medals'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('on', s === id);
     document.body.classList.toggle('playing', mode === 'play');
@@ -86,17 +101,72 @@
   }
 
   function renderBest() {
-    view.best = best.score;
-    $('best').textContent = best.score > 0
-      ? '최고 기록 ' + best.score.toLocaleString() + '점 · 길이 ' + best.len
-      : '첫 도전을 시작하세요';
+    view.best = rec.endless.score;
+    const parts = [];
+    if (rec.endless.score > 0) parts.push('무한 최고 ' + rec.endless.score.toLocaleString() + '점');
+    if (rec.stage.max > 0) parts.push('스테이지 레벨 ' + rec.stage.max + ' 깸');
+    $('best').textContent = parts.length ? parts.join(' · ') : '첫 도전을 시작하세요';
+    $('stage-tag').textContent = rec.stage.max > 0 ? 'LV ' + (rec.stage.max + 1) : '';
+    $('medal-count').textContent = Object.keys(rec.medals).length + '/' + D.MEDALS.length;
+  }
+
+  // ─── 메달 ──────────────────────────────────────────────────
+  // 새로 딴 메달을 장부에 적고 돌려준다. live면 게임 중이라 토스트로 알린다
+  function checkMedals(live) {
+    const run = SN.World.runStats(W), fresh = [];
+    for (const m of D.MEDALS) {
+      if (rec.medals[m.id]) continue;
+      let ok = false;
+      try { ok = m.check(run, rec); } catch (e) { ok = false; }
+      if (ok) { rec.medals[m.id] = new Date().toISOString().slice(0, 10); fresh.push(m); }
+    }
+    if (fresh.length) {
+      saveRec();
+      if (live) { toast('메달 획득: ' + fresh.map(m => m.name).join(', ')); SN.Audio.play('medal'); vibrate([20, 40, 20]); }
+    }
+    return fresh;
+  }
+  const TIER = { 1: '동', 2: '은', 3: '금' };
+  function medalHtml(m, locked) {
+    return '<div class="medal t' + m.tier + (locked ? ' locked' : '') + '"><span class="coin">' + (locked ? '?' : TIER[m.tier]) + '</span><span><b>' + m.name + '</b><small>' + m.desc + '</small></span></div>';
+  }
+  function openMedals() {
+    $('medal-sub').textContent = '메달 ' + Object.keys(rec.medals).length + ' / ' + D.MEDALS.length;
+    $('medal-list').innerHTML = D.MEDALS.map(m => medalHtml(m, !rec.medals[m.id])).join('');
+    const T = rec.total, rows = [
+      ['무한 최고 점수', rec.endless.score.toLocaleString()], ['무한 최고 길이', rec.endless.len], ['최고 콤보', rec.endless.combo],
+      ['스테이지 최고 레벨', rec.stage.max ? 'LV ' + rec.stage.max : '없음'], ['스테이지 최고 점수', rec.stage.score.toLocaleString()], ['모두 한 판', T.games],
+      ['먹은 구슬', T.orbs.toLocaleString()], ['황금 구슬', T.golds], ['아이템', T.powers],
+    ];
+    $('record-list').innerHTML = rows.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + v + '</dd></div>').join('');
+    show('scr-medals');
+  }
+
+  // ─── 스테이지 고르기 ───────────────────────────────────────
+  function openStage() {
+    const box = $('level-list'), open = rec.stage.max + 1;
+    box.innerHTML = '';
+    D.LEVELS.forEach((L, i) => {
+      const n = i + 1, b = document.createElement('button');
+      b.className = 'lvl' + (n <= rec.stage.max ? ' done' : n === open ? ' next' : n > open ? ' locked' : '');
+      b.innerHTML = '<b>' + n + '</b><small>' + L.name + '</small>';
+      b.addEventListener('click', () => {
+        if (n > open) { toast('레벨 ' + (n - 1) + '을(를) 먼저 깨요'); return; }
+        keep(); newGame(undefined, { mode: 'stage', level: n });
+      });
+      box.appendChild(b);
+    });
+    show('scr-stage');
   }
 
   // ─── 흐름 ──────────────────────────────────────────────────
-  function newGame(seed) {
+  function newGame(seed, opts) {
     SN.Audio.unlock();
+    if (opts) lastOpts = opts;
     const [cols, rows] = boardFor(size());
-    W = SN.World.create(cols, rows, seed);
+    W = SN.World.create(cols, rows, seed, lastOpts);
+    view.best = W.mode === 'stage' ? rec.stage.score : rec.endless.score;
+    medalCheckT = 0;
     input.reset();
     mode = 'play';
     wakeLock(true);
@@ -129,17 +199,38 @@
   function gameOver() {
     mode = 'over';
     overAt = performance.now();
-    const isBest = W.score > best.score;
-    if (isBest || W.snake.length > best.len) {
+    // 기록 장부: 신기록은 칩으로 보여 준다
+    const newRec = [];
+    const T = rec.total;
+    T.games++; T.orbs += W.eaten; T.golds += W.golds; T.powers += W.powers; T.portals += W.portalsUsed;
+    let isBest;
+    if (W.mode === 'stage') {
+      isBest = W.score > rec.stage.score;
+      if (isBest) { rec.stage.score = W.score; if (W.score > 0) newRec.push('스테이지 최고 점수'); }
+    } else {
+      isBest = W.score > rec.endless.score;
+      if (isBest && W.score > 0) { rec.endless.score = W.score; newRec.push('최고 점수'); }
+      if (W.maxLen > rec.endless.len) { rec.endless.len = W.maxLen; newRec.push('최고 길이 ' + W.maxLen); }
+    }
+    if (W.maxCombo > rec.endless.combo && W.maxCombo > 1) { rec.endless.combo = W.maxCombo; newRec.push('최고 콤보 ' + W.maxCombo); }
+    saveRec();
+    if (W.mode !== 'stage' && (W.score > best.score || W.snake.length > best.len)) {
       best = { score: Math.max(best.score, W.score), len: Math.max(best.len, W.snake.length) };
       SN.store.set(BEST_KEY, best);
     }
+    // 스테이지는 다시 하기를 누르면 죽은 레벨부터
+    if (W.mode === 'stage') lastOpts = { mode: 'stage', level: W.level };
+    const fresh = checkMedals(false);
+    $('over-records').innerHTML = newRec.filter(x => !(isBest && x.indexOf('최고 점수') >= 0)).map(x => '<span>신기록 · ' + x + '</span>').join('');
+    $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
+    if (fresh.length) setTimeout(() => { if (mode === 'over') SN.Audio.play('medal'); }, 900);
+    $('over-t3').textContent = W.mode === 'stage' ? '레벨' : '시간';
     $('over-title').textContent = W.won ? '판을 가득 채웠다!' : W.cause === 'self' ? '꼬리를 물었다' : '벽에 부딪혔다';
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-len').textContent = W.snake.length;
     $('over-eaten').textContent = W.eaten + (W.golds ? ' (황금 ' + W.golds + ')' : '');
-    $('over-time').textContent = SN.fmtTime(W.time);
+    $('over-time').textContent = W.mode === 'stage' ? 'LV ' + W.level : SN.fmtTime(W.time);
     wakeLock(false);
     // 충돌 연출을 잠깐 보여 준 뒤 결과 화면
     setTimeout(() => { if (mode === 'over') show('scr-over'); }, 800);
@@ -152,8 +243,18 @@
       else SN.Audio.play(ev);
       if (ev === 'over') vibrate(250);
       else if (ev === 'gold') vibrate([20, 30, 40]);
+      else if (ev === 'power' || ev === 'combo') vibrate(20);
+      else if (ev === 'clear') { vibrate([30, 40, 30, 40, 80]); onClear(); }
     }
     world.events.length = 0;
+  }
+
+  // 스테이지 레벨을 깼다: 장부에 적고 메달 확인
+  function onClear() {
+    rec.stage.max = Math.max(rec.stage.max, W.level);
+    rec.total.levels++;
+    saveRec();
+    checkMedals(true);
   }
 
   function vibrate(ms) {
@@ -168,7 +269,8 @@
   input.onKey = code => {
     SN.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
-    if ((mode === 'title' || mode === 'over') && (code === 'Enter' || code === 'Space')) return newGame();
+    if (mode === 'title' && (code === 'Enter' || code === 'Space')) return newGame(undefined, { mode: 'endless' });
+    if (mode === 'over' && (code === 'Enter' || code === 'Space')) return newGame();
     if (code === 'KeyP' || code === 'Escape' || code === 'Space') return mode === 'play' ? pause() : resume();
   };
 
@@ -186,7 +288,11 @@
 
   // 최고 점수가 브라우저 정리 때 지워지지 않게 요청 (돈 0원, 이 기기 안에서만)
   const keep = () => { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* 무시 */ } };
-  $('btn-start').addEventListener('click', () => { keep(); newGame(); });
+  $('btn-start').addEventListener('click', () => { keep(); newGame(undefined, { mode: 'endless' }); });
+  $('btn-stage').addEventListener('click', () => { SN.Audio.unlock(); openStage(); });
+  $('btn-medals').addEventListener('click', () => { SN.Audio.unlock(); openMedals(); });
+  $('btn-stage-back').addEventListener('click', toTitle);
+  $('btn-medals-back').addEventListener('click', toTitle);
   $('btn-retry').addEventListener('click', () => newGame());
   $('btn-home').addEventListener('click', toTitle);
   $('btn-resume').addEventListener('click', resume);
@@ -242,9 +348,13 @@
       }
     } else if (W) {
       if (mode === 'play') {
-        if (auto) drive(W);
+        if (auto && W.phase === 'play') drive(W);
         SN.World.step(W, dt);
         drainEvents(W, true);
+        // 스테이지: 깬 뒤 잠깐 축하하고 다음 레벨로
+        if (W.phase === 'clear' && W.clearT > D.STAGE.clearTime) { SN.World.nextLevel(W); drainEvents(W, true); }
+        // 게임 중에 딸 수 있는 메달은 바로 알려 준다
+        if ((medalCheckT += dt) > 0.5 && W.phase === 'play') { medalCheckT = 0; checkMedals(true); }
         if (W.phase === 'over') gameOver();
         frozenDrawn = false;
       }
@@ -282,7 +392,8 @@
     get mode() { return mode; },
     get demo() { return demo; },
     get best() { return best; },
-    newGame, pause, resume, toTitle,
+    get rec() { return rec; },
+    newGame, pause, resume, toTitle, openStage, openMedals,
     turn(dir) { return W ? SN.World.turn(W, dir) : false; },
     autopilot(on) { auto = on !== false; return auto; },
   };

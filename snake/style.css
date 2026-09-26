@@ -218,6 +218,54 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
 .stats dt { font-size: 12px; color: var(--muted); }
 .stats dd { margin: 4px 0 0; font: 700 22px var(--num); }
 
+/* ─── 모드 버튼 · 스테이지 · 메달 ─── */
+.modes { display: flex; flex-direction: column; gap: 14px; }
+.big-btn.pink { background: linear-gradient(180deg, #ffb3d4 0%, #ff5fa8 45%, #d81f76 100%); box-shadow: 0 6px 0 #7a0f44, 0 10px 26px rgba(255, 46, 136, .35), inset 0 2px 0 rgba(255, 255, 255, .55); }
+.big-btn.pink:active { box-shadow: 0 2px 0 #7a0f44, 0 6px 16px rgba(255, 46, 136, .3), inset 0 2px 0 rgba(255, 255, 255, .5); }
+.big-btn .tag { font: 700 14px var(--num); letter-spacing: .5px; padding: 2px 8px; border-radius: 999px; background: rgba(7, 8, 13, .25); }
+.big-btn .tag:empty { display: none; }
+.mini-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 16px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .06); color: var(--text); font: normal 16px var(--disp); letter-spacing: 1px; cursor: pointer; }
+.mini-btn .i { width: 20px; height: 20px; color: var(--yellow); }
+.mini-btn b { font: 700 16px var(--num); color: var(--yellow); margin-left: 4px; }
+.help .glyphs { display: inline-flex; gap: 3px; min-width: 18px; font: 700 13px var(--num); font-style: normal; }
+.help .glyphs i { font-style: normal; }
+.panel.wide { max-width: 720px; }
+
+#level-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 4px; }
+.lvl { position: relative; min-height: 76px; padding: 10px 6px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .05); color: var(--text); cursor: pointer; text-align: center; }
+.lvl b { display: block; font: 700 28px/1 var(--num); color: var(--cyan); }
+.lvl small { display: block; margin-top: 4px; font: normal 14px var(--disp); letter-spacing: .5px; color: var(--muted); }
+.lvl.done { border-color: rgba(255, 230, 109, .5); background: rgba(255, 230, 109, .06); }
+.lvl.done b { color: var(--yellow); }
+.lvl.done::after { content: "깸"; position: absolute; right: 6px; top: 6px; padding: 1px 6px; border-radius: 999px; background: var(--yellow); color: var(--bg); font: 700 11px var(--num); }
+.lvl.next { border-color: var(--pink); box-shadow: 0 0 0 1px var(--pink), 0 0 18px rgba(255, 46, 136, .35); }
+.lvl.locked { opacity: .35; cursor: default; }
+.lvl.locked b { color: var(--muted); }
+.lvl:not(.locked):active { transform: scale(.96); }
+
+#medal-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 6px 0 12px; }
+.medal { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .04); text-align: left; }
+.medal .coin { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font: 700 15px var(--num); color: #1a1000;
+  background: radial-gradient(circle at 35% 30%, #fff 0 12%, var(--m1) 14% 55%, var(--m2) 100%); box-shadow: 0 0 0 2px rgba(255, 255, 255, .25), 0 0 14px var(--m3); }
+.medal b { display: block; font: normal 14px var(--disp); letter-spacing: .5px; color: var(--text); }
+.medal small { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; }
+.medal.t1 { --m1: #e08a4a; --m2: #7a3a14; --m3: rgba(224, 138, 74, .45); }
+.medal.t2 { --m1: #dfe7f2; --m2: #6b7a90; --m3: rgba(223, 231, 242, .45); }
+.medal.t3 { --m1: #ffe66d; --m2: #b98600; --m3: rgba(255, 230, 109, .6); }
+.medal.locked { opacity: .38; }
+.medal.locked .coin { background: #1a2130; box-shadow: none; color: var(--muted); }
+.records { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 16px; }
+.records div { padding: 8px 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(94, 231, 255, .04); }
+.records dt { font-size: 11px; color: var(--muted); }
+.records dd { margin: 2px 0 0; font: 700 20px var(--num); }
+
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: -8px 0 12px; }
+.chips span { padding: 3px 10px; border-radius: 999px; background: rgba(255, 46, 136, .14); border: 1px solid rgba(255, 46, 136, .5); color: #ffb3d4; font: 700 13px var(--num); animation: pop .45s .4s var(--back) both; }
+.new-medals { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 16px; }
+.new-medals:empty { display: none; }
+.new-medals .medal { animation: pop .5s var(--back) both; }
+.new-medals .medal:nth-child(2) { animation-delay: .15s; } .new-medals .medal:nth-child(3) { animation-delay: .3s; }
+
 /* ─── 터치 기기: 누르기 쉬운 크기 (최소 44px) ─── */
 body.touch .icon-btn { width: 44px; height: 44px; }
 body.touch .big-btn { padding: 16px; }
@@ -226,6 +274,8 @@ body.touch .text-btn { padding: 10px 16px; }
 @media (max-width: 600px) {
   .logo { font-size: 54px; letter-spacing: 3px; }
   .panel { padding: 22px 16px; }
+  #level-list { grid-template-columns: repeat(3, 1fr); }
+  #medal-list { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* 낮은 가로 화면(작은 탭·가로 폰): 시작 화면을 두 칸으로 */
@@ -240,8 +290,17 @@ body.touch .text-btn { padding: 10px 16px; }
   #scr-title .logo { font-size: 58px; grid-column: 1; grid-row: 1; }
   #scr-title .tagline { grid-column: 1; grid-row: 2; margin-bottom: 6px; }
   #scr-title .best { grid-column: 1; grid-row: 3; margin-bottom: 10px; }
-  #scr-title .big-btn { grid-column: 1; grid-row: 4; }
+  #scr-title .modes { grid-column: 1; grid-row: 4; gap: 10px; }
   #scr-title .help { grid-column: 2; grid-row: 1 / span 4; margin: 0; }
+  .modes .big-btn { padding: 11px; font-size: 21px; }
+  #level-list { grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .lvl { min-height: 64px; padding: 8px 4px; } .lvl b { font-size: 24px; } .lvl small { font-size: 12px; }
+  #medal-list { gap: 6px; margin-bottom: 8px; }
+  .medal { padding: 5px 6px; gap: 6px; } .medal .coin { width: 28px; height: 28px; font-size: 12px; } .medal b { font-size: 12px; } .medal small { font-size: 10px; }
+  .records { gap: 4px; margin-bottom: 8px; } .records div { padding: 3px 2px; } .records dt { font-size: 10px; } .records dd { font-size: 14px; margin: 0; }
+  #scr-medals .sub, #scr-stage .sub { margin-bottom: 8px; font-size: 13px; } #scr-medals h2, #scr-stage h2 { font-size: 24px; }
+  #scr-medals .big-btn { padding: 9px; font-size: 18px; }
+  .panel.wide { padding: 16px 20px; }
   #scr-title .pc-line { display: none; }
   .score-big { font-size: 48px; }
   .stats { margin: 12px 0 14px; }

@@ -30,6 +30,9 @@
     <symbol id="i-orb" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/></symbol>
     <symbol id="i-wall" viewBox="0 0 24 24"><path d="M3 5h18v4H3zm0 5h8v4H3zm9 0h9v4h-9zM3 15h18v4H3z"/></symbol>
+    <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 2h2v20H5zm3 1h11l-2.5 4L19 11H8z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></symbol>
   </svg>
 
   <div id="topbar">
@@ -45,14 +48,41 @@
       <h1 class="logo">N<span>-</span>SNAKE</h1>
       <p class="tagline">먹을수록 길어진다. 부딪히면 끝.</p>
       <p id="best" class="best"></p>
-      <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>시작</span> <kbd class="only-pc">Enter</kbd></button>
+      <div class="modes">
+        <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>무한 모드</span> <kbd class="only-pc">Enter</kbd></button>
+        <button id="btn-stage" class="big-btn pink"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg><span>스테이지</span> <b id="stage-tag" class="tag"></b></button>
+        <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
+      </div>
       <ul class="help">
         <li><svg class="i" aria-hidden="true"><use href="#i-swipe"/></svg><span><b class="only-touch">밀기</b><b class="only-pc">방향키</b> <span class="only-touch">화면 아무 데나 밀어서 방향 바꾸기</span><span class="only-pc">또는 WASD로 방향 바꾸기</span></span></li>
         <li><svg class="i pink" aria-hidden="true"><use href="#i-orb"/></svg><span><b>에너지 구슬</b> 먹으면 한 칸 길어지고 점수</span></li>
         <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>황금 구슬</b> 5번째마다 나오는 큰 점수</span></li>
         <li><svg class="i red" aria-hidden="true"><use href="#i-wall"/></svg><span><b>벽·내 몸</b> 부딪히면 끝</span></li>
+        <li><span class="glyphs"><i style="color:#7fd3ff">◷</i><i style="color:#ffe66d">×2</i><i style="color:#c7a6ff">◌</i><i style="color:#3dff8b">✂</i></span><span><b>아이템</b> 느린 시계·두 배·유령·가위</span></li>
+        <li><svg class="i gold" aria-hidden="true"><use href="#i-play"/></svg><span><b>콤보</b> 빨리 이어 먹으면 점수 배율 ×2 ×3 ×4</span></li>
       </ul>
       <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
+    </div>
+  </section>
+
+  <!-- 스테이지 고르기 -->
+  <section id="scr-stage" class="screen">
+    <div class="panel wide">
+      <h2>스테이지</h2>
+      <p class="sub">목표만큼 구슬을 먹으면 다음 레벨. 깬 레벨 다음까지 열려요</p>
+      <div id="level-list"></div>
+      <button id="btn-stage-back" class="text-btn">처음 화면으로</button>
+    </div>
+  </section>
+
+  <!-- 메달 · 기록 -->
+  <section id="scr-medals" class="screen">
+    <div class="panel wide">
+      <h2>메달 · 기록</h2>
+      <p class="sub" id="medal-sub"></p>
+      <div id="medal-list"></div>
+      <dl id="record-list" class="records"></dl>
+      <button id="btn-medals-back" class="big-btn"><span>닫기</span></button>
     </div>
   </section>
 
@@ -75,8 +105,10 @@
       <dl class="stats">
         <div><dt>길이</dt><dd id="over-len">4</dd></div>
         <div><dt>먹은 구슬</dt><dd id="over-eaten">0</dd></div>
-        <div><dt>시간</dt><dd id="over-time">0:00</dd></div>
+        <div><dt id="over-t3">시간</dt><dd id="over-time">0:00</dd></div>
       </dl>
+      <div id="over-records" class="chips"></div>
+      <div id="over-medals" class="new-medals"></div>
       <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
       <button id="btn-home" class="text-btn">처음 화면으로</button>
     </div>

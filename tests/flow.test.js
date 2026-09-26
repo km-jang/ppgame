@@ -373,6 +373,23 @@ async function takeGift(page) {
     await Z.tap('#btn-retry');
     assert(await until(Z, () => SN.debug.mode === 'play'), '다시 하기 안 됨');
   });
+  await test('스테이지: 레벨 고르기 → 목표를 채우면 다음 레벨, 기록과 메달 판', async () => {
+    await Z.evaluate(() => SN.debug.toTitle());
+    await Z.tap('#btn-stage');
+    assert(await until(Z, () => document.getElementById('scr-stage').classList.contains('on')), '스테이지 화면이 안 나옴');
+    assert(await Z.evaluate(() => document.querySelectorAll('#level-list .lvl').length === 12 && document.querySelectorAll('#level-list .lvl.locked').length === 12 - SN.debug.rec.stage.max - 1), '레벨 칸·잠금');
+    await Z.tap('#level-list .lvl:nth-child(1)');
+    assert(await until(Z, () => SN.debug.mode === 'play' && SN.debug.world.mode === 'stage' && SN.debug.world.level === 1), '레벨 1이 시작 안 됨');
+    await Z.evaluate(() => { const W = SN.debug.world; W.got = W.goal - 1; SN.debug.autopilot(true); });
+    assert(await until(Z, () => SN.debug.world.level === 2, null, 15000), '다음 레벨로 안 넘어감');
+    assert(await Z.evaluate(() => SN.debug.rec.stage.max >= 1), '스테이지 기록이 안 남음');
+    await Z.evaluate(() => { SN.debug.autopilot(false); SN.debug.toTitle(); });
+    await Z.tap('#btn-medals');
+    assert(await until(Z, () => document.getElementById('scr-medals').classList.contains('on')), '메달 화면이 안 나옴');
+    assert(await Z.evaluate(() => document.querySelectorAll('#medal-list .medal').length === SN.DATA.MEDALS.length), '메달 칸 수');
+    await Z.tap('#btn-medals-back');
+    assert(await until(Z, () => SN.debug.mode === 'title' && document.getElementById('scr-title').classList.contains('on')), '닫기');
+  });
   await test('N-SNAKE 콘솔 오류 없음', async () => { assert(!sn.errors.length, sn.errors.join(' | ')); });
   await sn.ctx.close();
 

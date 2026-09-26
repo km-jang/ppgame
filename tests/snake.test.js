@@ -11,7 +11,7 @@ for (const f of ['util.js', 'data.js', 'world.js']) {
 }
 const SN = vm.runInContext('SN', ctx);
 const D = SN.DATA;
-const { create, step, turn, speed, spawnFood, botDir } = SN.World;
+const { create, step, turn, speed, spawnFood, botDir, nextLevel, levelDef, buildWalls, spawnItem, runStats } = SN.World;
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -244,6 +244,181 @@ test('판을 가득 채우면 이긴 것으로 끝난다', () => {
   W.food = { x: 3, y: 1, gold: false, born: 0 };
   ticks(W, 1);
   assert(W.phase === 'over' && W.won && W.events.includes('win'), 'win');
+});
+
+// ─── 무한 · 스테이지 모드 ───────────────────────────────────
+const wallsOf = W => { const n = []; for (let i = 0; i < W.walls.length; i++) if (W.walls[i]) n.push(i); return n; };
+
+test('스테이지: 레벨 12개 모두 가로·세로 판에서 출발 자리가 비어 있고 벽이 판 안에 있다', () => {
+  for (const [c, r] of [D.BOARD.land, D.BOARD.port]) {
+    for (let lv = 1; lv <= D.LEVELS.length + 2; lv++) {
+      const W = create(c, r, lv, { mode: 'stage', level: lv });
+      const def = levelDef(lv);
+      assert(W.goal === def.goal && W.lv.walls === def.walls, 'level def');
+      if (def.walls !== 'none') assert(wallsOf(W).length > 0, 'walls for ' + def.walls);
+      const h = W.snake[0];
+      for (let k = 0; k <= 5; k++) assert(!W.walls[h.y * c + h.x + k], 'lane clear lv' + lv + ' ' + c + 'x' + r);
+      for (const p of W.snake) assert(!W.walls[p.y * c + p.x], 'body not in wall');
+      assert(W.portals.length === (def.portals || 0), 'portals lv' + lv + ': ' + W.portals.length);
+      assert(W.food && !W.walls[W.food.y * c + W.food.x] && W.portalAt[W.food.y * c + W.food.x] < 0, 'food on free cell');
+    }
+  }
+});
+
+test('스테이지: 목표만큼 먹으면 레벨 깸 → 다음 레벨은 새 벽·처음 길이, 점수는 그대로', () => {
+  const W = create(COLS, ROWS, 3, { mode: 'stage', level: 1 });
+  for (let i = 0; i < W.goal; i++) { foodAhead(W); ticks(W, 1); if (W.phase !== 'play') break; }
+  assert(W.phase === 'clear' && W.events.includes('clear'), 'clear: ' + W.phase + ' got ' + W.got + '/' + W.goal);
+  const sc = W.score;
+  assert(sc >= W.goal * D.FOOD.points + D.STAGE.clearBonus, 'clear bonus');
+  step(W, 0.5);
+  assert(W.phase === 'clear' && W.clearT > 0.4, 'waits in clear');
+  nextLevel(W);
+  assert(W.level === 2 && W.phase === 'play' && W.snake.length === D.START.len && W.score === sc && W.got === 0, 'next level');
+  assert(wallsOf(W).length > 0, 'level 2 has pillars');
+  assert(runStats(W).levelsCleared === 1, 'stats');
+});
+
+test('스테이지: 벽에 부딪히면 끝, 12를 넘으면 더 빨라진다', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'stage', level: 3 }); // 가운데 벽
+  const [c] = [COLS];
+  const idx = wallsOf(W)[0], wx = idx % c, wy = Math.floor(idx / c);
+  W.snake = [{ x: wx - 1, y: wy }, { x: wx - 2, y: wy }, { x: wx - 3, y: wy }, { x: wx - 4, y: wy }];
+  W.dir = 'right'; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  ticks(W, 1);
+  assert(W.phase === 'over' && W.cause === 'wall', 'inner wall kills');
+  assert(levelDef(13).speed > levelDef(1).speed && levelDef(13).goal > levelDef(1).goal, 'loop harder');
+});
+
+test('포털: 들어가면 짝 포털로 나온다', () => {
+  const W = create(COLS, ROWS, 5, { mode: 'stage', level: 4 });
+  const P = W.portals[0];
+  W.snake = [{ x: P.a.x - 1, y: P.a.y }, { x: P.a.x - 2, y: P.a.y }, { x: P.a.x - 3, y: P.a.y }, { x: P.a.x - 4, y: P.a.y }];
+  W.dir = 'right'; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  ticks(W, 1);
+  assert(W.snake[0].x === P.b.x && W.snake[0].y === P.b.y, 'teleported to ' + JSON.stringify(W.snake[0]) + ' expected ' + JSON.stringify(P.b));
+  assert(W.portalsUsed === 1 && W.events.includes('portal'), 'portal counted');
+  ticks(W, 1);
+  assert(W.phase === 'play' && W.snake[0].x === P.b.x + 1, 'keeps going same way');
+});
+
+test('무한: 빨리 이어 먹으면 콤보 배율, 늦으면 끊긴다', () => {
+  const W = create(200, ROWS, 1, { mode: 'endless' });
+  const pts = [];
+  for (let i = 0; i < 6; i++) { const s0 = W.score; foodAhead(W, false); ticks(W, 1); pts.push(W.score - s0); }
+  assert(JSON.stringify(pts) === JSON.stringify([10, 10, 20, 20, 30, 30]), 'combo points ' + JSON.stringify(pts));
+  assert(W.maxCombo === 6 && W.events.includes('combo'), 'max combo');
+  W.lastEat = W.time - D.COMBO.window - 1;
+  const s0 = W.score; foodAhead(W, false); ticks(W, 1);
+  assert(W.combo === 1 && W.score - s0 === 10, 'combo reset');
+});
+
+test('무한: 황금 구슬은 시간이 지나면 보통 구슬로 식는다 (기본 규칙은 그대로)', () => {
+  const W = create(COLS, 200, 1, { mode: 'endless' });
+  W.food = { x: 0, y: 0, gold: true, born: W.t }; W.wait = 0; W.item = null; W.itemT = 99;
+  W.snake = [{ x: 5, y: 10 }, { x: 4, y: 10 }, { x: 3, y: 10 }, { x: 2, y: 10 }]; W.dir = 'down';
+  step(W, D.FOOD.goldLife * 0.5);
+  assert(W.food.gold, 'still gold');
+  for (let i = 0; i < 50 && W.food.gold; i++) step(W, 0.1);
+  assert(!W.food.gold && W.events.includes('cool'), 'cooled');
+  const C0 = create(COLS, ROWS, 1);
+  C0.food = { x: 0, y: 0, gold: true, born: 0 }; C0.wait = 0;
+  C0.snake = [{ x: 5, y: 10 }, { x: 4, y: 10 }, { x: 3, y: 10 }, { x: 2, y: 10 }]; C0.dir = 'down';
+  step(C0, D.FOOD.goldLife + 1);
+  assert(C0.food.gold, 'classic keeps gold');
+});
+
+test('아이템: 때가 되면 나타나고, 안 먹으면 사라진다', () => {
+  const W = create(COLS, ROWS, 2, { mode: 'endless' });
+  W.wait = 0; W.snake = [{ x: 3, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 0 }];
+  W.food = { x: 31, y: 19, gold: false, born: 0 };
+  let seen = false;
+  for (let i = 0; i < 60 * 12 && W.phase === 'play'; i++) {
+    if (!W.queue.length) turn(W, botDir(W));
+    step(W, 1 / 60);
+    if (W.item) seen = true;
+  }
+  assert(seen && W.events.includes('item'), 'item appeared');
+  const Q = create(200, ROWS, 2, { mode: 'endless' });
+  spawnItem(Q);
+  const it = Q.item;
+  Q.wait = 0; it.x = 0; it.y = 0;
+  Q.food = { x: 0, y: 1, gold: false, born: 0 };
+  for (let i = 0; i < (D.ITEM.life + 0.5) * 10; i++) step(Q, 0.1);
+  assert(Q.phase === 'play' && Q.item !== it, 'expired item gone');
+});
+
+function eatItem(kind, setupFn) {
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  W.itemT = 99; W.wait = 0;
+  if (setupFn) setupFn(W);
+  const d = SN.World.DIRS[W.dir], h = W.snake[0];
+  W.item = { kind, x: h.x + d[0], y: h.y + d[1], life: 5, born: W.t };
+  W.food = { x: 0, y: 0, gold: false, born: 0 };
+  ticks(W, 1);
+  return W;
+}
+
+test('아이템 느린 시계: 잠깐 느려졌다가 돌아온다', () => {
+  const W = eatItem('slow');
+  assert(W.eff.slow > 0 && W.events.includes('power'), 'slow on');
+  const s = speed(W);
+  assert(Math.abs(s - D.SPEED.base * D.ITEM.slowMul) < 1e-9, 'slower ' + s);
+  step(W, D.ITEM.kinds.slow.time + 0.1);
+  assert(W.eff.slow === 0 || W.phase !== 'play', 'slow ends');
+});
+
+test('아이템 점수 두 배: 구슬 점수가 두 배', () => {
+  const W = eatItem('double');
+  const s0 = W.score; foodAhead(W, false); ticks(W, 1);
+  assert(W.score - s0 === D.FOOD.points * 2, 'double ' + (W.score - s0));
+});
+
+test('아이템 유령: 벽을 넘어 반대편으로, 몸도 통과', () => {
+  const W = eatItem('ghost');
+  W.snake = [{ x: COLS - 1, y: 5 }, { x: COLS - 2, y: 5 }, { x: COLS - 3, y: 5 }, { x: COLS - 4, y: 5 }];
+  W.dir = 'right'; W.queue = [];
+  ticks(W, 1);
+  assert(W.phase === 'play' && W.snake[0].x === 0 && W.wraps === 1, 'wrapped');
+  W.snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }, { x: 7, y: 10 }, { x: 6, y: 10 }, { x: 5, y: 10 }];
+  W.dir = 'right';
+  turn(W, 'down'); ticks(W, 1); turn(W, 'left'); ticks(W, 1); turn(W, 'up'); ticks(W, 1);
+  assert(W.phase === 'play', 'passes own body');
+  step(W, D.ITEM.kinds.ghost.time + 0.1);
+  assert(W.eff.ghost === 0 || W.phase === 'over', 'ghost ends');
+});
+
+test('아이템 가위: 꼬리 3분의 1을 자르고 점수 (처음 길이 밑으로는 안 줄어든다)', () => {
+  const W = eatItem('cut', Q => { for (let i = 0; i < 11; i++) Q.snake.push({ x: Q.snake[Q.snake.length - 1].x, y: Q.snake[Q.snake.length - 1].y + 1 }); });
+  assert(W.snake.length === 15 - 5 + 0 || W.snake.length === 10, 'cut to ' + W.snake.length);
+  assert(W.score === D.ITEM.kinds.cut.points, 'cut points');
+  const S = eatItem('cut');
+  assert(S.snake.length === D.START.len, 'min length kept ' + S.snake.length);
+});
+
+test('메달 확인 함수: 이번 판 기록과 평생 기록으로 판정', () => {
+  const run = { mode: 'endless', score: 1200, golds: 1, maxLen: 41, maxCombo: 5, powerKinds: 4, portals: 0, wraps: 3 };
+  const rec = { stage: { max: 6 }, total: { games: 3, orbs: 120 } };
+  const got = D.MEDALS.filter(m => m.check(run, rec)).map(m => m.id).sort();
+  assert(JSON.stringify(got) === JSON.stringify(['combo5', 'ghost3', 'gold1', 'len20', 'len40', 'lvl3', 'lvl6', 'power4', 'score1k'].sort()), 'medals ' + got.join(','));
+  assert(new Set(D.MEDALS.map(m => m.id)).size === D.MEDALS.length, 'unique ids');
+});
+
+test('무한·스테이지 봇을 오래 돌려도 값이 망가지지 않는다', () => {
+  for (const mode of ['endless', 'stage']) for (let seed = 1; seed <= 12; seed++) {
+    const W = create(COLS, ROWS, seed, { mode, level: 1 + (seed % 12) });
+    const r = SN.rng(seed * 3 + 7);
+    for (let i = 0; i < 60 * 90 && W.phase !== 'over'; i++) {
+      if (W.phase === 'clear') { if (W.clearT > D.STAGE.clearTime) nextLevel(W); step(W, 1 / 60); continue; }
+      if (!W.queue.length) turn(W, r() < 0.05 ? ['up', 'down', 'left', 'right'][Math.floor(r() * 4)] : botDir(W));
+      step(W, r() * 0.04);
+      W.events.length = 0; W.fx.length = 0;
+      assert(Number.isFinite(W.score + W.t + W.acc + W.alpha + speed(W)), 'finite');
+      const seen = new Set();
+      for (const p of W.snake) { assert(p.x >= 0 && p.y >= 0 && p.x < COLS && p.y < ROWS, 'in bounds'); seen.add(key(p)); }
+      if (!(W.eff.ghost > 0)) for (const p of W.snake.slice(0, 1)) assert(!W.walls[p.y * COLS + p.x] || W.phase === 'over', 'head not in wall');
+    }
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
