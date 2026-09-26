@@ -102,6 +102,7 @@
   <!-- 달리기 HUD -->
   <section id="hud" class="screen">
     <div id="hud-stars"><img alt="" class="star-ico"><b>0</b></div>
+    <div id="park-missions" aria-live="polite"></div>
     <div id="hud-track"><svg class="i t-sun" aria-hidden="true"><use href="#i-sun"/></svg><svg class="i t-moon" aria-hidden="true"><use href="#i-moon"/></svg><div id="hud-fill"></div><svg id="hud-car" aria-hidden="true" viewBox="0 0 40 20"><use href="#i-car"/></svg><span class="flag"></span></div>
     <!-- 출발 신호등 3·2·1 -->
     <div id="count" aria-hidden="true"><div class="lights"><i></i><i></i><i></i></div><b id="count-num"></b></div>
@@ -140,6 +141,16 @@
   </section>
 
   <!-- 카드 크게 보기 (도감에서 카드를 누르면) -->
+  <!-- 선물 상자: 한 판 끝나면 셋 중 하나 고르기 (PLAN.md 9.1 B) -->
+  <div id="gift-pop" aria-hidden="true">
+    <div class="gift-wrap">
+      <h2>선물 상자!</h2>
+      <p class="gift-sub">하나 골라 봐</p>
+      <div id="gift-list"></div>
+      <p id="gift-msg"></p>
+      <button id="gift-ok" class="btn primary"><span>좋아!</span></button>
+    </div>
+  </div>
   <div id="card-zoom" aria-hidden="true"><div class="zc"></div><p>화면을 누르면 닫혀요</p></div>
 
   <!-- 잠자기 -->
@@ -218,8 +229,11 @@
   <script src="js/art.js"></script>
   <script src="js/car.js"></script>
   <script src="js/site.js"></script>
+  <script src="js/neon.js"></script>
   <script src="js/friends.js"></script>
   <script src="js/scene.js"></script>
+  <script src="js/park.js"></script>
+  <script src="js/parkdraw.js"></script>
   <script src="js/cards.js"></script>
   <script src="js/samples.js"></script>
   <script src="js/sound.js"></script>

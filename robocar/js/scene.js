@@ -27,7 +27,10 @@
 
   // ─── 건물 타일 (팔레트별) ───────────────────────────────────
   const TILE_W = 1600, RES = 1.25;
-  const tiles = { city: { far: [], mid: [] }, site: { far: [], mid: [] } };
+  const tiles = { city: { far: [], mid: [] }, site: { far: [], mid: [] }, neon: { far: [], mid: [] } };
+  // 코스 무늬: 도시·공사장·네온 시티 (네온 그림은 neon.js, 없으면 도시로 그린다)
+  const NE = () => RC.Neon;
+  function themeOf(R) { const id = R.course && R.course.id; return id === 'site' ? 'site' : id === 'neon' && NE() ? 'neon' : 'city'; }
   function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.round(w * RES); c.height = Math.round(h * RES); const g = c.getContext('2d'); g.scale(RES, RES); return [c, g]; }
 
   function buildFar(pi) {
@@ -102,6 +105,13 @@
   function ensureTiles(theme) {
     const T = tiles[theme];
     if (T.far.length) return T;
+    if (theme === 'neon') {
+      // 네온 시티는 늘 밤이라 한 벌만 그려 세 칸에 같이 쓴다
+      const [cf, gf] = makeCanvas(TILE_W, 330); NE().buildFar(PAL[2], TILE_W, 330, gf);
+      const [cm, gm] = makeCanvas(TILE_W, 360); NE().buildMid(PAL[2], TILE_W, 360, gm);
+      for (let i = 0; i < 3; i++) { T.far.push(cf); T.mid.push(cm); }
+      return T;
+    }
     for (let i = 0; i < 3; i++) {
       if (theme === 'site') {
         const [cf, gf] = makeCanvas(TILE_W, 330); RC.Site.buildFar(PAL[i], i, TILE_W, 330, gf); T.far.push(cf);
@@ -216,6 +226,7 @@
     const g = c.getContext('2d');
     g.setTransform(R2, 0, 0, R2, 0, -ROAD_Y * R2);
     if (theme === 'site') { RC.Site.roadTile(g, P, ROAD_W); roadCache.key = key; roadCache.c = c; return c; }
+    if (theme === 'neon') { NE().roadTile(g, P, ROAD_W); roadCache.key = key; roadCache.c = c; return c; }
     g.fillStyle = lin(g, 0, GY - 26, 0, GY, [[0, shade(P.side, 1.1)], [1, shade(P.side, 0.85)]]);
     g.fillRect(0, GY - 26, ROAD_W, 26);
     g.strokeStyle = 'rgba(0,0,0,0.12)'; g.lineWidth = 1.5;
@@ -241,6 +252,7 @@
     for (const p of pits) {
       const x = p.x - cam;
       if (x > vw + 60 || x + p.w < -60) continue;
+      if (theme === 'neon' && NE().pit) { NE().pit(ctx, x, p); continue; }
       ctx.fillStyle = lin(ctx, 0, GY - 26, 0, 600, [[0, '#2a2118'], [0.2, '#15110d'], [1, '#050506']]);
       ctx.fillRect(x, GY - 26, p.w, 600 - GY + 26);
       ctx.fillStyle = '#5a4430'; ctx.fillRect(x, GY - 26, 6, 600); ctx.fillRect(x + p.w - 6, GY - 26, 6, 600);
@@ -375,6 +387,7 @@
   }
 
   function items(ctx, R, cam, vw, t, P) {
+    const neon = themeOf(R) === 'neon', N = NE();
     for (const o of R.level.items) {
       const x = o.x - cam;
       if (x < -220 || x > vw + 220) continue;
@@ -382,11 +395,13 @@
         case 'star': if (!o.got) drawStar(ctx, x, o.y, 19, t); break;
         case 'box':
           if (o.broken) break;
+          if (neon) { for (let k = 0; k < o.n; k++) N.crate(ctx, x, GY - 64 * (k + 1), 64, 64, k, t); break; }
           for (let k = 0; k < o.n; k++) crate(ctx, x, GY - 64 * (k + 1), 64, 64, (Math.floor(o.x / 97) + k) % 2);
           break;
         case 'rock': {
           if (o.broken) break;
           if (o.style === 'pipe') { RC.Site.pipe(ctx, x, o); break; }
+          if (neon) { N.barrier(ctx, x, o, t); break; }
           // 콘크리트 방호벽
           poly(ctx, [0, 0, 10, -16, 22, -66, 68, -66, 80, -16, 90, 0], x, GY);
           ctx.fillStyle = lin(ctx, 0, GY - 66, 0, GY, [[0, '#e3e7ee'], [1, '#8e96a3']]); ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = INK; ctx.stroke();
@@ -423,6 +438,7 @@
         case 'hook': RC.Site.hook(ctx, x, t); break;
         case 'ramp': {
           if (o.style === 'dirt') { RC.Site.dirtRamp(ctx, x, o); break; }
+          if (neon) { N.ramp(ctx, x, o, t); break; }
           // 강철 점프대
           ctx.fillStyle = '#2a303c';
           for (let k = 0; k < 4; k++) { const xx = x + 20 + k * 36, hh = o.h * (xx - x) / o.w; ctx.fillRect(xx - 2, GY - hh, 4, hh); }
@@ -443,10 +459,33 @@
         case 'balloon': if (!o.popped) RC.Friends.balloon(ctx, o, x, t); break;
         case 'friend': if (!o.saved) RC.Friends.waiting(ctx, o, x, t); break;
         case 'check': RC.Friends.gate(ctx, x, t, o.passed); break;
-        case 'flag': finishGate(ctx, x, t, P); break;
+        case 'flag': if (neon) N.finishGate(ctx, x, t, R.done); else finishGate(ctx, x, t, P); break;
+        case 'boost': boostPad(ctx, x, o, t); break;
+        case 'tunnel': if (N && N.tunnelBack) N.tunnelBack(ctx, x, o, t); break;
       }
     }
     for (const f of R.flying) drawStar(ctx, f.x - cam, f.y, 16, t);
+  }
+
+  // 가속 발판 (네온 시티): 화살표 불빛이 앞으로 흐른다
+  function boostPad(ctx, x, o, t) {
+    if (NE() && NE().boost) { NE().boost(ctx, x, o, t); return; }
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = o.used ? 'rgba(57,216,255,0.25)' : 'rgba(57,216,255,0.6)';
+    ctx.fillRect(x, GY - 4, o.w, 8);
+    for (let k = 0; k < 4; k++) { const ax = x + ((k * 30 + t * 120) % o.w); poly(ctx, [0, -10, 14, 0, 0, 10, 6, 0], ax, GY); ctx.fill(); }
+    ctx.restore();
+  }
+  // 터널 앞쪽 (차 위에 그린다)
+  function tunnelsFront(ctx, R, cam, vw, t) {
+    const N = NE();
+    if (!N || !N.tunnelFront) return;
+    for (const o of R.level.items) {
+      if (o.type !== 'tunnel') continue;
+      const x = o.x - cam;
+      if (x > vw + 60 || x + o.w < -60) continue;
+      N.tunnelFront(ctx, x, o, t);
+    }
   }
 
   function monkey(ctx, x, o, t) {
@@ -609,6 +648,48 @@
     ctx.restore();
   }
 
+  // ─── 바퀴 자국 (선물 상자) ─────────────────────────────────
+  // 차 뒤꽁무니가 지나간 자리를 0.5초 동안 기억해 띠로 그리거나, 별·물방울을 뿌린다
+  const RAINBOW = ['#ff3b3b', '#ff9f1a', '#ffd21a', '#22c55e', '#2f6bff', '#a855f7'];
+  function trail(ctx, K, R, ix, iy, cam, dt, t) {
+    const kind = R.cfg.trail, robot = R.car.form === 'robot';
+    K.tr = K.tr || [];
+    if (!R.freeze) {
+      for (const p of K.tr) p.a += dt;
+      K.tr.push({ x: ix - (robot ? 24 : R.body.id === 'fire' ? 112 : 96), y: iy - (robot ? 30 : 14), a: 0 });
+      K.tr = K.tr.filter(p => p.a < 0.5);
+    }
+    const pts = K.tr;
+    if (pts.length < 2) return;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const band = (color, off, w, alpha) => {
+      ctx.strokeStyle = color; ctx.lineWidth = w; ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      pts.forEach((p, i) => { const x = p.x - cam, y = p.y + off; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      ctx.stroke();
+    };
+    if (kind === 'rainbow') RAINBOW.forEach((c, i) => band(c, (i - 2.5) * 5, 5, 0.85));
+    else if (kind === 'fire') {
+      ctx.globalCompositeOperation = 'lighter';
+      band('#ff4a1a', 0, 18, 0.45); band('#ffb020', 0, 9, 0.8); band('#fff2a0', 0, 3, 0.9);
+      if (!R.freeze && Math.random() < 0.5) puffAdd(K, pts[pts.length - 1].x, pts[pts.length - 1].y, -120 - Math.random() * 120, -60 - Math.random() * 80, 0.35, 2.5, 'spark', '#ffb020');
+    } else if (kind === 'neon') {
+      ctx.globalCompositeOperation = 'lighter';
+      band('#39d8ff', -5, 7, 0.8); band('#ff4fa3', 5, 7, 0.8); band('#ffffff', 0, 2, 0.6);
+    } else if (kind === 'star') {
+      for (let i = 0; i < pts.length; i += 4) { const p = pts[i]; drawStar(ctx, p.x - cam, p.y - 6 + Math.sin(t * 8 + i) * 4, 9 * (1 - p.a * 1.4), t); }
+    } else if (kind === 'bubble') {
+      for (let i = 0; i < pts.length; i += 3) {
+        const p = pts[i], r = 5 + (i % 3) * 3, x = p.x - cam + Math.sin(i * 1.7) * 6, y = p.y - p.a * 90 - (i % 4) * 5;
+        ctx.globalAlpha = Math.max(0, 1 - p.a * 2);
+        ctx.fillStyle = 'rgba(160,225,255,0.35)'; ctx.strokeStyle = 'rgba(220,245,255,0.9)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(x - r * 0.45, y - r * 0.45, 2, 2);
+      }
+    }
+    ctx.restore();
+  }
+
   // ─── 카메라 ──────────────────────────────────────────────
   function camOf(R, vw) {
     if (!R._cam) R._cam = { x: R.car.x - vw * (R.camFrac || 0.28), zoom: 1, shake: 0, flash: 0, last: performance.now(), land: 0, ui: [], pf: [], pops: [] };
@@ -631,13 +712,16 @@
     else if (ev === 'check') K.pops.push({ x: R.car.x + 120, y: GY - 300, txt: '절반 왔어!', c: '#ffffff', t: 0 });
     else if (ev === 'splash') { K.shake = Math.max(K.shake, 3); for (let i = 0; i < 8; i++) puffAdd(K, R.car.x - 20 + Math.random() * 40, GY - 4, (Math.random() - 0.3) * 260, -120 - Math.random() * 160, 0.5, 5 + Math.random() * 4, 'dust', '#6a4424'); }
     else if (ev === 'pop') K.shake = Math.max(K.shake, 4);
+    else if (ev === 'super') { K.shake = Math.max(K.shake, 12); K.gold = 0.7; K.pops.push({ x: R.car.x + 40, y: R.car.y - 250, txt: '슈퍼 변신!', c: '#ffd23a', t: 0 }); }
+    else if (ev === 'boost') { K.shake = Math.max(K.shake, 3); K.pops.push({ x: R.car.x + 60, y: R.car.y - 150, txt: '쌩!', c: '#39d8ff', t: 0 }); }
+    else if (ev === 'douse') K.pops.push({ x: R.car.x + 260, y: GY - 150, txt: '치익!', c: '#9fe6ff', t: 0 });
     else if (ev === 'star' && R.lastStar) K.ui.push({ wx: R.lastStar.x, wy: R.lastStar.y, t: 0 });
   }
   let hud = { x: 60, y: 40 };
   function setHud(x, y) { hud = { x, y }; }
 
   function drawRun(ctx, R, vw) {
-    const theme = R.course && R.course.id === 'site' ? 'site' : 'city';
+    const theme = themeOf(R);
     const T = ensureTiles(theme);
     const c = R.car;
     const K = camOf(R, vw);
@@ -658,13 +742,16 @@
     K.shake = Math.max(0, K.shake - dt * 30); K.flash = Math.max(0, K.flash - dt); K.land = Math.max(0, K.land - dt);
     K.jump = Math.max(0, (K.jump || 0) - dt);
     const cam = K.x, t = R.t;
-    const P = palAt(Math.min(1, ix / R.level.length));
+    const P = palAt(theme === 'neon' ? 1 : Math.min(1, ix / R.level.length));
     const lw = layerWeights(P.ws, P.wn);
 
     // 배경 (카메라 확대 영향 없음)
     const low = RC.Draw.low;
-    sky(ctx, P, vw, t);
-    if (!low) { godRays(ctx, P, vw, t); clouds(ctx, P, cam, vw, t, lw); birds(ctx, P, cam, vw, t); }
+    if (theme === 'neon') NE().sky(ctx, P, vw, t, cam);
+    else {
+      sky(ctx, P, vw, t);
+      if (!low) { godRays(ctx, P, vw, t); clouds(ctx, P, cam, vw, t, lw); birds(ctx, P, cam, vw, t); }
+    }
     drawLayer(ctx, T.far, lw, cam, 0.12, GY - 26 - 330 + 20, 330, vw);
     drawLayer(ctx, T.mid, lw, cam, 0.38, GY - 26 - 360 + 10, 360, vw);
 
@@ -675,7 +762,7 @@
     ctx.translate(fx0 + (Math.random() - 0.5) * sh, fy0 + (Math.random() - 0.5) * sh);
     ctx.scale(K.zoom, K.zoom);
     ctx.translate(-fx0, -fy0);
-    if (theme === 'site') RC.Site.props(ctx, P, cam, vw, t); else props(ctx, P, cam, vw, t);
+    if (theme === 'site') RC.Site.props(ctx, P, cam, vw, t); else if (theme === 'neon') NE().props(ctx, P, cam, vw, t); else props(ctx, P, cam, vw, t);
     road(ctx, P, cam, vw, R.level.pits, theme);
     items(ctx, R, cam, vw, t, P);
 
@@ -705,11 +792,35 @@
     K.tilt = (K.tilt || 0) + (tilt - (K.tilt || 0)) * Math.min(1, dt * (c.onGround ? 14 : 8));
     tilt = K.tilt;
     const spin = c.spin > 0 ? (1 - c.spin / 0.9) * TAU : 0;
-    C.drawBot(ctx, R.cfg, cx, iy, {
+    // 선물로 받은 바퀴 자국
+    if (R.cfg.trail && !c.fall) trail(ctx, K, R, ix, iy, cam, dt, t);
+    // 슈퍼 로봇: 금빛 기운 + 반짝이 꼬리 + 금색 몸
+    const sup = c.super > 0;
+    if (sup) {
+      const pulse = 0.75 + Math.sin(t * 9) * 0.2;
+      glow(ctx, '#ffd23a', cx, iy - 100, 190, pulse * Math.min(1, c.super * 2));
+      if (!R.freeze && Math.random() < 0.8) puffAdd(K, ix - 30 + (Math.random() - 0.5) * 60, iy - 60 - Math.random() * 120, -240 - Math.random() * 120, (Math.random() - 0.5) * 60, 0.5, 2.5, 'spark', Math.random() < 0.5 ? '#ffe98a' : '#ffffff');
+    }
+    const drawCfg = sup ? Object.assign({}, R.cfg, { color: '#ffc21a' }) : R.cfg;
+    const spray = R.shots && R.shots.length > 0 && R.shotT > D.RUN.shotGap - 0.15;
+    C.drawBot(ctx, drawCfg, cx, iy, {
       t, form: c.form, morph: c.morph, thrust: c.thrusting, glide: c.gliding, spin, tilt: c.form === 'car' ? tilt : 0,
       bounce: c.bump > 0 ? Math.sin(c.bump * 40) * 4 : R.t === 0 ? Math.abs(Math.sin(now * 0.028)) * 1.6 : (c.onGround && c.form === 'car' ? Math.sin(ix * 0.09) * 0.9 + Math.sin(ix * 0.031) * 0.6 : 0), squash: K.land > 0 ? Math.sin(K.land / 0.25 * Math.PI) : K.jump > 0 ? -Math.sin(K.jump / 0.22 * Math.PI) * 0.8 : 0,
-      dist: ix, speed, running: c.onGround, air: !c.onGround, punch: c.punch,
+      dist: ix, speed, running: c.onGround, air: !c.onGround, punch: c.punch, spray,
     });
+    // 물대포 물방울: 빛나는 물방울 + 짧은 꼬리
+    if (R.shots && R.shots.length) {
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+      for (const sh of R.shots) {
+        const sx = sh.x - cam;
+        ctx.strokeStyle = 'rgba(120,210,255,0.45)'; ctx.lineWidth = 9;
+        ctx.beginPath(); ctx.moveTo(sx, sh.y); ctx.lineTo(sx - sh.vx * 0.05, sh.y - sh.vy * 0.05); ctx.stroke();
+        ctx.strokeStyle = 'rgba(220,245,255,0.9)'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(sx, sh.y); ctx.lineTo(sx - sh.vx * 0.025, sh.y - sh.vy * 0.025); ctx.stroke();
+        glow(ctx, '#7fd8ff', sx, sh.y, 16, 0.9);
+      }
+      ctx.restore();
+    }
     RC.Friends.riders(ctx, R, cx, iy, c.form, t);
     // 능력 연출
     if (c.form === 'robot' && R.body.ability === 'water' && c.robotT > D.RUN.robotTime - 0.9) {
@@ -732,6 +843,7 @@
       for (let i = 0; i < 5; i++) { ctx.fillStyle = 'rgba(255,90,60,' + (0.25 - i * 0.045) + ')'; ctx.fillRect(cx - 60 - i * 40, iy - 150 + i * 6, 50, 110 - i * 12); }
       ctx.restore();
     }
+    tunnelsFront(ctx, R, cam, vw, t);
     fx(ctx, R, cam);
     // 떠오르는 글자 (공중 보너스·구했다!)
     for (const q of K.pops) {
@@ -744,7 +856,7 @@
       ctx.restore();
     }
     K.pops = K.pops.filter(q => q.t < 1.3);
-    if (!low) { if (theme === 'site') RC.Site.foreground(ctx, P, cam, vw); else foreground(ctx, P, cam, vw); }
+    if (!low) { if (theme === 'site') RC.Site.foreground(ctx, P, cam, vw); else if (theme === 'neon') NE().foreground(ctx, P, cam, vw, t); else foreground(ctx, P, cam, vw); }
     ctx.restore();
 
     // 속도선
@@ -768,6 +880,7 @@
     K.ui = K.ui.filter(u => u.t < 0.55);
     post(ctx, P, vw);
     if (K.flash > 0) { ctx.fillStyle = 'rgba(210,245,255,' + Math.min(0.6, K.flash) + ')'; ctx.fillRect(0, 0, vw, 600); }
+    if (K.gold > 0) { K.gold = Math.max(0, K.gold - dt); ctx.fillStyle = 'rgba(255,214,90,' + Math.min(0.5, K.gold) + ')'; ctx.fillRect(0, 0, vw, 600); }
   }
 
   // 가장자리 어둡게 + 시간대 색감: 한 장으로 합쳐 두고 한 번만 찍는다

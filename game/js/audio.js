@@ -96,8 +96,39 @@
       noise(sfxBus, t, 'lowpass', 3000, 60, 0.45, 0.7);
       tone(sfxBus, t, 'sine', 90, 30, 0.4, 0.6);
     } },
+    // 필살기: 짧게 빨려 들어가는 소리 뒤에 저음 폭발, 위로 퍼지는 금속성 울림
+    ult:     { gap: 0.30, fn: t => {
+      tone(sfxBus, t, 'sawtooth', 220, 1400, 0.12, 0.18);
+      noise(sfxBus, t + 0.1, 'lowpass', 5000, 50, 1.2, 0.95);
+      tone(sfxBus, t + 0.1, 'sine', 110, 28, 0.9, 0.8);
+      [660, 880, 1320].forEach((f, i) => tone(sfxBus, t + 0.12 + i * 0.06, 'triangle', f, f * 1.5, 0.4, 0.14));
+    } },
+    // 필살기 게이지가 가득 참
+    ultReady:{ gap: 0.50, fn: t => { [784, 988, 1175, 1568].forEach((f, i) => tone(sfxBus, t + i * 0.055, 'square', f, f, 0.09, 0.1)); } },
+    // 메달 획득: 위로 올라가는 반짝이는 화음 + 쉿 하는 빛
+    medal:   { gap: 0.40, fn: t => {
+      [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.35, 0.14));
+      tone(sfxBus, t + 0.35, 'square', 2093, 2093, 0.25, 0.05);
+      noise(sfxBus, t, 'highpass', 5000, 9000, 0.45, 0.07);
+    } },
+    // 콤보 10·25·50·100을 넘길 때: 짧게 두 번 올라가는 음
+    combo:   { gap: 0.20, fn: t => { tone(sfxBus, t, 'square', 880, 1320, 0.07, 0.09); tone(sfxBus, t + 0.06, 'square', 1320, 1760, 0.09, 0.09); } },
+    // 아이템·상점 (2026-09-26)
+    coin:    { gap: 0.04, fn: t => { tone(sfxBus, t, 'square', 1319, 1319, 0.05, 0.07); tone(sfxBus, t + 0.045, 'square', 1976, 1976, 0.09, 0.07); } },
+    shieldUp:{ gap: 0.10, fn: t => { tone(sfxBus, t, 'triangle', 440, 880, 0.18, 0.2); tone(sfxBus, t + 0.05, 'sine', 1320, 1760, 0.2, 0.1); } },
+    block:   { gap: 0.10, fn: t => { noise(sfxBus, t, 'bandpass', 3000, 1200, 0.18, 0.4, 3); tone(sfxBus, t, 'triangle', 1500, 700, 0.22, 0.2); } },
+    heat:    { gap: 0.10, fn: t => { tone(sfxBus, t, 'sawtooth', 200, 900, 0.25, 0.14); noise(sfxBus, t, 'highpass', 2000, 6000, 0.25, 0.12); } },
+    magnet:  { gap: 0.10, fn: t => { tone(sfxBus, t, 'sine', 300, 600, 0.3, 0.2); tone(sfxBus, t + 0.02, 'sine', 303, 606, 0.3, 0.15); } },
+    bomb:    { gap: 0.20, fn: t => { noise(sfxBus, t, 'lowpass', 4000, 60, 0.7, 0.9); tone(sfxBus, t, 'sine', 100, 30, 0.6, 0.7); } },
+    claim:   { gap: 0.20, fn: t => { [1047, 1319, 1568, 2093].forEach((f, i) => tone(sfxBus, t + i * 0.06, 'square', f, f, 0.12, 0.08)); noise(sfxBus, t + 0.2, 'highpass', 6000, 9000, 0.3, 0.06); } },
+    buy:     { gap: 0.15, fn: t => { tone(sfxBus, t, 'square', 988, 988, 0.06, 0.08); tone(sfxBus, t + 0.07, 'square', 1480, 1480, 0.14, 0.08); } },
+    deny:    { gap: 0.15, fn: t => { tone(sfxBus, t, 'square', 220, 180, 0.14, 0.08); } },
     heal:    { gap: 0.05, fn: t => { tone(sfxBus, t, 'sine', 660, 660, 0.08, 0.25); tone(sfxBus, t + 0.07, 'sine', 990, 990, 0.12, 0.25); } },
     eshoot:  { gap: 0.08, fn: t => { tone(sfxBus, t, 'triangle', 700, 350, 0.08, 0.12); } },
+    // 보스 예고(돌진·레이저) · 레이저 발사 · 헥사 방패가 총알을 막음
+    warn:    { gap: 0.3, fn: t => { for (let i = 0; i < 3; i++) tone(sfxBus, t + i * 0.12, 'square', 1200, 1200, 0.07, 0.07); } },
+    laser:   { gap: 0.2, fn: t => { tone(sfxBus, t, 'sawtooth', 120, 60, 0.5, 0.25); noise(sfxBus, t, 'bandpass', 3000, 800, 0.45, 0.3, 1); } },
+    block:   { gap: 0.06, fn: t => { tone(sfxBus, t, 'triangle', 1800, 1400, 0.04, 0.05); } },
     pick:    { gap: 0.05, fn: t => { [523, 659, 784].forEach((f, i) => tone(sfxBus, t + i * 0.05, 'square', f, f, 0.1, 0.12)); } },
     clear:   { gap: 0.10, fn: t => { [440, 554, 659, 880].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.18, 0.25)); } },
     wave:    { gap: 0.10, fn: t => { tone(sfxBus, t, 'triangle', 330, 660, 0.25, 0.22); } },
@@ -127,6 +158,10 @@
     pick:     { f: 'tile-match', v: 0.6 },
     dash:     { f: 'weapon_change', v: 0.5, r: 1.3 },
     bossDown: { f: 'enemy_destroy', v: 1.1, r: 0.6 },
+    ult:      { f: 'enemy_destroy', v: 1.0, r: 0.5 },
+    medal:    { f: 'tile-match', v: 0.5, r: 1.2 },
+    bomb:     { f: 'enemy_destroy', v: 0.9, r: 0.7 },
+    claim:    { f: 'tile-match', v: 0.5, r: 1.4 },
   };
   const FILES = Array.from(new Set(Object.values(SAMPLE).map(s => s.f)));
   function play(name, opt) {

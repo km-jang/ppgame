@@ -34,6 +34,8 @@ var RC = {};
     { id: 'jet',   name: '제트팩', say: '제트팩! 꾹 누르면 날아!' },
     { id: 'wing',  name: '날개',   say: '날개! 꾹 누르면 둥실!' },
     { id: 'drill', name: '드릴',   say: '드릴! 바위도 뚫어!' },
+    // 물대포: 앞에 불·진흙·풍선·상자가 보이면 저절로 쏜다. 친구를 구할수록 물줄기가 늘어난다 (N-GUN 총열처럼)
+    { id: 'hose',  name: '물대포', say: '물대포! 저절로 쏴!' },
   ];
 
   const COLORS = ['#ff3b3b', '#ff9f1a', '#ffd21a', '#22c55e', '#2f6bff', '#a855f7'];
@@ -80,6 +82,14 @@ var RC = {};
     airBonusAfter: 0.75,     // 이만큼(초) 넘게 공중에 있다 내리면 보너스 별 (Hill Climb Racing 참고)
     airBonusStep: 0.2, airBonusMax: 5,
     balloonR: 58,
+    // 슈퍼 변신 (N-GUN 필살기처럼): 별을 모으면 게이지가 차고, 가득 차면 변신 버튼이 금색
+    superNeed: 12,           // 별 이만큼 모으면 가득
+    superTime: 4,            // 슈퍼 로봇 시간
+    superRange: 1400,        // 앞의 장애물을 이만큼 멀리까지 별로 바꾼다
+    superY: 150,             // 땅 위 이 높이로 날아간다 (구덩이 걱정 없음)
+    superSpeed: 1.5,
+    // 물대포 장비
+    shotGap: 0.42, shotV: 820, shotUp: 300, shotRange: 820, shotMax: 3,
   };
 
   const JAR = 15; // 별 병 크기 (이만큼 모으면 스티커 1장)
@@ -87,7 +97,7 @@ var RC = {};
   // 코스: 조각(패턴) 목록이 다르다. first = 처음 몇 조각 고정 순서(쉬운 것부터)
   // unlock = 도시를 끝까지 달린 판 수가 이만큼이면 열림 (0 = 처음부터)
   // 부품 열기: 지금까지 모은 별(prog.total)이 need 이상이면 열린다. need 없으면 처음부터
-  const UNLOCK = { monster: 20, fire: 50, wing: 90, police: 140, spring: 200, drill: 270 };
+  const UNLOCK = { monster: 20, hose: 35, fire: 50, wing: 90, police: 140, spring: 200, drill: 270 };
 
   const COURSES = [
     { id: 'city', name: '도시', desc: '낮에서 밤까지 큰 길을 달려요', unlock: 0,
@@ -96,6 +106,10 @@ var RC = {};
     { id: 'site', name: '공사장', desc: '고깔을 쓰러뜨리고 흙더미를 넘어요', unlock: 1,
       first: ['stars', 'cones', 'dirt', 'stars'],
       patterns: ['stars', 'pit', 'cones', 'pipe', 'dirt', 'crane', 'mud', 'boxes', 'cones', 'monkey', 'balloons'] },
+    // 네온 시티: 처음부터 끝까지 밤. 빛나는 길·불빛 터널·가속 발판 (N-GUN 스타일, PLAN.md 9.1 C)
+    { id: 'neon', name: '네온 시티', desc: '빛나는 밤 도시를 쌩쌩 달려요', unlock: 3,
+      first: ['stars', 'boost', 'boxes', 'stars'],
+      patterns: ['stars', 'boost', 'pit', 'boxes', 'rock', 'ramp', 'high', 'tunnel', 'zig', 'fire', 'balloons', 'tunnel'] },
   ];
 
   // 구조할 친구 (코스마다 두 번, 길가에서 "도와줘!")
@@ -105,6 +119,33 @@ var RC = {};
     { id: 'bot', name: '꼬마 로봇', color: '#7fd3ff' },
   ];
 
-  RC.DATA = { BODIES, WHEELS, GEAR, COLORS, STICKERS, RARITY, RUN, JAR, COURSES, UNLOCK, FRIENDS };
+  // 선물 상자 (한 판 끝날 때마다 상자 3개 중 하나): 바퀴 자국 효과와 특별 페인트. 다 모으면 별 보너스
+  // css: 선물 상자 속 미리보기 모양
+  const GIFTS = [
+    { id: 'fire',    kind: 'trail', name: '불꽃 자국',   css: 'linear-gradient(90deg, #ff3b1a, #ffb020, #fff2a0)' },
+    { id: 'rainbow', kind: 'trail', name: '무지개 자국', css: 'linear-gradient(180deg, #ff3b3b, #ff9f1a, #ffd21a, #22c55e, #2f6bff, #a855f7)' },
+    { id: 'star',    kind: 'trail', name: '별 자국',     css: 'radial-gradient(circle, #fff6c9 0 20%, #ffd23a 21% 45%, #b97a00 46%)' },
+    { id: 'bubble',  kind: 'trail', name: '물방울 자국', css: 'radial-gradient(circle at 35% 35%, #ffffff 0 12%, #9fe6ff 13% 45%, #2f7bff 46%)' },
+    { id: 'neon',    kind: 'trail', name: '네온 자국',   css: 'linear-gradient(180deg, #39d8ff 0 45%, #ff4fa3 55% 100%)' },
+    { id: 'gold',    kind: 'paint', name: '황금 페인트', color: '#ffc21a' },
+    { id: 'chrome',  kind: 'paint', name: '은빛 크롬',   color: '#c9d2df' },
+    { id: 'pink',    kind: 'paint', name: '분홍 번개',   color: '#ff4fa3' },
+    { id: 'mint',    kind: 'paint', name: '민트 번개',   color: '#2de0c0' },
+    { id: 'carbon',  kind: 'paint', name: '검정 카본',   color: '#2a2f3a' },
+  ];
+  const GIFT_BONUS = 5;   // 다 모은 뒤에는 별 5개
+
+  // 놀이터: 옆으로 달리기 대신 위에서 본 공원을 손가락으로 돌아다니는 모드 (park.js, PLAN.md 9.1 E)
+  const PARK = { id: 'park', name: '놀이터', desc: '위에서 보며 마음대로 돌아다녀요', unlock: 2 };
+
+  RC.DATA = { PARK, GIFTS, GIFT_BONUS, BODIES, WHEELS, GEAR, COLORS, STICKERS, RARITY, RUN, JAR, COURSES, UNLOCK, FRIENDS };
+  // 선물 상자 세 개에 무엇을 넣을지: 아직 없는 선물을 섞어서 고르고, 모자라면 별 보너스로 채운다
+  RC.giftChoices = function (owned, rand) {
+    const left = RC.DATA.GIFTS.filter(g => !owned.includes(g.id));
+    const out = [];
+    while (out.length < 3 && left.length) out.push(left.splice(Math.floor(rand() * left.length), 1)[0]);
+    while (out.length < 3) out.push({ id: 'bonus', kind: 'bonus', name: '별 ' + RC.DATA.GIFT_BONUS + '개', css: 'radial-gradient(circle, #fff6c9 0 25%, #ffd23a 26% 60%, #b97a00 61%)' });
+    return out;
+  };
   RC.find = (list, id) => list.find(x => x.id === id) || list[0];
 })(RC);

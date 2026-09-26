@@ -83,6 +83,14 @@
     check:  t => { [659, 784, 1047].forEach((f, i) => tone(sfx, t + i * 0.1, 'square', f, f, 0.16, 0.14)); },
     unlock: t => { [523, 784, 1047, 1568].forEach((f, i) => tone(sfx, t + i * 0.1, 'triangle', f, f, 0.3, 0.24)); },
     rev:    t => { tone(sfx, t, 'sawtooth', 90, 260, 0.5, 0.16); tone(sfx, t + 0.05, 'square', 60, 140, 0.45, 0.08); noise(sfx, t, 'lowpass', 400, 1200, 0.5, 0.18); },
+    // 슈퍼 변신 · 게이지 가득 · 물대포 · 가속 발판 · 선물 상자
+    super:  t => { tone(sfx, t, 'sawtooth', 200, 1600, 0.35, 0.18); [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(sfx, t + 0.25 + i * 0.07, 'triangle', f, f, 0.3, 0.22)); noise(sfx, t + 0.2, 'lowpass', 4000, 300, 0.6, 0.35); },
+    peek:   t => { tone(sfx, t, 'sine', 500, 900, 0.12, 0.2); tone(sfx, t + 0.12, 'sine', 700, 1200, 0.12, 0.2); },
+    superReady: t => { [1047, 1319, 1568, 2093].forEach((f, i) => tone(sfx, t + i * 0.06, 'square', f, f, 0.12, 0.12)); },
+    spray:  t => noise(sfx, t, 'bandpass', 2600, 1400, 0.16, 0.12),
+    douse:  t => { noise(sfx, t, 'highpass', 3000, 1500, 0.35, 0.3); tone(sfx, t, 'sine', 700, 300, 0.15, 0.12); },
+    boost:  t => { tone(sfx, t, 'sawtooth', 300, 1400, 0.3, 0.14); noise(sfx, t, 'bandpass', 800, 4000, 0.3, 0.2); },
+    gift:   t => { [659, 880, 1175, 1760].forEach((f, i) => tone(sfx, t + i * 0.08, 'triangle', f, f, 0.35, 0.26)); noise(sfx, t, 'highpass', 5000, 3000, 0.4, 0.15); },
     slam:   t => { tone(sfx, t, 'sine', 120, 50, 0.3, 0.5); noise(sfx, t, 'lowpass', 2000, 200, 0.25, 0.35); },
   };
 
@@ -109,6 +117,8 @@
     slam:   { f: 'impact', v: 1.1, r: 0.85 },
     balloon: { f: 'placement-a', v: 0.8, r: 1.6, layer: true },
     rescue: { f: 'tile-match', v: 0.9, layer: true },
+    super:  { f: 'weapon_change', v: 1.8, r: 0.8, layer: true },
+    boost:  { f: 'skid', v: 0.4, d: 0.4, r: 1.6, layer: true },
   };
   const FILES = Array.from(new Set(Object.values(SAMPLE).map(s => s.f).concat(['engine'])));
   function play(name) {

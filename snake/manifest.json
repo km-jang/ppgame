@@ -1,0 +1,15 @@
+{
+  "name": "N-SNAKE",
+  "short_name": "N-SNAKE",
+  "description": "에너지 구슬을 먹을수록 길어지는 네온 뱀 게임",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07080d",
+  "theme_color": "#07080d",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
