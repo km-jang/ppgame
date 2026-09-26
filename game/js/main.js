@@ -10,26 +10,27 @@
   if (isTouch) document.body.classList.add('touch');
   const input = NG.createInput(canvas);
   const stickMove = $('stick-move'), stickAim = $('stick-aim');
-  const view = { dpr: 1, hudTop: 14, hudLeft: 104, hudRight: 12, ui: 1, touchHint: isTouch };
+  // 움직임 줄이기 설정: 화면 흔들림·번쩍임·튀어 오름을 뺀다 (render.js)
+  const calmQ = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const view = { dpr: 1, hudTop: 14, hudLeft: 104, hudRight: 12, ui: 1, touchHint: isTouch, calm: !!(calmQ && calmQ.matches) };
+  if (calmQ && calmQ.addEventListener) calmQ.addEventListener('change', () => { view.calm = calmQ.matches; });
   const demoView = Object.create(view, { hud: { value: false } });
-  const BEST_KEY = 'ngun.best2';   // 난이도별 {easy:{score,wave}, ...}
   const MUTE_KEY = 'ngun.muted';
   const DIFF_KEY = 'ngun.diff';
   const AUDIO_KEY = 'ngun.audio';
 
   let W = null;        // 실제 판
   let demo = null;     // 시작 화면 뒤에서 혼자 도는 시연 판
-  let mode = 'title';  // title | play | cards | paused | over
+  let mode = 'title';  // title | medals | play | cards | paused | over
   let cardsShownAt = 0;
   let diff = NG.store.get(DIFF_KEY, 'normal');
-  if (!NG.DATA.DIFFICULTY[diff]) diff = 'normal';
-  let bests = NG.store.get(BEST_KEY, null);
-  if (!bests) {
-    // 난이도 도입 전 기록은 '보통'으로 옮긴다
-    const old = NG.store.get('ngun.best', null);
-    bests = old ? { normal: old } : {};
-  }
-  const bestOf = d => bests[d] || { score: 0, wave: 0 };
+  if (typeof diff !== 'string' || !NG.DATA.DIFFICULTY[diff]) diff = 'normal';
+  // 기록·메달 (records.js). 예전 최고 기록 키(ngun.best2)도 읽어 합치고 계속 같이 쓴다
+  const REC = NG.Records;
+  let rec = REC.load();
+  let runMedals = [];   // 이번 판에 딴 메달
+  let runSaved = false; // 이번 판 기록을 이미 넣었나 (게임 오버·그만두기 중 한 번만)
+  let medalCheckT = 0;
   let lastTs = 0;
   let frozenDrawn = false; // 일시정지·카드 화면에선 한 번만 그리고 쉰다 (배터리)
 
@@ -63,7 +64,7 @@
   window.addEventListener('resize', resize);
 
   // ─── 오버레이 ──────────────────────────────────────────────
-  const screens = ['scr-title', 'scr-cards', 'scr-pause', 'scr-over'];
+  const screens = ['scr-title', 'scr-medals', 'scr-cards', 'scr-pause', 'scr-over'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('on', s === id);
     document.body.classList.toggle('playing', mode === 'play');
@@ -79,10 +80,100 @@
   }
 
   function renderBest() {
-    const b = bestOf(diff);
+    const b = rec.best[diff];
     $('best').textContent = b.score > 0
       ? NG.DATA.DIFFICULTY[diff].name + ' 최고 기록 ' + b.score.toLocaleString() + '점 · WAVE ' + b.wave
       : NG.DATA.DIFFICULTY[diff].name + ' 첫 도전을 시작하세요';
+    $('medal-count').textContent = REC.count(rec) + '/' + NG.DATA.MEDALS.length;
+  }
+
+  // ─── 메달 ──────────────────────────────────────────────────
+  const TIER = ['', '동', '은', '금'];
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function medalHtml(m, got, date) {
+    return '<div class="medal t' + m.tier + (got ? '' : ' locked') + '">' +
+      '<span class="coin' + (got && String(m.icon).length > 2 ? ' long' : '') + '" aria-hidden="true"><i>' + esc(got ? m.icon : '?') + '</i></span>' +
+      '<span class="mtxt"><b>' + esc(m.name) + ' <em>' + TIER[m.tier] + '</em></b><small>' + esc(m.desc) + '</small>' +
+      (date ? '<small class="date">' + esc(date) + '</small>' : '') + '</span></div>';
+  }
+
+  // 새 메달 검사. live면 게임 중 알림, finished면 판이 끝난 것 (판 수 메달)
+  function checkMedals(live, finished) {
+    if (!W) return [];
+    const fresh = REC.newMedals(rec, REC.runOf(W), finished);
+    if (!fresh.length) return fresh;
+    REC.award(rec, fresh);
+    REC.save(rec);
+    for (const m of fresh) runMedals.push(m);
+    if (live) {
+      for (const m of fresh) medalToast(m);
+      NG.Audio.play('medal');
+      vibrate([20, 40, 20]);
+    }
+    return fresh;
+  }
+
+  // 게임 중 메달 알림: 아래 가운데에 하나씩 차례로
+  const toastQ = [];
+  let toastBusy = false;
+  function medalToast(m) {
+    toastQ.push(m);
+    if (!toastBusy) nextMedalToast();
+  }
+  function nextMedalToast() {
+    const el = $('medal-toast');
+    const m = toastQ.shift();
+    if (!m) { toastBusy = false; el.classList.remove('on'); return; }
+    toastBusy = true;
+    el.innerHTML = '<span class="mt-head">메달 획득</span>' + medalHtml(m, true);
+    el.classList.remove('on');
+    void el.offsetWidth; // 애니메이션 다시 시작
+    el.classList.add('on');
+    setTimeout(nextMedalToast, 2400);
+  }
+  function clearMedalToasts() {
+    toastQ.length = 0;
+    $('medal-toast').classList.remove('on');
+  }
+
+  function renderMedalBoard() {
+    const M = NG.DATA.MEDALS;
+    $('medal-sub').textContent = '메달 ' + REC.count(rec) + ' / ' + M.length + ' · 잠긴 메달은 조건을 채우면 열립니다';
+    $('medal-list').innerHTML = M.map(m => medalHtml(m, rec.medals[m.id] != null, rec.medals[m.id])).join('');
+    const rows = [['최고 점수', 'score', v => v.toLocaleString()], ['최고 웨이브', 'wave', String], ['최다 처치', 'kills', v => v.toLocaleString()],
+      ['최장 생존', 'time', NG.fmtTime], ['최고 콤보', 'combo', String]];
+    let h = '<thead><tr><th></th>' + REC.DIFFS.map(d => '<th class="d-' + d + '">' + NG.DATA.DIFFICULTY[d].name + '</th>').join('') + '</tr></thead><tbody>';
+    for (const [name, k, f] of rows) {
+      h += '<tr><th>' + name + '</th>' + REC.DIFFS.map(d => { const v = rec.best[d][k]; return '<td>' + (v > 0 ? f(v) : '-') + '</td>'; }).join('') + '</tr>';
+    }
+    $('rec-table').innerHTML = h + '</tbody>';
+    const L = rec.life;
+    $('rec-life').innerHTML = '<span>총 <b>' + L.games.toLocaleString() + '</b>판</span><span>처치 <b>' + L.kills.toLocaleString() + '</b></span>' +
+      '<span>보스 <b>' + L.bosses.toLocaleString() + '</b></span><span>N-버스트 <b>' + L.ults.toLocaleString() + '</b></span><span>플레이 <b>' + NG.fmtTime(L.time) + '</b></span>';
+  }
+
+  function openMedals() {
+    if (mode !== 'title') return;
+    mode = 'medals';
+    renderMedalBoard();
+    show('scr-medals');
+  }
+  function closeMedals() {
+    if (mode !== 'medals') return;
+    mode = 'title';
+    renderBest();
+    show('scr-title');
+  }
+
+  // 이번 판을 기록에 넣는다 (게임 오버, 또는 10초 넘게 하고 그만둘 때). 깬 기록 이름 목록을 돌려준다
+  function saveRun(finished) {
+    if (!W || runSaved) return [];
+    runSaved = true;
+    const run = REC.runOf(W);
+    checkMedals(false, finished);
+    const broken = REC.finish(rec, run);
+    REC.save(rec);
+    return broken;
   }
 
   function setDiff(d) {
@@ -115,6 +206,10 @@
     const { w, h } = size();
     W = NG.World.createWorld(w, h, undefined, diff);
     input.reset();
+    runMedals = [];
+    runSaved = false;
+    medalCheckT = 0;
+    clearMedalToasts();
     mode = 'play';
     NG.Audio.setDuck(false);
     NG.Audio.music('play');
@@ -123,6 +218,8 @@
   }
 
   function toTitle() {
+    if (W && W.stats.time > 10) saveRun(true);
+    clearMedalToasts();
     W = null;
     mode = 'title';
     NG.Audio.setDuck(false);
@@ -192,20 +289,29 @@
 
   function gameOver() {
     mode = 'over';
-    const b = bestOf(diff);
-    const isBest = W.score > b.score;
-    if (isBest || W.wave > b.wave) {
-      bests[diff] = { score: Math.max(b.score, W.score), wave: Math.max(b.wave, W.wave) };
-      NG.store.set(BEST_KEY, bests);
-    }
+    const broken = saveRun(true);
+    clearMedalToasts(); // 이번 판 메달은 결과 화면에 모아 보여 준다
     NG.Audio.music('off');
     $('over-diff').textContent = W.diff.name;
     $('over-score').textContent = W.score.toLocaleString();
-    $('over-new').style.display = isBest ? '' : 'none';
+    $('over-new').style.display = broken.indexOf('score') >= 0 ? '' : 'none';
     $('over-wave').textContent = W.wave;
     $('over-kills').textContent = W.stats.kills.toLocaleString();
     $('over-time').textContent = NG.fmtTime(W.stats.time);
+    $('over-combo').textContent = W.stats.bestCombo;
     $('over-n').textContent = W.player.gun.barrels;
+    // 깬 기록마다 "신기록!" 딱지
+    for (const el of document.querySelectorAll('#scr-over [data-rec]')) {
+      const hit = broken.indexOf(el.dataset.rec) >= 0;
+      el.classList.toggle('rec', hit);
+      const old = el.querySelector('.chip');
+      if (old) old.remove();
+      if (hit) el.insertAdjacentHTML('beforeend', '<span class="chip">신기록!</span>');
+    }
+    // 이번 판에 딴 메달 (게임 중에 딴 것 포함)
+    const om = $('over-medals');
+    om.innerHTML = runMedals.length ? '<p class="nm-head">새 메달 ' + runMedals.length + '개</p>' + runMedals.map(m => medalHtml(m, true)).join('') : '';
+    if (runMedals.length) setTimeout(() => { if (mode === 'over') NG.Audio.play('medal'); }, 1100);
     const counts = {};
     for (const id of W.stats.picks) counts[id] = (counts[id] || 0) + 1;
     const all = NG.DATA.CARDS.concat([NG.DATA.FALLBACK_CARD]);
@@ -238,6 +344,7 @@
     NG.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
     if (code === 'KeyF') { toast('조준: ' + (input.toggleAim() === 'mouse' ? '마우스' : '자동')); return; }
+    if (mode === 'medals') { if (code === 'Escape' || code === 'Enter') closeMedals(); return; }
     if (mode === 'title' && code === 'Enter') return newGame();
     if (mode === 'over' && code === 'Enter') return newGame();
     if (code === 'KeyP' || code === 'Escape') return mode === 'play' ? pause() : resume();
@@ -267,6 +374,8 @@
   const keep = () => { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* 무시 */ } };
   $('btn-start').addEventListener('click', () => { keep(); newGame(); });
   $('btn-retry').addEventListener('click', newGame);
+  $('btn-medals').addEventListener('click', () => { NG.Audio.unlock(); openMedals(); });
+  $('btn-medals-back').addEventListener('click', closeMedals);
   $('btn-home').addEventListener('click', toTitle);
   $('btn-resume').addEventListener('click', resume);
   $('btn-quit').addEventListener('click', toTitle);
@@ -354,7 +463,9 @@
     const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
     lastTs = ts;
 
-    if (mode === 'title') {
+    if (mode === 'title' || mode === 'medals') {
+      // 시연 판은 8웨이브를 넘기면 처음부터 (오래 켜 두면 적이 계속 늘어 느려지지 않게)
+      if (demo && demo.wave > 8) demo = null;
       if (!demo) { const { w, h } = size(); demo = NG.World.createWorld(w, h, 12345); }
       if (demo.phase === 'cards') NG.World.pickCard(demo, 0);
       demo.player.hp = demo.player.maxHp;
@@ -370,6 +481,8 @@
           NG.World.step(W, i === 0 ? inp : Object.assign({}, inp, { dash: false, ult: false }), dt / n);
         }
         drainEvents(W);
+        // 메달은 0.5초마다 검사 (판 도중에 딴 것은 바로 알림)
+        if (mode === 'play' && W.phase !== 'over' && (medalCheckT += dt) > 0.5) { medalCheckT = 0; checkMedals(true, false); }
         if (mode === 'play' && W.phase === 'cards') showCards();
         else if (mode === 'play' && W.phase === 'over') gameOver();
         updateDashBtn();
@@ -407,5 +520,11 @@
   } catch (e) { /* 무시 */ }
 
   // 개발·테스트용 손잡이
-  NG.debug = { get world() { return W; }, get mode() { return mode; }, get diff() { return diff; }, newGame, choose, setDiff };
+  NG.debug = {
+    get world() { return W; }, get mode() { return mode; }, get diff() { return diff; },
+    get medals() { return rec; }, get runMedals() { return runMedals; },
+    newGame, choose, setDiff, openMedals, closeMedals, checkMedals,
+    // 기록을 다시 읽는다 (테스트가 저장소를 바꾼 뒤)
+    reload() { rec = REC.load(); renderBest(); },
+  };
 })(NG);
