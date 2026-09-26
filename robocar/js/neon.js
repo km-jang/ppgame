@@ -74,8 +74,9 @@
 
   // ─── 하늘: 남색 그라디언트 · 격자 · 별 · 빛나는 고리 달 ────────────
   const skyC = { key: '', c: null };
-  function buildSky(vw) {
-    const Q = 0.5, W = Math.ceil(vw * Q), H = 300;
+  // 화면 배율(Q) 그대로 그려 두면 찍을 때 늘이지 않아 빠르다. 길이 덮는 460 아래는 그리지 않는다
+  function buildSky(vw, Q, key) {
+    const W = Math.ceil(vw * Q), H = Math.ceil(460 * Q);
     const c = skyC.c || document.createElement('canvas');
     c.width = W; c.height = H;
     const g = c.getContext('2d');
@@ -123,13 +124,15 @@
     tube(g, CY, 3, 10, Q);
     g.beginPath(); g.arc(mx, my, mr + 2, 0, TAU);
     g.strokeStyle = 'rgba(255,79,163,0.5)'; g.lineWidth = 2; g.stroke();
-    skyC.key = String(Math.round(vw)); skyC.c = c;
+    skyC.key = key; skyC.c = c;
   }
   function sky(ctx, P, vw, t, cam) {
-    if (skyC.key !== String(Math.round(vw))) buildSky(vw);
-    // 아래쪽은 길이 덮으니 460까지만 찍는다
-    const c = skyC.c;
-    ctx.drawImage(c, 0, 0, c.width, c.height * 460 / 600, 0, 0, vw, 460);
+    let q = 1;
+    try { q = ctx.getTransform().a || 1; } catch (e) { q = 1; }
+    q = Math.max(0.5, Math.min(2.5, Math.round(q * 4) / 4));
+    const key = Math.round(vw) + ':' + q;
+    if (skyC.key !== key) buildSky(vw, q, key);
+    ctx.drawImage(skyC.c, 0, 0, vw, 460);
     // 반짝이는 별 몇 개 (움직이는 것은 이것뿐: 달·안개는 미리 그려 둔 그림)
     for (let i = 0; i < 9; i++) {
       const a = 0.5 + 0.5 * Math.sin(t * (1.3 + i * 0.37) + i * 2.1);
@@ -356,7 +359,7 @@
     // 홀로그램 경고판 (둥실 떠서 살짝 깜빡)
     const ph = performance.now() / 1000;
     const a = 0.75 + 0.25 * Math.sin(ph * 9) * Math.sin(ph * 3.1);
-    stampAdd(ctx, warnSprite(), x + w / 2, GY - 118 + Math.sin(ph * 2) * 5, a);
+    stampAdd(ctx, warnSprite(), x + w / 2, GY - 78 + Math.sin(ph * 2) * 4, a);
   }
 
   // ─── 길가 소품: 네온 가로등 · 홀로그램 광고판 · 빛 야자수 · 빛 나무 ─────
@@ -377,7 +380,7 @@
     });
   }
   function coneSprite(col) {
-    return sprite('cone' + col, 260, 310, 130, 230, g => {
+    return sprite('cone' + col, 186, 266, 45, 196, g => {
       g.fillStyle = lin(g, 0, -194, 0, 70, [[0, rgba(col, 0.5)], [0.6, rgba(col, 0.14)], [1, rgba(col, 0)]]);
       poly(g, [34, -194, 60, -194, 125, 70, -35, 70], 0, 0); g.fill();
       // 길바닥에 떨어진 둥근 빛
@@ -646,34 +649,36 @@
 
   // 가속 발판: 앞으로 흐르는 화살표 + 위로 솟는 빛 (쓰면 흐려진다)
   function beamSprite(w) {
-    return sprite('beam' + w, w + 20, 140, 10, 130, g => {
-      g.fillStyle = lin(g, 0, -126, 0, 0, [[0, 'rgba(255,210,58,0)'], [0.6, 'rgba(255,210,58,0.3)'], [1, 'rgba(255,235,140,0.75)']]);
-      g.fillRect(4, -126, w - 8, 126);
+    return sprite('beam' + w, w + 20, 150, 10, 140, g => {
+      g.fillStyle = lin(g, 0, -136, 0, 0, [[0, 'rgba(255,210,58,0)'], [0.55, 'rgba(255,210,58,0.35)'], [1, 'rgba(255,235,140,0.85)']]);
+      poly(g, [10, 0, w + 4, 0, w - 6, -136, 20, -136], 0, 0); g.fill();
       g.fillStyle = lin(g, 0, -60, 0, 0, [[0, 'rgba(57,216,255,0)'], [1, 'rgba(57,216,255,0.35)']]);
       for (let k = 0; k < 5; k++) g.fillRect(12 + k * (w - 24) / 4 - 2, -60, 4, 60);
     }, 1);
   }
   function boost(ctx, x, o, t) {
     const w = o.w, used = !!o.used;
-    const fade = used ? 0.35 : 1;
-    // 받침판
-    rr(ctx, x - 4, GY - 3, w + 8, 14, 5); ctx.fillStyle = '#070a1e'; ctx.fill();
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fade;
-    if (!used) stampAdd(ctx, beamSprite(w), x, GY, 0.7 + 0.3 * Math.sin(t * 8));
-    ctx.fillStyle = rgba(CY, 0.35); ctx.fillRect(x - 4, GY - 3, w + 8, 14);
-    ctx.fillStyle = rgba(CY2, 0.9); ctx.fillRect(x - 4, GY - 3, w + 8, 2); ctx.fillRect(x - 4, GY + 9, w + 8, 2);
-    // 화살표
-    ctx.save(); ctx.beginPath(); ctx.rect(x, GY - 3, w, 14); ctx.clip();
-    ctx.fillStyle = used ? CY : YL;
-    const sp = used ? 30 : 160;
-    for (let k = -1; k < 5; k++) {
-      const ax = x + ((k * 30 + t * sp) % 150 + 150) % 150 - 10;
-      poly(ctx, [0, -2, 9, -2, 17, 4, 9, 10, 0, 10, 8, 4], ax, GY);
+    // 길 위에 비스듬히 놓인 발판 (연석 빛줄과 겹치지 않게 조금 아래까지 내려 그린다)
+    const pad = [0, -3, w, -3, w + 14, 22, 14, 22];
+    poly(ctx, pad, x, GY); ctx.fillStyle = used ? '#0a1030' : '#1a1640'; ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    if (!used) stampAdd(ctx, beamSprite(w), x, GY, 0.85 + 0.15 * Math.sin(t * 8));
+    // 화살표 (앞으로 흐른다)
+    ctx.save(); poly(ctx, pad, x, GY); ctx.clip();
+    ctx.fillStyle = used ? rgba(CY, 0.45) : YL;
+    const sp = used ? 30 : 170;
+    for (let k = -1; k < 6; k++) {
+      const ax = x + ((k * 30 + t * sp) % 180 + 180) % 180 - 30;
+      poly(ctx, [0, 0, 10, 0, 22, 9, 10, 18, 0, 18, 12, 9], ax, GY);
       ctx.fill();
     }
     ctx.restore();
+    // 테두리 빛
+    poly(ctx, pad, x, GY);
+    ctx.strokeStyle = used ? rgba(CY, 0.4) : rgba(YL, 0.35); ctx.lineWidth = 7; ctx.stroke();
+    ctx.strokeStyle = used ? rgba(CY2, 0.5) : '#fff1a8'; ctx.lineWidth = 2; ctx.stroke();
     ctx.restore();
-    glow(ctx, used ? CY : YL, x + w / 2, GY + 4, w * 0.6, used ? 0.2 : 0.55);
+    if (!used) glow(ctx, YL, x + w / 2 + 7, GY + 8, 50, 0.55);
   }
 
   // ─── 불빛 터널: 뒤(차 뒤) · 앞(차 앞) ─────────────────────────
@@ -681,45 +686,35 @@
   function ringX(x, o, i) { return x + 30 + i * (o.w - 60) / (T_N - 1); }
   function ringCol(i) { return i === 0 || i === T_N - 1 ? PK : i % 2 ? VI : CY; }
   function pulse(t, i) { return Math.pow(0.5 + 0.5 * Math.sin(t * 6 - i * 0.9), 4); }
-  // 고리 반쪽 스프라이트 (side: 0 뒤쪽 왼 호, 1 앞쪽 오른 호). 매 프레임 호를 긋지 않고 찍기만 한다
-  function ringSprite(col, side, fat) {
-    return sprite('ring' + col + side + (fat ? 'f' : ''), T_RX * 2 + 36, T_RY * 2 + 36, T_RX + 18, T_RY + 18, g => {
-      g.beginPath();
-      if (side) g.ellipse(0, 0, T_RX, T_RY, 0, -Math.PI / 2, Math.PI / 2);
-      else g.ellipse(0, 0, T_RX, T_RY, 0, Math.PI / 2, Math.PI * 1.5);
-      if (side) tube(g, col, fat ? 5 : 3.2, fat ? 14 : 10, 1.5);
-      else { g.strokeStyle = col; g.lineWidth = 4; g.stroke(); }
+  // 고리 앞쪽 반(오른 호) 스프라이트: 매 프레임 번진 호를 긋지 않고 찍기만 한다. 반쪽만 담아 찍는 넓이를 줄인다
+  function ringSprite(col, fat) {
+    return sprite('ring' + col + (fat ? 'f' : ''), T_RX + 26, T_RY * 2 + 36, 8, T_RY + 18, g => {
+      g.beginPath(); g.ellipse(0, 0, T_RX, T_RY, 0, -Math.PI / 2, Math.PI / 2);
+      tube(g, col, fat ? 5 : 3.2, fat ? 14 : 10, 1.5);
     }, 1.5);
-  }
-  // 안쪽 벽 (어둡고 반투명) + 지붕 빛 + 빛 줄 자리: 터널 길이별로 한 번 그린다
-  function wallSprite(w) {
-    const x0 = 30, x1 = w - 30, h = GY - 26 - T_TOP;
-    return sprite('twall' + w, w, h, 0, 0, g => {
-      g.fillStyle = 'rgba(6,9,30,0.72)'; g.fillRect(x0, 16, x1 - x0, h - 16);
-      g.fillStyle = lin(g, 0, 10, 0, 80, [[0, 'rgba(155,107,255,0.45)'], [1, 'rgba(155,107,255,0)']]);
-      g.fillRect(x0, 10, x1 - x0, 70);
-      for (const [ly, c, a] of T_LINES) { g.fillStyle = rgba(c, a * 0.35); g.fillRect(x0, ly - T_TOP, x1 - x0, 1.5); }
-    }, 1);
   }
   const T_LINES = [[T_TOP + 60, CY, 0.5], [T_TOP + 130, PK2, 0.35], [GY - 60, CY, 0.4]];
   function tunnelBack(ctx, x, o, t) {
     const w = o.w;
     const x0 = x + 30, x1 = x + w - 30;
-    stamp(ctx, wallSprite(w), x, T_TOP);
+    // 안쪽 벽 (어둡고 반투명) + 지붕 빛: 단색 채우기라 싸다
+    ctx.fillStyle = 'rgba(6,9,30,0.72)'; ctx.fillRect(x0, T_TOP + 16, x1 - x0, GY - 26 - T_TOP - 16);
+    ctx.fillStyle = 'rgba(155,107,255,0.3)'; ctx.fillRect(x0, T_TOP + 10, x1 - x0, 14);
+    ctx.fillStyle = 'rgba(155,107,255,0.14)'; ctx.fillRect(x0, T_TOP + 24, x1 - x0, 26);
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     // 벽을 따라 뒤로 흐르는 빛 줄 (빨리 달리는 느낌)
     const off = ((-t * 420) % 90 + 90) % 90;
     for (const [ly, c, a] of T_LINES) {
+      ctx.fillStyle = rgba(c, a * 0.35); ctx.fillRect(x0, ly, x1 - x0, 1.5);
       ctx.fillStyle = rgba(c, a);
       for (let dx = off; dx < x1 - x0; dx += 90) ctx.fillRect(x0 + dx, ly - 1, Math.min(40, x1 - x0 - dx), 3);
     }
-    // 고리 뒷쪽 반 (왼쪽 호)
+    // 고리 뒤쪽 반 (왼쪽 호, 가는 선)
+    ctx.lineWidth = 3;
     for (let i = 0; i < T_N; i++) {
-      ctx.globalAlpha = 0.3 + 0.4 * pulse(t, i);
-      const c = ringSprite(ringCol(i), 0);
-      ctx.drawImage(c, ringX(x, o, i) - c.ox, T_CY - c.oy, c.lw, c.lh);
+      ctx.strokeStyle = rgba(ringCol(i), 0.3 + 0.4 * pulse(t, i));
+      ctx.beginPath(); ctx.ellipse(ringX(x, o, i), T_CY, T_RX, T_RY, 0, Math.PI / 2, Math.PI * 1.5); ctx.stroke();
     }
-    ctx.globalAlpha = 1;
     // 바닥 빛
     ctx.fillStyle = rgba(CY, 0.18); ctx.fillRect(x0, GY - 2, x1 - x0, 6);
     ctx.restore();
@@ -742,7 +737,7 @@
       const rx = ringX(x, o, i), p = pulse(t, i);
       const end = i === 0 || i === T_N - 1;
       ctx.globalAlpha = Math.min(1, (end ? 0.8 : 0.5) + 0.5 * p);
-      const c = ringSprite(ringCol(i), 1, end);
+      const c = ringSprite(ringCol(i), end);
       ctx.drawImage(c, rx - c.ox, T_CY - c.oy, c.lw, c.lh);
     }
     ctx.globalAlpha = 1;
