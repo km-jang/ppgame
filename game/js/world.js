@@ -35,7 +35,11 @@
       cards: null, events: [], shake: 0, flash: 0, whiteFlash: 0,
       hitstop: 0, lastStop: -1, slow: 0, pulse: 0, booms: [], shocks: [],
       score: 0, nextId: 1,
-      stats: { kills: 0, shots: 0, time: 0, picks: [], ults: 0 },
+      combo: 0, comboT: 0, comboPop: 0, // 연속 처치 수, 끊기기까지 남은 시간, HUD 튀어 오름
+      waveHit: false,                    // 이번 웨이브에 한 대라도 맞았나
+      pendDash: false, pendUlt: false,   // 화면 멈춤(히트스톱) 중에 누른 대시·필살기는 멈춤이 풀린 뒤 쓴다
+      stats: { kills: 0, shots: 0, time: 0, picks: [], ults: 0,
+        dashes: 0, hurts: 0, cleanWaves: 0, cleanBoss: 0, bestCombo: 0, ultBoss: 0, ultBest: 0 },
     };
     startWave(W);
     return W;
@@ -73,6 +77,8 @@
     W.clearT = -1;
     W.banner = D.WAVE.banner;
     W.eBullets.length = 0;
+    W.waveHit = false;
+    W.pendDash = W.pendUlt = false;
     W.events.push(W.bossWave ? 'boss' : 'wave');
   }
 
@@ -128,8 +134,9 @@
       }
       return;
     }
-    // 보스 연쇄 폭발·느린 화면이 끝날 때까지 카드 화면을 미룬다
-    if (W.enemies.length === 0 && !W.booms.length && W.slow <= 0) {
+    // 보스 연쇄 폭발·느린 화면·필살기 충격파가 끝날 때까지 카드 화면을 미룬다
+    // (큰 화면 구석에서 쓴 충격파는 1초 넘게 퍼져서, 안 기다리면 카드 화면에 멈춘 고리가 남고 다음 웨이브로 넘어갔다)
+    if (W.enemies.length === 0 && !W.booms.length && W.slow <= 0 && !W.shocks.length) {
       if (W.clearT < 0) W.clearT = D.WAVE.clearDelay;
       W.clearT -= dt;
       if (W.clearT <= 0) openCards(W);
@@ -141,6 +148,11 @@
     W.phase = 'cards';
     W.cards = drawCards(W, 3);
     W.eBullets.length = 0;
+    W.pendDash = W.pendUlt = false;
+    if (!W.waveHit) {
+      W.stats.cleanWaves += 1;
+      if (W.bossWave) W.stats.cleanBoss += 1;
+    }
     W.events.push('clear');
   }
 
@@ -231,8 +243,14 @@
   function killEnemy(W, e, dx, dy) {
     e.dead = true;
     const p = W.player;
+    const C = D.COMBO;
+    W.combo += 1;
+    W.comboT = C.window;
+    if (W.combo > W.stats.bestCombo) W.stats.bestCombo = W.combo;
+    if (W.combo >= C.show) W.comboPop = 1;
+    if (C.marks.indexOf(W.combo) >= 0) W.events.push('combo');
     const mul = 1 + W.bossKills * 0.5;
-    W.score += Math.round(e.def.score * mul * W.diff.score);
+    W.score += Math.round(e.def.score * mul * W.diff.score * D.comboMul(W.combo));
     W.stats.kills += 1;
     shatter(W, e, dx, dy);
     burst(W, e.x, e.y, e.def.color, e.type === 'boss' ? 60 : 4 + Math.round(e.r / 3), e.type === 'boss' ? 420 : 200, e.type === 'boss' ? 5 : 2.5);
@@ -293,7 +311,7 @@
     p.ultT = 0.6;
     p.iframe = Math.max(p.iframe, U.iframe);
     const max = Math.hypot(Math.max(p.x, W.w - p.x), Math.max(p.y, W.h - p.y)) + 60;
-    W.shocks.push({ x: p.x, y: p.y, r: 0, max, dmg: ultDamage(W), hit: [], n: p.gun.barrels * U.spokes, rot: p.aim });
+    W.shocks.push({ x: p.x, y: p.y, r: 0, max, dmg: ultDamage(W), hit: [], kills: 0, n: p.gun.barrels * U.spokes, rot: p.aim });
     W.stats.ults += 1;
     W.shake = Math.max(W.shake, 18);
     W.whiteFlash = Math.max(W.whiteFlash, 0.3);
@@ -315,11 +333,22 @@
         if (d - e.r > s.r) continue;
         s.hit.push(e.id);
         const dx = e.x - s.x, dy = e.y - s.y;
-        damageEnemy(W, e, e.type === 'boss' ? s.dmg * U.bossMul : s.dmg, false, dx, dy, 'ult');
-        if (!e.dead && e.type !== 'boss') { const l = d || 1; e.vx += dx / l * 420; e.vy += dy / l * 420; }
+        damageEnemy(W, e, e.type === 'boss' ? Math.min(s.dmg * U.bossMul, e.maxHp * U.bossCap) : s.dmg, false, dx, dy, 'ult');
+        if (e.dead) {
+          s.kills += 1;
+          if (s.kills > W.stats.ultBest) W.stats.ultBest = s.kills;
+          if (e.type === 'boss') W.stats.ultBoss += 1;
+        } else if (e.type !== 'boss') { const l = d || 1; e.vx += dx / l * 420; e.vy += dy / l * 420; }
       }
       W.eBullets = W.eBullets.filter(b => Math.hypot(b.x - s.x, b.y - s.y) > s.r);
     }
+    W.shocks = W.shocks.filter(s => s.r < s.max);
+  }
+
+  // 게임 오버 뒤: 충격파는 모양만 끝까지 퍼지고 더는 피해를 주지 않는다 (예전엔 그 자리에 멈춘 고리가 남았다)
+  function fadeShocks(W, dt) {
+    if (!W.shocks.length) return;
+    for (const s of W.shocks) s.r += D.ULT.speed * dt;
     W.shocks = W.shocks.filter(s => s.r < s.max);
   }
 
@@ -332,6 +361,9 @@
     if (p.iframe > 0 || p.dashT > 0 || W.phase !== 'play') return;
     p.hp -= n;
     p.iframe = D.PLAYER.iframe;
+    W.waveHit = true;
+    W.stats.hurts += 1;
+    if (D.COMBO.breakOnHurt) W.combo = 0;
     W.shake = Math.max(W.shake, 12);
     W.flash = 0.2;
     burst(W, p.x, p.y, '#ffffff', 16, 260, 3);
@@ -398,6 +430,7 @@
       p.dashT = P.dashTime;
       p.dashCd = p.dashCdMax;
       p.iframe = Math.max(p.iframe, P.dashIframe);
+      W.stats.dashes += 1;
       W.events.push('dash');
     }
 
@@ -653,21 +686,39 @@
     W.whiteFlash = Math.max(0, W.whiteFlash - dt);
     W.pulse = Math.max(0, W.pulse - dt * 1.6);
     W.banner = Math.max(0, W.banner - dt);
+    W.comboPop = Math.max(0, W.comboPop - dt * 4);
+  }
+
+  function updateCombo(W, dt) {
+    if (W.combo <= 0) return;
+    W.comboT -= dt;
+    if (W.comboT <= 0) { W.combo = 0; W.comboT = 0; }
   }
 
   // 한 프레임 진행. input: {moveX, moveY, aimAngle|null, dash, ult}
   function step(W, input, dt) {
     // 히트스톱: 화면이 멈춘 동안은 흔들림만 풀고 아무것도 움직이지 않는다
+    // 멈춘 동안 누른 대시·필살기는 버리지 않고 기억했다가 멈춤이 풀리면 쓴다
+    // (예전엔 적을 잡는 순간 누른 N-버스트가 씹혔다)
     if (W.hitstop > 0) {
       W.hitstop -= dt;
+      if (W.phase === 'play') {
+        if (input.dash) W.pendDash = true;
+        if (input.ult) W.pendUlt = true;
+      }
       return;
     }
-    if (W.phase === 'over') { updateFx(W, dt); return; }
+    if (W.phase === 'over') { fadeShocks(W, dt); updateFx(W, dt); return; }
     if (W.phase !== 'play') return;
+    if (W.pendDash || W.pendUlt) {
+      input = Object.assign({}, input, { dash: input.dash || W.pendDash, ult: input.ult || W.pendUlt });
+      W.pendDash = W.pendUlt = false;
+    }
     // 보스 격파 직후 느린 화면
     if (W.slow > 0) { W.slow -= dt; dt *= D.IMPACT.slowRate; }
     W.t += dt;
     W.stats.time += dt;
+    updateCombo(W, dt);
     updatePlayer(W, input, dt);
     updateEnemies(W, dt);
     updateBullets(W, dt);

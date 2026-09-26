@@ -105,6 +105,14 @@
     } },
     // 필살기 게이지가 가득 참
     ultReady:{ gap: 0.50, fn: t => { [784, 988, 1175, 1568].forEach((f, i) => tone(sfxBus, t + i * 0.055, 'square', f, f, 0.09, 0.1)); } },
+    // 메달 획득: 위로 올라가는 반짝이는 화음 + 쉿 하는 빛
+    medal:   { gap: 0.40, fn: t => {
+      [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.35, 0.14));
+      tone(sfxBus, t + 0.35, 'square', 2093, 2093, 0.25, 0.05);
+      noise(sfxBus, t, 'highpass', 5000, 9000, 0.45, 0.07);
+    } },
+    // 콤보 10·25·50·100을 넘길 때: 짧게 두 번 올라가는 음
+    combo:   { gap: 0.20, fn: t => { tone(sfxBus, t, 'square', 880, 1320, 0.07, 0.09); tone(sfxBus, t + 0.06, 'square', 1320, 1760, 0.09, 0.09); } },
     heal:    { gap: 0.05, fn: t => { tone(sfxBus, t, 'sine', 660, 660, 0.08, 0.25); tone(sfxBus, t + 0.07, 'sine', 990, 990, 0.12, 0.25); } },
     eshoot:  { gap: 0.08, fn: t => { tone(sfxBus, t, 'triangle', 700, 350, 0.08, 0.12); } },
     pick:    { gap: 0.05, fn: t => { [523, 659, 784].forEach((f, i) => tone(sfxBus, t + i * 0.05, 'square', f, f, 0.1, 0.12)); } },
@@ -137,6 +145,7 @@
     dash:     { f: 'weapon_change', v: 0.5, r: 1.3 },
     bossDown: { f: 'enemy_destroy', v: 1.1, r: 0.6 },
     ult:      { f: 'enemy_destroy', v: 1.0, r: 0.5 },
+    medal:    { f: 'tile-match', v: 0.5, r: 1.2 },
   };
   const FILES = Array.from(new Set(Object.values(SAMPLE).map(s => s.f)));
   function play(name, opt) {

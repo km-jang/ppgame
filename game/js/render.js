@@ -470,8 +470,9 @@
 
     // 보스 체력바
     const boss = W.enemies.find(e => e.type === 'boss' && e.spawnT <= 0);
+    const by = Math.max(top + 44 * s, gy + 28 * s);
     if (boss) {
-      const bw = Math.min(420, W.w - 40), bx = (W.w - bw) / 2, by = Math.max(top + 44 * s, gy + 28 * s);
+      const bw = Math.min(420, W.w - 40), bx = (W.w - bw) / 2;
       ctx.fillStyle = 'rgba(255,46,136,0.2)';
       ctx.fillRect(bx, by, bw, 8);
       ctx.fillStyle = '#ff2e88';
@@ -482,6 +483,8 @@
       ctx.fillText('BOSS #' + (W.bossKills + 1), W.w / 2, by + 12);
     }
 
+    drawCombo(ctx, W, view, right, boss ? by + 26 : top + 50 * s);
+
     // 웨이브 알림
     if (W.banner > 0 && W.phase === 'play') {
       const a = Math.min(1, W.banner, (D.WAVE.banner - W.banner) * 4);
@@ -489,7 +492,7 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const fs = Math.min(64, Math.round(W.w / 7));
-      const ty = W.h * 0.38, slide = (1 - Math.min(1, (D.WAVE.banner - W.banner) * 3)) * 40;
+      const ty = W.h * 0.38, slide = view.calm ? 0 : (1 - Math.min(1, (D.WAVE.banner - W.banner) * 3)) * 40;
       ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
       ctx.fillStyle = W.bossWave ? '#ff2e88' : '#e8f7ff';
       ctx.shadowColor = W.bossWave ? 'rgba(255,46,136,0.8)' : 'rgba(94,231,255,0.7)'; ctx.shadowBlur = 20;
@@ -499,6 +502,37 @@
       ctx.fillStyle = W.bossWave ? '#ffb3d4' : '#8aa4b8';
       ctx.fillText(W.bossWave ? '보스가 나타났다!' : '끝까지 버텨라', W.w / 2 - slide, ty + fs * 0.62);
       ctx.globalAlpha = 1;
+    }
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  // 연속 처치 콤보: 오른쪽 위 점수 아래. 잡을 때마다 튀어 오르고, 끊기기까지 남은 시간을 막대로
+  // 색: 3~9 청록 · 10~24 노랑 · 25~49 주황 · 50~ 분홍
+  function drawCombo(ctx, W, view, right, y) {
+    const C = D.COMBO, n = W.combo;
+    if (n < C.show || W.phase !== 'play') return;
+    const s = view.ui || 1;
+    const pop = view.calm ? 0 : W.comboPop;
+    const col = n >= 50 ? '#ff2e88' : n >= 25 ? '#ffb703' : n >= 10 ? '#ffe66d' : '#5ee7ff';
+    const fs = Math.round(24 * s * (1 + 0.4 * pop * pop));
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
+    const txt = 'x' + n + ' COMBO';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillText(txt, right + 2, y + 2);
+    ctx.fillStyle = pop > 0.6 ? '#ffffff' : col;
+    ctx.fillText(txt, right, y);
+    const by = y + fs + 2, bw = 96 * s;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(right - bw, by, bw, 3 * s);
+    ctx.fillStyle = col;
+    ctx.fillRect(right - bw * Math.max(0, W.comboT / C.window), by, bw * Math.max(0, W.comboT / C.window), 3 * s);
+    const mul = D.comboMul(n);
+    if (mul > 1) {
+      ctx.font = '700 ' + Math.round(12 * s) + 'px ' + NUM;
+      ctx.fillStyle = '#bcd3e2';
+      ctx.fillText('SCORE x' + mul.toFixed(1), right, by + 6 * s);
     }
     ctx.textBaseline = 'alphabetic';
   }
@@ -522,12 +556,13 @@
     ctx.textBaseline = 'alphabetic';
   }
 
-  // view: {dpr, hudTop, hudLeft, hud(false면 HUD 생략)}, touch: 입력 모듈의 터치 상태
+  // view: {dpr, hudTop, hudLeft, hud(false면 HUD 생략), calm(움직임 줄이기)}, touch: 입력 모듈의 터치 상태
   function draw(ctx, W, view, touch) {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     drawBackground(ctx, W, view.dpr);
     ctx.save();
-    if (W.shake > 0) {
+    // 움직임 줄이기 설정이면 화면 흔들림·번쩍임을 뺀다
+    if (W.shake > 0 && !view.calm) {
       const s = W.shake * 0.5;
       ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
     }
@@ -543,7 +578,7 @@
       ctx.fillRect(0, 0, W.w, W.h);
     }
     if (W.whiteFlash > 0) {
-      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(0.4, W.whiteFlash * 0.8) + ')';
+      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(view.calm ? 0.12 : 0.4, W.whiteFlash * 0.8) + ')';
       ctx.fillRect(0, 0, W.w, W.h);
     }
     if (view.hud !== false) drawHud(ctx, W, view);

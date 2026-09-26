@@ -328,12 +328,208 @@ test('필살기: 피해는 총이 셀수록, 웨이브가 오를수록 크다', 
   assert(Math.abs(NG.World.ultDamage(W) - 2 * 8 * 6 * U.sec * 2.5) < 1e-9, 'and with wave');
 });
 
+test('점검: 총이 커져도 필살기 한 번에 보스 체력의 bossCap까지만 깎는다', () => {
+  const W = clearWorld(56);
+  const p = W.player;
+  p.gun.barrels = 12; p.gun.rate = 20; p.gun.dmg = 50; p.fireCd = 1e9; p.ult = U.need;
+  const boss = putEnemy(W, 'boss', 600, 400, 2000);
+  step(W, Object.assign({}, IDLE, { ult: true }), DT);
+  for (let i = 0; i < 60; i++) step(W, IDLE, DT);
+  assert(!boss.dead && Math.abs((2000 - boss.hp) - 2000 * U.bossCap) < 1e-6, 'capped: ' + (2000 - boss.hp));
+});
+
 test('필살기: 보스에게 준 피해는 덜 찬다', () => {
   const W = clearWorld(55);
   putEnemy(W, 'boss', 100, 100, 320);
   W.bullets.push({ x: 100, y: 100, vx: 0, vy: -1, r: 4, dmg: 10, life: 1, pierce: 0, bounce: 0, hits: [] });
   step(W, IDLE, DT);
   assert(Math.abs(W.player.ult - 10 * U.bossRate) < 1e-6, 'boss rate: ' + W.player.ult);
+});
+
+// ─── 점검(2026-09-26)에서 찾은 규칙 버그 재발 방지 ─────────────
+test('점검: 화면 멈춤(히트스톱) 중에 누른 필살기·대시는 멈춤이 풀리면 나간다', () => {
+  const W = clearWorld(60);
+  const p = W.player;
+  p.ult = U.need;
+  putEnemy(W, 'grunt', 100, 100);
+  W.hitstop = 0.1;
+  step(W, Object.assign({}, IDLE, { ult: true, dash: true }), DT);
+  assert(W.stats.ults === 0, 'nothing during hitstop');
+  for (let i = 0; i < 10 && W.stats.ults === 0; i++) step(W, IDLE, DT);
+  assert(W.stats.ults === 1 && W.stats.dashes === 1, 'fired after hitstop: ults ' + W.stats.ults + ' dashes ' + W.stats.dashes);
+  // 한 번만 나간다
+  for (let i = 0; i < 10; i++) step(W, IDLE, DT);
+  assert(W.stats.dashes === 1, 'no repeat');
+});
+
+test('필살기: 멈춤 중 누른 필살기는 카드 화면·다음 웨이브로 넘어가지 않는다', () => {
+  const W = clearWorld(61);
+  W.player.ult = U.need;
+  W.hitstop = 0.1;
+  step(W, Object.assign({}, IDLE, { ult: true }), DT);
+  W.phase = 'cards'; W.cards = drawCards(W, 3);
+  W.hitstop = 0;
+  pickCard(W, 0);
+  step(W, IDLE, DT);
+  assert(W.stats.ults === 0 && W.player.ult === U.need, 'queued press dropped at wave change');
+});
+
+test('점검: 큰 화면 구석에서 쓴 충격파가 다 퍼진 뒤에야 카드 화면', () => {
+  const W = createWorld(1600, 1000, 62);
+  W.spawnQueue.length = 0; W.enemies.length = 0; W.banner = 0;
+  const p = W.player;
+  p.x = 20; p.y = 20; p.ult = U.need;
+  putEnemy(W, 'grunt', 60, 20, 1);
+  step(W, Object.assign({}, IDLE, { ult: true }), DT);
+  let frames = 0;
+  while (W.phase === 'play' && frames++ < 60 * 10) step(W, IDLE, DT);
+  assert(W.phase === 'cards', 'cards');
+  assert(W.shocks.length === 0, 'shock finished before cards: ' + W.shocks.length);
+});
+
+test('점검: 게임 오버 뒤 충격파는 모양만 퍼지고 피해·점수는 없다', () => {
+  const W = clearWorld(63);
+  const p = W.player;
+  p.ult = U.need;
+  step(W, Object.assign({}, IDLE, { ult: true }), DT);
+  const far = putEnemy(W, 'grunt', 780, 580, 100);
+  W.phase = 'over';
+  const score = W.score;
+  for (let i = 0; i < 60; i++) step(W, IDLE, DT);
+  assert(W.shocks.length === 0, 'shock faded out');
+  assert(far.hp === 100 && W.score === score, 'no damage after over');
+});
+
+test('필살기: 분열체가 충격파에 죽으면 새끼도 같은 충격파에 쓸린다 (한 방 처치 수 기록)', () => {
+  const W = clearWorld(64);
+  W.wave = 6;
+  const p = W.player;
+  p.ult = U.need; p.fireCd = 1e9;
+  putEnemy(W, 'splitter', p.x + 100, p.y);
+  step(W, Object.assign({}, IDLE, { ult: true }), DT);
+  for (let i = 0; i < 40; i++) step(W, IDLE, DT);
+  assert(W.enemies.filter(e => e.type === 'mini').length === 0, 'minis cleared');
+  assert(W.stats.ultBest === 3, 'one shock took 3: ' + W.stats.ultBest);
+});
+
+// ─── 콤보·기록 ───────────────────────────────────────────────
+test('콤보: 연달아 잡으면 오르고 점수 배율이 붙고, 시간이 지나거나 맞으면 끊긴다', () => {
+  const C = NG.DATA.COMBO;
+  const W = clearWorld(70);
+  const p = W.player; p.fireCd = 1e9;
+  putEnemy(W, 'tank', 780, 580, 1e9); // 웨이브가 끝나지 않게 붙잡아 두는 적
+  const kill = () => {
+    const e = putEnemy(W, 'grunt', 100, 100, 0.5);
+    W.bullets.push({ x: 100, y: 100, vx: 0, vy: -1, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+    step(W, IDLE, DT);
+    return e;
+  };
+  for (let i = 0; i < 10; i++) kill();
+  assert(W.combo === 10 && W.stats.bestCombo === 10, 'combo ' + W.combo);
+  assert(NG.DATA.comboMul(10) > NG.DATA.comboMul(4) && NG.DATA.comboMul(4) === 1, 'multiplier');
+  assert(NG.DATA.comboMul(10000) === 1 + C.maxBonus, 'capped');
+  const s0 = W.score; kill();
+  assert(W.score - s0 === Math.round(10 * NG.DATA.comboMul(11)), 'score uses multiplier: ' + (W.score - s0));
+  for (let i = 0; i < 60 * (C.window + 0.2); i++) step(W, IDLE, DT);
+  assert(W.combo === 0 && W.stats.bestCombo === 11, 'timed out');
+  kill(); kill();
+  W.eBullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
+  step(W, IDLE, DT);
+  assert(W.combo === 0, 'hurt breaks combo');
+});
+
+test('기록용 통계: 대시·무피격 웨이브·보스 무피격·필살기 보스 마무리', () => {
+  const W = clearWorld(71);
+  W.wave = 5; W.bossWave = true;
+  const p = W.player; p.fireCd = 1e9;
+  step(W, Object.assign({}, IDLE, { dash: true }), DT);
+  assert(W.stats.dashes === 1, 'dash counted');
+  const boss = putEnemy(W, 'boss', 700, 500, 320);
+  boss.hp = 1; // 거의 다 잡은 보스
+  p.ult = U.need;
+  for (let i = 0; i < 20; i++) step(W, IDLE, DT);
+  step(W, Object.assign({}, IDLE, { ult: true }), DT);
+  let frames = 0;
+  while (W.phase === 'play' && frames++ < 60 * 20) step(W, IDLE, DT);
+  assert(boss.dead && W.stats.ultBoss === 1, 'ult finished the boss');
+  assert(W.phase === 'cards' && W.stats.cleanWaves === 1 && W.stats.cleanBoss === 1, 'clean boss wave');
+  pickCard(W, 0);
+  W.eBullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
+  step(W, IDLE, DT);
+  W.spawnQueue.length = 0; W.enemies.length = 0;
+  frames = 0;
+  while (W.phase === 'play' && frames++ < 60 * 20) step(W, IDLE, DT);
+  assert(W.stats.cleanWaves === 1 && W.stats.hurts === 1, 'hit wave is not clean');
+});
+
+// records.js: 가짜 저장소로 돌린다
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game', 'js', 'records.js'), 'utf8'), ctx, { filename: 'records.js' });
+const R = NG.Records;
+function fakeStore(init) {
+  const m = Object.assign({}, init);
+  return { m, get: (k, f) => (k in m ? JSON.parse(m[k]) : f), set: (k, v) => { m[k] = JSON.stringify(v); } };
+}
+
+test('메달 목록: 12~20개, id 중복 없음, 이름·조건·등급·검사 함수', () => {
+  const M = NG.DATA.MEDALS;
+  assert(M.length >= 12 && M.length <= 20, 'count ' + M.length);
+  assert(new Set(M.map(m => m.id)).size === M.length, 'unique ids');
+  for (const m of M) assert(m.name && m.desc && m.icon && [1, 2, 3].includes(m.tier) && typeof m.check === 'function', 'shape ' + m.id);
+  // 빈 판으로는 아무것도 못 딴다
+  const W = createWorld(800, 600, 72);
+  assert(R.newMedals(R.blank(), R.runOf(W), false).length === 0, 'nothing for nothing');
+});
+
+test('기록: 옛 최고 기록(ngun.best2, ngun.best)을 이어받고 망가진 저장본에도 안 멈춘다', () => {
+  const a = R.load(fakeStore({ 'ngun.best2': JSON.stringify({ normal: { score: 1234, wave: 7 }, hard: 'x' }) }));
+  assert(a.best.normal.score === 1234 && a.best.normal.wave === 7 && a.best.hard.score === 0, 'best2 merged');
+  const b = R.load(fakeStore({ 'ngun.best': JSON.stringify({ score: 50, wave: 2 }) }));
+  assert(b.best.normal.score === 50, 'oldest merged into normal');
+  for (const junk of ['"abc"', '42', 'null', '[1,2]', '{"best":{"easy":{"score":"NaN","wave":-3}},"life":{"games":"7"},"medals":{"boss1":"2026-09-26","fake":1}}']) {
+    const r = R.load(fakeStore({ 'ngun.rec1': junk, 'ngun.best2': junk }));
+    for (const d of R.DIFFS) for (const k of Object.keys(r.best[d])) assert(Number.isFinite(r.best[d][k]) && r.best[d][k] >= 0, 'finite ' + junk);
+    assert(!('fake' in r.medals), 'unknown medal dropped');
+  }
+  const c = R.load(fakeStore({ 'ngun.rec1': '{"life":{"games":"7"},"medals":{"boss1":"2026-09-26"}}' }));
+  assert(c.life.games === 7 && c.medals.boss1 === '2026-09-26', 'keeps good values');
+});
+
+test('기록: 판이 끝나면 난이도별 최고·평생 합계·깬 기록 목록, 저장하면 옛 키도 갱신', () => {
+  const st = fakeStore({});
+  const rec = R.load(st);
+  const run = { diff: 'hard', score: 500, wave: 6, kills: 80, time: 120, bestCombo: 12, bossKills: 1, ults: 2, maxN: 2 };
+  const broken = R.finish(rec, run);
+  assert(broken.join() === 'score', 'first game: only score chip ' + broken);
+  assert(rec.best.hard.wave === 6 && rec.best.hard.combo === 12 && rec.best.normal.score === 0, 'per difficulty');
+  assert(rec.life.games === 1 && rec.life.kills === 80 && rec.life.bosses === 1 && rec.life.ults === 2, 'lifetime');
+  const broken2 = R.finish(rec, Object.assign({}, run, { score: 400, wave: 8, kills: 90 }));
+  assert(broken2.join() === 'wave,kills', 'second: ' + broken2);
+  R.save(rec, st);
+  assert(JSON.parse(st.m['ngun.best2']).hard.wave === 8, 'old key kept in sync');
+  assert(R.load(st).life.games === 2, 'round trip');
+});
+
+test('메달: 조건을 채우면 한 번만 주고, 평생 기록 메달은 판 수를 센다', () => {
+  const rec = R.blank();
+  const run = { diff: 'normal', score: 0, wave: 10, kills: 120, time: 300, bossKills: 1, maxN: 3, ults: 3, cleanBoss: 0, bestCombo: 10, ultBoss: 0, ultBest: 0 };
+  const got = R.newMedals(rec, run, false).map(m => m.id);
+  for (const id of ['boss1', 'n3', 'k100', 'c10', 'ult3', 'w10', 'w10n']) assert(got.includes(id), 'has ' + id + ' in ' + got);
+  assert(!got.includes('w15h') && !got.includes('games10'), 'not yet');
+  R.award(rec, R.newMedals(rec, run, false), '2026-09-26');
+  assert(R.newMedals(rec, run, false).length === 0, 'only once');
+  assert(rec.medals.boss1 === '2026-09-26', 'dated');
+  rec.life.games = 9;
+  assert(R.newMedals(rec, run, false).length === 0 && R.newMedals(rec, run, true).map(m => m.id).join() === 'games10', '10th game finishes');
+});
+
+test('긴 판: 봇으로 돌려도 통계가 숫자로 남고 메달 검사가 안 멈춘다', () => {
+  const W = runLong(73, 60 * 60 * 3, false);
+  const run = R.runOf(W);
+  for (const k of Object.keys(run)) if (k !== 'diff') assert(Number.isFinite(run[k]), 'finite ' + k);
+  assert(run.bestCombo >= 1 && run.dashes > 0, 'combo/dash tracked');
+  const rec = R.blank();
+  R.finish(rec, run);
+  R.newMedals(rec, run, true);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
