@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#07080d"/>
+  <path d="M120 400 V250 a70 70 0 0 1 70 -70 H300" fill="none" stroke="#3460ff" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M190 180 H300" fill="none" stroke="#5ee7ff" stroke-width="72" stroke-linecap="round"/>
+  <line x1="392" y1="180" x2="452" y2="180" stroke="#ffe66d" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="340" cy="180" r="74" fill="#5ee7ff"/>
+  <text x="340" y="216" font-family="system-ui, sans-serif" font-size="104" font-weight="900" text-anchor="middle" fill="#07080d">N</text>
+  <circle cx="380" cy="380" r="34" fill="#ff2e88"/>
+</svg>

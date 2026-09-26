@@ -39,6 +39,11 @@ async function until(page, fn, arg, ms) {
   return false;
 }
 
+// 결과 화면 뒤 선물 상자가 뜨면 하나 골라 닫는다 (뒤 버튼을 누를 수 있게)
+async function takeGift(page) {
+  if (await until(page, () => RC.debug.giftOpen, null, 6000)) await page.evaluate(() => { RC.debug.pickGift(0); RC.debug.closeGifts(); });
+}
+
 (async () => {
   const browser = await pw.chromium.launch();
   console.log('뚝딱 로봇카');
@@ -124,7 +129,7 @@ async function until(page, fn, arg, ms) {
     assert(await until(P, () => RC.debug.run.level.items.some(o => o.type === 'cone' && o.down), null, 20000), '고깔을 하나도 못 쓰러뜨림');
     await P.evaluate(() => { const R = RC.debug.run; R.car.x = R.level.length - 200; });
     assert(await until(P, () => RC.debug.mode === 'result', null, 10000), '공사장 결과 화면 아님');
-    await P.waitForTimeout(700);
+    await takeGift(P);
     await P.tap('#btn-again');
     assert(await until(P, () => RC.debug.mode === 'run' && RC.debug.run.course.id === 'site'), '또 달리기가 같은 코스가 아님');
   });
@@ -230,6 +235,72 @@ async function until(page, fn, arg, ms) {
     srv.close();
   });
 
+  await test('코스 고르기 2×2 (도시·공사장·네온 시티·놀이터), 놀이터에서 꾹 누르면 차가 간다', async () => {
+    const pk = await open(browser, ROOT + '/robocar/index.html');
+    const Q = pk.page;
+    await Q.evaluate(() => { RC.debug.noAuto = true; RC.debug.prog.runs = 9; RC.debug.prog.log.finished = 9; });
+    await Q.waitForTimeout(600);
+    await Q.evaluate(() => RC.debug.toMap());
+    await Q.waitForTimeout(700);
+    const cards = await Q.evaluate(() => [...document.querySelectorAll('#courses .course b')].map(b => b.textContent));
+    assert(cards.join(',') === '도시,공사장,네온 시티,놀이터', '코스 카드: ' + cards.join(','));
+    const fit = await Q.evaluate(() => [...document.querySelectorAll('.course, #btn-map-back')].every(e => { const b = e.getBoundingClientRect(); return b.bottom <= innerHeight && b.right <= innerWidth && b.left >= 0 && b.top >= 0; }));
+    assert(fit, '코스 카드가 화면 밖으로 나감');
+    await Q.tap('#courses .course:nth-child(4)');
+    assert(await until(Q, () => RC.debug.mode === 'park'), '놀이터로 안 감');
+    assert(await until(Q, () => document.getElementById('wipe').className === ''), '화면 넘김이 안 끝남');
+    assert(await Q.evaluate(() => document.getElementById('park-missions').children.length === 3), '미션 세 개가 안 보임');
+    const x0 = await Q.evaluate(() => RC.debug.run.car.x);
+    await Q.mouse.move(1100, 300); await Q.mouse.down(); await Q.waitForTimeout(1200); await Q.mouse.up();
+    const x1 = await Q.evaluate(() => RC.debug.run.car.x);
+    assert(x1 > x0 + 60, '꾹 눌렀는데 차가 안 감: ' + x0.toFixed(0) + ' → ' + x1.toFixed(0));
+    // 미션을 다 하면 도착 문 → 지나가면 결과 화면
+    await Q.evaluate(() => { const P = RC.debug.run; P.saved = 3; P.stars = 40; P.popped = 5; });
+    assert(await until(Q, () => !!RC.debug.run.gate), '도착 문이 안 나옴');
+    await Q.evaluate(() => { const P = RC.debug.run; P.car.x = P.gate.x; P.car.y = P.gate.y; });
+    assert(await until(Q, () => RC.debug.mode === 'result', null, 6000), '놀이터 결과 화면이 안 나옴');
+    assert(!pk.errors.length, pk.errors.join(' | '));
+    await pk.ctx.close();
+  });
+  await test('네온 시티를 달리고, 슈퍼 변신 버튼이 금색이 되면 누를 수 있다', async () => {
+    const nn = await open(browser, ROOT + '/robocar/index.html');
+    const Q = nn.page;
+    await Q.evaluate(() => { RC.debug.noAuto = true; RC.debug.prog.runs = 9; RC.debug.prog.log.finished = 9; });
+    await Q.waitForTimeout(600);
+    await Q.evaluate(() => RC.debug.startRun('neon'));
+    assert(await until(Q, () => RC.debug.mode === 'run' && RC.debug.run.course.id === 'neon'), '네온 시티 시작 안 됨');
+    await Q.waitForTimeout(3800);
+    await Q.evaluate(() => { RC.debug.run.superG = 12; });
+    assert(await until(Q, () => document.getElementById('btn-transform').classList.contains('super')), '금색 슈퍼 버튼이 안 됨');
+    await Q.tap('#btn-transform');
+    assert(await until(Q, () => RC.debug.run.car.super > 0), '슈퍼 변신이 안 됨');
+    assert(!nn.errors.length, nn.errors.join(' | '));
+    await nn.ctx.close();
+  });
+  await test('결과 뒤 선물 상자: 하나 고르면 받고, 차고 색깔 판에 선물 칸이 생긴다', async () => {
+    const gf = await open(browser, ROOT + '/robocar/index.html');
+    const Q = gf.page;
+    await Q.evaluate(() => { localStorage.clear(); RC.debug.noAuto = true; });
+    await Q.waitForTimeout(600);
+    await Q.evaluate(() => { RC.debug.startRun('city'); });
+    await Q.waitForTimeout(300);
+    await Q.evaluate(() => { const R = RC.debug.run; R.stars = 3; R.car.x = R.level.length + 10; });
+    assert(await until(Q, () => RC.debug.mode === 'result', null, 8000), '결과 화면이 안 나옴');
+    assert(await until(Q, () => RC.debug.giftOpen, null, 9000), '선물 상자가 안 나옴');
+    await Q.waitForTimeout(300);
+    await Q.tap('#gift-list .gift:nth-child(1)');
+    assert(await until(Q, () => RC.debug.prog.gifts.length === 1), '선물을 못 받음');
+    await Q.tap('#gift-ok');
+    assert(await until(Q, () => !RC.debug.giftOpen), '선물 창이 안 닫힘');
+    await Q.evaluate(() => RC.debug.toGarage());
+    await Q.waitForTimeout(500);
+    assert(await Q.evaluate(() => !!document.querySelector('#colors .swatch.special, #colors .swatch.trail')), '차고에 선물 칸이 없음');
+    const fit = await Q.evaluate(() => { const r = document.querySelector('.color-panel').getBoundingClientRect(), g = document.querySelector('.garage-panel').getBoundingClientRect(); return r.bottom <= g.top + 2; });
+    assert(fit, '색깔 판이 부품 판과 겹침');
+    assert(!gf.errors.length, gf.errors.join(' | '));
+    await gf.ctx.close();
+  });
+
   console.log('N-GUN');
   const ng = await open(browser, ROOT + '/game/index.html');
   const G = ng.page;
@@ -272,6 +343,38 @@ async function until(page, fn, arg, ms) {
   });
   await test('N-GUN 콘솔 오류 없음', async () => { assert(!ng.errors.length, ng.errors.join(' | ')); });
   await ng.ctx.close();
+
+  console.log('N-SNAKE');
+  const sn = await open(browser, ROOT + '/snake/index.html');
+  const Z = sn.page;
+  await test('시작 → 뱀이 움직인다 → 방향을 바꾼다', async () => {
+    assert(await on(Z, 'scr-title'), '시작 화면 아님');
+    await Z.tap('#btn-start');
+    assert(await until(Z, () => SN.debug.mode === 'play'), '게임이 시작 안 됨');
+    const head0 = await Z.evaluate(() => SN.debug.world.snake[0].x + ',' + SN.debug.world.snake[0].y);
+    await Z.evaluate(() => SN.debug.turn('up'));
+    assert(await until(Z, h => { const s = SN.debug.world.snake[0]; return s.x + ',' + s.y !== h; }, head0), '뱀이 안 움직임');
+    assert(await Z.evaluate(() => SN.debug.world.dir === 'up' || SN.debug.world.phase === 'over'), '방향이 안 바뀜');
+  });
+  await test('밀어서(스와이프) 방향을 바꾼다', async () => {
+    await Z.evaluate(() => SN.debug.newGame(3));
+    await Z.waitForTimeout(200);
+    const cdp = await Z.context().newCDPSession(Z);
+    const pt = (x, y) => [{ x, y, id: 1 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(640, 400) });
+    for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(640, 400 + i * 20) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert(await until(Z, () => SN.debug.world.dir === 'down' || SN.debug.world.queue.includes('down')), '아래로 밀었는데 안 바뀜');
+  });
+  await test('벽에 부딪히면 게임 오버 → 다시 하기', async () => {
+    await Z.evaluate(() => { const W = SN.debug.world; W.snake[0].x = W.cols - 1; W.dir = 'right'; W.queue.length = 0; W.wait = 0; });
+    assert(await until(Z, () => SN.debug.mode === 'over', null, 6000), '게임 오버 안 됨');
+    assert(await until(Z, () => document.getElementById('scr-over').classList.contains('on'), null, 4000), '게임 오버 화면 안 나옴');
+    await Z.tap('#btn-retry');
+    assert(await until(Z, () => SN.debug.mode === 'play'), '다시 하기 안 됨');
+  });
+  await test('N-SNAKE 콘솔 오류 없음', async () => { assert(!sn.errors.length, sn.errors.join(' | ')); });
+  await sn.ctx.close();
 
   await browser.close();
   console.log('\n' + passed + ' passed, ' + failed + ' failed');

@@ -229,7 +229,7 @@ test('구덩이에 막 빠지기 시작했을 때 눌러도 뛴다 (코요테 �
 });
 
 test('한 판 내내 순간 이동이 없다 (앞뒤로 튀지 않음)', () => {
-  for (const course of ['city', 'site']) {
+  for (const course of ['city', 'site', 'neon']) {
     const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 3, course);
     let px = R.car.x, py = R.car.y, f = 0, worst = 0, worstY = 0;
     while (!R.done && f++ < 60 * 200) {
@@ -287,6 +287,110 @@ test('오래 날면 공중 보너스 별, 보통 점프는 보너스 없음', ()
   stepRun(jet, { tap: true }, DT);
   const b = events(jet, () => ({ tap: false, hold: true }), 4);
   assert(b.airbonus === 1 && jet.airBonus >= 2, 'jet flight bonus ' + jet.airBonus);
+});
+
+// ─── 네온 시티 ───
+test('네온 시티: 아무것도 안 눌러도, 모든 부품 조합으로도 끝까지 간다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 4, 'neon');
+  const sec = drive(R, () => NONE, 400);
+  assert(R.done && sec < 180, 'idle finish ' + sec);
+  for (const b of D.BODIES) for (const w of D.WHEELS) for (const g of D.GEAR) {
+    const Q = createRun({ body: b.id, wheel: w.id, gear: g.id }, 6, 'neon');
+    drive(Q, smartBot, 400);
+    assert(Q.done, b.id + '/' + w.id + '/' + g.id + ' did not finish neon');
+  }
+});
+
+test('네온 시티: 가속 발판과 불빛 터널이 나오고, 발판을 밟으면 빨라진다', () => {
+  const R = createRun({ body: 'police', wheel: 'normal', gear: 'wing' }, 8, 'neon');
+  const types = new Set(R.level.items.map(o => o.type));
+  assert(types.has('boost') && types.has('tunnel'), 'neon pieces: ' + [...types].join(','));
+  const pad = R.level.items.find(o => o.type === 'boost');
+  let f = 0, fast = 0;
+  const events = [];
+  while (!pad.used && f++ < 60 * 60) { stepRun(R, NONE, DT); events.push(...R.events); R.events.length = 0; }
+  for (let i = 0; i < 30; i++) { stepRun(R, NONE, DT); fast = Math.max(fast, RC.Run.speedOf(R)); R.events.length = 0; }
+  assert(pad.used && events.includes('boost'), 'boost pad used');
+  assert(fast > D.RUN.speed * 1.3, 'faster on boost: ' + fast.toFixed(0));
+});
+
+// ─── 슈퍼 변신 ───
+test('슈퍼 변신: 별로 게이지가 차고, 가득 차면 변신 버튼이 슈퍼 변신이 된다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 1);
+  let f = 0; const events = [];
+  while (R.superG < D.RUN.superNeed && f++ < 60 * 60) { stepRun(R, NONE, DT); events.push(...R.events); R.events.length = 0; }
+  assert(R.superG === D.RUN.superNeed && events.includes('superReady'), 'gauge full after ' + (f / 60).toFixed(1) + 's');
+  assert(f / 60 < 25, 'fills within about 20 seconds of play: ' + (f / 60).toFixed(1));
+  stepRun(R, { tap: false, hold: false, transform: true }, DT);
+  assert(R.car.super > 0 && R.car.form === 'robot' && R.superG === 0 && R.supers === 1, 'super on');
+  assert(R.events.includes('super'), 'super event');
+});
+
+test('슈퍼 변신: 앞의 장애물이 별로 바뀌고, 날아서 구덩이에 안 빠지고, 끝나면 차로 돌아온다', () => {
+  const R = createRun({ body: 'police', wheel: 'normal', gear: 'wing' }, 3);
+  const c = R.car;
+  const pit = R.level.pits[1];
+  c.x = pit.x - 500;
+  const ahead = R.level.items.filter(o => (o.type === 'box' || o.type === 'rock' || o.type === 'fire') && o.x > c.x && o.x < c.x + D.RUN.superRange);
+  R.superG = D.RUN.superNeed;
+  const stars0 = R.totalStars;
+  stepRun(R, { transform: true }, DT);
+  assert(ahead.every(o => o.broken || o.out), 'obstacles turned into stars');
+  assert(R.totalStars > stars0 || !ahead.length, 'stars spilled');
+  let fell = false, maxY = 0, f = 0;
+  while (c.super > 0 && f++ < 60 * 10) { stepRun(R, NONE, DT); if (c.fall) fell = true; if (f > 40) maxY = Math.max(maxY, c.y); R.events.length = 0; }
+  assert(!fell, 'did not fall while flying');
+  assert(maxY < D.RUN.groundY - 100, 'flying high: ' + maxY.toFixed(0));
+  for (let i = 0; i < 60 * 3; i++) { stepRun(R, NONE, DT); R.events.length = 0; }
+  assert(c.form === 'car' && !(c.super > 0), 'back to car');
+});
+
+test('슈퍼 변신: 게이지가 안 찼으면 보통 변신, 슈퍼 중에는 게이지가 안 찬다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 2);
+  R.superG = 5;
+  stepRun(R, { transform: true }, DT);
+  assert(R.car.form === 'robot' && !(R.car.super > 0) && R.superG === 5, 'normal transform keeps gauge');
+  const Q = createRun({ body: 'racer', wheel: 'normal', gear: 'jet' }, 2);
+  Q.superG = D.RUN.superNeed;
+  stepRun(Q, { transform: true }, DT);
+  for (let i = 0; i < 60 * 3; i++) { stepRun(Q, NONE, DT); Q.events.length = 0; }
+  assert(Q.stars > 0 && Q.superG === 0, 'no gain during super: ' + Q.superG);
+});
+
+// ─── 물대포 장비 ───
+test('물대포: 앞에 불이 보이면 저절로 쏴서 끄고 별이 나온다', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'hose' }, 3);
+  const fire = R.level.items.find(o => o.type === 'fire');
+  assert(fire, 'course has fire');
+  R.car.x = fire.x - 700;
+  let f = 0; const ev = [];
+  while (!fire.out && R.car.x < fire.x && f++ < 60 * 10) { stepRun(R, NONE, DT); ev.push(...R.events); R.events.length = 0; }
+  assert(fire.out, 'fire put out before reaching it');
+  assert(ev.includes('spray') && ev.includes('douse'), 'spray + douse events');
+});
+
+test('물대포: 아무것도 없으면 안 쏘고, 친구를 구할수록 물줄기가 늘어난다 (최대 3)', () => {
+  const R = createRun({ body: 'racer', wheel: 'normal', gear: 'hose' }, 3);
+  R.level.items = R.level.items.filter(o => o.type === 'star' || o.type === 'flag');
+  for (let i = 0; i < 120; i++) { stepRun(R, NONE, DT); R.events.length = 0; }
+  assert(R.shots.length === 0, 'no targets, no shots');
+  R.level.items.push({ type: 'fire', x: R.car.x + 500, w: 110, out: false });
+  R.level.items.sort((a, b) => a.x - b.x);
+  R.saved = 5;
+  let n = 0;
+  for (let i = 0; i < 60; i++) { stepRun(R, NONE, DT); n = Math.max(n, R.shots.length); R.events.length = 0; }
+  assert(R.streams === D.RUN.shotMax && n >= 3, 'three streams: ' + R.streams + ' shots ' + n);
+});
+
+// ─── 선물 상자 ───
+test('선물 상자: 아직 없는 선물 3개가 나오고, 다 모으면 별 보너스로 채운다', () => {
+  const rnd = RC.rng(3);
+  const a = RC.giftChoices([], rnd);
+  assert(a.length === 3 && new Set(a.map(g => g.id)).size === 3 && a.every(g => g.kind !== 'bonus'), 'three different gifts');
+  const owned = D.GIFTS.slice(0, D.GIFTS.length - 1).map(g => g.id);
+  const b = RC.giftChoices(owned, rnd);
+  assert(b[0].id === D.GIFTS[D.GIFTS.length - 1].id && b[1].kind === 'bonus' && b[2].kind === 'bonus', 'last gift + bonus');
+  for (let i = 0; i < 50; i++) assert(RC.giftChoices(owned.slice(0, 5), rnd).every(g => !owned.slice(0, 5).includes(g.id)), 'never an owned gift');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

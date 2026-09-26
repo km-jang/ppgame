@@ -78,6 +78,22 @@
           L.items.push({ type: 'monkey', x: x + 260, state: 'wait', threw: false, flee: 0 });
           for (let k = 0; k < 4; k++) star(x + 20 + k * 60, GY - 40);
           x += 520; break;
+        // ─── 네온 시티 조각 ───
+        case 'boost':
+          // 가속 발판: 밟으면 쌩 (하나에 한 번)
+          L.items.push({ type: 'boost', x: x + 80, w: 120, used: false });
+          for (let k = 0; k < 5; k++) star(x + 260 + k * 60, GY - 40);
+          x += 620; break;
+        case 'tunnel':
+          // 불빛 터널: 입구에 가속 발판, 안에 별 한 줄 (지붕은 그림만)
+          L.items.push({ type: 'tunnel', x: x + 60, w: 560 });
+          L.items.push({ type: 'boost', x: x + 20, w: 120, used: false });
+          for (let k = 0; k < 8; k++) star(x + 140 + k * 60, GY - 40 - (k % 2) * 30);
+          x += 720; break;
+        case 'zig':
+          // 지그재그 별: 점프를 톡톡 하면 다 먹는다
+          for (let k = 0; k < 8; k++) star(x + 40 + k * 55, GY - 40 - (k % 2) * 120);
+          x += 520; break;
         // ─── 공사장 조각 ───
         case 'cones':
           // 고깔 줄: 그냥 달려서 와르르 쓰러뜨리면 하나에 별 하나 (막히지 않음)
@@ -129,6 +145,8 @@
       stars: 0, totalStars: L.items.filter(o => o.type === 'star').length,
       smashed: 0, transforms: 0, saved: 0, riders: [], airBonus: 0,
       fx: [], events: [], flying: [],
+      superG: 0, supers: 0, seenStars: 0,   // 슈퍼 변신 게이지 (별 개수), 쓴 횟수
+      shots: [], shotT: 0.6, douses: 0, streams: 1,   // 물대포 물방울
     };
   }
 
@@ -142,6 +160,7 @@
     if (c.spin > 0) v *= 0.55;
     if (c.mud > 0) v *= 0.6;
     if (c.hop > 0) v *= 1.5;
+    if (c.super > 0) v *= R0.superSpeed;
     if (R.done) v *= Math.max(0, 1 - R.doneT);
     return v;
   }
@@ -183,6 +202,76 @@
     R.events.push('smash');
   }
 
+  // ─── 슈퍼 변신 ────────────────────────────────────────────
+  // 금빛 로봇으로 변신해 날아가고, 앞의 장애물이 모두 별로 바뀐다
+  function superTransform(R) {
+    const c = R.car;
+    R.superG = 0; R.supers += 1; R.transforms += 1;
+    c.form = 'robot'; c.robotT = R0.superTime; c.super = R0.superTime; c.morph = R0.morph;
+    // 구덩이에 빠지던 중이면 그대로 건져 올린다
+    if (c.fall) { c.fall = false; c.fallT = 0; }
+    if (c.pop) c.pop = null;
+    c.onGround = false; c.vy = Math.min(c.vy, -300);
+    for (const o of R.level.items) {
+      if (o.x < c.x - 60) continue;
+      if (o.x > c.x + R0.superRange) break;
+      const mx = o.x + (o.w || 0) / 2;
+      if ((o.type === 'box' || o.type === 'rock') && !o.broken) { o.broken = true; R.smashed += 1; spill(R, mx, GY - (o.h || 60) / 2, 3); puff(R, mx, GY - 40, '#ffd23a', 12, 300, 6, 'spark'); }
+      else if (o.type === 'fire' && !o.out) { o.out = true; spill(R, mx, GY - 30, 2); puff(R, mx, GY - 20, '#bfe9ff', 10, 200, 12, 'steam'); }
+      else if (o.type === 'mud' && !o.out) { o.out = true; spill(R, mx, GY - 20, 1); }
+      else if (o.type === 'cone' && !o.down) { o.down = true; o.vx = 400; o.vy = -500; o.rot = 0; o.fly = 0; spill(R, o.x + 15, GY - 40, 1); }
+      else if (o.type === 'banana' && !o.hit) o.hit = true;
+      else if (o.type === 'monkey') o.flee = Math.max(o.flee, 1);
+    }
+    puff(R, c.x, c.y - 60, '#ffd23a', 30, 420, 7, 'spark');
+    R.events.push('super');
+  }
+
+  // ─── 물대포 장비 ──────────────────────────────────────────
+  // 앞에 맞힐 것(불·진흙·풍선·상자·원숭이·고깔)이 보이면 저절로 쏜다. 물줄기 수 = 1 + 구한 친구 (최대 3)
+  const WET = { fire: o => !o.out, mud: o => !o.out, balloon: o => !o.popped, box: o => !o.broken, monkey: o => !(o.flee > 0), cone: o => !o.down };
+  function hose(R, dt) {
+    const c = R.car;
+    R.streams = Math.min(R0.shotMax, 1 + R.saved);
+    R.shotT -= dt;
+    if (R.shotT <= 0 && !R.done && !c.fall && !c.pop) {
+      const target = R.level.items.find(o => WET[o.type] && WET[o.type](o) && o.x > c.x + 40 && o.x < c.x + R0.shotRange);
+      if (target) {
+        R.shotT = R0.shotGap;
+        const robot = c.form === 'robot', y0 = robot ? c.y - 150 : c.y - (R.body.id === 'fire' ? 86 : 64);
+        for (let i = 0; i < R.streams; i++) {
+          R.shots.push({ x: c.x + 30, y: y0, vx: R0.shotV + speedOf(R), vy: -R0.shotUp + i * 170 - (R.streams - 1) * 60, life: 1.4 });
+        }
+        R.events.push('spray');
+      } else R.shotT = 0.1;
+    }
+    for (const s of R.shots) {
+      s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 900 * dt; s.life -= dt;
+      if (s.y > GY) { s.life = 0; puff(R, s.x, GY - 4, '#9fe0ff', 3, 120, 5, 'steam'); continue; }
+      for (const o of R.level.items) {
+        if (o.x > s.x + 80) break;
+        if (!WET[o.type] || !WET[o.type](o)) continue;
+        const w = o.w || 40;
+        let hit = false;
+        if (o.type === 'balloon') { const dx = o.x - s.x, dy = o.y - s.y; hit = dx * dx + dy * dy < 50 * 50; }
+        else if (o.type === 'box') hit = s.x > o.x && s.x < o.x + w && s.y > GY - o.h;
+        else if (o.type === 'monkey') hit = Math.abs(s.x - o.x) < 40 && s.y > GY - 110;
+        else hit = s.x > o.x - 10 && s.x < o.x + w + 10 && s.y > GY - 90;
+        if (!hit) continue;
+        s.life = 0; R.douses += 1;
+        puff(R, s.x, s.y, '#bfe9ff', 8, 180, 8, 'steam');
+        if (o.type === 'fire') { o.out = true; spill(R, o.x + w / 2, GY - 30, 2); R.events.push('douse'); }
+        else if (o.type === 'mud') { o.out = true; spill(R, o.x + w / 2, GY - 20, 2); R.events.push('douse'); }
+        else if (o.type === 'balloon') { o.popped = true; spill(R, o.x, o.y, 2); R.lastBalloon = o; puff(R, o.x, o.y, o.color, 14, 320, 7, 'confetti'); R.events.push('balloon'); }
+        else if (o.type === 'box') smash(R, o, 1 + o.n);
+        else if (o.type === 'monkey') { o.flee = 1; R.events.push('douse'); }
+        else if (o.type === 'cone') { o.down = true; o.vx = 380; o.vy = -420; o.rot = 0; o.fly = 0; spill(R, o.x + 15, GY - 40, 1); R.events.push('cone'); }
+        break;
+      }
+    }
+    R.shots = R.shots.filter(s => s.life > 0);
+  }
+
   // ─── 한 프레임 ────────────────────────────────────────────
   // input: {tap: 이번 프레임에 눌렀나, hold: 누르고 있나, transform: 변신 버튼 눌렀나}
   // 화면 한 프레임(dt가 얼마든) → 규칙은 고정 간격(R0.step)으로 쪼개 계산한다.
@@ -216,7 +305,9 @@
     c.morph = Math.max(0, c.morph - dt);
     c.landT = Math.max(0, (c.landT || 0) - dt);
     c.punch = Math.max(0, c.punch - dt);
-    if (input.transform && c.form === 'car' && c.cd <= 0 && !R.done) {
+    c.super = Math.max(0, (c.super || 0) - dt);
+    if (input.transform && R.superG >= R0.superNeed && !R.done) superTransform(R);
+    else if (input.transform && c.form === 'car' && c.cd <= 0 && !R.done) {
       c.form = 'robot'; c.robotT = R0.robotTime; c.morph = R0.morph;
       R.transforms += 1;
       R.events.push('transform');
@@ -243,7 +334,7 @@
     }
     if (c.form === 'robot') {
       c.robotT -= dt;
-      if (c.robotT <= 0) { c.form = 'car'; c.cd = R0.transformCd; c.morph = R0.morph; R.events.push('untransform'); }
+      if (c.robotT <= 0) { c.form = 'car'; c.cd = R0.transformCd; c.morph = R0.morph; c.super = 0; R.events.push('untransform'); }
     }
 
     // 점프·공중
@@ -252,7 +343,7 @@
     if (c.fall && !c.pop && input.tap && (c.fallT || 0) < R0.coyote) {
       c.fall = false; c.y = Math.min(c.y, GY); c.onGround = true;
     }
-    if (!R.done && !c.fall && !c.pop) {
+    if (!R.done && !c.fall && !c.pop && !(c.super > 0)) {
       if (input.tap && !c.onGround && c.airJumps <= 0 && !(R.gear.id === 'jet' && c.fuel > 0)) c.buf = R0.buffer;
       if (input.tap || (c.onGround && c.buf > 0)) {
         if (c.onGround) {
@@ -305,6 +396,12 @@
 
     if (c.pop) {
       // 위에서 이미 움직였다
+    } else if (c.super > 0) {
+      // 슈퍼 로봇: 땅 위 일정한 높이로 부드럽게 떠서 난다 (스프링처럼 따라감)
+      const ty = GY - R0.superY + Math.sin(R.t * 5) * 8;
+      c.vy += ((ty - c.y) * 40 - c.vy * 9) * dt;
+      c.y += c.vy * dt;
+      c.airT = 0;
     } else {
       // 중력: 꼭대기 근처에선 약하게(둥실), 내려올 땐 강하게(착). 제트·날개를 쓰는 동안은 그대로
       let g = R0.gravity;
@@ -357,7 +454,7 @@
       if (o.x > c.x + 900) break;
       if (o.type === 'star' && !o.got) {
         let dx = o.x - c.x, dy = o.y - (c.y - 35);
-        const magnet = robot && R.body.ability === 'siren';
+        const magnet = (robot && R.body.ability === 'siren') || c.super > 0;
         if (magnet && dx * dx + dy * dy < R0.magnetR * R0.magnetR) { o.x -= dx * 6 * dt; o.y -= dy * 6 * dt; dx = o.x - c.x; dy = o.y - (c.y - 35); }
         if (dx * dx + dy * dy < R0.starR * R0.starR * (robot ? 1.6 : 1)) {
           o.got = true; R.stars += 1; R.events.push('star'); R.lastStar = { x: o.x, y: o.y };
@@ -396,6 +493,12 @@
           c.hot = 0.8; c.vy = -520; c.onGround = false;
           puff(R, c.x, GY - 20, '#555a66', 10, 120, 16, 'steam');
           R.events.push('hot');
+        }
+      } else if (o.type === 'boost' && !o.used) {
+        if (c.x > o.x && c.x < o.x + o.w && c.onGround) {
+          o.used = true; c.hop = 1.0;
+          puff(R, c.x, GY - 10, '#39d8ff', 12, 260, 6, 'spark');
+          R.events.push('boost');
         }
       } else if (o.type === 'cone' && !o.down) {
         if (front > o.x && c.x - 40 < o.x + o.w && c.y > GY - 60) {
@@ -465,6 +568,16 @@
       if (o.cy >= 0 && o.vy > 0) { o.vy *= -0.35; o.vx *= 0.6; }
     }
 
+    // 슈퍼 게이지: 새로 모은 별만큼 찬다 (슈퍼 중에는 안 찬다)
+    if (R.stars > R.seenStars) {
+      if (!(c.super > 0) && R.superG < R0.superNeed) {
+        R.superG = Math.min(R0.superNeed, R.superG + R.stars - R.seenStars);
+        if (R.superG >= R0.superNeed) R.events.push('superReady');
+      }
+      R.seenStars = R.stars;
+    }
+    if (R.gear.id === 'hose') hose(R, dt);
+
     // 효과
     if (c.thrusting && R.rand() < 0.9) R.fx.push({ kind: 'flame', x: c.x - 55, y: c.y - 30, vx: -200, vy: 120, life: 0.25, max: 0.25, color: '#ffb020', size: 10 });
     for (const q of R.fx) {
@@ -476,5 +589,5 @@
     R.fx = R.fx.filter(q => q.life > 0);
   }
 
-  RC.Run = { buildLevel, createRun, stepRun, speedOf };
+  RC.Run = { buildLevel, createRun, stepRun, speedOf, superTransform };
 })(RC);

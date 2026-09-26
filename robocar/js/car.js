@@ -254,6 +254,24 @@
     ctx.restore(); ctx.restore();
   }
 
+  // 물대포: 은빛 받침 + 파란 물통 + 앞으로 비스듬한 노즐. spray면 노즐 끝이 물빛으로 번쩍
+  function waterCannon(ctx, x, y, t, s, spray) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(s || 1, s || 1);
+    // 물통
+    rr(ctx, -30, -20, 26, 16, 7); ctx.fillStyle = lin(ctx, 0, -20, 0, -4, [[0, '#9fe6ff'], [0.5, '#2f9bff'], [1, '#1553a8']]); ctx.fill(); outline(ctx, 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(-26, -17, 16, 2.5);
+    // 받침
+    rr(ctx, -12, -8, 30, 10, 4); ctx.fillStyle = gunmetal(ctx, -8, 2); ctx.fill(); outline(ctx, 2);
+    ctx.beginPath(); ctx.arc(2, -10, 10, Math.PI, 0); ctx.fillStyle = chrome(ctx, -20, -2); ctx.fill(); outline(ctx, 2);
+    // 노즐 (앞으로 30도쯤 들림)
+    ctx.save(); ctx.translate(4, -12); ctx.rotate(-0.42);
+    rr(ctx, 0, -5, 34, 10, 4); ctx.fillStyle = chrome(ctx, -5, 5); ctx.fill(); outline(ctx, 2);
+    rr(ctx, 30, -7, 8, 14, 3); ctx.fillStyle = '#ff6a1a'; ctx.fill(); outline(ctx, 1.5);
+    glow(ctx, '#7fd8ff', 40, 0, spray ? 26 : 12, spray ? 1 : 0.5 + Math.sin(t * 6) * 0.2);
+    ctx.restore();
+    ctx.restore();
+  }
+
   function springs(ctx, x, y0, y1) {
     ctx.fillStyle = gunmetal(ctx, y0, y1); ctx.fillRect(x - 2.5, y0, 5, y1 - y0);
     ctx.strokeStyle = '#d7dde7'; ctx.lineWidth = 3;
@@ -300,6 +318,7 @@
     for (const dx of wx) wheel(ctx, x + dx, axleY, wr, rot, W.id, o.speed, color);
     if (cfg.gear === 'jet') jetPod(ctx, mounts.pod.x, mounts.pod.y, o.thrust, t);
     if (cfg.gear === 'drill') drill(ctx, mounts.nose.x - 6, mounts.nose.y, t);
+    if (cfg.gear === 'hose') waterCannon(ctx, x - 4, mounts.roof + 2, t, 1, o.spray);
     ctx.restore();
   }
 
@@ -390,6 +409,8 @@
     } else if (cfg.gear === 'wing') {
       ctx.save(); ctx.translate(x - 22, y - 148 - bob); ctx.scale(1.35, 1.35);
       wing(ctx, 0, 0, true, t, o.glide); ctx.restore();
+    } else if (cfg.gear === 'hose') {
+      waterCannon(ctx, x - 30, y - 184 - bob, t, 1.15, o.spray);
     }
 
     drawArm(ph + Math.PI, false);
