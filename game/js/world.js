@@ -1019,5 +1019,5 @@
     updateFx(W, dt);
   }
 
-  NG.World = { bossLook, createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage };
+  NG.World = { makePlayer, addDrop, bossLook, createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage };
 })(NG);
