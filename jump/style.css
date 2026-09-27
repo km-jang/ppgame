@@ -358,7 +358,7 @@ body.touch .text-btn { padding: 10px 16px; }
 .shop-btn:active, .ship-card:active { transform: scale(.97); }
 .shop-btn:focus-visible, .ship-card:focus-visible, .tabs button:focus-visible, .buy:focus-visible, .use:focus-visible, .claim:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
 
-/* 내 로봇 칸 */
+/* 내 캐릭터 칸 (시작 화면) */
 .ship-card {
   display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 10px;
   min-height: 64px; margin: 0 0 10px; padding: 6px 10px 6px 6px; cursor: pointer;
@@ -370,6 +370,8 @@ body.touch .text-btn { padding: 10px 16px; }
 .sc-txt { min-width: 0; }
 .sc-txt small { display: block; font-size: 11px; color: var(--muted); }
 .sc-txt b { display: block; font: normal 21px/1.15 var(--disp); letter-spacing: .5px; }
+#btn-char { border-color: color-mix(in srgb, var(--sc, #5ee7ff) 45%, transparent); }
+#btn-char .sc-txt b { color: var(--sc, var(--text)); }
 .sc-txt em { display: block; font-style: normal; font-size: 12px; line-height: 1.3; color: var(--muted); word-break: keep-all; }
 .sc-go { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font: normal 14px var(--disp); color: var(--cyan); white-space: nowrap; }
 
@@ -412,7 +414,7 @@ body.touch .text-btn { padding: 10px 16px; }
 .tabs button[aria-selected="true"] { color: var(--cyan); border-color: var(--cyan); background: rgba(94, 231, 255, .14); }
 .shop-sub { margin: 0 0 10px; font-size: 13px; }
 .shop-list { display: grid; gap: 10px; margin-bottom: 14px; text-align: left; }
-.shop-list.t-skins { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.shop-list.t-chars { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .shop-list.t-up, .shop-list.t-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sitem { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(94, 231, 255, .04); min-width: 0; }
 .sitem.ship { --sc: var(--cyan); display: grid; grid-template-columns: 64px 1fr; grid-template-areas: "cv name" "cv desc" "btn btn"; column-gap: 10px; row-gap: 4px; align-items: start; }
@@ -422,6 +424,11 @@ body.touch .text-btn { padding: 10px 16px; }
 .sitem.ship > button, .sitem.ship > .maxed { grid-area: btn; }
 .sitem.cur { border-color: var(--sc); box-shadow: 0 0 18px color-mix(in srgb, var(--sc) 35%, transparent); background: color-mix(in srgb, var(--sc) 8%, transparent); }
 .sitem.locked .ship-cv { filter: saturate(.5) brightness(.75); }
+/* 캐릭터 칸: 세로 카드 (그림 위, 이름·좋은 점·버튼 아래) */
+.shop-list.t-chars .sitem.ship { grid-template-columns: 1fr; grid-template-areas: "cv" "name" "desc" "btn"; justify-items: center; text-align: center; row-gap: 4px; }
+.shop-list.t-chars .ship-cv { width: 84px; height: 84px; }
+.shop-list.t-chars .sitem.ship > button, .shop-list.t-chars .sitem.ship > .maxed { justify-self: stretch; }
+.trait { display: block; margin-bottom: 2px; font: normal 14px/1.2 var(--disp); font-style: normal; color: var(--sc); }
 .s-name { font: normal 18px var(--disp); letter-spacing: .5px; }
 .s-name small { font: 700 13px var(--num); color: var(--muted); margin-left: 4px; }
 .s-desc { font-size: 12px; color: var(--muted); line-height: 1.35; word-break: keep-all; }
@@ -471,11 +478,8 @@ body.touch .text-btn { padding: 10px 16px; }
   #scr-over .opanel .o-right { margin-top: 12px; }
   .tpanel .logo { align-self: center; }
   .tpanel .tagline, .tpanel .best { text-align: center; }
-  .shop-list.t-skins { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shop-list.t-chars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .shop-list.t-up, .shop-list.t-items { grid-template-columns: 1fr; }
-}
-@media (min-width: 701px) and (max-width: 900px) {
-  .shop-list.t-skins { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* 낮은 가로 화면 (탭 A 계열 893×533 · 가로 폰): 촘촘하게 */
@@ -507,6 +511,8 @@ body.touch .text-btn { padding: 10px 16px; }
   .sitem { padding: 6px 8px; gap: 4px; }
   .sitem.ship { grid-template-columns: 48px 1fr; grid-template-areas: "cv name" "cv desc" "btn btn"; column-gap: 8px; row-gap: 2px; align-items: center; }
   .sitem.ship .ship-cv { width: 48px; height: 48px; }
+  .shop-list.t-chars .ship-cv { width: 64px; height: 64px; }
+  .trait { font-size: 13px; }
   .buy, .use, .maxed { min-width: 76px; font-size: 16px; padding: 4px 10px; }
   .s-name { font-size: 16px; }
   .s-desc { font-size: 11px; line-height: 1.25; }

@@ -43,17 +43,17 @@
   </div>
   <div id="toast" role="status"></div>
 
-  <!-- 시작 화면: 왼쪽 로고·내 로봇·미션 / 오른쪽 난이도·시작·상점·메달·도움말 -->
+  <!-- 시작 화면: 왼쪽 로고·내 캐릭터·미션 / 오른쪽 난이도·시작·상점·메달·도움말 -->
   <section id="scr-title" class="screen">
     <div class="panel tpanel">
       <div class="t-left">
         <h1 class="logo ko">통통 <span>점프</span></h1>
         <p class="tagline">발판을 밟고 하늘 높이 올라가요</p>
         <p id="best" class="best"></p>
-        <button id="btn-skin" type="button" class="ship-card" aria-label="로봇 꾸미기">
-          <canvas id="skin-preview" class="ship-cv" width="128" height="128" aria-hidden="true"></canvas>
-          <span class="sc-txt"><small>내 로봇</small><b id="skin-name">기본</b><em id="skin-desc"></em></span>
-          <span class="sc-go">꾸미기</span>
+        <button id="btn-char" type="button" class="ship-card" aria-label="캐릭터 바꾸기">
+          <canvas id="char-preview" class="ship-cv" width="128" height="128" aria-hidden="true"></canvas>
+          <span class="sc-txt"><small>내 캐릭터</small><b id="char-name">통통 로봇</b><em id="char-desc"></em></span>
+          <span class="sc-go">바꾸기</span>
         </button>
         <div id="title-missions" class="mcard"></div>
       </div>
@@ -90,7 +90,7 @@
         <span class="coin-pill big"><i class="cn" aria-hidden="true"></i><b id="shop-coins">0</b></span>
       </div>
       <div class="tabs" role="tablist" aria-label="상점 칸">
-        <button type="button" role="tab" data-tab="skins" aria-selected="true">꾸미기</button>
+        <button type="button" role="tab" data-tab="chars" aria-selected="true">캐릭터</button>
         <button type="button" role="tab" data-tab="up" aria-selected="false">강화</button>
         <button type="button" role="tab" data-tab="items" aria-selected="false">시작 아이템</button>
       </div>

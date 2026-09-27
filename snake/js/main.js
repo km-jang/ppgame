@@ -44,9 +44,9 @@
   // 코인·상점·미션 (shop.js). 저장 키 snake.shop1, 코인은 네 게임이 같이 쓰는 지갑(common/hub.js)
   const SH = SN.Shop;
   let shop = SH.load();
-  let shopTab = 'skins';
+  let shopTab = 'chars';
   let lastEarn = null;   // 이번 판에 받은 코인 {coins, parts, done}
-  view.skin = shop.skin;
+  view.char = shop.char;
   const fmt = n => Math.floor(n).toLocaleString();
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let medalCheckT = 0;
@@ -151,7 +151,21 @@
     $('title-missions').innerHTML = missionsHtml('미션');
     const lo = D.START_ITEMS.filter(it => shop.items[it.id] > 0).map(it => it.name + (shop.items[it.id] > 1 ? ' ×' + shop.items[it.id] : ''));
     $('loadout-line').textContent = lo.length ? '다음 판 시작 아이템: ' + lo.join(' · ') : '';
-    view.skin = shop.skin;
+    renderCharCard();
+  }
+
+  // 시작 화면 "내 캐릭터" 칸: 미리보기 · 이름 · 특기 (누르면 상점 캐릭터 칸)
+  let cardChar = '';
+  function renderCharCard() {
+    const ch = SH.charDef(shop.char) || D.CHARS[0];
+    view.char = ch.id;
+    if (demo && demo.char !== ch.id) demo = null;   // 시연 뱀도 새 캐릭터로
+    if (cardChar === ch.id) return;
+    cardChar = ch.id;
+    $('char-name').textContent = ch.name;
+    $('char-name').style.color = ch.color;
+    $('char-trait').textContent = ch.trait;
+    SN.Render.drawCharPreview($('char-preview'), ch.id);
   }
 
   function priceBtn(id, label) {
@@ -166,14 +180,15 @@
     const list = $('shop-list');
     list.className = 'shop-list t-' + shopTab;
     let h = '';
-    if (shopTab === 'skins') {
-      $('shop-sub').textContent = '뱀 몸 색을 바꿔요. 산 것은 눌러서 고르세요';
-      h = D.SKINS.map(s => {
-        const own = !!shop.skins[s.id], cur = shop.skin === s.id;
-        return '<div class="sitem skin' + (cur ? ' cur' : '') + (own ? '' : ' locked') + '" style="--sc:' + s.color + '">' +
-          '<canvas class="skin-cv" width="168" height="72" data-skin="' + s.id + '" aria-hidden="true"></canvas>' +
+    if (shopTab === 'chars') {
+      $('shop-sub').textContent = '캐릭터마다 모양과 특기가 달라요. 산 것은 눌러서 고르세요';
+      h = D.CHARS.map(s => {
+        const own = !!shop.chars[s.id], cur = shop.char === s.id;
+        return '<div class="sitem skin char' + (cur ? ' cur' : '') + (own ? '' : ' locked') + '" style="--sc:' + s.color + '">' +
+          '<canvas class="skin-cv" width="168" height="76" data-char="' + s.id + '" aria-hidden="true"></canvas>' +
           '<b class="s-name">' + esc(s.name) + '</b>' +
-          '<span class="s-desc">' + esc(s.desc) + '</span>' +
+          '<span class="s-desc">' + esc(s.look) + '</span>' +
+          '<span class="s-trait">특기 · ' + esc(s.trait) + '</span>' +
           (cur ? '<span class="maxed on">사용 중</span>' : own ? '<button type="button" class="use" data-use="' + s.id + '">고르기</button>' : priceBtn(s.id, '')) +
         '</div>';
       }).join('');
@@ -197,7 +212,7 @@
       }).join('');
     }
     list.innerHTML = h;
-    for (const cv of list.querySelectorAll('canvas[data-skin]')) SN.Render.drawSkinPreview(cv, cv.dataset.skin);
+    for (const cv of list.querySelectorAll('canvas[data-char]')) SN.Render.drawCharPreview(cv, cv.dataset.char);
   }
 
   function openShop(tab) {
@@ -214,14 +229,14 @@
     show('scr-title');
   }
 
-  const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 꾸미기예요', max: '더는 살 수 없어요' };
+  const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 캐릭터예요', max: '더는 살 수 없어요' };
   function buyThing(id) {
     const r = SH.buy(shop, id);
     if (r.ok) {
       SH.save(shop);
       SN.Audio.play('buy');
       vibrate(20);
-      if (SH.skinDef(id)) toast(SH.skinDef(id).name + ' 뱀으로 바꿨어요!');
+      if (SH.charDef(id)) toast(SH.charDef(id).name + '(으)로 바꿨어요!');
     } else {
       SN.Audio.play('deny');
       toast(NAMES[r.reason] || '살 수 없어요');
@@ -230,9 +245,9 @@
     renderTitleShop();
     return r;
   }
-  function useSkin(id) {
-    const ok = SH.selectSkin(shop, id);
-    if (ok) { SH.save(shop); SN.Audio.play('pick'); }
+  function useChar(id) {
+    const ok = SH.selectChar(shop, id);
+    if (ok) { SH.save(shop); SN.Audio.play('pick'); toast(SH.charDef(id).name + '(으)로 바꿨어요!'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
     return ok;
@@ -308,6 +323,14 @@
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
 
+  // 예전 꾸미기를 캐릭터로 바꿨으면 한 번 알려 준다
+  function tellMigration() {
+    const m = SH.takeMigration();
+    if (!m) return;
+    renderTitleShop();
+    setTimeout(() => toast(m.refund > 0 ? '꾸미기가 캐릭터로 바뀌었어요 · 코인 ' + fmt(m.refund) + '개 돌려받음' : '꾸미기가 캐릭터로 바뀌었어요'), 600);
+  }
+
   // ─── 메달 ──────────────────────────────────────────────────
   // 새로 딴 메달을 장부에 적고 돌려준다. live면 게임 중이라 토스트로 알린다
   function checkMedals(live) {
@@ -367,7 +390,7 @@
     SH.save(shop);
     W = SN.World.create(cols, rows, seed, SH.worldOpts(shop, lo, lastOpts));
     lastEarn = null;
-    view.skin = shop.skin;
+    view.char = shop.char;
     const used = D.START_ITEMS.filter(it => lo[it.id]).map(it => it.name);
     if (used.length) setTimeout(() => { if (mode === 'play') toast('시작 아이템: ' + used.join(' · ')); }, 300);
     view.best = W.mode === 'stage' ? rec.stage.score : rec.endless.score;
@@ -505,12 +528,13 @@
   $('btn-stage').addEventListener('click', () => { SN.Audio.unlock(); openStage(); });
   $('btn-medals').addEventListener('click', () => { SN.Audio.unlock(); openMedals(); });
   $('btn-shop').addEventListener('click', () => { SN.Audio.unlock(); openShop(); });
+  $('btn-char').addEventListener('click', () => { SN.Audio.unlock(); openShop('chars'); });
   $('btn-shop-back').addEventListener('click', closeShop);
   for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); });
   $('shop-list').addEventListener('click', e => {
     const b = e.target.closest('[data-buy],[data-use]');
     if (!b) return;
-    if (b.dataset.buy) buyThing(b.dataset.buy); else useSkin(b.dataset.use);
+    if (b.dataset.buy) buyThing(b.dataset.buy); else useChar(b.dataset.use);
   });
   for (const id of ['title-missions', 'over-missions']) {
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) claimMission(+b.dataset.claim, b); });
@@ -562,7 +586,7 @@
 
     if (mode === 'title' || mode === 'shop') {
       // 시연: 자동 운전 뱀이 시작 화면 뒤에서 돈다. 끝나면 잠시 뒤 새로
-      if (!demo) { const [c, r] = boardFor(size()); demo = SN.World.create(c, r, 777); demo.wait = 0; demoRest = 0; }
+      if (!demo) { const [c, r] = boardFor(size()); demo = SN.World.create(c, r, 777); demo.char = view.char; demo.wait = 0; demoRest = 0; }
       if (demo.phase === 'play') { drive(demo); SN.World.step(demo, dt); }
       else if ((demoRest += dt) > 1.5) demo = null;
       if (demo) {
@@ -605,6 +629,7 @@
   resize();
   toTitle();
   reportSummary();
+  tellMigration();
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
   // 오프라인 실행 (홈 화면에 추가했을 때). 미리보기 창 안에서는 조용히 건너뛴다
   try {
@@ -633,8 +658,9 @@
     get coins() { return SH.coins(); },
     giveCoins(n) { SH.getWallet().add(n); renderTitleShop(); if (mode === 'shop') renderShop(); return SH.coins(); },
     openShop, closeShop, claim: i => claimMission(i),
-    buy: id => buyThing(id), selectSkin: id => useSkin(id),
+    buy: id => buyThing(id), selectChar: id => useChar(id), selectSkin: id => useChar(id),
+    get char() { return shop.char; },
     // 저장소를 바꾼 뒤 다시 읽기 (테스트용)
-    reload() { shop = SH.load(); renderBest(); },
+    reload() { shop = SH.load(); cardChar = ''; renderBest(); tellMigration(); },
   };
 })(SN);

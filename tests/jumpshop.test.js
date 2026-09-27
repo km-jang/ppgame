@@ -33,14 +33,15 @@ const run = o => Object.assign({ diff: 'easy', height: 0, stars: 0, springs: 0, 
 
 console.log('통통 점프 상점 테스트');
 
-test('자료: 꾸미기 6개 · 강화 4개(5단계) · 시작 아이템 2개 · 미션 15개 이상, 값이 80 ~ 1,200', () => {
-  assert(D.SKINS.length >= 6 && D.SKINS[0].price === 0 && D.SKINS.filter(s => !s.price).length === 1, 'skins');
+test('자료: 캐릭터 5개 · 강화 4개(5단계) · 시작 아이템 2개 · 미션 15개 이상, 값이 80 ~ 1,200', () => {
+  assert(D.CHARS.length === 5 && D.CHARS[0].id === 'robot' && D.CHARS[0].price === 0 && D.CHARS.filter(s => !s.price).length === 1, 'chars');
+  assert(!('SKINS' in D), 'old skins removed');
   assert(D.UPGRADES.map(u => u.id).join() === 'speed,rocket,coin,cloud' && D.UPGRADES.every(u => u.prices.length === D.UPGRADE_MAX), 'upgrades');
   assert(D.START_ITEMS.map(i => i.give).join() === 'rocket,shield' && D.START_ITEMS.every(i => i.max === 3), 'items');
-  const all = [...D.SKINS, ...D.UPGRADES, ...D.START_ITEMS].map(x => x.id);
+  const all = [...D.CHARS, ...D.UPGRADES, ...D.START_ITEMS].map(x => x.id);
   assert(new Set(all).size === all.length, 'shop ids are unique ' + all.join());
   assert(D.MISSIONS.length >= 15 && new Set(D.MISSIONS.map(m => m.id)).size === D.MISSIONS.length, 'missions');
-  const prices = [...D.SKINS.filter(s => s.price).map(s => s.price), ...D.UPGRADES.flatMap(u => u.prices), ...D.START_ITEMS.map(i => i.price)];
+  const prices = [...D.CHARS.filter(s => s.price).map(s => s.price), ...D.UPGRADES.flatMap(u => u.prices), ...D.START_ITEMS.map(i => i.price)];
   assert(Math.min(...prices) >= 80 && Math.max(...prices) <= 1200, 'price range ' + Math.min(...prices) + ' ~ ' + Math.max(...prices));
   for (const m of D.MISSIONS) assert(['life', 'run'].includes(m.kind) && m.goal > 0 && m.reward > 0 && m.text, 'mission ' + m.id);
   const runKeys = Object.keys(SH.runOf(create(1, {})));
@@ -116,17 +117,21 @@ test('지갑: 불러올 때 지갑 잔액을 쓰고, 저장하면 지갑에 맞�
   assert(noW.coins === 7, 'no wallet');
 });
 
-test('사기: 모자라면 못 사고, 모으면 꾸미기·강화·시작 아이템을 산다', () => {
+test('사기: 모자라면 못 사고, 모으면 캐릭터·강화·시작 아이템을 산다', () => {
   const st = SH.blank();
-  const skin = D.SKINS[1];
-  let r = SH.buy(st, skin.id);
-  assert(!r.ok && r.reason === 'coins' && !st.skins[skin.id], 'poor');
+  assert(st.char === 'robot' && st.chars.robot && Object.keys(st.chars).length === 1, 'robot free and owned');
+  const ch = D.CHARS[1];
+  let r = SH.buy(st, ch.id);
+  assert(!r.ok && r.reason === 'coins' && !st.chars[ch.id], 'poor');
   st.coins = 5000;
-  r = SH.buy(st, skin.id);
-  assert(r.ok && st.skins[skin.id] && st.skin === skin.id && st.coins === 5000 - skin.price, 'bought skin');
-  assert(SH.buy(st, skin.id).reason === 'owned', 'owned');
-  assert(SH.selectSkin(st, 'basic') && st.skin === 'basic', 'select owned');
-  assert(!SH.selectSkin(st, 'gold') && st.skin === 'basic', 'cannot select locked');
+  r = SH.buy(st, ch.id);
+  assert(r.ok && st.chars[ch.id] && st.char === ch.id && st.coins === 5000 - ch.price, 'bought char and picked it');
+  assert(SH.buy(st, ch.id).reason === 'owned' && SH.buy(st, 'robot').reason === 'owned', 'owned');
+  assert(SH.selectChar(st, 'robot') && st.char === 'robot', 'select owned');
+  assert(!SH.selectChar(st, 'alien') && st.char === 'robot', 'cannot select locked');
+  assert(!SH.selectChar(st, 'nope') && st.char === 'robot', 'cannot select unknown');
+  assert(SH.selectSkin === SH.selectChar, 'old name kept');
+  assert(SH.worldOpts(st).char === 'robot', 'world gets the char');
   for (let k = 0; k < D.UPGRADE_MAX; k++) assert(SH.buy(st, 'speed').ok, 'upgrade ' + k);
   assert(st.up.speed === D.UPGRADE_MAX && SH.buy(st, 'speed').reason === 'max' && SH.price(st, 'speed') === null, 'upgrade max');
   for (let k = 0; k < 3; k++) assert(SH.buy(st, 'rocketStart').ok, 'item ' + k);
@@ -207,23 +212,51 @@ test('판이 끝나면: 코인 지급 + 미션 진행 + 해 본 난이도 기록
   assert(st.missions[2].prog === Math.min(300, r.bounces), 'bounces ' + st.missions[2].prog);
 });
 
-test('망가진 저장본도 올바른 모양으로 (없는 꾸미기·음수·모르는 미션·겹친 미션)', () => {
+test('망가진 저장본도 올바른 모양으로 (없는 캐릭터·음수·모르는 미션·겹친 미션)', () => {
   const raw = {
-    coins: -50, skin: 'gold', skins: { berry: true, gold: 'yes', nope: true }, up: { speed: 99, rocket: -3, coin: '2', cloud: null },
+    coins: -50, char: 'alien', chars: { frog: true, alien: 'yes', nope: true }, up: { speed: 99, rocket: -3, coin: '2', cloud: null },
     items: { rocketStart: 10, shieldStart: 'x' }, missions: [{ id: 'h100', prog: 999 }, { id: 'h100', prog: 3 }, { id: 'zzz' }, 5, { id: 'star30', prog: 'a' }],
     life: { earned: 'x', games: 3, diffs: { normal: true, hard: 'y' } }, mseed: -1,
   };
   const st = SH.clean(raw);
-  assert(st.coins === 0 && st.skins.berry && !st.skins.gold && !('nope' in st.skins) && st.skin === 'basic', 'skins');
+  assert(st.coins === 0 && st.chars.frog && st.chars.robot && !st.chars.alien && !('nope' in st.chars) && st.char === 'robot', 'chars ' + JSON.stringify(st.chars));
+  assert(!('skins' in st) && !('skin' in st) && !('refund' in st) && st.v === 2, 'new shape');
   assert(st.up.speed === D.UPGRADE_MAX && st.up.rocket === 0 && st.up.coin === 2 && st.up.cloud === 0, 'upgrades ' + JSON.stringify(st.up));
   assert(st.items.rocketStart === 3 && st.items.shieldStart === 0, 'items');
   assert(st.missions.length === 3 && st.missions[0].id === 'h100' && st.missions[0].done && st.missions[0].prog === 100, 'missions ' + JSON.stringify(st.missions));
   assert(st.missions.filter(m => m.id === 'h100').length === 1 && st.missions[1].id === 'star30' && st.missions[1].prog === 0, 'dedupe');
   assert(st.life.diffs.normal && !st.life.diffs.hard && st.life.games === 3 && st.mseed >= 1, 'life');
-  for (const bad of [null, 'x', 42, [], { missions: 'x' }]) { const b = SH.clean(bad); assert(b.missions.length === 3 && b.skin === 'basic', 'bad ' + JSON.stringify(bad)); }
+  for (const bad of [null, 'x', 42, [], { missions: 'x' }]) { const b = SH.clean(bad); assert(b.missions.length === 3 && b.char === 'robot', 'bad ' + JSON.stringify(bad)); }
   const store = memStore();
   SH.save(st, store, null);
   assert(JSON.stringify(SH.load(store, null)) === JSON.stringify(st), 'round trip');
+});
+
+test('예전 꾸미기 저장본: 값이 같은 캐릭터로 옮기고, 맞는 것이 없으면 값을 한 번만 돌려준다', () => {
+  // 민트(300)·번개(500)를 사고 번개를 쓰던 저장본 + 딸기(150)
+  const store = memStore({ 'jump.shop1': { v: 1, coins: 0, skin: 'bolt', skins: { basic: true, berry: true, mint: true, bolt: true }, up: { speed: 2 } } });
+  const w = fakeWallet(100);
+  const st = SH.load(store, w);
+  assert(st.chars.robot && st.chars.frog && st.chars.rabbit && !st.chars.penguin && !st.chars.alien, 'mapped ' + JSON.stringify(st.chars));
+  assert(st.char === 'rabbit', 'selected mapped ' + st.char);
+  assert(st.coins === 250 && w.c === 250, 'berry refunded once ' + st.coins + ' ' + w.c);
+  assert(st.up.speed === 2 && !('refund' in st), 'rest kept');
+  const saved = store.m['jump.shop1'];
+  assert(saved.v === 2 && saved.chars && !saved.skins && !('refund' in saved), 'saved new shape right away');
+  const again = SH.load(store, w);
+  assert(again.coins === 250 && again.char === 'rabbit', 'not refunded twice');
+  // 헬멧·황금 → 펭귄·외계인, 고른 꾸미기를 안 가졌으면 로봇으로
+  const b = SH.clean({ skin: 'berry', skins: { helmet: true, gold: true } });
+  assert(b.chars.penguin && b.chars.alien && b.char === 'robot' && !b.refund, 'helmet gold ' + JSON.stringify(b));
+  const c = SH.clean({ skin: 'gold', skins: { gold: false, basic: true } });
+  assert(!c.chars.alien && c.char === 'robot', 'not owned falls back');
+  // 지갑 없이도 한 번만
+  const s2 = memStore({ 'jump.shop1': { coins: 10, skins: { berry: true } } });
+  assert(SH.load(s2, null).coins === 160 && SH.load(s2, null).coins === 160, 'no wallet refund once');
+  // 모든 예전 꾸미기가 알맞게 옮겨진다 (값이 같은 캐릭터 또는 돌려줌)
+  for (const [id, m] of Object.entries(D.OLD_SKINS)) {
+    assert(m.to ? SH.charDef(m.to) : m.refund > 0, 'old skin ' + id);
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
