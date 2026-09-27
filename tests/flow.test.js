@@ -94,6 +94,32 @@ async function until(page, fn, arg, ms) {
     assert(await HB.evaluate(() => document.getElementById('stk-new').hidden), '열었는데 새 표시가 남음');
     await HB.tap('#stk-close');
   });
+  await test('소리 단추: 누르면 네 게임 함께 꺼지고(play.sound1) 다시 누르면 켜진다, 누르면 소리 판이 열린다', async () => {
+    assert(await HB.evaluate(() => typeof SND !== 'undefined' && !SND.muted() && !document.getElementById('snd-btn').classList.contains('off')), '처음 켬');
+    assert(await HB.evaluate(() => { const b = document.getElementById('snd-btn').getBoundingClientRect(); return b.width >= 40 && b.height >= 40 && b.right <= innerWidth && b.top >= 0; }), '소리 단추 크기·자리');
+    await HB.tap('#snd-btn');
+    assert(await HB.evaluate(() => SND.muted() && JSON.parse(localStorage.getItem('play.sound1')).muted === true && document.getElementById('snd-btn').classList.contains('off')), '끔');
+    await HB.tap('#snd-btn');
+    assert(await HB.evaluate(() => !SND.muted() && !document.getElementById('snd-btn').classList.contains('off')), '다시 켬');
+    assert(await until(HB, () => SND.ready()), '눌렀는데 소리 판이 안 열림');
+    // 다른 페이지(게임)에서 바꾼 것도 따라온다 (storage 이벤트)
+    await HB.evaluate(() => { localStorage.setItem('play.sound1', JSON.stringify({ muted: true, music: true, fx: true })); window.dispatchEvent(new StorageEvent('storage', { key: 'play.sound1' })); });
+    assert(await HB.evaluate(() => SND.muted() && document.getElementById('snd-btn').classList.contains('off')), '다른 곳에서 끈 것이 안 따라옴');
+    await HB.evaluate(() => SND.setMuted(false));
+  });
+  await test('게임 카드를 누르면 톡 소리를 내고 0.15초 안에 게임으로 넘어간다', async () => {
+    await HB.evaluate(() => {
+      const a = document.querySelector('.pick a.snake');
+      a.addEventListener('click', () => { localStorage.setItem('x.navAt', String(Date.now())); }, true);
+      window.addEventListener('pagehide', () => { localStorage.setItem('x.navGone', String(Date.now())); });
+    });
+    await Promise.all([HB.waitForURL(u => /\/snake\/index\.html$/.test(String(u)), { timeout: 5000 }), HB.tap('.pick a.snake')]);
+    const d = await HB.evaluate(() => Number(localStorage.getItem('x.navGone')) - Number(localStorage.getItem('x.navAt')));
+    assert(d >= 0 && d < 150 + 100, '넘어가기까지 ' + d + 'ms');
+    await HB.evaluate(() => { localStorage.removeItem('x.navAt'); localStorage.removeItem('x.navGone'); });
+    await HB.goto(ROOT + '/index.html');
+    assert(await until(HB, () => document.querySelectorAll('.pick a').length === 4), '돌아오기');
+  });
   await test('게임 고르기 콘솔 오류 없음', async () => { assert(!hb.errors.length, hb.errors.join(' | ')); });
   await hb.ctx.close();
   // 두 탭 크기에서 글자: 카드 제목은 한 줄, 설명은 잘리지 않고, 미션 글은 15px 이상 (글꼴 서버를 막아 넓은 기본 서체로)

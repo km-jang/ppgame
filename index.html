@@ -64,6 +64,12 @@
     .coin-pill, .rec-btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 999px; font: normal 20px var(--display); color: #ffe66d; background: rgba(12, 16, 26, .7); border: 2px solid rgba(255, 230, 109, .45); }
     .rec-btn { color: #bff8ff; border-color: rgba(94, 231, 255, .45); cursor: pointer; }
     .rec-btn:active { transform: scale(.96); }
+    /* 소리 단추: 네 게임 모두 함께 켜고 끈다 (common/sound.js, 키 play.sound1) */
+    .snd-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
+    .snd-btn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .snd-btn .x { display: none; }
+    .snd-btn.off { color: #8a93a8; border-color: rgba(138, 147, 168, .45); }
+    .snd-btn.off .x { display: inline; } .snd-btn.off .w { display: none; }
     .cn { width: 22px; height: 22px; border-radius: 50%; flex: none; background: radial-gradient(circle at 35% 30%, #fff 0 12%, #ffe66d 14% 55%, #c98f00 100%); box-shadow: 0 0 10px rgba(255, 230, 109, .6); }
     .daily { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .dm { position: relative; min-height: 64px; padding: 8px 12px 10px; border-radius: 14px; background: rgba(12, 16, 26, .72); border: 1px solid rgba(94, 231, 255, .25); display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
@@ -137,6 +143,7 @@
       <span class="coin-pill" title="네 게임에서 모은 별코인"><i class="cn" aria-hidden="true"></i><b id="hub-coins">0</b></span>
       <button id="stk-open" class="rec-btn stk-btn" type="button">스티커북<b id="stk-new" class="new-dot" hidden></b></button>
       <button id="rec-open" class="rec-btn" type="button">기록실</button>
+      <button id="snd-btn" class="rec-btn snd-btn" type="button" aria-label="소리 끄기" title="소리"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="w" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M16 9l6 6M22 9l-6 6"/></svg></button>
     </div>
     <div class="daily-head"><span>오늘의 미션</span><small id="daily-bonus"></small></div>
     <div id="daily" class="daily"></div>
@@ -168,6 +175,7 @@
   </section>
 
   <script src="common/hub.js"></script>
+  <script src="common/sound.js"></script>
   <script>
     'use strict';
     // 놀이 본부 그리기. 게임에서 돌아올 때마다(renderHub) 새로 읽는다
@@ -183,8 +191,22 @@
       let claimKey = '', claimAt = 0, claimTimer = 0;
       // 카드 주소도 HUB.GAMES에서 (폴더 말고 index.html까지: 파일로 바로 열어도 열리게)
       for (const g of HUB.GAMES) { const a = document.querySelector('.pick a[data-game="' + g.id + '"]'); if (a && g.path) a.setAttribute('href', g.path); }
+      // 별코인이 늘면 톡톡 소리와 함께 세어 올린다 (움직임 줄이기면 바로). 처음 그릴 때는 바로
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      let shown = -1, coinRaf = 0;
+      function showCoins(v) {
+        cancelAnimationFrame(coinRaf);
+        if (shown < 0 || v <= shown || still) { shown = v; $('hub-coins').textContent = fmt(v); return; }
+        const from = shown, t0 = performance.now(), dur = Math.min(900, 250 + (v - from) * 4);
+        const step = now => {
+          const k = Math.min(1, (now - t0) / dur), n = Math.round(from + (v - from) * (1 - Math.pow(1 - k, 2)));
+          if (n !== shown) { shown = n; $('hub-coins').textContent = fmt(n); SND.ui('coin'); }
+          if (k < 1) coinRaf = requestAnimationFrame(step);
+        };
+        coinRaf = requestAnimationFrame(step);
+      }
       function renderHub() {
-        $('hub-coins').textContent = fmt(HUB.coins());
+        showCoins(HUB.coins());
         const list = HUB.daily();
         $('daily').innerHTML = list.map((m, i) =>
           '<div class="dm' + (m.claimed ? ' claimed' : m.done ? ' done' : '') + '" style="--c:' + color(m.game) + '">' +
@@ -215,6 +237,7 @@
         const b = e.target.closest('[data-claim]');
         if (!b || performance.now() < claimAt) return;
         HUB.claimDaily(Number(b.dataset.claim));
+        SND.ui('claim');
         renderHub();
       });
       function renderStickers() {
@@ -230,12 +253,31 @@
         $('stk-new').hidden = !n;
         $('stk-new').textContent = n;
       }
-      $('stk-open').addEventListener('click', () => { renderStickers(); $('stickers').classList.add('on'); HUB.seeStickers(); renderNew(); });
-      $('stk-close').addEventListener('click', () => $('stickers').classList.remove('on'));
-      $('stickers').addEventListener('click', e => { if (e.target.id === 'stickers') $('stickers').classList.remove('on'); });
-      $('rec-open').addEventListener('click', () => { renderRecords(); $('records').classList.add('on'); });
-      $('rec-close').addEventListener('click', () => $('records').classList.remove('on'));
-      $('records').addEventListener('click', e => { if (e.target.id === 'records') $('records').classList.remove('on'); });
+      const shut = id => { if ($(id).classList.contains('on')) { $(id).classList.remove('on'); SND.ui('close'); } };
+      // 새 스티커가 있으면 여는 소리 대신 스티커 소리
+      $('stk-open').addEventListener('click', () => { const fresh = HUB.stickers().some(t => t.fresh); renderStickers(); $('stickers').classList.add('on'); SND.ui(fresh ? 'sticker' : 'open'); HUB.seeStickers(); renderNew(); });
+      $('stk-close').addEventListener('click', () => shut('stickers'));
+      $('stickers').addEventListener('click', e => { if (e.target.id === 'stickers') shut('stickers'); });
+      $('rec-open').addEventListener('click', () => { renderRecords(); $('records').classList.add('on'); SND.ui('open'); });
+      $('rec-close').addEventListener('click', () => shut('records'));
+      $('records').addEventListener('click', e => { if (e.target.id === 'records') shut('records'); });
+      // 소리 단추: 네 게임 모두 함께 (다른 탭·게임에서 바꿔도 SND.onChange로 따라 바뀐다)
+      const sndIcon = () => { const off = SND.muted(); $('snd-btn').classList.toggle('off', off); $('snd-btn').setAttribute('aria-label', off ? '소리 켜기' : '소리 끄기'); $('snd-btn').setAttribute('aria-pressed', String(off)); };
+      $('snd-btn').addEventListener('click', () => { SND.toggleMuted(); SND.ui('tap'); });
+      SND.onChange(sndIcon); sndIcon();
+      // 게임 카드: 톡 소리를 낸 뒤 0.1초 안에 넘어간다 (소리가 꺼져 있으면 바로)
+      let going = false;
+      document.querySelector('.pick').addEventListener('click', e => {
+        const a = e.target.closest('a[href]');
+        if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        if (going) return;
+        going = true;
+        const go = () => { location.href = a.href; };
+        if (SND.ui('tap')) setTimeout(go, 110); else go();
+      });
+      // 뒤로 가기로 돌아오면 다시 누를 수 있게
+      window.addEventListener('pageshow', () => { going = false; });
       const renderHubBase = renderHub;
       renderHub = function () {
         renderHubBase(); renderNew();
