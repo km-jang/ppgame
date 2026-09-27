@@ -16,7 +16,7 @@
   const MUTE_KEY = 'snake.muted';
 
   const view = { dpr: 1, w: 0, h: 0, ui: 1, hudMid: 32, hudLeft: 150, hudRight: 14, touch: isTouch, calm: false, best: 0 };
-  view.pad = input;   // 조이스틱 그리기용 (render.js가 읽기만 한다)
+  view.pad = input;   // 밀기 화살표 그리기용 (render.js가 읽기만 한다)
   const demoView = Object.create(view, { hud: { value: false } });
 
   let W = null;        // 실제 판
@@ -53,17 +53,10 @@
   let easy = SN.store.get(EASY_KEY, true) !== false;
   const boardFor = ({ w, h }) => { const B = easy ? D.EASY.board : D.BOARD; return h > w * 1.1 ? B.port : B.land; };
 
-  // 조이스틱은 판 위에 겹쳐 그리므로 판 자리를 따로 비우지 않는다 (판이 작아지지 않게)
+  // 판은 화면을 가득 쓴다 (버튼 자리를 비우지 않는다. 조작은 화면 밀기)
   function fit(world) {
     const L = SN.Render.layout(world.cols, world.rows, view.w, view.h, view.hudH);
     Object.assign(view, L);
-  }
-  // 조이스틱 자리: 오른쪽 아래 구석(세로 화면은 아래 가운데), 작게
-  function placeStick() {
-    const R = Math.round(Math.max(40, Math.min(62, Math.min(view.w, view.h) * 0.075)));
-    input.radius = R;
-    const m = R + Math.max(22, R * 0.45);
-    input.home = view.h > view.w * 1.1 ? { x: view.w / 2, y: view.h - m } : { x: view.w - m, y: view.h - m };
   }
   function renderEasy() {
     for (const b of document.querySelectorAll('[data-easy]')) b.setAttribute('aria-pressed', String((b.dataset.easy === '1') === easy));
@@ -92,7 +85,6 @@
     view.ui = isTouch ? (Math.min(w, h) >= 600 ? 1.3 : 1.1) : 1;
     measureHud();
     input.threshold = Math.max(D.SWIPE.min, Math.min(w, h) * D.SWIPE.ratio);
-    placeStick();
     view.calm = !!(calmQuery && calmQuery.matches);
     frozenDrawn = false;
     canvas.width = Math.round(w * view.dpr);
@@ -284,9 +276,9 @@
   }
 
   // ─── 입력 연결 ─────────────────────────────────────────────
-  input.onDir = dir => {
+  input.onDir = (dir, touch) => {
     SN.Audio.unlock();
-    if (mode === 'play' && W && SN.World.turn(W, dir) && input.stick) vibrate(10);
+    if (mode === 'play' && W && SN.World.turn(W, dir) && touch) vibrate(10);
   };
   for (const b of document.querySelectorAll('[data-easy]')) b.addEventListener('click', () => { SN.Audio.unlock(); setEasy(b.dataset.easy === '1'); });
   input.onKey = code => {
