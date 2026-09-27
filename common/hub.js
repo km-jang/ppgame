@@ -7,7 +7,9 @@
 //   play.hub1 : { v:1, coins, earned, spent, moved:{게임:true},
 //                 games:{ 게임: { best, bestText, medals, medalMax, games, sec, last } },
 //                 daily:{ day, list:[{game, stat, goal, text, reward, sum}], prog:[], claimed:[], bonus },
-//                 play:{ day, sec } }
+//                 play:{ day, sec },
+//                 adapt:{ '게임.난이도': { ema, n } },          알아서 맞춰 주는 난이도
+//                 stickers:{ id: 'YYYY-MM-DD' }, seen:{ id: true } } 스티커북
 var HUB = (typeof HUB !== 'undefined' && HUB) || {};
 (function (H) {
   const KEY = 'play.hub1';
@@ -48,6 +50,39 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
       { stat: 'games', goal: 3, sum: true, text: '슝슝 달리기 3판 하기', reward: 50 },
     ],
   };
+  // 스티커북: 네 게임에서 특별한 일을 하면 한 장씩. 판이 끝날 때 reportRun의 stats로 확인한다
+  // (s: 이번 판 stats). 게임이 그 값을 안 보내면 그냥 안 붙는다
+  const STICKERS = [
+    { id: 'ng_first', game: 'ngun', name: '첫 출격', desc: '뿅뿅 우주선 한 판', icon: '🚀', check: s => s.games >= 1 },
+    { id: 'ng_boss', game: 'ngun', name: '보스 사냥꾼', desc: '보스 1마리 잡기', icon: '👾', check: s => s.bosses >= 1 },
+    { id: 'ng_mars', game: 'ngun', name: '화성 도착', desc: '화성까지 가기', icon: '🔴', check: s => s.planet >= 4 },
+    { id: 'ng_saturn', game: 'ngun', name: '토성 고리', desc: '토성까지 가기', icon: '🪐', check: s => s.planet >= 6 },
+    { id: 'ng_pluto', game: 'ngun', name: '명왕성 끝까지', desc: '명왕성까지 가기', icon: '💜', check: s => s.planet >= 9 },
+    { id: 'ng_hole', game: 'ngun', name: '블랙홀 탈출', desc: '블랙홀 웨이브 버티기', icon: '🌀', check: s => s.blackholes >= 1 },
+    { id: 'sn_first', game: 'snake', name: '첫 냠냠', desc: '냠냠 뱀 한 판', icon: '🐍', check: s => s.games >= 1 },
+    { id: 'sn_len30', game: 'snake', name: '쭉쭉 30', desc: '길이 30', icon: '📏', check: s => s.len >= 30 },
+    { id: 'sn_len60', game: 'snake', name: '거대 뱀', desc: '길이 60', icon: '🐉', check: s => s.len >= 60 },
+    { id: 'sn_gold', game: 'snake', name: '황금 입맛', desc: '한 판에 황금 구슬 5개', icon: '⭐', check: s => s.golds >= 5 },
+    { id: 'sn_rival', game: 'snake', name: '라이벌 이기기', desc: '라이벌 뱀보다 많이 먹기', icon: '🏆', check: s => s.rivalWin >= 1 },
+    { id: 'sn_stage', game: 'snake', name: '스테이지 5', desc: '스테이지 레벨 5 깨기', icon: '🚩', check: s => s.level >= 5 },
+    { id: 'jp_first', game: 'jump', name: '첫 점프', desc: '통통 점프 한 판', icon: '🟢', check: s => s.games >= 1 },
+    { id: 'jp_cloud', game: 'jump', name: '구름 위', desc: '100m 오르기', icon: '☁️', check: s => s.height >= 100 },
+    { id: 'jp_space', game: 'jump', name: '우주 점프', desc: '250m 오르기', icon: '🌌', check: s => s.height >= 250 },
+    { id: 'jp_stars', game: 'jump', name: '별나라', desc: '500m 오르기', icon: '✨', check: s => s.height >= 500 },
+    { id: 'jp_stomp', game: 'jump', name: '꾹 밟기', desc: '몬스터 5마리 밟기', icon: '👣', check: s => s.stomps >= 5 },
+    { id: 'jp_spring', game: 'jump', name: '스프링 왕', desc: '한 판에 스프링 10번', icon: '🌀', check: s => s.springs >= 10 },
+    { id: 'rn_first', game: 'runner', name: '첫 비행', desc: '슝슝 달리기 한 판', icon: '✈️', check: s => s.games >= 1 },
+    { id: 'rn_1k', game: 'runner', name: '1,000m', desc: '1,000m 달리기', icon: '🛣️', check: s => s.dist >= 1000 },
+    { id: 'rn_saturn', game: 'runner', name: '토성 지나기', desc: '토성까지 달리기', icon: '🪐', check: s => s.planet >= 6 },
+    { id: 'rn_pirate', game: 'runner', name: '해적선 따돌리기', desc: '우주 해적선에게서 도망치기', icon: '🏴', check: s => s.pirates >= 1 },
+    { id: 'rn_slide', game: 'runner', name: '미끄럼 달인', desc: '한 판에 미끄러지기 10번', icon: '⬇️', check: s => s.slides >= 10 },
+    { id: 'rn_stars', game: 'runner', name: '별 부자', desc: '한 판에 별 150개', icon: '💫', check: s => s.stars >= 150 },
+  ];
+
+  // 알아서 맞춰 주는 난이도: 판 결과(perf, 1 = 그 난이도에서 보통 잘함, 0.3 = 금방 짐, 2 = 아주 잘함)의 이동 평균으로
+  // 다음 판을 살짝 쉽게(0.85배) 또는 살짝 어렵게(1.12배). 쉬움·보통·어려움 안에서만 움직인다
+  const ADAPT = { alpha: 0.35, gain: 0.3, min: 0.85, max: 1.12, warm: 2 };
+
   const DAILY_COUNT = 3;       // 하루 미션 수 (서로 다른 게임에서 하나씩)
   const DAILY_BONUS = 150;     // 셋 다 받으면 보너스 상자
 
@@ -68,7 +103,7 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
   }
 
   function blank() {
-    return { v: 1, coins: 0, earned: 0, spent: 0, moved: {}, games: {}, daily: { day: '', list: [], prog: [], claimed: [], bonus: false }, play: { day: '', sec: 0 } };
+    return { v: 1, coins: 0, earned: 0, spent: 0, moved: {}, games: {}, daily: { day: '', list: [], prog: [], claimed: [], bonus: false }, play: { day: '', sec: 0 }, adapt: {}, stickers: {}, seen: {} };
   }
 
   // 망가진 저장본도 올바른 모양으로
@@ -92,6 +127,12 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
       s.daily.bonus = d.bonus === true;
     }
     if (isObj(raw.play)) { s.play.day = typeof raw.play.day === 'string' ? raw.play.day : ''; s.play.sec = num(raw.play.sec); }
+    if (isObj(raw.adapt)) for (const k of Object.keys(raw.adapt)) {
+      const a = raw.adapt[k];
+      if (/^[a-z]+\.[a-z]+$/.test(k) && isObj(a)) s.adapt[k] = { ema: Math.min(3, num(a.ema) || 1), n: int(a.n) };
+    }
+    if (isObj(raw.stickers)) for (const t of STICKERS) if (typeof raw.stickers[t.id] === 'string') s.stickers[t.id] = raw.stickers[t.id].slice(0, 10);
+    if (isObj(raw.seen)) for (const t of STICKERS) if (raw.seen[t.id] === true && s.stickers[t.id]) s.seen[t.id] = true;
     return s;
   }
 
@@ -188,6 +229,13 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
       s.daily.prog[i] = Math.min(m.goal, m.sum ? was + v : Math.max(was, v));
       if (was < m.goal && s.daily.prog[i] >= m.goal) fresh.push(m.text);
     });
+    // 스티커: 이번 판 stats로 새로 붙는 것
+    for (const t of STICKERS) {
+      if (t.game !== game || s.stickers[t.id]) continue;
+      let ok = false;
+      try { ok = !!t.check(st); } catch (e) { ok = false; }
+      if (ok) s.stickers[t.id] = s.daily.day;
+    }
     const r = s.games[game] || { best: 0, bestText: '', medals: 0, medalMax: 0, games: 0, sec: 0, last: '' };
     r.sec += num(sec); r.last = s.daily.day;
     s.games[game] = r;
@@ -208,6 +256,37 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
     return got;
   }
 
+  // ─── 알아서 맞춰 주는 난이도 ───────────────────────────────
+  // 게임이 판을 시작할 때: 압박(적 수·속도·간격 등)에 곱할 배율. 1보다 작으면 살짝 쉽게
+  function adaptMul(game, diff) {
+    const a = load().adapt[game + '.' + diff];
+    if (!a || a.n < ADAPT.warm) return 1;
+    return Math.max(ADAPT.min, Math.min(ADAPT.max, 1 + (a.ema - 1) * ADAPT.gain));
+  }
+  // 판이 끝났을 때: perf = 이번 판이 그 난이도 기준으로 얼마나 잘했나 (1이 보통)
+  function adaptRun(game, diff, perf) {
+    const s = load(), k = game + '.' + diff;
+    const a = s.adapt[k] || { ema: 1, n: 0 };
+    const p = Math.max(0, Math.min(3, Number(perf) || 0));
+    a.ema = a.ema + (p - a.ema) * ADAPT.alpha;
+    a.n += 1;
+    s.adapt[k] = a;
+    save(s);
+    return adaptMul(game, diff);
+  }
+
+  // ─── 스티커북 ─────────────────────────────────────────────
+  function stickers() {
+    const s = load();
+    return STICKERS.map(t => ({ id: t.id, game: t.game, name: t.name, desc: t.desc, icon: t.icon, got: s.stickers[t.id] || '', fresh: !!s.stickers[t.id] && !s.seen[t.id] }));
+  }
+  // 스티커북을 열어 봤으면 "새 스티커" 표시를 끈다
+  function seeStickers() {
+    const s = load();
+    for (const id of Object.keys(s.stickers)) s.seen[id] = true;
+    save(s);
+  }
+
   // 기록실 화면용 한 번에 읽기
   function summary(day) {
     const s = freshDaily(load(), day);
@@ -221,5 +300,5 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
     return { coins: s.coins, earned: s.earned, spent: s.spent, medals, medalMax, games, todaySec: s.play.sec, rows };
   }
 
-  Object.assign(H, { KEY, GAMES, DAILY, DAILY_COUNT, DAILY_BONUS, dayKey, blank, clean, load, save, coins, addCoins, spend, setCoins, moveIn, report, pickDaily, daily, reportRun, claimDaily, summary });
+  Object.assign(H, { KEY, GAMES, DAILY, DAILY_COUNT, DAILY_BONUS, STICKERS, ADAPT, adaptMul, adaptRun, stickers, seeStickers, dayKey, blank, clean, load, save, coins, addCoins, spend, setCoins, moveIn, report, pickDaily, daily, reportRun, claimDaily, summary });
 })(HUB);

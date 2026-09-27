@@ -119,5 +119,44 @@ test('날이 바뀌면 오늘 논 시간이 0부터', () => {
   assert(H.summary('2026-09-28').todaySec === 0, 'day 2 resets');
 });
 
+test('알아서 맞춰 주는 난이도: 처음 두 판은 그대로, 계속 빨리 지면 살짝 쉽게, 잘하면 살짝 어렵게, 범위 안에서만', () => {
+  const { H } = fresh();
+  assert(H.adaptMul('jump', 'easy') === 1, 'start 1');
+  H.adaptRun('jump', 'easy', 0.2);
+  assert(H.adaptMul('jump', 'easy') === 1, 'warm-up keeps 1');
+  for (let i = 0; i < 10; i++) H.adaptRun('jump', 'easy', 0.2);
+  const easy = H.adaptMul('jump', 'easy');
+  assert(easy < 1 && easy >= H.ADAPT.min, 'easier after quick losses ' + easy);
+  for (let i = 0; i < 20; i++) H.adaptRun('jump', 'easy', 3);
+  const hard = H.adaptMul('jump', 'easy');
+  assert(hard > 1 && hard <= H.ADAPT.max, 'harder after great runs ' + hard);
+  assert(H.adaptMul('jump', 'normal') === 1 && H.adaptMul('snake', 'easy') === 1, 'separate per game and level');
+  H.adaptRun('ngun', 'hard', 'x'); H.adaptRun('ngun', 'hard', -5); H.adaptRun('ngun', 'hard', 99);
+  const m = H.adaptMul('ngun', 'hard');
+  assert(m >= H.ADAPT.min && m <= H.ADAPT.max, 'bad input stays in range ' + m);
+});
+
+test('스티커북: 판 결과로 붙고, 한 번만, 다른 게임 값으로는 안 붙고, 열어 보면 새 표시가 꺼진다', () => {
+  const { H } = fresh();
+  const day = '2026-09-27';
+  assert(H.stickers().length === H.STICKERS.length && H.stickers().every(t => !t.got), 'empty book');
+  assert(new Set(H.STICKERS.map(t => t.id)).size === H.STICKERS.length, 'unique ids');
+  for (const g of H.GAMES) assert(H.STICKERS.filter(t => t.game === g.id).length >= 5, 'each game has stickers ' + g.id);
+  H.reportRun('jump', { height: 120, stars: 3 }, 30, day);
+  let b = H.stickers();
+  const got = id => b.find(t => t.id === id).got;
+  assert(got('jp_first') && got('jp_cloud') && !got('jp_space'), 'jump stickers');
+  assert(!got('rn_1k') && !got('sn_first'), 'other games untouched');
+  H.reportRun('runner', { height: 999 }, 30, day);
+  b = H.stickers();
+  assert(!got('jp_space') && got('rn_first'), 'runner run does not give jump stickers');
+  assert(b.filter(t => t.fresh).length === 3, 'fresh count ' + b.filter(t => t.fresh).length);
+  H.seeStickers();
+  assert(H.stickers().every(t => !t.fresh), 'seen');
+  H.reportRun('jump', { height: 300 }, 30, day);
+  b = H.stickers();
+  assert(got('jp_space') && b.filter(t => t.fresh).length === 1 && got('jp_first') === day, 'new one only');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
