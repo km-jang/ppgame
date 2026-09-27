@@ -57,11 +57,11 @@
   // meteor: 운석이 떨어지는 간격(초)·예고 시간(초). 예고 원이 내 자리에 생기고 warn초 뒤 떨어진다
   // pull·bulletPull: 블랙홀 웨이브에서 나와 적 탄을 끌어당기는 힘 (px/초, px/초²). 내 속도(220)보다 한참 약하다
   const DIFFICULTY = {
-    easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.7,  enemySpeed: 0.85, count: 0.85, bulletSpeed: 0.8,  fireRate: 0.8,  score: 0.6,
+    easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.7,  enemySpeed: 0.85, count: 0.9,  bulletSpeed: 0.8,  fireRate: 0.8,  score: 0.6,
               lead: 0.3,  meteorEvery: 5.2, meteorWarn: 1.35, pull: 38, bulletPull: 70 },
     normal: { id: 'normal', name: '보통',   hp: 5, enemyHp: 1.05, enemySpeed: 1.05, count: 1.1,  bulletSpeed: 1.05, fireRate: 1.1,  score: 1,
               lead: 0.6,  meteorEvery: 4.0, meteorWarn: 1.15, pull: 52, bulletPull: 100 },
-    hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.55, enemySpeed: 1.25, count: 1.4,  bulletSpeed: 1.25, fireRate: 1.45, score: 1.6,
+    hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.5,  enemySpeed: 1.2,  count: 1.35, bulletSpeed: 1.2,  fireRate: 1.4,  score: 1.6,
               lead: 0.85, meteorEvery: 3.2, meteorWarn: 1.0,  pull: 66, bulletPull: 130 },
   };
 
@@ -74,7 +74,7 @@
     perWave: 0.03, minMul: 0.6,
     extraEvery: 6, extraMax: 3, spread: 190,
     bossMul: 1.5,      // 보스 웨이브에선 덜 자주
-    enemyDmg: 8,       // 원 안의 적 피해 (웨이브 체력 배율·난이도 적 체력 배율을 곱함. 졸개·돌격병·돌진이는 한 방)
+    enemyDmg: 5,       // 원 안의 적 피해 (웨이브 체력 배율·난이도 적 체력 배율을 곱함. 졸개·돌격병·새끼는 한 방)
     stop: 0.05,        // 떨어지는 순간 화면 멈춤
   };
 
@@ -274,8 +274,9 @@
     { id: 'fullult', icon: 'Q',  name: '필살기 가득',  desc: '필살기 게이지가 가득 찬 채로 시작', price: 120, max: 3 },
   ];
 
-  // 판이 끝날 때 받는 코인 = 점수 ÷ 40 + (웨이브-1) × 4 + 보스 × 40 + 주운 코인. 그 뒤 코인 보너스 강화만큼 더
-  const COINS = { perScore: 40, perWave: 4, perBoss: 40 };
+  // 판이 끝날 때 받는 코인 = 점수 ÷ 40 + (웨이브-1) × 5 + 보스 × 40 + 주운 코인. 그 뒤 코인 보너스 강화만큼 더
+  // (2026-09-27 난이도를 올리며 웨이브 코인 4 → 5: 판이 짧아져도 한 판에 받는 코인이 비슷하게)
+  const COINS = { perScore: 40, perWave: 5, perBoss: 40 };
 
   // 게임 중 떨어지는 아이템 (일반 적 처치마다, 회복 다음에 한 번 굴림). chance: 처치당 확률
   // coin: value 코인, 보스는 bossCoins개를 흩뿌림 · heat: time초 동안 연사 mul배 · magnet: time초 동안 모든 아이템을 끌어옴

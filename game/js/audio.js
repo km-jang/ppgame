@@ -129,6 +129,13 @@
     warn:    { gap: 0.3, fn: t => { for (let i = 0; i < 3; i++) tone(sfxBus, t + i * 0.12, 'square', 1200, 1200, 0.07, 0.07); } },
     laser:   { gap: 0.2, fn: t => { tone(sfxBus, t, 'sawtooth', 120, 60, 0.5, 0.25); noise(sfxBus, t, 'bandpass', 3000, 800, 0.45, 0.3, 1); } },
     block:   { gap: 0.06, fn: t => { tone(sfxBus, t, 'triangle', 1800, 1400, 0.04, 0.05); } },
+    // 태양계 여행 (2026-09-27): 운석 예고 휘익 · 운석 쿵 · 돌진이 예고·돌진 · 블랙홀 웨이브 · 새 행성 도착
+    meteorWarn: { gap: 0.4, fn: t => { tone(sfxBus, t, 'sine', 1400, 500, 0.5, 0.07); } },
+    meteor:  { gap: 0.12, fn: t => { noise(sfxBus, t, 'lowpass', 1800, 80, 0.35, 0.55); tone(sfxBus, t, 'sine', 90, 35, 0.3, 0.45); } },
+    chargeWarn: { gap: 0.25, fn: t => { tone(sfxBus, t, 'square', 520, 780, 0.1, 0.05); } },
+    charge:  { gap: 0.12, fn: t => { noise(sfxBus, t, 'bandpass', 400, 2400, 0.22, 0.25, 2); } },
+    hole:    { gap: 1.0, fn: t => { tone(sfxBus, t, 'sine', 70, 40, 1.2, 0.4); tone(sfxBus, t, 'triangle', 300, 120, 1.0, 0.1); tone(sfxBus, t + 0.02, 'triangle', 306, 118, 1.0, 0.08); } },
+    planet:  { gap: 1.0, fn: t => { [523, 784, 1047, 1319].forEach((f, i) => tone(sfxBus, t + 0.1 + i * 0.09, 'triangle', f, f, 0.4, 0.12)); } },
     pick:    { gap: 0.05, fn: t => { [523, 659, 784].forEach((f, i) => tone(sfxBus, t + i * 0.05, 'square', f, f, 0.1, 0.12)); } },
     clear:   { gap: 0.10, fn: t => { [440, 554, 659, 880].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.18, 0.25)); } },
     wave:    { gap: 0.10, fn: t => { tone(sfxBus, t, 'triangle', 330, 660, 0.25, 0.22); } },

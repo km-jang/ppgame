@@ -55,7 +55,7 @@ test('처음 상태', () => {
   const W = createWorld(800, 600, 1);
   assert(W.phase === 'play' && W.wave === 1, 'wave 1 play');
   assert(W.player.x === 400 && W.player.y === 300, 'player centered');
-  assert(W.spawnQueue.length === 8, '1웨이브 적 수 ' + W.spawnQueue.length);
+  assert(W.spawnQueue.length === Math.round(8 * NG.DATA.DIFFICULTY.normal.count), '1웨이브 적 수 ' + W.spawnQueue.length);
 });
 
 test('웨이브 구성: 보스는 5의 배수에서만, 등장 웨이브 지킴', () => {
@@ -260,6 +260,7 @@ const U = NG.DATA.ULT;
 function clearWorld(seed) {
   const W = createWorld(800, 600, seed);
   W.spawnQueue.length = 0; W.enemies.length = 0; W.banner = 0;
+  W.meteorT = 1e9; // 운석은 따로 시험한다
   return W;
 }
 function putEnemy(W, type, x, y, hp) {
@@ -325,12 +326,13 @@ test('필살기: 발동하면 충격파가 퍼져 화면의 적을 치고 적 �
 test('필살기: 피해는 총이 셀수록, 웨이브가 오를수록 크다', () => {
   const W = createWorld(800, 600, 54);
   const base = NG.World.ultDamage(W);
-  assert(base === NG.DATA.GUN.dmg * U.minMul, 'min damage at start: ' + base);
+  const eh = W.diff.enemyHp;
+  assert(base === NG.DATA.GUN.dmg * U.minMul * eh, 'min damage at start: ' + base);
   assert(base > NG.DATA.ENEMIES.tank.hp, 'first special clears a wave-1 heavy');
   W.player.gun.barrels = 6; W.player.gun.rate = 8; W.player.gun.dmg = 2;
-  assert(NG.World.ultDamage(W) === 2 * 8 * 6 * U.sec, 'scales with gun');
+  assert(Math.abs(NG.World.ultDamage(W) - 2 * 8 * 6 * U.sec * eh) < 1e-9, 'scales with gun');
   W.wave = 11;
-  assert(Math.abs(NG.World.ultDamage(W) - 2 * 8 * 6 * U.sec * 2.5) < 1e-9, 'and with wave');
+  assert(Math.abs(NG.World.ultDamage(W) - 2 * 8 * 6 * U.sec * 2.5 * eh) < 1e-9, 'and with wave');
 });
 
 test('점검: 총이 커져도 필살기 한 번에 보스 체력의 bossCap까지만 깎는다', () => {
@@ -566,6 +568,7 @@ function bossWorld(k, seed) {
     vx: 0, vy: 0, spawnT: 0, flash: 0, droneHit: 0, dead: false, ang: 0, cd: 0, ringCd: 3, aimCd: 1.4, summonCd: 6.5, strafe: 1 };
   W.enemies.push(e);
   W.player.hp = W.player.maxHp = 1e6; W.player.x = 300; W.player.y = 500; W.player.fireCd = 1e9;
+  W.meteorT = 1e9; W.hole = null;
   return { W, e };
 }
 const HOLD = { moveX: 0, moveY: 0, aimAngle: 0, dash: false };
@@ -659,7 +662,7 @@ test('보스 공격: 다섯 보스 모두 오래 싸워도 값이 망가지지 �
 const SH = NG.Shop;
 const DA = NG.DATA;
 // 적이 안 나오지만 웨이브도 안 끝나게 (대기열에 하나를 아주 늦게)
-function clearArena(W) { W.spawnQueue = ['grunt']; W.spawnTimer = 1e9; W.enemies.length = 0; W.eBullets.length = 0; if (W.lasers) W.lasers.length = 0; W.banner = 0; }
+function clearArena(W) { W.spawnQueue = ['grunt']; W.spawnTimer = 1e9; W.enemies.length = 0; W.eBullets.length = 0; if (W.lasers) W.lasers.length = 0; W.banner = 0; W.meteorT = 1e9; W.meteors.length = 0; W.hole = null; }
 
 test('기체: 6종, 이름·설명·모양·색이 모두 다르고 무료는 2종', () => {
   const S = DA.SHIPS;
@@ -723,12 +726,12 @@ test('상점 없이 만든 판(시연·옛 테스트)은 예전과 같은 기본
   assert(E.player.maxHp === 8, 'easy hp');
 });
 
-test('코인: 점수÷40 + (웨이브-1)×4 + 보스×40 + 주운 코인, 코인 보너스 강화는 10%씩', () => {
+test('코인: 점수÷40 + (웨이브-1)×5 + 보스×40 + 주운 코인, 코인 보너스 강화는 10%씩', () => {
   const run = { score: 4000, wave: 6, bosses: 1, runCoins: 21 };
   const c = SH.coinsFor(run, SH.blank());
-  assert(c.parts.score === 100 && c.parts.wave === 20 && c.parts.boss === 40 && c.parts.pickup === 21 && c.parts.bonus === 0 && c.total === 181, JSON.stringify(c));
+  assert(c.parts.score === 100 && c.parts.wave === 25 && c.parts.boss === 40 && c.parts.pickup === 21 && c.parts.bonus === 0 && c.total === 186, JSON.stringify(c));
   const st = SH.blank(); st.up.coin = 3;
-  assert(SH.coinsFor(run, st).total === 181 + Math.floor(181 * 0.3), 'bonus');
+  assert(SH.coinsFor(run, st).total === 186 + Math.floor(186 * 0.3), 'bonus');
   assert(SH.coinsFor({ score: -5, wave: 0 }, st).total === 0, 'no negatives');
 });
 
@@ -812,7 +815,7 @@ test('판 끝: finishRun이 코인을 주고 미션을 진행한다 (runOf는 �
   const W = createWorld(800, 600, 17, 'normal', SH.worldOpts(st, {}));
   W.score = 800; W.wave = 3; W.stats.coinPicks = 5; W.stats.coins = 15;
   const res = SH.finishRun(st, SH.runOf(W));
-  assert(res.coins === 20 + 8 + 15 && st.coins === res.coins && st.life.games === 1, 'coins ' + res.coins);
+  assert(res.coins === 20 + 10 + 15 && st.coins === res.coins && st.life.games === 1, 'coins ' + res.coins);
   assert(res.done.join() === 'games5' && st.missions[1].prog === 5, 'missions');
 });
 
@@ -942,6 +945,236 @@ test('미션 목록: 15개 안팎, id 중복 없음, 누적·한 판이 섞이�
     assert(m.goal > 0 && m.reward > 0 && m.text, 'shape ' + m.id);
     if (m.ship) assert(DA.SHIPS.some(s => s.id === m.ship), 'ship ' + m.id);
   }
+});
+
+// ─── 태양계 여행 · 블랙홀 · 운석 · 돌진이 · 난이도 (2026-09-27) ─────────────
+// 다음 웨이브로 바로 넘긴다 (카드 화면을 거쳐 startWave가 불린다)
+function nextWave(W) { W.phase = 'cards'; W.cards = drawCards(W, 3); pickCard(W, 0); }
+
+test('태양계 여행: 웨이브 2개마다 수성 → 금성 → … → 명왕성, 그다음은 2바퀴 수성', () => {
+  const P = DA.PLANETS, per = DA.JOURNEY.perPlanet;
+  assert(P.map(p => p.name).join('') === '수성금성지구화성목성토성천왕성해왕성명왕성', 'order ' + P.map(p => p.name).join(','));
+  for (const p of P) assert(p.id && p.fact && /^#[0-9a-f]{6}$/i.test(p.color), 'shape ' + p.id);
+  for (let n = 1; n <= per * P.length; n++) {
+    const pl = NG.World.placeOf(n);
+    assert(pl.planet === P[Math.floor((n - 1) / per)] && pl.lap === 1, 'wave ' + n + ' ' + pl.planet.name);
+    assert(pl.first === ((n - 1) % per === 0), 'first ' + n);
+  }
+  const lap2 = NG.World.placeOf(per * P.length + 1);
+  assert(lap2.planet.id === 'mercury' && lap2.lap === 2 && lap2.first, 'lap 2');
+  // 판 안에서도: 웨이브가 바뀌면 W.place가 따라가고, 새 행성 첫 웨이브엔 'planet' 소식
+  const W = createWorld(800, 600, 400);
+  assert(W.place.planet.id === 'mercury', 'starts at mercury');
+  const seen = [];
+  for (let n = 2; n <= 20; n++) {
+    W.events.length = 0; nextWave(W);
+    assert(W.place.planet === NG.World.placeOf(n).planet, 'place follows wave ' + n);
+    if (W.events.includes('planet')) seen.push(W.place.planet.id);
+  }
+  // 블랙홀 웨이브는 'hole' 소식이 대신 나오므로 도착 소식은 행성 수 이하
+  assert(seen.length >= 5 && seen.every((id, i) => i === 0 || id !== seen[i - 1]), 'arrivals ' + seen.join(','));
+});
+
+test('블랙홀: from 웨이브부터, 보스 웨이브엔 없고, 두 번 연달아 안 나오며, 확률은 chance 안팎', () => {
+  const B = DA.BLACKHOLE;
+  let eligible = 0, holes = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const W = createWorld(1280, 800, 500 + seed);
+    let prev = !!W.hole;
+    assert(!prev, 'no hole on wave 1');
+    for (let n = 2; n <= 40; n++) {
+      nextWave(W);
+      const h = !!W.hole;
+      if (n < B.from) assert(!h, 'too early ' + n);
+      if (n % DA.WAVE.bossEvery === 0) assert(!h, 'boss wave ' + n);
+      if (prev) assert(!h, 'twice in a row at ' + n);
+      if (n >= B.from && n % DA.WAVE.bossEvery !== 0 && !prev) { eligible++; if (h) holes++; }
+      if (h) {
+        assert(W.hole.fx >= B.place[0] && W.hole.fx <= B.place[1] && W.hole.fy >= B.place[0] && W.hole.fy <= B.place[1], 'inside');
+        assert(W.events.includes('hole'), 'hole event');
+      }
+      prev = h;
+    }
+  }
+  const rate = holes / eligible;
+  console.log('       블랙홀 확률(가능한 웨이브 중) ' + (rate * 100).toFixed(1) + '% (' + holes + '/' + eligible + ')');
+  assert(Math.abs(rate - B.chance) < 0.05, 'rate ' + rate);
+});
+
+test('블랙홀: 끌어당김은 쉬움 < 보통 < 어려움, 가장 센 곳도 가장 느린 기체 속도의 절반 아래', () => {
+  const df = DA.DIFFICULTY, slow = DA.PLAYER.speed * Math.min(...DA.SHIPS.map(s => s.speed));
+  assert(df.easy.pull < df.normal.pull && df.normal.pull < df.hard.pull, 'pull order');
+  assert(df.easy.bulletPull < df.normal.bulletPull && df.normal.bulletPull < df.hard.bulletPull, 'bullet pull order');
+  for (const d of ['easy', 'normal', 'hard']) {
+    const W = createWorld(1280, 800, 600, d);
+    W.hole = { fx: 0.5, fy: 0.5, x: 640, y: 400 };
+    const max = Math.hypot(...Object.values(NG.World.holePull(W, 640 + DA.BLACKHOLE.core + 1, 400, W.diff.pull)));
+    const far = Math.hypot(...Object.values(NG.World.holePull(W, 5, 5, W.diff.pull)));
+    assert(max <= W.diff.pull + 1e-9 && far < max && far > 0, d + ' falloff ' + max + ' ' + far);
+    assert(max < slow * 0.5, d + ' pull ' + max + ' vs slowest ship ' + slow);
+  }
+});
+
+test('블랙홀: 가만히 있으면 끌려가고, 반대로 움직이면 빠져나간다. 적은 끌려가지 않고 적 탄은 휘다 삼켜진다', () => {
+  const W = createWorld(800, 600, 610);
+  clearArena(W); // 웨이브가 끝나지 않게
+  W.hole = { fx: 0.5, fy: 0.5, x: 400, y: 300 };
+  const p = W.player; p.x = 250; p.y = 300; p.fireCd = 1e9;
+  for (let i = 0; i < 60; i++) step(W, IDLE, DT);
+  assert(p.x > 250 + W.diff.pull * 0.4, 'idle drifts toward hole: ' + p.x.toFixed(1));
+  p.x = 330; p.y = 300;
+  for (let i = 0; i < 60; i++) step(W, { moveX: -1, moveY: 0, aimAngle: 0, dash: false }, DT);
+  assert(p.x < 330 - 100, 'escapes at full speed: ' + p.x.toFixed(1));
+  const e = putEnemy(W, 'tank', 600, 300, 1e9); e.speed = 0;
+  W.eBullets.push({ x: 400, y: 120, vx: 120, vy: 0, r: 5, life: 6 });
+  const b = W.eBullets[0];
+  for (let i = 0; i < 30; i++) step(W, IDLE, DT);
+  assert(b.vy > 5, 'bullet bends toward hole: vy ' + b.vy.toFixed(1));
+  assert(Math.abs(e.x - 600) < 1e-6, 'enemy not pulled');
+  W.eBullets.push({ x: 400, y: 300 - DA.BLACKHOLE.swallow + 4, vx: 0, vy: 0, r: 5, life: 6 });
+  const n0 = W.eBullets.length;
+  step(W, IDLE, DT);
+  assert(W.eBullets.length === n0 - 1, 'swallowed');
+});
+
+test('운석: 내 자리에 예고 원이 먼저 뜨고, 가만히 있으면 맞고, 예고를 보고 비키면 안 맞는다 (예고 시간 안에 넉넉히)', () => {
+  const M = DA.METEOR;
+  for (const d of ['easy', 'normal', 'hard']) {
+    const df = DA.DIFFICULTY[d];
+    // 원 밖으로 나가는 데 걸리는 시간이 예고의 절반도 안 된다 (가장 느린 기체 기준)
+    const slow = DA.PLAYER.speed * Math.min(...DA.SHIPS.map(s => s.speed));
+    assert((M.r + DA.PLAYER.r) / slow < df.meteorWarn * 0.5, d + ' fair warn ' + df.meteorWarn);
+    for (const move of [false, true]) {
+      const W = createWorld(800, 600, 620, d);
+      clearArena(W); W.enemies.push({ id: 1, type: 'tank', def: DA.ENEMIES.tank, x: 780, y: 580, r: 26, hp: 1e9, maxHp: 1e9, speed: 0, spawnT: 0, flash: 0, droneHit: 0, vx: 0, vy: 0, ang: 0, cd: 0, dead: false });
+      W.player.fireCd = 1e9;
+      W.meteorT = 0.01;
+      const hp = W.player.hp;
+      let warned = false;
+      for (let i = 0; i < 60 * 2.5; i++) {
+        if (W.meteors.length) warned = true;
+        step(W, move && warned ? { moveX: 1, moveY: 0, aimAngle: 0, dash: false } : IDLE, DT);
+        if (i > 5) W.meteorT = 1e9; // 한 번만
+      }
+      assert(warned, 'warning first');
+      assert(move ? W.player.hp === hp : W.player.hp === hp - 1, d + (move ? ' dodged' : ' idle hit') + ' hp ' + W.player.hp);
+    }
+  }
+  // 운석 간격: 웨이브가 오를수록 짧아지지만 minMul 아래로는 안 줄고, 보스 웨이브엔 길다. 여러 개는 extraEvery 웨이브마다
+  const W = createWorld(800, 600, 621, 'normal');
+  const g1 = NG.World.meteorGap(W); W.wave = 99; const g99 = NG.World.meteorGap(W);
+  W.bossWave = true; const gb = NG.World.meteorGap(W);
+  assert(g99 < g1 && Math.abs(g99 - W.diff.meteorEvery * M.minMul) < 1e-9 && gb > g99, 'gap ' + g1 + ' ' + g99 + ' ' + gb);
+});
+
+test('운석: 떨어진 자리의 일반 적도 피해를 입는다 (보스는 안 맞음)', () => {
+  const W = clearWorld(630);
+  const p = W.player; p.fireCd = 1e9;
+  const g = putEnemy(W, 'grunt', p.x + 20, p.y); g.speed = 0; g.def = Object.assign({}, g.def, { speed: 0 });
+  const boss = putEnemy(W, 'boss', p.x - 30, p.y, 1000);
+  W.meteors.push({ x: p.x, y: p.y, r: DA.METEOR.r, t: 0, warn: 0.05, rot: 0 });
+  p.iframe = 5; // 나는 안 맞게
+  for (let i = 0; i < 6; i++) step(W, IDLE, DT);
+  assert(g.dead, 'grunt crushed');
+  assert(boss.hp === 1000, 'boss untouched');
+});
+
+test('돌진이: 멈춰서 예고선을 보인 뒤 돌진한다. 가만히 있으면 맞고 옆으로 비키면 안 맞는다', () => {
+  const C = DA.ENEMIES.charger;
+  assert(DA.WAVE_POOL.some(w => w.type === 'charger'), 'in wave pool');
+  for (const move of [false, true]) {
+    const W = clearWorld(640 + (move ? 1 : 0));
+    const p = W.player; p.fireCd = 1e9; p.x = 400; p.y = 300;
+    const e = putEnemy(W, 'charger', 150, 300, 1e9);
+    e.speed = C.speed; e.chRest = 0;
+    let warned = false, dashed = false, hurt = 0;
+    for (let i = 0; i < 60 * 2; i++) {
+      if (e.chWarn > 0) warned = true;
+      if (e.chDash > 0) dashed = true;
+      step(W, move && warned ? { moveX: 0, moveY: 1, aimAngle: 0, dash: false } : IDLE, DT);
+      hurt += W.events.filter(x => x === 'hurt').length; W.events.length = 0;
+      if (hurt) break;
+    }
+    assert(warned && dashed, 'warn then dash');
+    assert(move ? hurt === 0 : hurt === 1, (move ? 'sidestep safe' : 'idle hit') + ' ' + hurt);
+  }
+});
+
+test('사수는 난이도만큼 내가 가는 쪽을 앞질러 쏜다 (가만히 있으면 그대로 겨눔)', () => {
+  const shotAngle = (d, vy) => {
+    const W = createWorld(800, 600, 650, d);
+    clearArena(W);
+    const p = W.player; p.x = 400; p.y = 300; p.vx = 0; p.vy = vy; p.fireCd = 1e9;
+    const e = { id: 9, type: 'shooter', def: DA.ENEMIES.shooter, x: 100, y: 300, r: 15, hp: 1e9, maxHp: 1e9, speed: 0, spawnT: 0, flash: 0, droneHit: 0, vx: 0, vy: 0, ang: 0, cd: 0.0001, dead: false, strafe: 1 };
+    W.enemies.push(e);
+    step(W, { moveX: 0, moveY: vy ? 1 : 0, aimAngle: 0, dash: false }, 1e-4);
+    const b = W.eBullets[0];
+    return Math.atan2(b.vy, b.vx);
+  };
+  assert(Math.abs(shotAngle('normal', 0)) < 1e-6, 'straight when still');
+  const e = shotAngle('easy', 220), n = shotAngle('normal', 220), h = shotAngle('hard', 220);
+  assert(e > 0 && e < n && n < h, 'lead ' + e.toFixed(3) + ' ' + n.toFixed(3) + ' ' + h.toFixed(3));
+});
+
+// 피하는 봇: 가까운 적·탄·운석 예고·돌진 예고선·블랙홀에서 멀어지고, 벽을 피하며, 가운데를 돈다. 필살기는 차면 쓴다
+function dodgeBot(W) {
+  const p = W.player;
+  let fx = 0, fy = 0;
+  for (const e of W.enemies) {
+    if (e.dead) continue;
+    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1, R = 260 + e.r;
+    if (d < R) { const k = (R - d) / R * (e.spawnT > 0 ? 0.5 : 1.6); fx += dx / d * k; fy += dy / d * k; }
+    const a = e.chWarn > 0 ? e.chA : e.warnT > 0 ? e.chargeA : null;
+    if (a != null) { const qx = -Math.sin(a), qy = Math.cos(a), side = Math.sign(dx * qx + dy * qy) || 1; fx += qx * side * 2.5; fy += qy * side * 2.5; }
+  }
+  let danger = false;
+  for (const b of W.eBullets) {
+    const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1;
+    if (d > 190) continue;
+    const vl = Math.hypot(b.vx, b.vy) || 1, ux = b.vx / vl, uy = b.vy / vl, along = dx * ux + dy * uy;
+    if (along < -10) continue;
+    const sx = dx - ux * along, sy = dy - uy * along, sd = Math.hypot(sx, sy) || 1, k = (190 - d) / 190 * 3 * (sd < 30 ? 1.5 : 0.6);
+    fx += sx / sd * k; fy += sy / sd * k;
+    if (d < 45 && sd < 18) danger = true;
+  }
+  for (const m of W.meteors) {
+    const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy) || 1;
+    if (d < m.r + p.r + 30) { fx += (d < 2 ? 1 : dx / d) * 6; fy += (d < 2 ? 0 : dy / d) * 6; }
+  }
+  if (W.hole) { const dx = p.x - W.hole.x, dy = p.y - W.hole.y, d = Math.hypot(dx, dy) || 1; if (d < 260) { fx += dx / d * 1.2; fy += dy / d * 1.2; } }
+  const m = 110;
+  if (p.x < m) fx += (m - p.x) / m * 3; if (p.x > W.w - m) fx -= (p.x - W.w + m) / m * 3;
+  if (p.y < m) fy += (m - p.y) / m * 3; if (p.y > W.h - m) fy -= (p.y - W.h + m) / m * 3;
+  const ox = p.x - W.w / 2, oy = p.y - W.h / 2, od = Math.hypot(ox, oy) || 1, want = Math.min(W.w, W.h) * 0.28;
+  fx += -oy / od * 0.7 + (want - od) / want * ox / od * 0.8;
+  fy += ox / od * 0.7 + (want - od) / want * oy / od * 0.8;
+  const l = Math.hypot(fx, fy) || 1;
+  return { moveX: fx / l, moveY: fy / l, aimAngle: null, dash: danger && p.dashCd <= 0, ult: p.ult >= DA.ULT.need };
+}
+
+// 가만히 있는 봇(움직이지 않고 자동 사격만)과 피하는 봇을 난이도마다 시드 여러 개로 돌려 버틴 시간을 잰다
+test('난이도: 쉬움부터 가만히 있으면 금방 지고, 피해 다니면 몇 배 오래 버틴다 (쉬움 < 보통 < 어려움)', () => {
+  const CAP = 240, SEEDS = 6;
+  const survive = (d, bot) => {
+    let total = 0;
+    for (let s = 1; s <= SEEDS; s++) {
+      const W = createWorld(1280, 800, 700 + s, d);
+      while (W.phase !== 'over' && W.stats.time < CAP) {
+        if (W.phase === 'cards') pickCard(W, (s + W.wave) % 3);
+        step(W, bot(W), DT); W.events.length = 0;
+      }
+      total += W.stats.time;
+    }
+    return total / SEEDS;
+  };
+  const r = {};
+  for (const d of ['easy', 'normal', 'hard']) r[d] = { idle: survive(d, () => IDLE), dodge: survive(d, dodgeBot) };
+  console.log('       버틴 시간(초, 상한 ' + CAP + ') 가만히: 쉬움 ' + r.easy.idle.toFixed(0) + ' / 보통 ' + r.normal.idle.toFixed(0) + ' / 어려움 ' + r.hard.idle.toFixed(0) +
+    ' · 피하기: ' + r.easy.dodge.toFixed(0) + ' / ' + r.normal.dodge.toFixed(0) + ' / ' + r.hard.dodge.toFixed(0));
+  assert(r.easy.idle > 25 && r.easy.idle < 70, 'easy idle ' + r.easy.idle);
+  assert(r.easy.idle > r.normal.idle && r.normal.idle > r.hard.idle, 'idle ordering');
+  for (const d of ['easy', 'normal', 'hard']) assert(r[d].dodge > r[d].idle * 3, d + ' dodge ' + r[d].dodge.toFixed(0) + ' vs idle ' + r[d].idle.toFixed(0));
+  assert(r.easy.dodge >= r.hard.dodge, 'dodge easy >= hard');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
