@@ -534,7 +534,7 @@
     }
     W.giftLog.push(got);
     W.events.push('gift');
-    W.fx.push(Object.assign({ kind: 'gift', x: o.x, z: o.z, y: o.y }, got));
+    W.fx.push(Object.assign({}, got, { kind: 'gift', reward: got.kind, x: o.x, z: o.z, y: o.y }));
     return got;
   }
 

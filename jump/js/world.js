@@ -147,7 +147,8 @@
         const ey = kind === 'moving' ? (W.genY + y) / 2 + 8 : y + (rand() - 0.5) * 30;
         const ek = pickKind(L.extra, d, rand, mix, warm ? ['normal'] : null);
         // 먼저 놓인 몬스터와 겹쳐 보이면 곁 발판은 놓지 않는다 (곁 발판은 길이 아니라 없어도 된다. 난수는 똑같이 쓴다)
-        const MO = D.MONSTER, hit = W.monsters.some(m => !m.gone && ey > m.y0 - MO.r - m.float - 4 && ey - D.PLAT.h < m.y0 + MO.r + m.float + 6 &&
+        // 몬스터 바로 위를 덮어 밟을 수 없게 만드는 자리(지붕)도 피한다
+        const MO = D.MONSTER, hit = W.monsters.some(m => !m.gone && ey > m.y0 - MO.r - m.float - 4 && ey - D.PLAT.h < m.y0 + MO.r + m.float + MO.roof &&
           Math.abs(wrapDelta(ex, m.x0)) < w / 2 + m.range + MO.r + 6);
         if (!hit) extra = addPlat(W, ek, ex, ey, w);
         xs.push(ex);
@@ -222,6 +223,8 @@
       if (p.kind === 'spring' && p.y >= my - belowSpring && p.y <= my + above && dx < M.pad) return false;
       // 어느 발판과도 겹쳐 보이지 않게 (발판은 윗면 p.y에서 아래로 두께 D.PLAT.h)
       if (p.y > my - M.r - fl - 4 && p.y - D.PLAT.h < my + M.r + fl + 6 && dx < p.w / 2 + M.r + 6) return false;
+      // 바로 위를 발판이 덮고 있으면 위에서 밟을 수 없으니 놓지 않는다 (지붕)
+      if (p.y > my && p.y - D.PLAT.h < my + M.r + fl + M.roof && dx < p.w / 2 + M.r * 0.5) return false;
       if (p.main) {
         if (p.y < my - below || p.y > my + above) continue;
         // 움직이는 길 발판은 오가는 범위 전체를 막는다 (어디서 튀어 오를지 모르니까)

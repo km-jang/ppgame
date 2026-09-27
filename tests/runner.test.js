@@ -1417,7 +1417,7 @@ test('깜짝 선물 상자: 처음 35~55초, 그 뒤 60~100초마다. 처음 안
   let gifts = 0, pir = 0;
   for (const id of D.DIFF_ORDER) {
     for (let seed = 1; seed <= 4; seed++) {
-      const W = create(seed, { diff: id, wait: 0, bh: 1, pirateAt: 61 });
+      const W = create(seed, { diff: id, wait: 0, bh: 1, pirateAt: 61, warp: 0 });   // 워프가 앞의 선물을 치우면 곧 다시 나오므로 간격은 워프 없이 잰다
       let lastAt = -1, firstAt = -1;
       while (W.runT < 420 && W.phase === 'play') {
         W.inv = 99; W.hearts = 9;
@@ -1514,6 +1514,7 @@ test('선물: 코인(15~40, 판이 끝날 때 받는 코인에 더해짐) · 바
   const kinds = {}, items = {};
   for (let seed = 1; seed <= 80; seed++) {
     const W = empty({ diff: seed % 3 === 0 ? 'hard' : 'easy' });
+    W.grand = RN.rng(seed * 7919 + 1);   // empty()는 늘 같은 씨앗이라 선물 난수만 바꾼다
     W.shield = seed % 2 === 0;
     const hadShield = W.shield;
     const got = RN.World.takeGift(W, { x: 1, z: W.dist, y: GF.y });
@@ -1587,11 +1588,11 @@ test('피버 타임: 빈 줄마다 별 한 줄 더, 처음 별 소나기는 부�
     const W = create(5, { diff: id, wait: 0 });
     W.runT = 50;
     RN.World.startFever(W);
+    W.fever = 1e3;   // 앞으로 만들 줄이 모두 피버 중에 닿게
     let rows = 0;
     for (let i = 0; i < 12; i++) {
       const row = makeRow(W);
       if (row.pat === 'stars' || !row.free.length) continue;
-      if ((row.z - W.dist) / speed(W) > W.fever) break;   // 닿을 때 피버가 끝나는 줄은 빼고
       for (const l of row.free) assert(W.obs.some(o => o.kind === 'star' && o.row === row.id && o.x === l), id + ' fever stars in free lane ' + l + ' of ' + row.pat);
       rows++;
     }

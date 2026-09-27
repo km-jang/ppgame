@@ -337,6 +337,7 @@
     W.funRng = SN.rng(((seed0 >>> 0) ^ 0x68e31da4) * 13 + 5);   // 선물 자리·상 (먹이 흐름을 흔들지 않게 따로)
     W.gifts = 0; W.giftCoins = 0; W.giftStart = []; W.lastGift = null; W.giftT = 0;
     W.fever = 0; W.fevers = 0; W.giants = 0; W.smashed = 0;
+    W.rivalBites = 0; W.rivalWholes = 0; W.rivalCells = 0; W.hold = 0;   // 라이벌 냠냠 · 머리끼리 쿵 멈춤
     // 라이벌 뱀: 무한 모드에만. 규칙용 난수는 따로 써서 내 판(먹이 자리)의 흐름을 흔들지 않는다
     W.rival = null;
     if (mode === 'endless' && opts.rival !== false) {
@@ -346,7 +347,7 @@
         level: lvId, rng: SN.rng(((seed0 >>> 0) * 2654435761 + 97) >>> 0),
         speed: L.speed * adaptPow(W, 'rivalSpeed'), react: L.react * adaptPow(W, 'rivalReact'),
         smart: Math.min(1, L.smart * adaptPow(W, 'rivalSmart')), wander: L.wander, clumsy: L.clumsy,
-        keepAway: L.keepAway, maxLen: L.maxLen,
+        keepAway: L.keepAway, maxLen: L.maxLen, flee: L.flee || 0, fleeDist: L.fleeDist || 0,
         met: false, eaten: 0, golds: 0, bumps: 0, passes: 0,
       };
     }
@@ -501,14 +502,9 @@
         const p = W.snake[i];
         if (p.x === nx && p.y === ny) return die(W, 'self');
       }
-      // 라이벌 몸: 보통은 내 몸처럼 위험, 쉬움은 그냥 지나가고 라이벌이 멈칫 (꼬리 끝 칸은 곧 빠지니 괜찮다)
-      if (rivalAt(W, nx, ny, true)) {
-        if (!W.easy && !(W.eff.giant > 0)) return die(W, 'rival');
-        const V = W.rival;
-        if (!(V.stun > 0)) { V.passes++; W.events.push('pass'); W.fx.push({ kind: 'pass', x: nx, y: ny }); }
-        V.stun = Math.max(V.stun, D.RIVAL.passStun);
-      }
     }
+    // 라이벌 몸: 물면 냠냠 (모든 난이도). 머리끼리 마주 부딪히면 둘 다 잠깐 멈춘다
+    if (rivalAt(W, nx, ny, false) && biteRival(W, nx, ny) === 'head') return;
 
     W.prev = copy(W.snake);
     W.snake.unshift({ x: nx, y: ny });
@@ -670,6 +666,39 @@
     return { x, y };
   }
 
+  // 내 머리가 라이벌 (x, y) 칸을 물었다. 돌려주는 값: 'head'(머리끼리 쿵, 나는 안 움직임) | 'bite' | 'whole'
+  function biteRival(W, x, y) {
+    const V = W.rival, B = V.body, RV = D.RIVAL;
+    const idx = B.findIndex(p => p.x === x && p.y === y);
+    if (idx < 0) return null;
+    // 머리끼리 마주: 라이벌이 멈칫하지 않았고 나를 보고 있으면 둘 다 잠깐 멈춤 (아무도 안 끝남)
+    if (idx === 0 && !(V.stun > 0) && V.dir === OPP[W.dir]) {
+      W.hold = RV.headHold; V.stun = RV.headStun; V.bumps++;
+      W.events.push('headbump');
+      W.fx.push({ kind: 'headbump', x, y });
+      return 'head';
+    }
+    const whole = idx < RV.minLen;
+    const cells = whole ? B.length : B.length - idx;
+    const gain = Math.min(RV.biteMax, cells);
+    W.grow += gain;
+    W.rivalBites++; W.rivalCells += gain;
+    const pts = gain * RV.bitePts * (W.feverT > 0 ? D.FEVER.mul : 1) * (W.eff && W.eff.double > 0 ? 2 : 1);
+    W.score += pts;
+    if (whole) {
+      W.rivalWholes++;
+      V.phase = 'gone'; V.t = RV.respawnMin + V.rng() * (RV.respawnMax - RV.respawnMin); V.body = []; V.prev = []; V.stun = 0;
+      W.events.push('biteall');
+      W.fx.push({ kind: 'biteAll', x, y, n: gain, pts });
+      return 'whole';
+    }
+    V.body = B.slice(0, idx); V.prev = V.prev.slice(0, idx); V.grow = 0;
+    V.stun = Math.max(V.stun, RV.biteStun);
+    W.events.push('bite');
+    W.fx.push({ kind: 'bite', x, y, n: gain, pts });
+    return 'bite';
+  }
+
   // 한 칸 전진: 갈 수 있는 방향 중 (구슬 쪽 / 그냥 앞 / 아무 데) 하나. 내 머리 둘레는 피하고, 빈 곳이 넉넉한 쪽
   function rivalTick(W) {
     const V = W.rival, C = W.cols, R = W.rows, B = V.body, h = B[0];
@@ -702,7 +731,9 @@
     const ph = W.snake[0], pd = DIRS[W.queue.length && W.queue[0] !== OPP[W.dir] ? W.queue[0] : W.dir];
     const aheadX = ph.x + pd[0], aheadY = ph.y + pd[1];
     const need = B.length + 2;
-    const mode = V.rng() < V.wander ? 'wander' : V.target && V.rng() < V.smart ? 'food' : 'straight';
+    // 내 머리가 가까우면 난이도만큼 도망 (쉬움은 거의 안 도망)
+    const near = Math.abs(h.x - ph.x) + Math.abs(h.y - ph.y) <= V.fleeDist;
+    const mode = near && V.rng() < V.flee ? 'flee' : V.rng() < V.wander ? 'wander' : V.target && V.rng() < V.smart ? 'food' : 'straight';
     const cand = [];
     let forced = null;
     for (const k in DIRS) {
@@ -719,6 +750,7 @@
       if (c.x === aheadX && c.y === aheadY) sc -= 800;               // 내 바로 앞 칸은 막지 않는다
       for (let j = 2; j <= 4; j++) if (c.x === ph.x + pd[0] * j && c.y === ph.y + pd[1] * j) sc -= 300 / j;   // 내 앞길 몇 칸도 되도록 비켜 준다
       if (mode === 'food') sc -= Math.abs(c.x - V.target.x) + Math.abs(c.y - V.target.y);
+      else if (mode === 'flee') sc += pd2 * 40;
       else if (mode === 'wander') sc += V.rng() * 8;
       if (k === V.dir) sc += mode === 'straight' ? 3 : 0.5;
       cand.push({ k, c, s: sc });
@@ -736,6 +768,13 @@
     const c = pick.c;
     V.dir = pick.k;
     V.prev = copy(B);
+    if (c.x === ph.x && c.y === ph.y) {
+      // 라이벌 머리가 내 머리에 쿵: 둘 다 잠깐 멈춤 (아무도 안 끝남)
+      W.hold = D.RIVAL.headHold; V.stun = D.RIVAL.headStun; V.bumps++; V.prev = copy(B);
+      W.events.push('headbump');
+      W.fx.push({ kind: 'headbump', x: c.x, y: c.y });
+      return;
+    }
     if (mine[c.y * C + c.x]) {
       // 라이벌 머리가 내 몸에 쿵: 라이벌만 멈칫하고 조금 줄어든다 (내가 이긴 것)
       V.stun = D.RIVAL.bumpStun; V.bumps++;
@@ -786,7 +825,9 @@
   // 판이 끝났을 때 라이벌과 비교 (라이벌이 한 번도 안 나왔으면 null). diff > 0 이면 내가 더 먹었다
   function rivalResult(W) {
     if (!W.rival || !W.rival.met) return null;
-    return { me: W.eaten, rival: W.rival.eaten, diff: W.eaten - W.rival.eaten, bumps: W.rival.bumps };
+    // 내가 먹은 것 = 구슬 + 라이벌에게서 물어 먹은 칸 (rivalWin도 이것으로)
+    const me = W.eaten + (W.rivalCells || 0);
+    return { me, rival: W.rival.eaten, diff: me - W.rival.eaten, bumps: W.rival.bumps, bites: W.rivalBites || 0, wholes: W.rivalWholes || 0 };
   }
 
   // 놀이 본부(common/hub.js) reportRun에 보낼 이번 판 값 (스티커북·오늘의 미션)
@@ -796,7 +837,7 @@
       len: W.maxLen, golds: W.golds, orbs: W.eaten, planet: W.space.max,
       level: W.mode === 'stage' && W.levelsCleared > 0 ? W.startLevel + W.levelsCleared - 1 : 0,
       rivalWin: r && r.diff > 0 ? 1 : 0,
-      gifts: W.gifts, fevers: W.fevers, giants: W.giants,
+      gifts: W.gifts, fevers: W.fevers, giants: W.giants, rivalBites: W.rivalBites,
     };
   }
   // 알아서 맞춰 주는 난이도: 이번 판이 그 난이도 기준으로 얼마나 잘했나 (1이 보통, HUB.adaptRun이 0~3으로 자른다)
@@ -819,6 +860,7 @@
     W.time += dt;
     timers(W, dt);
     W.acc += dt;
+    if (W.hold > 0) { W.hold = Math.max(0, W.hold - dt); W.acc = 0; }   // 머리끼리 쿵: 잠깐 멈춤
     let iv = 1 / speed(W), guard = 0;
     while (W.acc >= iv && W.phase === 'play') {
       W.acc -= iv;
@@ -837,7 +879,6 @@
     const block = new Uint8Array(cols * rows);
     for (let i = 0; i < W.snake.length - 1; i++) block[W.snake[i].y * cols + W.snake[i].x] = 1;
     if (W.walls) for (let i = 0; i < block.length; i++) if (W.walls[i]) block[i] = 1;
-    if (rivalLive(W) && !W.easy) for (const p of W.rival.body) block[p.y * cols + p.x] = 1;
     const reach = (sx, sy, limit) => {
       const seen = new Uint8Array(cols * rows), st = [sy * cols + sx];
       seen[st[0]] = 1;
@@ -869,7 +910,7 @@
   }
 
   // 앞길 위험 살피기 (그리기용 경고): 지금 방향(줄 선 방향이 있으면 그 방향)으로 max칸 안에
-  // 부딪히면 끝나는 칸(벽·판 끝·내 몸·보통일 때 라이벌 몸)이 있으면 {dist, x, y, cause}, 없으면 null.
+  // 부딪히면 끝나는 칸(벽·판 끝·내 몸)이 있으면 (라이벌 몸은 물어 먹는 것이라 위험이 아니다) {dist, x, y, cause}, 없으면 null.
   // 몸은 그 칸에 닿을 때쯤 꼬리가 빠져 있으면 위험이 아니다. 유령일 때는 늘 null
   function dangerAhead(W, max) {
     if (!W || W.phase !== 'play' || (W.eff && W.eff.ghost > 0)) return null;
@@ -886,8 +927,6 @@
       if (W.walls && W.walls[y * C + x] && !(W.eff && W.eff.giant > 0)) return { dist: k, x, y, cause: 'wall' };
       if (W.portalAt && W.portalAt[y * C + x] >= 0) return null;   // 포털 너머는 살피지 않는다
       for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return { dist: k, x, y, cause: 'self' };
-      // 라이벌 몸 (보통만. 쉬움은 지나가도 괜찮다). 곧 빠질 꼬리 끝 칸은 빼고
-      if (!W.easy && !(W.eff && W.eff.giant > 0) && rivalAt(W, x, y, true)) return { dist: k, x, y, cause: 'rival' };
     }
     return null;
   }
@@ -904,10 +943,11 @@
       // 어려움으로 한 판 (미션용)
       hardLen: W.hard ? W.maxLen : 0, hardTime: W.hard ? W.time : 0,
       // 재미 셋: 선물 상자 · 선물 코인 · 다음 판 시작 아이템 선물 · 피버 · 거대 뱀
+      rivalBites: W.rivalBites, rivalWholes: W.rivalWholes, rivalCells: W.rivalCells,
       gifts: W.gifts, giftCoins: W.giftCoins, giftStart: W.giftStart.slice(), fevers: W.fevers, giants: W.giants,
       rivalMet: !!(W.rival && W.rival.met), rivalEaten: W.rival ? W.rival.eaten : 0,
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, diffOf, spawnGift, openGift, startFever, startGiant, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, diffOf, spawnGift, openGift, startFever, startGiant, biteRival, DIRS, OPP };
 })(SN);

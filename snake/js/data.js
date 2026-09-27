@@ -82,6 +82,7 @@
       { id: 'games10',  tier: 1, name: '단골',          desc: '10판 하기',                      check: (r, R) => R.total.games >= 10 },
       { id: 'orbs500',  tier: 2, name: '구슬 500',      desc: '모두 합쳐 구슬 500개',           check: (r, R) => R.total.orbs >= 500 },
       { id: 'hard20',   tier: 2, name: '어려움 길이 20', desc: '어려움으로 한 판에 길이 20',    check: r => r.diff === 'hard' && r.maxLen >= 20 },
+      { id: 'rivalAll', tier: 2, name: '라이벌 통째로', desc: '라이벌을 통째로 냠냠',             check: r => r.rivalWholes >= 1 },
       { id: 'hard30',   tier: 3, name: '어려움 길이 30', desc: '어려움으로 한 판에 길이 30',    check: r => r.diff === 'hard' && r.maxLen >= 30 },
     ],
 
@@ -150,6 +151,7 @@
       { id: 'normal15', kind: 'run',  stat: 'normalLen',     goal: 15,   reward: 120, text: '보통으로 한 판에 길이 15' },
       { id: 't120',     kind: 'run',  stat: 'time',          goal: 120,  reward: 100, text: '한 판에 2분 버티기' },
       { id: 'ghost2',   kind: 'run',  stat: 'wraps',         goal: 2,    reward: 80,  text: '유령으로 벽 2번 통과' },
+      { id: 'bite5',    kind: 'life', stat: 'rivalBites',    goal: 5,    reward: 100, text: '라이벌 5번 냠냠 (누적)' },
       { id: 'hard12',   kind: 'run',  stat: 'hardLen',       goal: 12,   reward: 150, text: '어려움으로 한 판에 길이 12' },
       { id: 'hardt60',  kind: 'run',  stat: 'hardTime',      goal: 60,   reward: 150, text: '어려움으로 한 판에 1분 버티기' },
     ],
@@ -191,17 +193,23 @@
       minDist: 9,      // 나오는 자리: 몸 모든 칸이 내 머리에서 이만큼(칸) 떨어진 곳, 내게서 멀어지는 방향
       bumpStun: 2,     // 라이벌 머리가 내 몸에 부딪히면 멈칫(초)하고 bumpShrink칸 줄어든다 (내가 이긴 것)
       bumpShrink: 2,
-      passStun: 1.2,   // 쉬움: 내가 라이벌 몸을 지나가면 라이벌이 멈칫 (나는 아무 일 없음)
+      passStun: 1.2,   // (옛 규칙, 2026-09-27 냠냠 규칙 전: 쉬움에서 라이벌 몸을 지나가면 멈칫)
+      // 라이벌 냠냠 (2026-09-27, 소유자 "뱀은 라이벌을 먹으면 늘어나게"): 내 머리가 라이벌 몸을 물면 그 칸부터 꼬리까지 먹는다.
+      // 칸마다 biteGrow칸 길어지고 bitePts점 (피버·점수 두 배면 곱함). 한 번에 biteMax칸까지만 길어진다.
+      // 남는 앞부분이 minLen보다 짧거나 (멈칫한) 머리를 물면 통째로 먹고, 라이벌은 respawnMin~Max초 뒤 처음 길이로 다시 나온다.
+      // 머리끼리 마주 부딪히면(라이벌이 멈칫하지 않았을 때) 둘 다 잠깐 멈춘다 (나는 headHold초, 라이벌은 headStun초). 아무도 안 끝난다
+      bitePts: 5, biteMax: 12, biteStun: 1.5, respawnMin: 8, respawnMax: 12, headHold: 0.45, headStun: 1.2,
       blockStun: 1,    // 갈 곳이 막히면 멈칫. 멈칫이 끝나도 막혀 있으면 사라졌다가 back초 뒤 다른 자리에서 다시
       back: 3,
       // 난이도별 (시작 화면 난이도를 따른다. opts.rivalLevel로 따로 고를 수도 있다)
       //   speed: 초당 칸 · maxLen: 이 길이까지만 자람 · react: 새 구슬을 알아채기까지(초)
       //   smart: 한 칸마다 구슬 쪽으로 갈 확률 (나머지는 그냥 앞으로) · wander: 아무 데로 꺾을 확률
       //   clumsy: 내 몸을 못 보고 부딪힐 확률 (부딪히면 라이벌만 멈칫) · keepAway: 내 머리 둘레 이 칸 안은 피한다
+      //   flee: 내 머리가 fleeDist칸 안에 오면 한 칸마다 이 확률로 도망 (쉬움은 거의 안 도망 = 쉬운 먹잇감)
       levels: {
-        easy:   { speed: 3.6, maxLen: 12, react: 1.2, smart: 0.55, wander: 0.12, clumsy: 0.15, keepAway: 3 },
-        normal: { speed: 6.4, maxLen: 20, react: 0.5, smart: 0.85, wander: 0.04, clumsy: 0.05, keepAway: 3 },
-        hard:   { speed: 8.6, maxLen: 26, react: 0.2, smart: 0.97, wander: 0.01, clumsy: 0,    keepAway: 2 },
+        easy:   { speed: 3.6, maxLen: 12, react: 1.2, smart: 0.55, wander: 0.12, clumsy: 0.15, keepAway: 3, flee: 0.1, fleeDist: 2 },
+        normal: { speed: 6.4, maxLen: 20, react: 0.5, smart: 0.85, wander: 0.04, clumsy: 0.05, keepAway: 3, flee: 0.5, fleeDist: 3 },
+        hard:   { speed: 8.6, maxLen: 26, react: 0.2, smart: 0.97, wander: 0.01, clumsy: 0,    keepAway: 2, flee: 0.9, fleeDist: 4 },
       },
     },
 
