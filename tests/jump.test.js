@@ -1457,5 +1457,77 @@ test('손가락: 멈춤 뒤에도 누르고 있던 손가락이 그대로, 모�
   assert(G.I.drag, 'a real slide becomes a drag');
 });
 
+// ─── 소리 (jump/js/audio.js + 공통 SND) ─────────────────────
+// 소리 판은 브라우저에서만 돈다. 여기서는 SND 없이 조용한지, 배경 음악 고르기(높이 → 테마), 이벤트마다 소리가 있는지만 본다
+function audioCtx(snd) {
+  const c = vm.createContext({ console, Math, Date, JSON, Object, Array });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), c);
+  for (const f of ['util.js', 'data.js', 'world.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', f), 'utf8'), c);
+  if (snd) c.SND = snd;
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'audio.js'), 'utf8'), c, { filename: 'audio.js' });
+  return vm.runInContext('JP', c);
+}
+function stubSnd() {
+  const calls = [];
+  return { calls, onReady() {}, unlock() {}, muted: () => false, fxOn: () => true, ready: () => false, run: () => true,
+    ui: (n, o) => { calls.push(['ui', n, o]); return true; }, onChange() { return () => {}; }, toggleMuted() {},
+    music: { play: (g, p) => calls.push(['play', g, p]), setMood: o => calls.push(['mood', JSON.parse(JSON.stringify(o))]), duck: v => calls.push(['duck', v]), stop: () => calls.push(['stop']) } };
+}
+// 높이 m에 있는 가짜 판
+const at = (A, m, extra) => Object.assign({ height: m, zone: A.World.zoneAt(m), planet: A.World.planetAt(m), feverT: 0, room: null, easy: false }, extra || {});
+test('소리: 공통 소리(SND)가 없어도 조용히 아무것도 안 한다', () => {
+  const A = audioCtx(null);
+  assert(A.Audio.play('bounce', { k: 1 }) === false && A.Audio.ui('medal') === false, 'no sound without SND');
+  A.Audio.unlock(); A.Audio.musicTitle(); A.Audio.musicStart(at(A, 0)); A.Audio.follow(at(A, 300)); A.Audio.duck(0.3); A.Audio.musicStop();
+  assert(A.Audio.muted === true, 'muted without SND');
+});
+test('소리: 배경 음악은 높이를 따라 땅 → 하늘(구름 층) → 은하(대기권 돌파) → 행성 → 외계 행성 → 별나라 은하', () => {
+  const A = audioCtx(stubSnd()), P = A.Audio.placeFor;
+  const want = [[0, 'ground'], [69, 'ground'], [70, 'sky'], [120, 'sky'], [231, 'sky'], [232, 'galaxy'], [250, 'mercury'], [320, 'venus'],
+    [649, 'neptune'], [650, 'pluto'], [700, 'frost'], [760, 'lava'], [1050, 'rogue'], [1099, 'rogue'], [1100, 'galaxy'], [3000, 'galaxy']];
+  for (const [m, id] of want) assert(P(at(A, m)) === id, m + 'm: ' + P(at(A, m)) + ' (want ' + id + ')');
+  // 모든 테마가 공통 소리의 행성 음악 이름이다 (모르는 이름이면 아무렇게나 만든 음악이 된다)
+  const known = ['ground', 'sky', 'galaxy', 'title', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto',
+    'frost', 'lava', 'ocean', 'glass', 'gem', 'twin', 'shroom', 'rogue'];
+  for (let m = 0; m <= 1300; m += 5) assert(known.includes(P(at(A, m))), 'unknown theme at ' + m + 'm: ' + P(at(A, m)));
+  const src = fs.readFileSync(path.join(__dirname, '..', 'common', 'sound.js'), 'utf8');
+  for (const id of known) assert(new RegExp('\\b' + id + ': \\[').test(src), 'sound.js has no theme ' + id);
+});
+test('소리: 판 중 음악은 바뀐 것만 알린다 (행성·피버·비밀 방·쉬움 차분)', () => {
+  const snd = stubSnd(), A = audioCtx(snd);
+  A.Audio.musicStart(at(A, 0, { easy: true }));
+  assert(JSON.stringify(snd.calls.slice(-2)) === JSON.stringify([['mood', { fever: false, calm: true, boss: false }], ['play', 'jump', 'ground']]), 'start ' + JSON.stringify(snd.calls));
+  snd.calls.length = 0;
+  for (let m = 0; m < 60; m++) A.Audio.follow(at(A, m, { easy: true }));
+  assert(snd.calls.length === 0, 'no calls while nothing changes');
+  A.Audio.follow(at(A, 80, { easy: true }));
+  assert(JSON.stringify(snd.calls) === JSON.stringify([['mood', { planet: 'sky' }]]), 'sky ' + JSON.stringify(snd.calls));
+  snd.calls.length = 0;
+  A.Audio.follow(at(A, 90, { easy: true, feverT: 3 }));   // 피버: 반짝이, 쉬움도 피버 동안은 차분 끔
+  assert(JSON.stringify(snd.calls) === JSON.stringify([['mood', { fever: true, calm: false }]]), 'fever ' + JSON.stringify(snd.calls));
+  snd.calls.length = 0;
+  A.Audio.follow(at(A, 95, { easy: true }));
+  A.Audio.follow(at(A, 96, { easy: true, room: {} }));     // 비밀 방도 반짝이
+  assert(JSON.stringify(snd.calls) === JSON.stringify([['mood', { fever: false, calm: true }], ['mood', { fever: true, calm: false }]]), 'room ' + JSON.stringify(snd.calls));
+  snd.calls.length = 0;
+  const seen = [];
+  for (let m = 100; m <= 1200; m += 10) { A.Audio.follow(at(A, m)); }
+  for (const c of snd.calls) if (c[1].planet) seen.push(c[1].planet);
+  assert(seen.join(',') === 'galaxy,mercury,venus,earth,mars,jupiter,saturn,uranus,neptune,pluto,frost,lava,ocean,glass,gem,twin,shroom,rogue,galaxy', 'journey ' + seen.join(','));
+});
+test('소리: 판에서 나는 이벤트마다 소리가 있다 (끝·이어 하기는 공통 소리, 워프 출발도)', () => {
+  const A = audioCtx(stubSnd());
+  const src = fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'world.js'), 'utf8');
+  const evs = [...new Set([...src.matchAll(/events\.push\('([A-Za-z]+)'\)/g)].map(m => m[1]))];
+  assert(evs.length > 20 && evs.includes('warp'), 'events ' + evs.join(','));
+  const shared = ['over', 'revive'];   // main.js가 공통 소리(SND.ui over·overSoft·continueGo)나 fall로 낸다
+  const miss = evs.filter(e => !A.Audio.NAMES.includes(e) && !shared.includes(e));
+  assert(!miss.length, 'no sound for ' + miss.join(','));
+  for (const n of ['medal', 'claim', 'buy', 'deny', 'coin', 'pick', 'start']) assert(!A.Audio.NAMES.includes(n), n + ' should use the shared SND.ui sound');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'main.js'), 'utf8');
+  for (const n of ['continueAsk', 'continueGo', 'fanfare', 'overSoft', 'tick', 'medal', 'coin', 'start']) assert(main.includes("ui('" + n + "'"), 'main.js does not use ' + n);
+  assert(!/jump\.muted/.test(main), 'old jump.muted key still used');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
