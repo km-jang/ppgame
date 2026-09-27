@@ -1,7 +1,7 @@
 {
-  "name": "냠냠 뱀",
-  "short_name": "냠냠 뱀",
-  "description": "반짝 구슬을 냠냠 먹을수록 쭉쭉 길어지는 뱀 게임",
+  "name": "통통 점프",
+  "short_name": "통통 점프",
+  "description": "발판을 밟고 통통 튀어 하늘 높이 올라가는 네온 점프 게임",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

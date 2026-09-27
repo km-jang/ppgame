@@ -9,8 +9,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <meta name="description" content="에너지 구슬을 먹을수록 길어지는 네온 뱀 게임">
-  <title>냠냠 뱀</title>
+  <meta name="description" content="별을 모으며 네온 우주 길을 달리는 게임">
+  <title>슝슝 우주 달리기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Rajdhani:wght@600;700&display=swap">
@@ -26,13 +26,14 @@
     <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z"/></symbol>
     <symbol id="i-again" viewBox="0 0 24 24"><path d="M12 4V1.5a.5.5 0 0 0-.8-.4L6.6 4.6a.5.5 0 0 0 0 .8l4.6 3.5a.5.5 0 0 0 .8-.4V6a6 6 0 1 1-6 6 1 1 0 1 0-2 0 8 8 0 1 0 8-8z"/></symbol>
     <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 15v3h3v3H8v-3h3v-3a5 5 0 0 1-3.7-3H7a4 4 0 0 1-4-4V6a1 1 0 0 1 1-1h3zm10 4v3a2 2 0 0 0 2-2V7zM5 7v1a2 2 0 0 0 2 2V7z"/></symbol>
-    <symbol id="i-swipe" viewBox="0 0 24 24"><path d="M12 2l3 3h-2v4h-2V5H9zm0 20l-3-3h2v-4h2v4h2zM2 12l3-3v2h4v2H5v2zm20 0l-3 3v-2h-4v-2h4V9z"/></symbol>
-    <symbol id="i-orb" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></symbol>
+    <symbol id="i-lr" viewBox="0 0 24 24"><path d="M2 12l5-5v3h10V7l5 5-5 5v-3H7v3z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 2l7 7h-4v6H9V9H5zM5 18h14v3H5z"/></symbol>
     <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/></symbol>
-    <symbol id="i-wall" viewBox="0 0 24 24"><path d="M3 5h18v4H3zm0 5h8v4H3zm9 0h9v4h-9zM3 15h18v4H3z"/></symbol>
+    <symbol id="i-rock" viewBox="0 0 24 24"><path d="M8 3l7 1 5 5 1 6-4 5-8 1-5-4-1-7zm1 5l-2 3 2 2m6-6l1 3-2 2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></symbol>
+    <symbol id="i-magnet" viewBox="0 0 24 24"><path d="M4 3h5v9a3 3 0 0 0 6 0V3h5v9a8 8 0 0 1-16 0zm0 2v3h5V5zm11 0v3h5V5z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M14 1L4 14h7l-2 9 11-13h-7z"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
-    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 2h2v20H5zm3 1h11l-2.5 4L19 11H8z"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></symbol>
   </svg>
 
   <div id="topbar">
@@ -45,36 +46,25 @@
   <!-- 시작 화면 -->
   <section id="scr-title" class="screen">
     <div class="panel">
-      <h1 class="logo ko">냠냠 <span>뱀</span></h1>
-      <p class="tagline">구슬을 먹으면 쭉쭉 길어져요</p>
+      <h1 class="logo ko">슝슝 <span class="space">우주 </span><span class="hl">달리기</span></h1>
+      <p class="tagline">별을 모으며 우주 길을 달려요</p>
       <p id="best" class="best"></p>
       <div class="level-seg" role="group" aria-label="난이도">
-        <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>느리게 · 벽 통과</small></button>
-        <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>빠르게 · 벽 조심</small></button>
+        <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>천천히 · 하트 3개</small></button>
+        <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>빠르게 · 움직이는 운석</small></button>
       </div>
       <div class="modes">
-        <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>그냥 놀기</span> <kbd class="only-pc">Enter</kbd></button>
-        <button id="btn-stage" class="big-btn pink"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg><span>스테이지</span> <b id="stage-tag" class="tag"></b></button>
+        <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>출발!</span> <kbd class="only-pc">Enter</kbd></button>
         <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
       </div>
       <ul class="help">
-        <li><svg class="i" aria-hidden="true"><use href="#i-swipe"/></svg><span><b class="only-touch">화면을 밀어서</b><b class="only-pc">방향키로</b> 방향 바꾸기</span></li>
-        <li><svg class="i pink" aria-hidden="true"><use href="#i-orb"/></svg><span><b>구슬</b> 먹으면 길어져요</span></li>
-        <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>황금 구슬</b> 빨리 먹으면 큰 점수</span></li>
-        <li><svg class="i red" aria-hidden="true"><use href="#i-wall"/></svg><span><b class="danger">위험! 피해요</b> 빨간 줄무늬 벽 · 내 몸 · (보통) 빨간 테두리</span></li>
-        <li><span class="glyphs"><i style="color:#7fd3ff">◷</i><i style="color:#ffe66d">×2</i><i style="color:#c7a6ff">◌</i><i style="color:#3dff8b">✂</i></span><span><b>아이템</b> 모두 좋은 것, 먹어도 돼요</span></li>
+        <li><svg class="i" aria-hidden="true"><use href="#i-lr"/></svg><span><b class="only-touch">옆으로 밀거나 양옆 누르기</b><b class="only-pc">← → 방향키</b> 줄 바꾸기</span></li>
+        <li><svg class="i" aria-hidden="true"><use href="#i-up"/></svg><span><b class="only-touch">위로 밀기</b><b class="only-pc">↑ · 스페이스</b> 점프, 레이저 문 넘기</span></li>
+        <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 모으면 점수가 쑥쑥</span></li>
+        <li><svg class="i red" aria-hidden="true"><use href="#i-rock"/></svg><span><b class="danger">위험! 피해요</b> 빨간 운석 · 빨간 레이저</span></li>
+        <li><span class="glyphs"><svg class="i" aria-hidden="true" style="color:#5ee7ff"><use href="#i-shield"/></svg><svg class="i" aria-hidden="true" style="color:#ff5fa8"><use href="#i-magnet"/></svg><svg class="i" aria-hidden="true" style="color:#ffe66d"><use href="#i-bolt"/></svg></span><span><b>방패 · 자석 · 부스트</b> 모두 좋은 것</span></li>
       </ul>
       <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
-    </div>
-  </section>
-
-  <!-- 스테이지 고르기 -->
-  <section id="scr-stage" class="screen">
-    <div class="panel wide">
-      <h2>스테이지</h2>
-      <p class="sub">목표만큼 구슬을 먹으면 다음 레벨. 깬 레벨 다음까지 열려요</p>
-      <div id="level-list"></div>
-      <button id="btn-stage-back" class="text-btn">처음 화면으로</button>
     </div>
   </section>
 
@@ -93,7 +83,7 @@
   <section id="scr-pause" class="screen">
     <div class="panel">
       <h2>일시정지</h2>
-      <p class="sub">숨 고르고 다시 달려요</p>
+      <p class="sub">숨 고르고 다시 날아요</p>
       <button id="btn-resume" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>계속하기</span></button>
       <button id="btn-quit" class="text-btn">처음 화면으로</button>
     </div>
@@ -102,13 +92,13 @@
   <!-- 게임 오버 -->
   <section id="scr-over" class="screen">
     <div class="panel">
-      <h2 id="over-title">벽에 부딪혔다</h2>
+      <h2 id="over-title">운석에 쾅!</h2>
       <p class="score-big"><span id="over-score">0</span><small>점</small></p>
-      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 기록 경신</p>
+      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 점수 경신</p>
       <dl class="stats">
-        <div><dt>길이</dt><dd id="over-len">4</dd></div>
-        <div><dt>먹은 구슬</dt><dd id="over-eaten">0</dd></div>
-        <div><dt id="over-t3">시간</dt><dd id="over-time">0:00</dd></div>
+        <div><dt>거리</dt><dd id="over-dist">0m</dd></div>
+        <div><dt>별</dt><dd id="over-stars">0</dd></div>
+        <div><dt>시간</dt><dd id="over-time">0:00</dd></div>
       </dl>
       <div id="over-records" class="chips"></div>
       <div id="over-medals" class="new-medals"></div>

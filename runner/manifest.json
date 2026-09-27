@@ -1,7 +1,7 @@
 {
-  "name": "냠냠 뱀",
-  "short_name": "냠냠 뱀",
-  "description": "반짝 구슬을 냠냠 먹을수록 쭉쭉 길어지는 뱀 게임",
+  "name": "슝슝 우주 달리기",
+  "short_name": "슝슝 달리기",
+  "description": "별을 모으며 네온 우주 길을 슝슝 달리는 게임",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

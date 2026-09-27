@@ -218,7 +218,7 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
 .stats dt { font-size: 12px; color: var(--muted); }
 .stats dd { margin: 4px 0 0; font: 700 22px var(--num); }
 
-/* ─── 모드 버튼 · 스테이지 · 메달 ─── */
+/* ─── 모드 버튼 · 메달 ─── */
 .modes { display: flex; flex-direction: column; gap: 14px; }
 .big-btn.pink { background: linear-gradient(180deg, #ffb3d4 0%, #ff5fa8 45%, #d81f76 100%); box-shadow: 0 6px 0 #7a0f44, 0 10px 26px rgba(255, 46, 136, .35), inset 0 2px 0 rgba(255, 255, 255, .55); }
 .big-btn.pink:active { box-shadow: 0 2px 0 #7a0f44, 0 6px 16px rgba(255, 46, 136, .3), inset 0 2px 0 rgba(255, 255, 255, .5); }
@@ -231,17 +231,6 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
 .help .glyphs i { font-style: normal; }
 .panel.wide { max-width: 720px; }
 
-#level-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 6px 0 4px; }
-.lvl { position: relative; min-height: 76px; padding: 10px 6px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .05); color: var(--text); cursor: pointer; text-align: center; }
-.lvl b { display: block; font: 700 28px/1 var(--num); color: var(--cyan); }
-.lvl small { display: block; margin-top: 4px; font: normal 14px var(--disp); letter-spacing: .5px; color: var(--muted); }
-.lvl.done { border-color: rgba(255, 230, 109, .5); background: rgba(255, 230, 109, .06); }
-.lvl.done b { color: var(--yellow); }
-.lvl.done::after { content: "깸"; position: absolute; right: 6px; top: 6px; padding: 1px 6px; border-radius: 999px; background: var(--yellow); color: var(--bg); font: 700 11px var(--num); }
-.lvl.next { border-color: var(--pink); box-shadow: 0 0 0 1px var(--pink), 0 0 18px rgba(255, 46, 136, .35); }
-.lvl.locked { opacity: .35; cursor: default; }
-.lvl.locked b { color: var(--muted); }
-.lvl:not(.locked):active { transform: scale(.96); }
 
 #medal-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 6px 0 12px; }
 .medal { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .04); text-align: left; }
@@ -283,7 +272,6 @@ body.touch .text-btn { padding: 10px 16px; }
 @media (max-width: 600px) {
   .logo { font-size: 54px; letter-spacing: 3px; }
   .panel { padding: 22px 16px; }
-  #level-list { grid-template-columns: repeat(3, 1fr); }
   #medal-list { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -304,12 +292,10 @@ body.touch .text-btn { padding: 10px 16px; }
   #scr-title .help { grid-column: 2; grid-row: 1 / span 5; margin: 0; }
   .level-seg button { min-height: 48px; padding: 4px; } .level-seg b { font-size: 18px; }
   .modes .big-btn { padding: 11px; font-size: 21px; }
-  #level-list { grid-template-columns: repeat(6, 1fr); gap: 8px; }
-  .lvl { min-height: 64px; padding: 8px 4px; } .lvl b { font-size: 24px; } .lvl small { font-size: 12px; }
   #medal-list { gap: 6px; margin-bottom: 8px; }
   .medal { padding: 5px 6px; gap: 6px; } .medal .coin { width: 28px; height: 28px; font-size: 12px; } .medal b { font-size: 12px; } .medal small { font-size: 10px; }
   .records { gap: 4px; margin-bottom: 8px; } .records div { padding: 3px 2px; } .records dt { font-size: 10px; } .records dd { font-size: 14px; margin: 0; }
-  #scr-medals .sub, #scr-stage .sub { margin-bottom: 8px; font-size: 13px; } #scr-medals h2, #scr-stage h2 { font-size: 24px; }
+  #scr-medals .sub { margin-bottom: 8px; font-size: 13px; } #scr-medals h2 { font-size: 24px; }
   #scr-medals .big-btn { padding: 9px; font-size: 18px; }
   .panel.wide { padding: 16px 20px; }
   #scr-title .pc-line { display: none; }
@@ -331,3 +317,15 @@ body.touch .text-btn { padding: 10px 16px; }
 
 /* 한글 이름 로고 (냠냠 뱀, 2026-09-27): 굵은 한글 서체, 기울임 */
 .logo.ko { font-family: var(--disp); font-weight: normal; font-style: normal; letter-spacing: 3px; transform: skewX(-8deg); }
+
+/* ─── 통통 점프 전용 ─── */
+.help .i.green { color: #3dff8b; }
+.help .i.orange { color: #ff9f43; }
+.help b.orange { color: #ffb35c; }
+.over-sub:empty { display: none; }
+.over-sub { margin: 4px 0 0; }
+/* 쉬움 게임 오버: 부드럽게 (빨간색 대신 노랑·하늘색) */
+#scr-over.soft h2 { color: var(--yellow); text-shadow: 0 0 20px rgba(255, 230, 109, .45); }
+#scr-over.soft .panel::before { background: linear-gradient(90deg, transparent, var(--yellow), transparent); }
+#medal-list { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 600px) { #medal-list { grid-template-columns: repeat(2, 1fr); } }
