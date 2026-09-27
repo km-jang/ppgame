@@ -249,5 +249,20 @@
     });
   }
 
-  SN.Shop = { KEY, memWallet, useWallet, getWallet, coins, blank, clean, load, save, takeMigration, price, buy, selectChar, selectSkin: selectChar, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, charDef, skinDef: charDef, upDef, itemDef, missionDef };
+  // 저장된 난이도 읽기: snake.diff('easy'|'normal'|'hard')가 있으면 그것, 없으면 예전 snake.easy(false면 보통, 그 밖엔 쉬움)
+  function diffFrom(stored, oldEasy) {
+    if (stored === 'easy' || stored === 'normal' || stored === 'hard') return stored;
+    return oldEasy === false ? 'normal' : 'easy';
+  }
+
+  // 무한 모드 난이도별 최고 기록 적기. best: {easy|normal|hard: {score, len}}. 돌려주는 값: {score: 신기록?, len: 신기록?}
+  function recordBest(best, diff, score, len) {
+    const B = best[diff] || (best[diff] = { score: 0, len: 0 });
+    const out = { score: score > B.score && score > 0, len: len > B.len };
+    if (out.score) B.score = score;
+    if (out.len) B.len = len;
+    return out;
+  }
+
+  SN.Shop = { diffFrom, recordBest, KEY, memWallet, useWallet, getWallet, coins, blank, clean, load, save, takeMigration, price, buy, selectChar, selectSkin: selectChar, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, charDef, skinDef: charDef, upDef, itemDef, missionDef };
 })(SN);

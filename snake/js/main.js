@@ -29,10 +29,15 @@
   if (!best || typeof best.score !== 'number') best = { score: 0, len: 0 };
   // 기록 장부: 무한·스테이지 최고, 모두 합친 수, 받은 메달 (이 기기 안에만)
   const REC_KEY = 'snake.rec';
-  const blankRec = () => ({ endless: { score: 0, len: 0, combo: 0 }, stage: { max: 0, score: 0, level: 0 }, total: { games: 0, orbs: 0, golds: 0, powers: 0, portals: 0, levels: 0 }, medals: {} });
+  // best: 무한 모드 난이도별 최고 {easy|normal|hard: {score, len}} (2026-09-27, 어려움 추가 때. 그 전 기록은 endless에만 있다)
+  const blankRec = () => ({ endless: { score: 0, len: 0, combo: 0 }, stage: { max: 0, score: 0, level: 0 }, total: { games: 0, orbs: 0, golds: 0, powers: 0, portals: 0, levels: 0 }, medals: {},
+    best: { easy: { score: 0, len: 0 }, normal: { score: 0, len: 0 }, hard: { score: 0, len: 0 } } });
   function loadRec() {
     const r = blankRec(), got = SN.store.get(REC_KEY, null);
-    if (got && typeof got === 'object') for (const k of Object.keys(r)) Object.assign(r[k], got[k] || {});
+    if (got && typeof got === 'object') for (const k of Object.keys(r)) {
+      if (k === 'best') { const b = got.best || {}; for (const d of Object.keys(r.best)) if (b[d] && typeof b[d] === 'object') { r.best[d].score = Math.max(0, Number(b[d].score) || 0); r.best[d].len = Math.max(0, Number(b[d].len) || 0); } }
+      else Object.assign(r[k], got[k] || {});
+    }
     // 예전 최고 기록(snake.best)을 무한 모드 기록으로 이어받는다
     r.endless.score = Math.max(r.endless.score, best.score || 0);
     r.endless.len = Math.max(r.endless.len, best.len || 0);
@@ -56,23 +61,30 @@
   // ─── 화면 크기 ─────────────────────────────────────────────
   const size = () => ({ w: window.innerWidth, h: window.innerHeight });
   // 판 모양: 가로 화면은 32×20, 세로 화면(폰)은 20×32
-  // 쉬움(기본): 칸이 크고 느리며 판 끝을 넘으면 반대편으로. 이 기기에 기억한다
-  const EASY_KEY = 'snake.easy';
-  let easy = SN.store.get(EASY_KEY, true) !== false;
-  const boardFor = ({ w, h }) => { const B = easy ? D.EASY.board : D.BOARD; return h > w * 1.1 ? B.port : B.land; };
+  // 난이도 쉬움(기본) · 보통 · 어려움. 이 기기에 기억한다 (snake.diff). 예전 snake.easy(true/false)는 쉬움·보통으로 이어받는다
+  // 쉬움: 칸이 크고 느리며 판 끝을 넘으면 반대편으로
+  const EASY_KEY = 'snake.easy', DIFF_KEY = 'snake.diff';
+  let diff = SH.diffFrom(SN.store.get(DIFF_KEY, null), SN.store.get(EASY_KEY, null));
+  const boardFor = ({ w, h }) => { const B = diff === 'easy' ? D.EASY.board : D.BOARD; return h > w * 1.1 ? B.port : B.land; };
+  const diffName = id => (D.DIFFS.find(d => d.id === id) || D.DIFFS[1]).name;
 
   // 판은 화면을 가득 쓴다 (버튼 자리를 비우지 않는다. 조작은 화면 밀기)
   function fit(world) {
     const L = SN.Render.layout(world.cols, world.rows, view.w, view.h, view.hudH);
     Object.assign(view, L);
   }
-  function renderEasy() {
-    for (const b of document.querySelectorAll('[data-easy]')) b.setAttribute('aria-pressed', String((b.dataset.easy === '1') === easy));
+  function renderDiff() {
+    for (const b of document.querySelectorAll('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === diff));
   }
-  function setEasy(on) {
-    easy = !!on; SN.store.set(EASY_KEY, easy); renderEasy();
+  function setDiff(id) {
+    if (!D.DIFFS.some(d => d.id === id)) return diff;
+    diff = id; SN.store.set(DIFF_KEY, diff); SN.store.set(EASY_KEY, diff === 'easy'); renderDiff();
     demo = null;
+    if (mode === 'title') renderBest();
+    return diff;
   }
+  // 옛 손잡이: true 쉬움 · false 보통
+  function setEasy(on) { return setDiff(on ? 'easy' : 'normal'); }
   // 라이벌 뱀 켜기·끄기 (그냥 놀기에만, 처음엔 켬). 이 기기에 기억한다
   const RIVAL_KEY = 'snake.rival';
   let rivalOn = SN.store.get(RIVAL_KEY, true) !== false;
@@ -131,9 +143,13 @@
   }
 
   function renderBest() {
-    view.best = rec.endless.score;
+    // 고른 난이도의 무한 최고 (난이도별 기록이 없던 예전 판은 쉬움·보통 어느 쪽인지 몰라 전체 최고로 보여 준다)
+    const b = rec.best[diff];
+    view.best = b.score;
     const parts = [];
-    if (rec.endless.score > 0) parts.push('무한 최고 ' + rec.endless.score.toLocaleString() + '점');
+    if (b.score > 0) parts.push(diffName(diff) + ' 최고 ' + b.score.toLocaleString() + '점');
+    else if (rec.endless.score > 0 && diff !== 'hard') parts.push('무한 최고 ' + rec.endless.score.toLocaleString() + '점');
+    else if (diff === 'hard') parts.push('어려움 첫 도전');
     if (rec.stage.max > 0) parts.push('스테이지 레벨 ' + rec.stage.max + ' 깸');
     $('best').textContent = parts.length ? parts.join(' · ') : '첫 도전을 시작하세요';
     $('stage-tag').textContent = rec.stage.max > 0 ? 'LV ' + (rec.stage.max + 1) : '';
@@ -316,9 +332,8 @@
   }
 
   // 놀이 본부(common/hub.js)의 알아서 맞춰 주는 난이도. 본부가 없거나 실패하면 1
-  const diffId = e => (e ? 'easy' : 'normal');
-  function adaptMul(e) {
-    try { if (typeof HUB !== 'undefined' && HUB.adaptMul) { const m = Number(HUB.adaptMul('snake', diffId(e))); if (m > 0) return m; } } catch (err) { /* 무시 */ }
+  function adaptMul(d) {
+    try { if (typeof HUB !== 'undefined' && HUB.adaptMul) { const m = Number(HUB.adaptMul('snake', d)); if (m > 0) return m; } } catch (err) { /* 무시 */ }
     return 1;
   }
   let rivalToast = false;
@@ -339,7 +354,7 @@
       const fresh = HUB.reportRun('snake', Object.assign(SN.World.hubStats(W), { games: 1 }), W.time);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1000);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
-    try { if (HUB.adaptRun) HUB.adaptRun('snake', diffId(W.easy), SN.World.adaptPerf(W)); } catch (e) { /* 무시 */ }
+    try { if (HUB.adaptRun) HUB.adaptRun('snake', W.diff, SN.World.adaptPerf(W)); } catch (e) { /* 무시 */ }
   }
 
   // 예전 꾸미기를 캐릭터로 바꿨으면 한 번 알려 준다
@@ -377,6 +392,7 @@
       ['무한 최고 점수', rec.endless.score.toLocaleString()], ['무한 최고 길이', rec.endless.len], ['최고 콤보', rec.endless.combo],
       ['스테이지 최고 레벨', rec.stage.max ? 'LV ' + rec.stage.max : '없음'], ['스테이지 최고 점수', rec.stage.score.toLocaleString()], ['모두 한 판', T.games],
       ['먹은 구슬', T.orbs.toLocaleString()], ['황금 구슬', T.golds], ['아이템', T.powers],
+      ...D.DIFFS.map(d => [d.name + ' 최고', rec.best[d.id].score ? rec.best[d.id].score.toLocaleString() + '점 · 길이 ' + rec.best[d.id].len : '없음']),
     ];
     $('record-list').innerHTML = rows.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + v + '</dd></div>').join('');
     show('scr-medals');
@@ -405,19 +421,24 @@
   // ─── 흐름 ──────────────────────────────────────────────────
   function newGame(seed, opts) {
     SN.Audio.unlock();
-    if (opts) lastOpts = Object.assign({ rival: rivalOn }, opts, { easy });
-    const [cols, rows] = lastOpts.easy ? (size().h > size().w * 1.1 ? D.EASY.board.port : D.EASY.board.land) : (size().h > size().w * 1.1 ? D.BOARD.port : D.BOARD.land);
+    if (opts) {
+      // 난이도: opts.diff > 옛 opts.easy(true/false) > 시작 화면에서 고른 것
+      const d = D.DIFFS.some(x => x.id === opts.diff) ? opts.diff : typeof opts.easy === 'boolean' ? (opts.easy ? 'easy' : 'normal') : diff;
+      lastOpts = Object.assign({ rival: rivalOn }, opts, { diff: d, easy: d === 'easy' });
+    }
+    if (!lastOpts.diff) { lastOpts.diff = diff; lastOpts.easy = diff === 'easy'; }
+    const [cols, rows] = lastOpts.diff === 'easy' ? (size().h > size().w * 1.1 ? D.EASY.board.port : D.EASY.board.land) : (size().h > size().w * 1.1 ? D.BOARD.port : D.BOARD.land);
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다. 강화는 늘 적용
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
     // 알아서 맞춰 주는 난이도 (놀이 본부): 처음 두 판은 1, 그 뒤 0.85~1.12. 속도 오름·황금 시간·라이벌 실력에 조금씩
-    W = SN.World.create(cols, rows, seed, Object.assign(SH.worldOpts(shop, lo, lastOpts), { adapt: adaptMul(lastOpts.easy) }));
+    W = SN.World.create(cols, rows, seed, Object.assign(SH.worldOpts(shop, lo, lastOpts), { adapt: adaptMul(lastOpts.diff) }));
     rivalToast = false;
     lastEarn = null;
     view.char = shop.char;
     const used = D.START_ITEMS.filter(it => lo[it.id]).map(it => it.name);
     if (used.length) setTimeout(() => { if (mode === 'play') toast('시작 아이템: ' + used.join(' · ')); }, 300);
-    view.best = W.mode === 'stage' ? rec.stage.score : rec.endless.score;
+    view.best = W.mode === 'stage' ? rec.stage.score : rec.best[W.diff].score;
     medalCheckT = 0;
     input.reset();
     view.danger = null; warnKey = '';
@@ -461,9 +482,13 @@
       isBest = W.score > rec.stage.score;
       if (isBest) { rec.stage.score = W.score; if (W.score > 0) newRec.push('스테이지 최고 점수'); }
     } else {
-      isBest = W.score > rec.endless.score;
-      if (isBest && W.score > 0) { rec.endless.score = W.score; newRec.push('최고 점수'); }
-      if (W.maxLen > rec.endless.len) { rec.endless.len = W.maxLen; newRec.push('최고 길이 ' + W.maxLen); }
+      // 난이도별 최고 (신기록 표시는 고른 난이도 기준) + 전체 최고
+      const dn = diffName(W.diff), nb = SH.recordBest(rec.best, W.diff, W.score, W.maxLen);
+      isBest = nb.score;
+      if (nb.score) newRec.push(dn + ' 최고 점수');
+      if (nb.len) newRec.push(dn + ' 최고 길이 ' + W.maxLen);
+      rec.endless.score = Math.max(rec.endless.score, W.score);
+      rec.endless.len = Math.max(rec.endless.len, W.maxLen);
     }
     if (W.maxCombo > rec.endless.combo && W.maxCombo > 1) { rec.endless.combo = W.maxCombo; newRec.push('최고 콤보 ' + W.maxCombo); }
     saveRec();
@@ -534,7 +559,7 @@
     SN.Audio.unlock();
     if (mode === 'play' && W && SN.World.turn(W, dir) && touch) vibrate(10);
   };
-  for (const b of document.querySelectorAll('[data-easy]')) b.addEventListener('click', () => { SN.Audio.unlock(); setEasy(b.dataset.easy === '1'); });
+  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { SN.Audio.unlock(); setDiff(b.dataset.diff); });
   $('btn-rival').addEventListener('click', () => { SN.Audio.unlock(); setRival(!rivalOn); SN.Audio.play('pick'); });
   input.onKey = code => {
     SN.Audio.unlock();
@@ -658,7 +683,7 @@
   }
 
   // ─── 시작 ──────────────────────────────────────────────────
-  renderEasy();
+  renderDiff();
   renderRival();
   SN.Audio.setMuted(SN.store.get(MUTE_KEY, false));
   $('btn-mute').classList.toggle('muted', SN.Audio.muted);
@@ -684,8 +709,8 @@
     get mode() { return mode; },
     get demo() { return demo; },
     get best() { return best; },
-    get rec() { return rec; }, get easy() { return easy; }, setEasy,
-    get rival() { return rivalOn; }, setRival, get adapt() { return W ? W.adapt : adaptMul(easy); },
+    get rec() { return rec; }, get easy() { return diff === 'easy'; }, setEasy, get diff() { return diff; }, setDiff,
+    get rival() { return rivalOn; }, setRival, get adapt() { return W ? W.adapt : adaptMul(diff); },
     newGame, pause, resume, toTitle, openStage, openMedals,
     turn(dir) { return W ? SN.World.turn(W, dir) : false; },
     autopilot(on) { auto = on !== false; return auto; },

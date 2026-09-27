@@ -381,5 +381,26 @@ test('놀이 본부: 판 값(hubStats)으로 스티커가 붙고, 알아서 맞�
   assert(H.adaptMul('snake', 'easy') < 1 && H.adaptMul('snake', 'easy') >= 0.85, 'easier after short runs');
 });
 
+test('난이도 저장: snake.diff가 있으면 그것, 없으면 예전 snake.easy(true 쉬움 · false 보통), 처음은 쉬움', () => {
+  assert(SH.diffFrom(null, null) === 'easy' && SH.diffFrom(undefined, true) === 'easy' && SH.diffFrom(null, false) === 'normal', 'old easy');
+  for (const d of ['easy', 'normal', 'hard']) assert(SH.diffFrom(d, false) === d && SH.diffFrom(d, true) === d, 'new key wins ' + d);
+  assert(SH.diffFrom('super', false) === 'normal', 'bad value falls back');
+});
+
+test('난이도별 최고 기록: 고른 난이도만 오르고 다른 난이도는 그대로', () => {
+  const best = { easy: { score: 0, len: 0 }, normal: { score: 0, len: 0 }, hard: { score: 0, len: 0 } };
+  let r = SH.recordBest(best, 'hard', 300, 12);
+  assert(r.score && r.len && best.hard.score === 300 && best.hard.len === 12, 'hard best');
+  assert(best.easy.score === 0 && best.normal.score === 0, 'others untouched');
+  r = SH.recordBest(best, 'hard', 200, 15);
+  assert(!r.score && r.len && best.hard.score === 300 && best.hard.len === 15, 'only len');
+  r = SH.recordBest(best, 'normal', 0, 3);
+  assert(!r.score && r.len, 'zero score is no record');
+  // 알아서 맞추기 열쇠도 난이도별 (어려움 따로)
+  const ctx = load(true), H = vm.runInContext('HUB', ctx);
+  for (let i = 0; i < 4; i++) H.adaptRun('snake', 'hard', 2);
+  assert(H.adaptMul('snake', 'hard') > 1 && H.adaptMul('snake', 'normal') === 1, 'hard key separate');
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

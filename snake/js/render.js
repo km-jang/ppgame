@@ -95,7 +95,7 @@
       }
     }
     // 네온 테두리
-    const deadly = W && !W.easy;   // 보통: 판 끝에 닿으면 끝 → 빨간 테두리
+    const deadly = W && !W.easy;   // 보통·어려움: 판 끝에 닿으면 끝 → 빨간 테두리
     g.shadowColor = deadly ? 'rgba(255,59,78,0.9)' : 'rgba(94,231,255,0.9)';
     g.shadowBlur = 18;
     g.strokeStyle = deadly ? 'rgba(255,90,105,0.8)' : 'rgba(94,231,255,0.7)';
@@ -291,7 +291,7 @@
       }
       ctx.globalAlpha = 1;
     }
-    const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.easy ? 1 : 0].join(',');
+    const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.diff || (W.easy ? 1 : 0)].join(',');
     if (R.boardKey !== key || R.boardWalls !== W.walls) { R.boardKey = key; R.boardWalls = W.walls; R.board = paintBoard(v, W.cols, W.rows, v.dpr, W); }
     ctx.drawImage(R.board, v.bx - BM, v.by - BM, v.bw + BM * 2, v.bh + BM * 2);
   }
@@ -1013,6 +1013,7 @@
     const items = [];
     // 라이벌과 겨루기: 나 : 라이벌 먹은 구슬 (라이벌이 나온 뒤부터)
     if (W.rival && W.rival.met) items.push(['나 ' + W.eaten + ' : ' + W.rival.eaten + ' 라이벌', W.eaten >= W.rival.eaten ? '#8ff6ff' : '#ffb35c', Math.round(15 * s) + 'px ' + DISP]);
+    if (W.hard) items.push(['어려움', '#ff8a96', Math.round(15 * s) + 'px ' + DISP]);
     if (W.mode === 'stage') items.push(['LV ' + W.level + '  ' + Math.min(W.got, W.goal) + '/' + W.goal, '#5ee7ff']);
     if (W.fun && W.mult > 1 && W.time - W.lastEat <= (W.comboWindow || D.COMBO.window)) items.push(['COMBO ×' + W.mult, W.mult >= 3 ? '#ff9f43' : '#ffd6e8']);
     if (W.eff) for (const k of ['double', 'slow', 'ghost']) if (W.eff[k] > 0) items.push([ITEM[k].glyph + ' ' + Math.ceil(W.eff[k]), ITEM[k].color]);

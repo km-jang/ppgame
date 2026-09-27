@@ -1499,6 +1499,14 @@
     const s = v.ui, x0 = v.cx + v.cw + Math.round(24 * s), right = v.w - Math.round(18 * s);
     const sw = right - x0;
     let y = v.hudMid - 12 * s;
+    // 우주에서는 뒤로 행성이 지나가므로 점수판 뒤에 어두운 유리를 깐다 (글자가 늘 또렷하게)
+    if (CAM / D.METER > D.PLANETS[0].at - SPAN) {
+      const px = x0 - 14 * s, pw = right - px + 8 * s, ph = Math.min(v.h * 0.62, 360 * s);
+      const g = ctx.createLinearGradient(0, y - 14 * s, 0, y - 14 * s + ph);
+      g.addColorStop(0, 'rgba(5,8,18,0.62)'); g.addColorStop(0.8, 'rgba(5,8,18,0.5)'); g.addColorStop(1, 'rgba(5,8,18,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(px, y - 14 * s, pw, ph, 14 * s); else ctx.rect(px, y - 14 * s, pw, ph); ctx.fill();
+    }
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     // 난이도 · 지금 구역
     const Z = D.ZONES[W.zone], PL = W.zone === 2 && W.planet > 0 ? D.PLANETS[W.planet - 1] : null;

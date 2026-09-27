@@ -834,5 +834,93 @@ test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 �
   assert(Q.space.scene === 'mercury', 'stage fixed');
 });
 
+// ─── 어려움 ───
+test('난이도 세 가지: 쉬움 < 보통 < 어려움 (출발 속도·빨라지는 정도·황금 시간·아이템·스테이지)', () => {
+  const E = create(24, 15, 1, { mode: 'endless', diff: 'easy' }), N = create(COLS, ROWS, 1, { mode: 'endless', diff: 'normal' }), H = create(COLS, ROWS, 1, { mode: 'endless', diff: 'hard' });
+  assert(E.easy && !E.hard && N.diff === 'normal' && !N.easy && H.hard && !H.easy, 'flags');
+  assert(speed(E) < speed(N) && speed(N) < speed(H), 'start speed ' + [speed(E), speed(N), speed(H)]);
+  for (const W of [E, N, H]) for (let i = 0; i < 20; i++) W.snake.push({ x: 0, y: 0 });
+  assert(speed(E) < speed(N) && speed(N) < speed(H), 'long speed');
+  const n0 = create(COLS, ROWS, 1, { mode: 'endless', diff: 'normal' }), h0 = create(COLS, ROWS, 1, { mode: 'endless', diff: 'hard' });
+  assert(speed(H) - speed(h0) > speed(N) - speed(n0), 'hard ramps faster');
+  for (let i = 0; i < 200; i++) { H.snake.push({ x: 0, y: 0 }); N.snake.push({ x: 0, y: 0 }); }
+  assert(speed(H) === D.HARD.max && D.HARD.max > D.SPEED.max, 'hard cap');
+  assert(H.goldLife < N.goldLife && H.itemGapMul > N.itemGapMul, 'gold shorter, items rarer');
+  for (const n of [1, 6, 12]) {
+    const sE = create(24, 15, 1, { mode: 'stage', level: n, diff: 'easy' }), sN = create(COLS, ROWS, 1, { mode: 'stage', level: n }), sH = create(COLS, ROWS, 1, { mode: 'stage', level: n, diff: 'hard' });
+    assert(speed(sE) < speed(sN) && speed(sN) < speed(sH), 'stage speed ' + n);
+  }
+  // 옛 호출: easy: true 는 쉬움, 없으면 보통. diff가 이긴다
+  assert(create(COLS, ROWS, 1, { easy: true }).diff === 'easy' && create(COLS, ROWS, 1, {}).diff === 'normal', 'old easy opt');
+  assert(create(COLS, ROWS, 1, { easy: true, diff: 'hard' }).diff === 'hard' && create(COLS, ROWS, 1, { diff: 'x' }).diff === 'normal', 'diff wins, bad id');
+  assert(D.DIFFS.map(d => d.id).join() === 'easy,normal,hard', 'three buttons');
+});
+
+test('어려움: 판 끝은 끝, 센 라이벌(몸도 위험, 경고 켜짐), 출발 대기는 보통처럼', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless', diff: 'hard' });
+  assert(W.wait === D.START.wait, 'normal wait');
+  assert(W.rival.level === 'hard' && W.rival.speed === D.RIVAL.levels.hard.speed, 'hard rival');
+  assert(D.RIVAL.levels.hard.speed > D.RIVAL.levels.normal.speed && D.RIVAL.levels.hard.react < D.RIVAL.levels.normal.react, 'stronger');
+  W.wait = 0; W.itemT = 99; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  W.snake = [{ x: 5, y: 7 }, { x: 4, y: 7 }, { x: 3, y: 7 }, { x: 2, y: 7 }]; W.dir = 'right';
+  placeRival(W, [{ x: 6, y: 4 }, { x: 6, y: 5 }, { x: 6, y: 6 }, { x: 6, y: 7 }, { x: 6, y: 8 }], 'up');
+  const d = dangerAhead(W, 3);
+  assert(d && d.cause === 'rival', 'danger rival');
+  ticks(W, 1);
+  assert(W.phase === 'over' && W.cause === 'rival', 'rival body deadly');
+  const E = create(COLS, ROWS, 1, { mode: 'endless', diff: 'hard' });
+  E.wait = 0; E.dir = 'right'; E.queue = []; E.itemT = 99;
+  E.snake = [{ x: COLS - 2, y: 5 }, { x: COLS - 3, y: 5 }, { x: COLS - 4, y: 5 }, { x: COLS - 5, y: 5 }];
+  const e = dangerAhead(E, 3);
+  assert(e && e.cause === 'edge', 'edge warning');
+  ticks(E, 3);
+  assert(E.phase === 'over' && E.cause === 'wall', 'edge deadly');
+});
+
+test('어려움은 분명히 더 어렵다: 아이 흉내 봇이 버틴 시간·먹은 구슬 쉬움 > 보통 > 어려움', () => {
+  const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
+  const out = {};
+  for (const diff of ['easy', 'normal', 'hard']) {
+    const [c, r0] = diff === 'easy' ? [24, 15] : [COLS, ROWS];
+    const ts = [], es = [];
+    for (let seed = 1; seed <= 16; seed++) {
+      const W = create(c, r0, seed, { mode: 'endless', diff });
+      W.wait = 0;
+      const r = SN.rng(seed * 13 + 1);
+      let lag = 0;
+      for (let i = 0; i < 60 * 120 && W.phase === 'play'; i++) {
+        if ((lag -= 1 / 60) <= 0) {
+          lag = 0.12;
+          if (r() < 0.04) turn(W, ['up', 'down', 'left', 'right'][Math.floor(r() * 4)]);
+          else if (!dangerAhead(W, 1) || r() < 0.85) turn(W, botDir(W));
+        }
+        step(W, 1 / 60);
+        W.events.length = 0; W.fx.length = 0;
+      }
+      ts.push(W.time); es.push(W.eaten);
+    }
+    out[diff] = { t: med(ts), e: med(es) };
+  }
+  assert(out.easy.t > out.normal.t && out.normal.t > out.hard.t, 'time ' + JSON.stringify(out));
+  assert(out.easy.e > out.normal.e && out.normal.e >= out.hard.e, 'orbs ' + JSON.stringify(out));
+  assert(out.hard.t >= 3, 'still fair: not instant ' + out.hard.t);
+});
+
+test('어려움 메달·미션 값·알아서 맞추기 기준', () => {
+  const H = create(COLS, ROWS, 1, { mode: 'endless', diff: 'hard' });
+  H.maxLen = 31; H.time = 70;
+  const r = runStats(H);
+  assert(r.diff === 'hard' && r.hardLen === 31 && r.hardTime === 70 && r.normalLen === 31, 'run stats');
+  const got = D.MEDALS.filter(m => m.id.startsWith('hard') && m.check(r, {})).map(m => m.id).sort();
+  assert(got.join() === 'hard20,hard30', 'hard medals ' + got);
+  const N = create(COLS, ROWS, 1, { mode: 'endless' }); N.maxLen = 40;
+  assert(!D.MEDALS.filter(m => m.id.startsWith('hard')).some(m => m.check(runStats(N), {})), 'normal does not count');
+  assert(runStats(N).hardLen === 0 && runStats(N).hardTime === 0, 'normal hard stats 0');
+  assert(D.MISSIONS.some(m => m.stat === 'hardLen') && D.MISSIONS.some(m => m.stat === 'hardTime'), 'hard missions');
+  assert(D.ADAPT.target.hard > 0 && D.ADAPT.target.hard < D.ADAPT.target.normal, 'hard target');
+  H.eaten = D.ADAPT.target.hard;
+  assert(adaptPerf(H) === 1, 'hard perf');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
