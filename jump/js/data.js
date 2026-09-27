@@ -143,8 +143,9 @@
 
     // ─── 코인 · 상점 · 미션 (shop.js) ───────────────────────────
     // 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js)에 들어간다.
-    // 판이 끝나면 = 높이 ÷ perMeter + 별 ÷ perStars + 도착한 구역 보너스(zone[구역 번호]까지 모두 더함). 그 뒤 코인 보너스 강화만큼 더
-    COINS: { perMeter: 10, perStars: 2, zone: [0, 5, 10, 20] },
+    // 판이 끝나면 = 높이 ÷ perMeter + 별 ÷ perStars + 도착한 구역 보너스(zone[구역 번호]까지 모두 더함).
+    // 그 합에 난이도 배율(level: 보통·어려움이 더 많이), 그 뒤 코인 보너스 강화만큼 더
+    COINS: { perMeter: 20, perStars: 6, zone: [0, 4, 8, 12], level: { easy: 1, normal: 1.6, hard: 2.2 } },
 
     // 꾸미기: 로봇 공 색과 모자. body: 광택 공 [밝은 곳, 가운데, 어두운 곳], rim: 아래 반사광 r,g,b, glow: 둘레 빛 r,g,b
     // hat: 머리 장식 (render.js drawHat). price 0 = 처음부터 있음
@@ -166,10 +167,10 @@
     ],
     UPGRADE_MAX: 5,
 
-    // 시작 아이템: 사 두면 다음 판 시작할 때 하나씩 자동으로 쓴다. max: 쌓아 둘 수 있는 개수
+    // 시작 아이템: 사 두면 다음 판 시작할 때 하나씩 자동으로 쓴다. max: 쌓아 둘 수 있는 개수, give: World.create loadout 칸
     START_ITEMS: [
-      { id: 'rocket', icon: '▲', name: '로켓 출발', desc: '시작하자마자 로켓으로 쭉 날아오른다', price: 120, max: 3 },
-      { id: 'shield', icon: '◯', name: '방패 방울', desc: '방패 방울을 두르고 시작한다',         price: 80,  max: 3 },
+      { id: 'rocketStart', give: 'rocket', icon: '▲', name: '로켓 출발', desc: '시작하자마자 로켓으로 쭉 날아오른다', price: 120, max: 3 },
+      { id: 'shieldStart', give: 'shield', icon: '◯', name: '방패 방울', desc: '방패 방울을 두르고 시작한다',         price: 80,  max: 3 },
     ],
 
     // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름.

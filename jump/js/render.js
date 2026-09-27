@@ -823,9 +823,10 @@
     const w = cv.width, h = cv.height;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
-    const r = Math.round(Math.min(w, h) * 0.27);
+    // 안테나 끝(몸 위 1.7배)부터 헬멧 목 고리(아래 1.15배)까지 들어가게
+    const r = Math.round(Math.min(w, h) * 0.33);
     const stub = { phase: 'play', rocket: 0, shield: false, t: 1, cause: null, p: { vx: 0, vy: 0 }, ctl: { maxVx: 1 } };
-    drawBot(g, stub, { calm: true, dpr: 1, skin }, w / 2, h * 0.58, r, 1, 1);
+    drawBot(g, stub, { calm: true, dpr: 1, skin }, w / 2, h * 0.06 + r * 1.72, r, 1, 1);
   }
 
   // ─── 주인공: 광택 네온 공 로봇 (눈 두 개, 안테나) ───────────

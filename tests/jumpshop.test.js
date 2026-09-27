@@ -36,7 +36,9 @@ console.log('통통 점프 상점 테스트');
 test('자료: 꾸미기 6개 · 강화 4개(5단계) · 시작 아이템 2개 · 미션 15개 이상, 값이 80 ~ 1,200', () => {
   assert(D.SKINS.length >= 6 && D.SKINS[0].price === 0 && D.SKINS.filter(s => !s.price).length === 1, 'skins');
   assert(D.UPGRADES.map(u => u.id).join() === 'speed,rocket,coin,cloud' && D.UPGRADES.every(u => u.prices.length === D.UPGRADE_MAX), 'upgrades');
-  assert(D.START_ITEMS.map(i => i.id).join() === 'rocket,shield' && D.START_ITEMS.every(i => i.max === 3), 'items');
+  assert(D.START_ITEMS.map(i => i.give).join() === 'rocket,shield' && D.START_ITEMS.every(i => i.max === 3), 'items');
+  const all = [...D.SKINS, ...D.UPGRADES, ...D.START_ITEMS].map(x => x.id);
+  assert(new Set(all).size === all.length, 'shop ids are unique ' + all.join());
   assert(D.MISSIONS.length >= 15 && new Set(D.MISSIONS.map(m => m.id)).size === D.MISSIONS.length, 'missions');
   const prices = [...D.SKINS.filter(s => s.price).map(s => s.price), ...D.UPGRADES.flatMap(u => u.prices), ...D.START_ITEMS.map(i => i.price)];
   assert(Math.min(...prices) >= 80 && Math.max(...prices) <= 1200, 'price range ' + Math.min(...prices) + ' ~ ' + Math.max(...prices));
@@ -45,37 +47,58 @@ test('자료: 꾸미기 6개 · 강화 4개(5단계) · 시작 아이템 2개 ·
   for (const m of D.MISSIONS) assert(runKeys.includes(m.stat), 'mission stat exists ' + m.stat);
 });
 
-test('코인 계산: 높이 ÷ 10 + 별 ÷ 2 + 도착한 구역 보너스, 강화면 +10%씩', () => {
+test('코인 계산: 높이 ÷ 20 + 별 ÷ 6 + 도착한 구역 보너스, 보통·어려움은 더, 강화면 +10%씩', () => {
   const st = SH.blank();
   const a = SH.coinsFor(run({ height: 150, stars: 41, zone: 1 }), st);
-  assert(a.parts.height === 15 && a.parts.stars === 20 && a.parts.zone === 5 && a.total === 40, JSON.stringify(a));
+  assert(a.parts.height === 7 && a.parts.stars === 6 && a.parts.zone === 4 && a.parts.level === 0 && a.total === 17, JSON.stringify(a));
   const b = SH.coinsFor(run({ height: 520, stars: 100, zone: 3 }), st);
-  assert(b.parts.zone === 35 && b.total === 52 + 50 + 35, 'all zones ' + JSON.stringify(b));
+  assert(b.parts.zone === 24 && b.total === 26 + 16 + 24, 'all zones ' + JSON.stringify(b));
+  const n = SH.coinsFor(run({ diff: 'normal', height: 150, stars: 41, zone: 1 }), st), h = SH.coinsFor(run({ diff: 'hard', height: 150, stars: 41, zone: 1 }), st);
+  assert(n.parts.level === 10 && n.total === 27 && h.total === 37 && h.total > n.total, 'level bonus ' + n.total + ' ' + h.total);
   st.up.coin = 3;
   const c = SH.coinsFor(run({ height: 150, stars: 41, zone: 1 }), st);
-  assert(c.parts.bonus === 12 && c.total === 52, 'bonus ' + JSON.stringify(c));
+  assert(c.parts.bonus === 5 && c.total === 22, 'bonus ' + JSON.stringify(c));
   assert(SH.coinsFor(run({ height: -5, stars: NaN, zone: 99 }), SH.blank()).total >= 0, 'bad input safe');
 });
 
-test('코인 크기: 사람 닮은 봇의 보통 한 판은 20 ~ 100코인쯤 (숫자를 찍는다)', () => {
-  const out = {};
-  for (const diff of D.DIFF_ORDER) {
-    let sum = 0;
-    const n = 10;
-    for (let seed = 1; seed <= n; seed++) {
-      const W = create(seed, { diff, viewH: 600 });
-      const r = JP.rng(seed * 31);
-      // 사람처럼: 가끔 엉뚱한 쪽을 누른다
-      for (let i = 0; i < 60 * 150 && W.phase === 'play'; i++) {
-        W.input.dir = r() < 0.06 ? Math.floor(r() * 3) - 1 : botDir(W);
-        step(W, 1 / 60); W.events.length = 0; W.fx.length = 0;
+// 5~7살 아이 흉내 봇 (tests/jump.test.js의 KID와 같은 방식): 반응이 늦고 겨냥이 빗나간다
+const KID = { delay: 0.35, aim: 34, late: 0.3, lateMax: 0.4 }, HUMAN = { delay: 0.25, aim: 22, late: 0.15, lateMax: 0.3 };
+function kidBot(seed, cfg) {
+  const rand = JP.rng(seed * 7919 + 13);
+  cfg = cfg || KID;
+  let target = null, wait = 0, aimOff = 0, prev = 0;
+  return (W, dt) => {
+    const P = W.p;
+    botDir(W);
+    const t = W.botT;
+    if (t !== target) { target = t; aimOff = (rand() * 2 - 1) * cfg.aim; wait = cfg.delay * (0.7 + rand() * 0.6) + (rand() < cfg.late ? rand() * cfg.lateMax : 0); }
+    if (wait > 0) { wait -= dt; return prev; }
+    if (!t || W.rocket > 0) return (prev = 0);
+    const g = D.PLAYER.gravity, q = P.vy * P.vy + 2 * g * (P.y - t.y - D.PLAYER.r), tt = q < 0 ? 0 : (P.vy + Math.sqrt(q)) / g;
+    const dx = JP.World.wrapDelta(P.x, t.x + t.vx * tt + aimOff), brake = P.vx * P.vx / (2 * W.ctl.decel);
+    return (prev = Math.abs(dx) < Math.max(6, t.w * 0.2) + (Math.sign(dx) === Math.sign(P.vx) ? brake * 0.5 : 0) ? 0 : dx > 0 ? 1 : -1);
+  };
+}
+test('코인 크기: 아이 흉내 봇의 한 판은 20 ~ 60코인쯤 (숫자를 찍는다)', () => {
+  const avg = cfg => {
+    const out = {};
+    for (const diff of D.DIFF_ORDER) {
+      let sum = 0;
+      const n = 12;
+      for (let seed = 1; seed <= n; seed++) {
+        const W = create(seed, { diff, viewH: 600 });
+        const bot = kidBot(seed, cfg);
+        for (let i = 0; i < 60 * 300 && W.phase === 'play'; i++) { W.input.dir = bot(W, 1 / 60); step(W, 1 / 60); W.events.length = 0; W.fx.length = 0; }
+        sum += SH.coinsFor(SH.runOf(W), SH.blank()).total;
       }
-      sum += SH.coinsFor(SH.runOf(W), SH.blank()).total;
+      out[diff] = Math.round(sum / n);
     }
-    out[diff] = Math.round(sum / n);
-  }
-  console.log('       한 판 평균 코인 (강화 없음, 2분 30초 안): ' + JSON.stringify(out));
-  assert(out.normal >= 10 && out.normal <= 120, 'normal ' + out.normal);
+    return out;
+  };
+  const out = avg(KID), hum = avg(HUMAN);
+  console.log('       한 판 평균 코인 (강화 없음, 5분 상한): 아이 흉내 ' + JSON.stringify(out) + ', 사람 닮은 봇 ' + JSON.stringify(hum));
+  assert(out.easy >= 20 && out.easy <= 80, 'easy ' + out.easy);
+  assert(out.normal >= 5 && out.normal <= out.easy && out.hard <= out.normal, 'order ' + JSON.stringify(out));
 });
 
 test('지갑: 불러올 때 지갑 잔액을 쓰고, 저장하면 지갑에 맞춘다', () => {
@@ -106,8 +129,9 @@ test('사기: 모자라면 못 사고, 모으면 꾸미기·강화·시작 아�
   assert(!SH.selectSkin(st, 'gold') && st.skin === 'basic', 'cannot select locked');
   for (let k = 0; k < D.UPGRADE_MAX; k++) assert(SH.buy(st, 'speed').ok, 'upgrade ' + k);
   assert(st.up.speed === D.UPGRADE_MAX && SH.buy(st, 'speed').reason === 'max' && SH.price(st, 'speed') === null, 'upgrade max');
-  for (let k = 0; k < 3; k++) assert(SH.buy(st, 'rocket').ok, 'item ' + k);
-  assert(st.items.rocket === 3 && SH.buy(st, 'rocket').reason === 'max', 'item max');
+  for (let k = 0; k < 3; k++) assert(SH.buy(st, 'rocketStart').ok, 'item ' + k);
+  assert(st.items.rocketStart === 3 && SH.buy(st, 'rocketStart').reason === 'max', 'item max');
+  assert(SH.buy(st, 'rocket').ok && st.up.rocket === 1, 'rocket upgrade is separate');
   assert(SH.buy(st, 'nope').reason === 'unknown', 'unknown');
 });
 
@@ -131,13 +155,13 @@ test('강화가 판에 적용된다: 좌우 속도 · 로켓 시간 · 쉬움 �
 
 test('시작 아이템: 판 시작에 하나씩 쓰고, 로켓 출발·방패 방울이 켜진 채 시작', () => {
   const st = SH.blank();
-  st.items.rocket = 2; st.items.shield = 1;
+  st.items.rocketStart = 2; st.items.shieldStart = 1;
   const lo = SH.takeLoadout(st);
-  assert(lo.rocket && lo.shield && st.items.rocket === 1 && st.items.shield === 0, 'took one each');
+  assert(lo.rocket && lo.shield && st.items.rocketStart === 1 && st.items.shieldStart === 0, 'took one each');
   const W = create(1, Object.assign({ diff: 'normal' }, SH.worldOpts(st, lo)));
   assert(W.rocket > 0 && W.shield && W.rockets === 1 && W.events.includes('rocket'), 'started with both');
   const lo2 = SH.takeLoadout(st);
-  assert(lo2.rocket && !lo2.shield && st.items.rocket === 0, 'second');
+  assert(lo2.rocket && !lo2.shield && st.items.rocketStart === 0, 'second');
   assert(Object.keys(SH.takeLoadout(st)).length === 0, 'empty');
   const P = create(1, { diff: 'normal' });
   assert(!P.rocket && !P.shield && P.rockets === 0, 'no loadout by default');
@@ -186,13 +210,13 @@ test('판이 끝나면: 코인 지급 + 미션 진행 + 해 본 난이도 기록
 test('망가진 저장본도 올바른 모양으로 (없는 꾸미기·음수·모르는 미션·겹친 미션)', () => {
   const raw = {
     coins: -50, skin: 'gold', skins: { berry: true, gold: 'yes', nope: true }, up: { speed: 99, rocket: -3, coin: '2', cloud: null },
-    items: { rocket: 10, shield: 'x' }, missions: [{ id: 'h100', prog: 999 }, { id: 'h100', prog: 3 }, { id: 'zzz' }, 5, { id: 'star30', prog: 'a' }],
+    items: { rocketStart: 10, shieldStart: 'x' }, missions: [{ id: 'h100', prog: 999 }, { id: 'h100', prog: 3 }, { id: 'zzz' }, 5, { id: 'star30', prog: 'a' }],
     life: { earned: 'x', games: 3, diffs: { normal: true, hard: 'y' } }, mseed: -1,
   };
   const st = SH.clean(raw);
   assert(st.coins === 0 && st.skins.berry && !st.skins.gold && !('nope' in st.skins) && st.skin === 'basic', 'skins');
   assert(st.up.speed === D.UPGRADE_MAX && st.up.rocket === 0 && st.up.coin === 2 && st.up.cloud === 0, 'upgrades ' + JSON.stringify(st.up));
-  assert(st.items.rocket === 3 && st.items.shield === 0, 'items');
+  assert(st.items.rocketStart === 3 && st.items.shieldStart === 0, 'items');
   assert(st.missions.length === 3 && st.missions[0].id === 'h100' && st.missions[0].done && st.missions[0].prog === 100, 'missions ' + JSON.stringify(st.missions));
   assert(st.missions.filter(m => m.id === 'h100').length === 1 && st.missions[1].id === 'star30' && st.missions[1].prog === 0, 'dedupe');
   assert(st.life.diffs.normal && !st.life.diffs.hard && st.life.games === 3 && st.mseed >= 1, 'life');

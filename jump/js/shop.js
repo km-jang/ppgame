@@ -4,7 +4,7 @@
 //
 // 저장 키
 //   jump.shop1 : { v:1, coins, skin, skins:{id:true}, up:{speed,rocket,coin,cloud: 0~5},
-//                  items:{rocket,shield: 개수}, missions:[{id,prog,done}], mseed, life:{earned,games,diffs:{easy,normal,hard}} }
+//                  items:{rocketStart,shieldStart: 개수}, missions:[{id,prog,done}], mseed, life:{earned,games,diffs:{easy,normal,hard}} }
 // 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js, HUB)에 둔다. 지갑은 바꿔 끼울 수 있다 (테스트는 가짜 지갑):
 //   wallet = { coins(), setCoins(n), moveIn(game, n) }. 지갑이 없으면 이 저장본의 coins만 쓴다
 (function (JP) {
@@ -113,7 +113,7 @@
   // 판 시작: 가진 시작 아이템을 하나씩 꺼내 쓴다. 돌려준 값을 World.create opts.loadout으로
   function takeLoadout(st) {
     const lo = {};
-    for (const it of D.START_ITEMS) if ((st.items[it.id] || 0) > 0) { st.items[it.id] -= 1; lo[it.id] = true; }
+    for (const it of D.START_ITEMS) if ((st.items[it.id] || 0) > 0) { st.items[it.id] -= 1; lo[it.give] = true; }
     return lo;
   }
   // World.create에 더할 값
@@ -137,7 +137,9 @@
     let zone = 0;
     for (let i = 0; i <= z; i++) zone += C.zone[i];
     const parts = { height: Math.floor(num(run.height) / C.perMeter), stars: Math.floor(num(run.stars) / C.perStars), zone };
-    const base = parts.height + parts.stars + parts.zone;
+    const raw = parts.height + parts.stars + parts.zone;
+    parts.level = Math.floor(raw * ((C.level[run.diff] || 1) - 1));   // 보통·어려움 보너스
+    const base = raw + parts.level;
     const lv = st ? (st.up.coin || 0) : 0;
     parts.bonus = Math.floor(base * lv * upDef('coin').per);
     return { parts, total: base + parts.bonus };

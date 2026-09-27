@@ -284,9 +284,9 @@
 
   // 게임 오버: 받은 코인 (부분별) + 미션 진행
   function renderEarn() {
-    const e = lastEarn || { coins: 0, parts: { height: 0, stars: 0, zone: 0, bonus: 0 }, done: [] };
+    const e = lastEarn || { coins: 0, parts: { height: 0, stars: 0, zone: 0, level: 0, bonus: 0 }, done: [] };
     $('over-coins').textContent = '+0';
-    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['강화 보너스', P.bonus]];
+    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['난이도 보너스', P.level], ['강화 보너스', P.bonus]];
     $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
