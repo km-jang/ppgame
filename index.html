@@ -97,6 +97,28 @@
       .tag { top: 10px; left: 14px; }
     }
     @media (max-width: 640px) { .daily { grid-template-columns: 1fr; } .tot { grid-template-columns: repeat(2, 1fr); } .grow { grid-template-columns: 1fr 1fr; } }
+    .stk-btn { position: relative; color: #ffd6e8; border-color: rgba(255, 95, 168, .5); }
+    .new-dot { position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #ff4d6d; color: #fff; font: 700 13px/22px "Noto Sans KR", sans-serif; box-shadow: 0 0 10px rgba(255, 77, 109, .7); }
+    .new-dot[hidden] { display: none; }
+    #stickers { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(4, 7, 14, .78); }
+    #stickers.on { display: flex; }
+    #stickers .panel { width: min(96vw, 900px); max-height: 94vh; overflow-y: auto; padding: 20px 22px; border-radius: 20px; background: linear-gradient(180deg, rgba(16, 22, 36, .98), rgba(8, 11, 19, .98)); border: 1px solid rgba(255, 95, 168, .35); box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+    #stickers h2 { margin: 0 0 10px; font: normal 30px var(--display); letter-spacing: 1px; }
+    #stickers h2 small { font-size: 18px; color: #ffe66d; margin-left: 8px; }
+    .stk-game { margin: 10px 0 6px; font: normal 18px var(--display); color: var(--c); }
+    .stk-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .stk { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 14px; text-align: center; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); }
+    .stk i { font-style: normal; font-size: 34px; line-height: 1.1; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .5)); }
+    .stk b { font: normal 14px var(--display); }
+    .stk small { font-size: 11px; opacity: .75; line-height: 1.25; }
+    .stk.got { background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, .14), rgba(255, 255, 255, .04)); border-color: var(--c); box-shadow: 0 0 14px color-mix(in srgb, var(--c) 35%, transparent); }
+    .stk.locked i { filter: grayscale(1) brightness(.35); }
+    .stk.locked b { opacity: .6; }
+    .stk.fresh::after { content: "NEW"; position: absolute; top: -6px; right: -4px; padding: 1px 6px; border-radius: 999px; background: #ff4d6d; font: 700 10px "Noto Sans KR", sans-serif; }
+    .stk.fresh { animation: pop .6s cubic-bezier(.2, 1.5, .45, 1) both; }
+    @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+    .close-btn { display: block; width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 14px; font: normal 22px var(--display); background: linear-gradient(180deg, #ffd6e8, #ff5fa8); color: #2a0718; cursor: pointer; }
+    @media (max-width: 760px) { .stk-row { grid-template-columns: repeat(3, 1fr); } }
     @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
     @keyframes sweep { 0% { background-position: 160% 0; } 30%, 100% { background-position: -70% 0; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
@@ -107,6 +129,7 @@
     <div class="hub-top">
       <h1>게임 고르기</h1>
       <span class="coin-pill" title="네 게임에서 모은 별코인"><i class="cn" aria-hidden="true"></i><b id="hub-coins">0</b></span>
+      <button id="stk-open" class="rec-btn stk-btn" type="button">스티커북<b id="stk-new" class="new-dot" hidden></b></button>
       <button id="rec-open" class="rec-btn" type="button">기록실</button>
     </div>
     <div class="daily-head"><span>오늘의 미션</span><small id="daily-bonus"></small></div>
@@ -126,6 +149,15 @@
       <dl class="tot" id="rec-tot"></dl>
       <div id="rec-rows"></div>
       <button id="rec-close" type="button">닫기</button>
+    </div>
+  </section>
+
+  <!-- 스티커북: 네 게임에서 특별한 일을 하면 붙는 스티커 -->
+  <section id="stickers" class="overlay" aria-label="스티커북">
+    <div class="panel">
+      <h2>스티커북 <small id="stk-count"></small></h2>
+      <div id="stk-list"></div>
+      <button id="stk-close" type="button" class="close-btn">닫기</button>
     </div>
   </section>
 
@@ -166,11 +198,29 @@
         HUB.claimDaily(Number(b.dataset.claim));
         renderHub();
       });
+      function renderStickers() {
+        const list = HUB.stickers(), got = list.filter(t => t.got).length;
+        $('stk-count').textContent = got + ' / ' + list.length;
+        $('stk-list').innerHTML = HUB.GAMES.map(g => '<p class="stk-game" style="--c:' + g.color + '">' + g.name + '</p><div class="stk-row">' +
+          list.filter(t => t.game === g.id).map(t =>
+            '<div class="stk ' + (t.got ? 'got' : 'locked') + (t.fresh ? ' fresh' : '') + '" style="--c:' + g.color + '">' +
+              '<i aria-hidden="true">' + t.icon + '</i><b>' + (t.got ? t.name : '?') + '</b><small>' + t.desc + '</small></div>').join('') + '</div>').join('');
+      }
+      function renderNew() {
+        const n = HUB.stickers().filter(t => t.fresh).length;
+        $('stk-new').hidden = !n;
+        $('stk-new').textContent = n;
+      }
+      $('stk-open').addEventListener('click', () => { renderStickers(); $('stickers').classList.add('on'); HUB.seeStickers(); renderNew(); });
+      $('stk-close').addEventListener('click', () => $('stickers').classList.remove('on'));
+      $('stickers').addEventListener('click', e => { if (e.target.id === 'stickers') $('stickers').classList.remove('on'); });
       $('rec-open').addEventListener('click', () => { renderRecords(); $('records').classList.add('on'); });
       $('rec-close').addEventListener('click', () => $('records').classList.remove('on'));
       $('records').addEventListener('click', e => { if (e.target.id === 'records') $('records').classList.remove('on'); });
-      window.addEventListener('pageshow', renderHub);   // 게임에서 뒤로 돌아왔을 때
-      window.renderHub = renderHub;
+      const renderHubBase = renderHub;
+      renderHub = function () { renderHubBase(); renderNew(); };
+      window.addEventListener('pageshow', () => renderHub());   // 게임에서 뒤로 돌아왔을 때
+      window.renderHub = () => renderHub();
       renderHub();
     })();
   </script>

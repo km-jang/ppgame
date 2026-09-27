@@ -392,7 +392,6 @@ body.touch .text-btn { padding: 10px 16px; }
 .tabs button[aria-selected="true"] { color: var(--cyan); border-color: var(--cyan); background: rgba(94, 231, 255, .14); }
 .shop-sub { margin: 0 0 10px; font-size: 13px; }
 .shop-list { display: grid; gap: 10px; margin-bottom: 14px; text-align: left; }
-.shop-list.t-skins { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .shop-list.t-up, .shop-list.t-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sitem { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(94, 231, 255, .04); min-width: 0; }
 .sitem.skin { --sc: var(--cyan); display: grid; grid-template-columns: 1fr; grid-template-areas: "cv" "name" "desc" "btn"; row-gap: 4px; align-items: start; }
@@ -454,7 +453,6 @@ body.touch .text-btn { padding: 10px 16px; }
 /* 좁은 화면 (세로 폰): 상점 한 칸 · 두 칸 */
 @media (max-width: 700px) {
   .shop-list.t-up, .shop-list.t-items { grid-template-columns: 1fr; }
-  .shop-list.t-skins { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -504,4 +502,93 @@ body.touch .text-btn { padding: 10px 16px; }
 @media (max-height: 420px) and (orientation: landscape) {
   #scr-title .logo { font-size: 40px; }
   #scr-title .tagline, #scr-title .help { display: none; }
+}
+/* ═══ 캐릭터 5종 (2026-09-27, 뿅뿅 우주선 "내 기체" 칸과 같은 모양) ═══════════ */
+.char-card {
+  display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 10px;
+  width: 100%; min-height: 60px; margin: 0 0 12px; padding: 6px 10px 6px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 14px; background: rgba(94, 231, 255, .05);
+  color: var(--text); font: inherit; text-align: left; transition: transform .08s, border-color .15s;
+}
+.char-card:hover { border-color: var(--cyan); }
+.char-card:active { transform: scale(.97); }
+.char-card:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.char-cv { width: 96px; height: 44px; display: block; }
+.cc-txt { min-width: 0; }
+.cc-txt small { display: block; font-size: 11px; color: var(--muted); }
+.cc-txt b { display: block; font: normal 21px/1.15 var(--disp); letter-spacing: .5px; }
+.cc-txt em { display: block; font-style: normal; font-size: 12px; line-height: 1.3; color: #9dffcb; word-break: keep-all; }
+.cc-go { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font: normal 15px var(--disp); color: var(--cyan); white-space: nowrap; }
+/* 상점 캐릭터 칸: 이름 · 모양 · 특기 */
+.shop-list.t-chars { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.sitem.char { grid-template-areas: "cv" "name" "desc" "trait" "btn"; }
+.sitem.char .skin-cv { aspect-ratio: 168 / 76; }
+.sitem.char .s-trait { grid-area: trait; font-size: 12px; line-height: 1.35; color: #9dffcb; word-break: keep-all; }
+.sitem.char > button, .sitem.char > .maxed { align-self: end; }
+@media (max-width: 900px) { .shop-list.t-chars { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .shop-list.t-chars { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-height: 600px) and (orientation: landscape) {
+  .char-card { grid-template-columns: 80px 1fr auto; min-height: 48px; padding: 3px 8px 3px 4px; margin-bottom: 8px; gap: 8px; }
+  .char-cv { width: 80px; height: 36px; }
+  .cc-txt b { font-size: 17px; }
+  .cc-txt em { font-size: 11px; }
+  .cc-go { padding: 6px 10px; font-size: 14px; }
+  .shop-list.t-chars { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sitem.char { grid-template-columns: 84px 1fr; grid-template-areas: "cv name" "cv desc" "trait trait" "btn btn"; }
+  .sitem.char .skin-cv { width: 84px; height: 38px; }
+  .sitem.char .s-trait { font-size: 11px; line-height: 1.25; }
+}
+/* ═══ 라이벌 뱀 (2026-09-27): 시작 화면 켜기·끄기, 결과 한 줄 ═══════════ */
+.rival-tog {
+  display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; margin: 0 0 12px; padding: 4px 10px 4px 8px; cursor: pointer;
+  border: 1px solid rgba(255, 138, 31, .35); border-radius: 12px; background: rgba(255, 138, 31, .05);
+  color: var(--muted); font: inherit; text-align: left;
+}
+.rival-tog:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.rival-tog[aria-pressed=true] { color: var(--text); border-color: #ff8a1f; background: rgba(255, 138, 31, .12); }
+.rv-txt b { display: block; font: normal 18px/1.15 var(--disp); color: inherit; }
+.rival-tog[aria-pressed=true] .rv-txt b { color: #ffb35c; }
+.rv-txt small { display: block; font-size: 11.5px; line-height: 1.25; }
+/* 라이벌 얼굴: 주황 공에 보라 가면 */
+.rv-face { position: relative; display: inline-block; width: 30px; height: 30px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 38% 34%, #ffd08a, #ff8a1f 58%, #b8500a); }
+.rv-face::before { content: ""; position: absolute; left: 3px; right: 3px; top: 9px; height: 10px; border-radius: 5px; background: #4a1fa8; }
+.rv-face i { position: absolute; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+.rv-face i:first-child { left: 8px; } .rv-face i:last-child { right: 8px; }
+.rv-face.sm { transform: scale(.66); margin: -5px; }
+.rival-tog:not([aria-pressed=true]) .rv-face { filter: grayscale(1) brightness(.7); }
+.rv-sw { display: flex; align-items: center; gap: 6px; font: normal 15px var(--disp); }
+.rv-sw i { position: relative; width: 40px; height: 22px; border-radius: 11px; background: #2a3344; transition: background .15s; }
+.rv-sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #8aa4b8; transition: transform .15s; }
+.rival-tog[aria-pressed=true] .rv-sw i { background: #ff8a1f; }
+.rival-tog[aria-pressed=true] .rv-sw i::after { transform: translateX(18px); background: #fff; }
+.rival-tog[aria-pressed=true] .rv-sw em { color: #ffb35c; }
+.rv-sw em { font-style: normal; min-width: 1.4em; }
+.help b.rv { color: #ffb35c; }
+.rival-line { margin: 0 0 10px; padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(255, 138, 31, .45); background: rgba(255, 138, 31, .1);
+  color: #ffcf9a; font: normal 17px var(--disp); word-break: keep-all; }
+.rival-line.win { border-color: rgba(94, 231, 255, .5); background: rgba(94, 231, 255, .1); color: #bff8ff; }
+.rival-line[hidden] { display: none; }
+@media (max-height: 600px) and (orientation: landscape) {
+  .rival-tog { min-height: 44px; margin-bottom: 8px; padding: 2px 8px 2px 6px; }
+  .rv-txt b { font-size: 16px; } .rv-txt small { font-size: 10.5px; }
+  .rival-line { font-size: 15px; margin-bottom: 6px; padding: 4px 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .rv-sw i, .rv-sw i::after { transition: none; } }
+/* ═══ 우주 여행 (2026-09-27): 스테이지 칸마다 그 레벨 하늘 ═══════════ */
+.lvl-sky { position: absolute; left: 5px; top: 5px; width: 30px; height: 30px; pointer-events: none; }
+.lvl-sky-name { display: block; margin-top: 2px; font: normal 11px var(--disp); font-style: normal; opacity: .9; }
+.lvl.locked .lvl-sky { filter: grayscale(.6); }
+@media (max-height: 600px) and (orientation: landscape) {
+  .lvl-sky { width: 24px; height: 24px; left: 3px; top: 3px; }
+  .lvl-sky-name { font-size: 10px; margin-top: 1px; }
+}
+/* ═══ 어려움 (2026-09-27): 난이도 세 칸 ═══════════ */
+.level-seg.three { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.level-seg.three small { font-size: 11px; line-height: 1.2; word-break: keep-all; }
+.level-seg .hard[aria-pressed=true] { border-color: #ff5a6e; background: rgba(255, 77, 109, .14); box-shadow: 0 0 0 1px #ff5a6e, 0 0 16px rgba(255, 77, 109, .3); }
+.level-seg .hard[aria-pressed=true] b { color: #ff8a96; }
+@media (max-height: 600px) and (orientation: landscape) {
+  .level-seg.three small { font-size: 10px; }
 }

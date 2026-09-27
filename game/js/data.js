@@ -21,6 +21,42 @@
     tank:     { name: '중장갑', r: 26, hp: 18,  speed: 44,  score: 50,  color: '#8f5cff', shape: 'square' },
     splitter: { name: '분열체', r: 20, hp: 8,   speed: 62,  score: 25,  color: '#fb5607', shape: 'penta', splitInto: 'mini' },
     mini:     { name: '새끼',   r: 9,  hp: 1,   speed: 125, score: 5,   color: '#ff9e6d', shape: 'circle' },
+    // 돌진이 (2026-09-27): 가까이 오면 멈춰서 예고선을 보여 주고(warn초) 그 방향으로 쏜살같이 돌진한다.
+    // 예고선이 굳은 뒤에 옆으로 비키면 안 맞는다 (가만히 서 있으면 맞는다)
+    charger:  { name: '돌진이', r: 13, hp: 4,   speed: 64,  score: 20,  color: '#ff8c42', shape: 'arrow',
+                range: 340, warn: 0.75, dashSpeed: 560, dashTime: 0.5, rest: 1.4 },
+    // ─── 행성마다 다른 적 (2026-09-27, 소유자 "추천대로") ───────────────
+    // 그 행성 웨이브(2개)에만 섞여 나온다 (PLANETS[].foe, PLANET_FOE). 모두 맞기 전에 알아볼 수 있는 예고가 있다.
+    // 경고 시간(초)에는 난이도 foeWarn을 곱한다 (쉬움은 조금 길게)
+    // 수성 태양 불씨: 해가 있는 쪽(왼쪽·위)에서 날아오는 작고 빠른 불씨. 방향을 천천히만 틀어서 옆으로 비키면 스쳐 간다. 닿으면 꺼진다
+    ember:    { name: '태양 불씨', r: 8,  hp: 1,  speed: 175, score: 8,  color: '#ffb347', shape: 'ember', turn: 0.9 },
+    // 금성 산성 구름: 느린 구름. mistCd초마다 제자리에 안개 웅덩이를 남긴다 (mistForm초 동안 점선으로 생기고, mistLife초 동안
+    // 그 안에선 내 속도가 slow배). 아프지는 않다
+    acid:     { name: '산성 구름', r: 22, hp: 6,  speed: 38,  score: 25, color: '#c8f04a', shape: 'acid',
+                mistCd: 3.2, mistR: 58, mistForm: 0.6, mistLife: 4.5, slow: 0.55, mistMax: 6 },
+    // 지구 인공위성: 나를 가운데 두고 orbit px 거리에서 빙 돈다. beamCd초마다 멈춰서 점선 예고(beamWarn, 방향은 예고 시작 때 굳음)
+    // 뒤 짧은 빛줄기(길이 beamLen)를 beamOn초 쏜다
+    sat:      { name: '인공위성', r: 14, hp: 5,  speed: 75,  score: 30, color: '#9fd8ff', shape: 'sat',
+                orbit: 240, beamCd: 3.4, beamWarn: 0.9, beamOn: 0.25, beamLen: 440, beamW: 14 },
+    // 화성 모래 벌레: 땅속(모래 더미)으로 나를 따라오다(digSpeed, 이때는 못 맞히고 안 아프다) 내 밑에 오거나 digMax초가 지나면
+    // 멈춰서 둥근 예고(popR, popWarn초) 뒤 튀어나온다. 원 안에 있으면 아프다. 그다음 upTime초 동안 밖에 나와 느리게 쫓아온다
+    worm:     { name: '모래 벌레', r: 17, hp: 7,  speed: 45,  score: 35, color: '#e0824f', shape: 'worm',
+                digSpeed: 100, digMax: 5, popR: 50, popWarn: 0.9, upTime: 2.6 },
+    // 목성 번개 구름: 거리를 두고 떠 있다가 번개를 모은다(zapWarn초, 불꽃 + 내가 있던 자리까지 점선). 그 자리까지 짧은 번개
+    zap:      { name: '번개 구름', r: 21, hp: 7,  speed: 50,  score: 35, color: '#c9b6ff', shape: 'zap',
+                keep: 270, zapCd: 3.8, zapWarn: 1.0, zapOn: 0.18, zapW: 18, zapReach: 520 },
+    // 토성 고리 조각: 화면 왼쪽·오른쪽 끝에서 내 높이로 줄을 맞추고(aim초) 가로 띠 예고(warn초) 뒤 반대쪽 끝까지 휙 (sweep px/초)
+    shard:    { name: '고리 조각', r: 14, hp: 5,  speed: 150, score: 25, color: '#f3d58c', shape: 'shard',
+                aim: 1.3, warn: 1.0, sweep: 400 },
+    // 천왕성 얼음 결정: 부수면 작은 얼음 조각 3개로 쪼개진다
+    ice:      { name: '얼음 결정', r: 17, hp: 6,  speed: 60,  score: 25, color: '#bff6ff', shape: 'ice', splitInto: 'iceBit', splitN: 3 },
+    iceBit:   { name: '얼음 조각', r: 8,  hp: 1,  speed: 120, score: 5,  color: '#e6fbff', shape: 'iceBit' },
+    // 해왕성 폭풍 드론: 나를 둘러싸고 소용돌이치며(near~far px) 돈다. 둘레 windR px 안을 지나는 내 총알을 옆으로 휘게 한다
+    storm:    { name: '폭풍 드론', r: 15, hp: 6,  speed: 90,  score: 30, color: '#6fa8ff', shape: 'storm',
+                near: 150, far: 290, windR: 95, windTurn: 3.0 },
+    // 명왕성 하트 유령: 보였다(on초) 흐려졌다(off초) 한다 (fade초에 걸쳐). 흐릴 땐 못 맞히고 닿아도 안 아프며, 나에게서 keepOff px 떨어져 있다
+    ghost:    { name: '하트 유령', r: 17, hp: 5,  speed: 75,  score: 30, color: '#ffb3d9', shape: 'ghost',
+                on: 2.4, off: 1.8, fade: 0.45, keepOff: 140 },
     boss:     { name: '보스',   r: 58, hp: 320, speed: 42,  score: 1000, color: '#ff2e88', shape: 'octa',
                 ringCd: 3.0, ringCount: 14, ringSpeed: 170,
                 aimCd: 1.4, aimSpeed: 240, summonCd: 6.5 },
@@ -31,6 +67,7 @@
     { type: 'grunt',    from: 1, w: 10 },
     { type: 'runner',   from: 2, w: 5 },
     { type: 'shooter',  from: 3, w: 3 },
+    { type: 'charger',  from: 3, w: 3 },
     { type: 'tank',     from: 4, w: 2 },
     { type: 'splitter', from: 6, w: 3 },
   ];
@@ -47,11 +84,64 @@
   };
 
   // 난이도. 적 체력·속도·수, 적 탄 속도·연사, 내 체력, 점수 배율
+  // (2026-09-27 소유자: "난이도 더 높여도 돼, 쉬움부터 상하좌우 움직이게") 아래를 더했다
+  // lead: 사수가 내가 움직이는 쪽을 얼마나 앞질러 쏘나 (0 그대로 겨눔, 1 정확히 앞질러)
+  // meteor: 운석이 떨어지는 간격(초)·예고 시간(초). 예고 원이 내 자리에 생기고 warn초 뒤 떨어진다
+  // foeWarn: 행성 적(PLANET_FOE)의 예고 시간 배율
+  // pull·bulletPull: 블랙홀 웨이브에서 나와 적 탄을 끌어당기는 힘 (px/초, px/초²). 내 속도(220)보다 한참 약하다
   const DIFFICULTY = {
-    easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.6,  enemySpeed: 0.8,  count: 0.75, bulletSpeed: 0.75, fireRate: 0.7,  score: 0.6 },
-    normal: { id: 'normal', name: '보통',   hp: 5, enemyHp: 1,    enemySpeed: 1,    count: 1,    bulletSpeed: 1,    fireRate: 1,    score: 1 },
-    hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.5,  enemySpeed: 1.2,  count: 1.3,  bulletSpeed: 1.2,  fireRate: 1.35, score: 1.6 },
+    easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.7,  enemySpeed: 0.85, count: 0.9,  bulletSpeed: 0.8,  fireRate: 0.8,  score: 0.6,
+              lead: 0.3,  meteorEvery: 5.2, meteorWarn: 1.35, pull: 38, bulletPull: 70, foeWarn: 1.2 },
+    normal: { id: 'normal', name: '보통',   hp: 5, enemyHp: 1.05, enemySpeed: 1.05, count: 1.1,  bulletSpeed: 1.05, fireRate: 1.1,  score: 1,
+              lead: 0.6,  meteorEvery: 4.0, meteorWarn: 1.15, pull: 52, bulletPull: 100, foeWarn: 1 },
+    hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.5,  enemySpeed: 1.2,  count: 1.35, bulletSpeed: 1.2,  fireRate: 1.4,  score: 1.6,
+              lead: 0.85, meteorEvery: 3.2, meteorWarn: 1.0,  pull: 66, bulletPull: 130, foeWarn: 0.85 },
   };
+
+  // 운석 (2026-09-27): 가만히 서 있으면 맞도록 내 자리를 노린다. 예고 원(빨간 점선 + 차오르는 빛)이 먼저 뜨고
+  // 떨어질 때 원 안에 있으면 1칸 아프다. 원 안의 일반 적도 피해를 입는다 (적을 끌어들여 맞히는 재미)
+  // 간격 = 난이도 meteorEvery × max(minMul, 1 - (웨이브-1) × perWave). extraEvery 웨이브마다 운석이 하나씩 더 (내 주변 spread px 안)
+  const METEOR = {
+    r: 58,             // 떨어지는 원 반지름 (내가 0.35초면 빠져나간다)
+    firstDelay: 2.6,   // 웨이브 시작 뒤 첫 운석까지
+    perWave: 0.03, minMul: 0.6,
+    extraEvery: 6, extraMax: 3, spread: 190,
+    bossMul: 1.5,      // 보스 웨이브에선 덜 자주
+    enemyDmg: 5,       // 원 안의 적 피해 (웨이브 체력 배율·난이도 적 체력 배율을 곱함. 졸개·돌격병·새끼는 한 방)
+    stop: 0.05,        // 떨어지는 순간 화면 멈춤
+  };
+
+  // 태양계 여행 (2026-09-27, 소유자: "배경 행성을 수금지화목토천해명 지나가면 각 특색 있는 행성, 간혹 블랙홀 배경도")
+  // 웨이브 perPlanet개마다 다음 행성으로. 명왕성 다음은 다시 수성 (2바퀴, 3바퀴 …)
+  // 그림(색·무늬)은 render.js PLANET_ART. 여기는 이름·한 줄 설명·알림 색
+  const JOURNEY = { perPlanet: 2 };
+  // foe: 그 행성 웨이브에 섞여 나오는 행성 적 (ENEMIES)
+  const PLANETS = [
+    { id: 'mercury', name: '수성',   fact: '태양과 가장 가까운 행성',   color: '#c9c3bb', foe: 'ember' },
+    { id: 'venus',   name: '금성',   fact: '노란 구름이 빙글빙글',       color: '#ffcf6b', foe: 'acid' },
+    { id: 'earth',   name: '지구',   fact: '우리 집! 파란 바다 행성',    color: '#6fc3ff', foe: 'sat' },
+    { id: 'mars',    name: '화성',   fact: '빨간 모래 행성',             color: '#ff7a4d', foe: 'worm' },
+    { id: 'jupiter', name: '목성',   fact: '가장 큰 행성, 커다란 빨간 점', color: '#f0b98a', foe: 'zap' },
+    { id: 'saturn',  name: '토성',   fact: '멋진 고리를 두른 행성',      color: '#f3d58c', foe: 'shard' },
+    { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성', color: '#9ef0f0', foe: 'ice' },
+    { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',   color: '#5b8cff', foe: 'storm' },
+    { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',        color: '#e8d2b8', foe: 'ghost' },
+  ];
+  // 행성 적 섞기: 일반 웨이브는 적 수의 share만큼(최소 min), 보스 웨이브는 boss마리를 웨이브 안에 고르게 바꿔 넣는다.
+  // 처음 만나면 그 적 위에 이름표("화성 모래 벌레!")를 tag초 띄운다
+  const PLANET_FOE = { share: 0.3, min: 2, boss: 2, tag: 2.4 };
+
+  // 알아서 맞춰 주는 난이도 (2026-09-27, common/hub.js HUB.adaptMul). 판을 시작할 때 받은 배율 m(0.85 ~ 1.12, 처음 두 판은 1)을
+  // 압박 손잡이에 살짝 곱한다: 손잡이 = 1 + (m - 1) × 무게. count 적 수 · gap 적이 나오는 간격(나눔) · meteor 운석 간격(나눔) · fire 적 연사
+  // 판이 끝나면 perf = 버틴 시간 ÷ target[난이도] (최대 3)를 HUB.adaptRun으로 알린다. 1이면 "그 난이도에서 보통 잘한 판"
+  // target은 원 그리기 봇(피하지 않고 돌기만, 아이 흉내)의 버틴 시간 중앙값 근처 (PLAN.md 5.6)
+  const ADAPT = { count: 1, gap: 1, meteor: 1, fire: 0.6, min: 0.8, max: 1.2, target: { easy: 240, normal: 120, hard: 100 }, maxPerf: 3 };
+
+  // 블랙홀 웨이브: from 웨이브부터, 보스 웨이브가 아니고 바로 앞 웨이브가 블랙홀이 아니면 chance 확률로
+  // 블랙홀은 화면 안쪽(place 비율 사이)에, 내 자리에서 minFromPlayer px 이상 떨어져 생긴다.
+  // 끌어당기는 힘 = 난이도 pull × (near + (1 - near) × 가까움), 가까움 = 1 - 거리/(range × 화면 긴 변). 한가운데(core)는 힘 없음
+  // 적은 끌려가지 않는다 (적을 나에게 떠밀지 않게). 적 탄은 휘고, 가운데(swallow px)에 닿은 탄은 삼켜진다
+  const BLACKHOLE = { from: 4, chance: 0.16, core: 14, swallow: 26, range: 0.7, near: 0.35, place: [0.28, 0.72], minFromPlayer: 220 };
 
   // 타격감: 큰 적을 잡는 순간 화면을 아주 잠깐 멈춘다 (초). 연달아 걸리지 않게 간격을 둔다
   // 보스 모습: 5웨이브마다 차례로 바뀐다 (한 바퀴 돌면 같은 모습에 "MK2", "MK3"…). 규칙(체력·탄막)은 같다
@@ -180,10 +270,11 @@
     { id: 'w10',     tier: 1, icon: '10',  name: '10웨이브',       desc: '아무 난이도로 10웨이브 도달',           check: r => r.wave >= 10 },
     { id: 'w10n',    tier: 2, icon: '10',  name: '보통 10웨이브',  desc: '보통 이상으로 10웨이브 도달',           check: r => r.wave >= 10 && r.diff !== 'easy' },
     { id: 'w15h',    tier: 3, icon: '15',  name: '어려움 15웨이브', desc: '어려움으로 15웨이브 도달',             check: r => r.wave >= 15 && r.diff === 'hard' },
+    { id: 'pluto',   tier: 2, icon: '♥',   name: '태양계 끝까지', desc: '한 판에 명왕성까지 가기 (17웨이브)',     check: r => r.wave >= 17 },
     { id: 'games10', tier: 1, icon: '10판', name: '단골',          desc: '10판 플레이',                           check: (r, L) => L.games >= 10 },
   ];
 
-  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
+  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, PLANET_FOE, ADAPT, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
 
   // ═══ 기체 · 상점 · 미션 · 아이템 (2026-09-26, 소유자: "캐릭터 고를 수 있게, 상점·미션·아이템") ═══
   // 기체. hp: 체력 더하기, speed·dashCd: 배율, gun: 총 바꾸기(barrels 더하기, rate·dmg·speed 배율, crit 더하기,
@@ -227,8 +318,9 @@
     { id: 'fullult', icon: 'Q',  name: '필살기 가득',  desc: '필살기 게이지가 가득 찬 채로 시작', price: 120, max: 3 },
   ];
 
-  // 판이 끝날 때 받는 코인 = 점수 ÷ 40 + (웨이브-1) × 4 + 보스 × 40 + 주운 코인. 그 뒤 코인 보너스 강화만큼 더
-  const COINS = { perScore: 40, perWave: 4, perBoss: 40 };
+  // 판이 끝날 때 받는 코인 = 점수 ÷ 40 + (웨이브-1) × 5 + 보스 × 40 + 주운 코인. 그 뒤 코인 보너스 강화만큼 더
+  // (2026-09-27 난이도를 올리며 웨이브 코인 4 → 5: 판이 짧아져도 한 판에 받는 코인이 비슷하게)
+  const COINS = { perScore: 40, perWave: 5, perBoss: 40 };
 
   // 게임 중 떨어지는 아이템 (일반 적 처치마다, 회복 다음에 한 번 굴림). chance: 처치당 확률
   // coin: value 코인, 보스는 bossCoins개를 흩뿌림 · heat: time초 동안 연사 mul배 · magnet: time초 동안 모든 아이템을 끌어옴
@@ -265,5 +357,47 @@
   ];
   const MISSION_SLOTS = 3;
 
-  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS });
+  // ═══ 깜짝 선물 상자 · 피버 타임 · 동료 우주선 (2026-09-27, 소유자 "추천대로") ═══
+  // 셋 다 판을 어렵게 만들지 않는 "반가운 일"이다. 뽑기는 게임 규칙 난수(W.rand)와 따로 도는 난수(W.fun)를 써서
+  // 적·카드·운석이 나오는 차례는 예전과 똑같다
+
+  // 깜짝 선물 상자: 플레이 시간 gap초(사이 아무 값)마다 한 번, 반짝이는 선물 상자가 life초 동안 화면을 가로질러 둥실 떠 간다.
+  // 총알 hits발(또는 닿기)로 열린다. 웨이브 시작 quiet초·보스 웨이브 bossQuiet초·블랙홀 웨이브 holeQuiet초 동안은 안 나오고
+  // (보스 등장·블랙홀 시작 방해 안 함), 그때 차례가 오면 retry초 뒤 다시 본다. 웨이브 끝(적이 다 나오고 다 잡힘)에도 안 나온다
+  // 선물(rewards, w 가중치): 코인 min~max(step 단위, 판 끝 코인에 더해짐) · 방패 · 드론 time초 · 필살기 가득 · 다음 판 시작 아이템 하나
+  // 방패가 이미 있으면 방패, 필살기가 이미 가득이면 필살기는 뽑지 않는다. 시작 아이템 칸이 가득이면 판 끝에 itemFullCoins 코인으로
+  const GIFT = {
+    first: [45, 75], gap: [60, 100],
+    quiet: 4, bossQuiet: 7, holeQuiet: 7, retry: 1.5,
+    life: 8, r: 26, hits: 3, bob: 16, margin: 44, band: [0.22, 0.78],
+    popup: 2.6,       // 가운데 위 "선물: 코인 25개!" 알림 (초)
+    confetti: 42,     // 열릴 때 색종이 수
+    rewards: [
+      { id: 'coins',  w: 5, min: 15, max: 40, step: 5 },
+      { id: 'shield', w: 2 },
+      { id: 'drone',  w: 2, time: 20 },
+      { id: 'ult',    w: 2 },
+      { id: 'item',   w: 1.5 },
+    ],
+    itemFullCoins: 30,
+  };
+
+  // 피버 타임: 콤보가 fromCombo 이상인 처치마다 게이지 1 (보스는 bossAdd 더). need가 차면 time초 동안 FEVER:
+  // 점수 scoreMul배 · 화면 가장자리 무지개 · 음악 빨라짐 · 반짝이는 총알 · 가운데 위 "FEVER!" (banner초).
+  // 콤보가 끊겨 있는 동안은 게이지가 초당 idleDrain씩 조금 줄고, 피버가 끝나면 0부터 다시
+  // 적·탄·체력은 그대로 (어려워지지 않는다). 움직임 줄이기 설정이면 깜빡임 없이 고정 테두리와 글자만
+  // 원 그리기 봇(아이 흉내) 실측: 5분에 2~3번, 첫 피버는 1분 반 안팎 (PLAN.md 5.13)
+  const FEVER = { need: 35, fromCombo: 2, bossAdd: 10, idleDrain: 0.25, time: 10, scoreMul: 2, banner: 1.6 };
+
+  // 동료 우주선: firstWave 웨이브부터 2~3웨이브(every)마다 한 번, 웨이브 시작 delay초(사이 아무 값) 뒤 구조 캡슐이 가장자리에서
+  // capSpeed로 화면을 가로질러 떠 온다 (capLife초 뒤 사라짐). 총알 capHits발(또는 닿기)로 열면 작은 동료 기체가 나와
+  // time초 동안 내 옆(side px, 조준 뒤쪽)을 따라다니며 range 안의 가장 가까운 적에게 초당 rate발(위력 = 내 위력 × dmgMul)을 쏜다.
+  // 끝나면 bye초 동안 손을 흔들고("고마워!") 떠난다. 동료·캡슐은 한 번에 하나뿐. 맞지 않고 적을 막지도 않는다
+  const WINGMAN = {
+    firstWave: 2, every: [2, 3], delay: [5, 12],
+    capR: 22, capHits: 3, capSpeed: 70, capLife: 20,
+    time: 25, bye: 2.2, rate: 3, dmgMul: 0.5, bulletSpeed: 480, range: 560, r: 10, side: 60, follow: 6,
+  };
+
+  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS, GIFT, FEVER, WINGMAN });
 })(NG);

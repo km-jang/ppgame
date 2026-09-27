@@ -87,6 +87,25 @@
     portal: { gap: 0.08, fn(t) { tone(t, 'sine', 1600, 200, 0.18, 0.12); tone(t + 0.12, 'sine', 200, 1400, 0.16, 0.1); } },
     // 앞에 부딪힐 것이 있음: 짧은 경고음 두 번
     warn: { gap: 0.6, fn(t) { tone(t, 'square', 880, 880, 0.06, 0.07); tone(t + 0.1, 'square', 880, 880, 0.06, 0.07); } },
+    // 라이벌 뱀: 나오기 전 예고(우우) · 나옴(낮은 나팔) · 내 몸에 쿵(보잉) · 쉬움에서 지나감(휙) · 라이벌이 먹음(작고 낮게)
+    rivalwarn: { gap: 0.5, fn(t) { tone(t, 'triangle', 330, 440, 0.18, 0.08); tone(t + 0.2, 'triangle', 330, 440, 0.18, 0.08); } },
+    rival: { gap: 0.5, fn(t) { tone(t, 'square', 262, 262, 0.1, 0.07); tone(t + 0.1, 'square', 330, 330, 0.1, 0.07); tone(t + 0.2, 'square', 392, 392, 0.18, 0.07); } },
+    bump: { gap: 0.15, fn(t) { tone(t, 'sine', 520, 140, 0.3, 0.14); tone(t + 0.05, 'triangle', 900, 700, 0.12, 0.05); } },
+    pass: { gap: 0.2, fn(t) { noise(t, 'bandpass', 2000, 600, 0.2, 0.08); tone(t, 'sine', 900, 1400, 0.12, 0.05); } },
+    // 라이벌을 물어 먹음: 와삭 (통째로면 더 크게) · 머리끼리 쿵
+    bite: { gap: 0.1, fn(t) { noise(t, 'bandpass', 2600, 900, 0.12, 0.2); tone(t, 'square', 700, 350, 0.1, 0.08); tone(t + 0.08, 'triangle', 880, 1320, 0.12, 0.08); } },
+    biteall: { gap: 0.3, fn(t) { noise(t, 'bandpass', 2600, 600, 0.2, 0.25); [523, 659, 784, 1047].forEach((f, i) => tone(t + 0.1 + i * 0.06, 'square', f, f, 0.14, 0.08)); } },
+    headbump: { gap: 0.2, fn(t) { tone(t, 'sine', 300, 120, 0.2, 0.14); } },
+    rivaleat: { gap: 0.08, fn(t) { tone(t, 'triangle', 330, 260, 0.12, 0.06); } },
+    // 재미 셋: 선물 상자 나타남(딸랑) · 열기(팡파르) · 피버 시작(빠르게 오르는 음계) · 피버 끝 · 거대 변신(낮게 부풂) · 벽 부숨(쾅)
+    gift: { gap: 0.5, fn(t) { [1319, 1760].forEach((f, i) => tone(t + i * 0.08, 'triangle', f, f, 0.18, 0.08)); } },
+    giftopen: { gap: 0.3, fn(t) { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(t + i * 0.06, 'square', f, f, 0.14, 0.08)); noise(t + 0.25, 'highpass', 5000, 9000, 0.35, 0.06); } },
+    fever: { gap: 0.5, fn(t) { [523, 587, 659, 784, 880, 1047, 1175, 1319].forEach((f, i) => tone(t + i * 0.045, 'square', f, f, 0.08, 0.07)); } },
+    feverend: { gap: 0.5, fn(t) { tone(t, 'triangle', 880, 440, 0.3, 0.07); } },
+    giant: { gap: 0.5, fn(t) { tone(t, 'sawtooth', 110, 330, 0.5, 0.12); tone(t + 0.1, 'square', 220, 660, 0.4, 0.06); } },
+    smash: { gap: 0.08, fn(t) { noise(t, 'lowpass', 1800, 200, 0.25, 0.25); tone(t, 'sine', 140, 60, 0.2, 0.2); } },
+    // 새 하늘(행성·블랙홀)에 도착: 반짝이는 화음
+    planet: { gap: 0.5, fn(t) { [659, 880, 1175, 1568].forEach((f, i) => tone(t + i * 0.07, 'sine', f, f, 0.35, 0.07)); } },
     wrap: { gap: 0.08, fn(t) { noise(t, 'bandpass', 800, 3000, 0.15, 0.1); } },
     // 황금 구슬이 식음
     cool: { gap: 0.3, fn(t) { tone(t, 'triangle', 700, 350, 0.25, 0.08); } },

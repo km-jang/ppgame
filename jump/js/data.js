@@ -35,6 +35,9 @@
     //   main: 길을 이루는 발판 종류 가중치 [처음, 끝] · extra: 곁 발판 종류 가중치 · extraChance: 곁 발판이 나올 확률 [처음, 끝]
     //   moveSpeed: 움직이는 발판 속도 [처음, 끝] (점/초)
     //   mine: 가시 폭탄 {from: 처음 나오는 높이(m), chance: 줄마다 나올 확률 [처음, 끝]}. null이면 없음
+    //   monster: 밟는 몬스터 {from: 처음 나오는 높이(m), chance: 줄마다 나올 확률 [처음, 끝],
+    //            kinds: 종류 가중치 [처음, 끝] (MONSTER.kinds), walk: 슬라임이 발판 위를 걸어 다닐 확률 [처음, 끝]}
+    //   storm: 쫓아오는 먹구름 {from: 나오는 높이(m), speed: 오르는 빠르기 m/초 [처음, 끝], ramp: 끝 빠르기가 되는 높이(m)}. null이면 없음
     //   rescues: 떨어지면 받아 주는 구조 구름 수 · itemGap: 아이템 사이 높이(m) [최소, 최대]
     //   ctl: 좌우 움직임 {maxVx 최고 속도, accel 붙는 힘, decel 멈추는 힘}
     DIFFICULTY: {
@@ -47,6 +50,8 @@
         extra: { normal: [70, 35], cloud: [18, 38], crumble: [12, 27] },
         moveSpeed: [35, 85],
         mine: null,
+        monster: { from: 35, chance: [0.22, 0.4], kinds: { slime: [5, 3], balloon: [3, 3], bird: [0, 2] }, walk: [0.3, 0.6] },
+        storm: null,
         rescues: 3, itemGap: [40, 70],
         ctl: { maxVx: 400, accel: 2900, decel: 3000 },
       },
@@ -59,6 +64,8 @@
         extra: { normal: [60, 20], cloud: [25, 50], crumble: [15, 30] },
         moveSpeed: [50, 145],
         mine: { from: 45, chance: [0.06, 0.34] },
+        monster: { from: 20, chance: [0.24, 0.44], kinds: { slime: [5, 3], balloon: [3, 3], bird: [1, 3] }, walk: [0.4, 0.8] },
+        storm: { from: 12, speed: [1.5, 3.2], ramp: 400 },
         rescues: 0, itemGap: [55, 95],
         ctl: { maxVx: 430, accel: 3400, decel: 2800 },
       },
@@ -71,6 +78,8 @@
         extra: { normal: [45, 15], cloud: [30, 50], crumble: [25, 35] },
         moveSpeed: [85, 175],
         mine: { from: 15, chance: [0.14, 0.42] },
+        monster: { from: 10, chance: [0.26, 0.46], kinds: { slime: [4, 3], balloon: [3, 3], bird: [2, 4] }, walk: [0.5, 0.9] },
+        storm: { from: 6, speed: [1.9, 3.4], ramp: 250 },
         rescues: 0, itemGap: [70, 120],
         ctl: { maxVx: 470, accel: 3700, decel: 3100 },
       },
@@ -93,6 +102,52 @@
     // 가시 폭탄 (보통·어려움): 크기, 발판에서 가로로 떨어뜨리는 거리. 나오는 높이·확률은 난이도 mine
     MINE: { r: 15, clear: 105 },
 
+    // 밟는 몬스터 (2026-09-27): 위에서 내려와 밟으면 꾹 눌리고 크게 튀어 오른다 (한 번 튀는 높이 × stomp).
+    //   옆이나 아래에서 닿으면: 쉬움은 살짝 밀려나고(push 점/초, "앗") 다치지 않는다, 보통·어려움은 가시 폭탄처럼 끝 (방패·로켓이면 괜찮다).
+    //   r: 몸 반지름 · points: 밟으면 받는 점수(콤보 배율) · pad: 몬스터가 발판 위 튀는 길에서 떨어져 있는 거리
+    //     (길 발판 가운데에서 가로로 pad, 주인공 몸 + 몬스터 몸 + 여유) · top: 주인공 가운데가 몬스터 가운데보다 이만큼(몸 반지름 배율) 위면 "밟기"
+    //   roof: 몬스터 윗면에서 이 높이(점) 안에 덮는 발판이 없게 (위에서 밟을 수 있게)
+    //   seat: 앉을 곁 발판이 있을 때 슬라임이 나올 확률 (곁 발판이 길 발판보다 seatBelow점 넘게 낮을 때만) · perch: 앉을 곁 발판이 없을 때 두 줄 사이에 놓는 작은 받침 발판 폭
+    //   hurt: 옆·아래로 부딪혔다고 치는 몬스터 몸 배율 (밟기는 몸 전체, 부딪힘은 조금 안쪽만: 아이에게 너그럽게)
+    //   kinds: slime 발판 위에 앉는 슬라임(가끔 걸어 다님) · balloon 발판 사이에 둥둥 뜬 풍선 괴물 · bird 옆으로 오가는 작은 로봇 새
+    //     (range: 오가는 거리 점, speed: 점/초, float: 위아래 둥실 점)
+    MONSTER: {
+      r: 17, stomp: 1.5, points: 15, push: 150, cool: 0.6, pad: 54, top: 0.15, hurt: 0.7, seat: 0.7, seatBelow: 6, perch: 64, roof: 60,
+      kinds: {
+        slime:   { name: '통통 슬라임', color: '#7dff6a', top: '#eaffc2', speed: 40 },
+        balloon: { name: '풍선 괴물',   color: '#ff7ad9', top: '#ffd6f4', range: 26, speed: 22, float: 6 },
+        bird:    { name: '로봇 새',     color: '#ffb13d', top: '#fff0c2', range: 50, speed: 60, float: 4 },
+      },
+    },
+
+    // 쫓아오는 먹구름 (보통·어려움, 2026-09-27): 아래에서 올라온다. 닿으면 떨어진 것과 같다 (방패 방울이 막아 주면 뒤로 물러난다).
+    //   빠르기는 난이도 storm.speed, 늘 사람 닮은 봇이 오르는 평균보다 느리다 (tests/jump.test.js가 잰다).
+    //   lag: 화면 아래 끝에서 이만큼(화면 높이 배율)보다 더 멀리 처지지는 않는다 (너무 멀어 잊히지 않게)
+    //   rest: 로켓이 끝난 뒤·방울이 막아 준 뒤 쉬는 시간(초) · back: 방울이 막아 주면 물러나는 거리(화면 높이 배율)
+    //   warn: 이만큼(m) 가까우면 HUD가 빨갛게 · hint: 처음 보일 때 "구름이 쫓아와요!" 보여 주는 시간(초)
+    STORM: { lag: 0.62, rest: 2.5, back: 0.5, warn: 4, hint: 2.8 },
+
+    // 알아서 맞춰 주는 난이도 (common/hub.js adaptMul, 0.85 ~ 1.12, 처음 두 판은 1). World.create opts.adapt로 받는다.
+    //   배율 mul을 이 지수만큼 거듭제곱해 곱한다 (1보다 작으면 쉽게):
+    //   ramp: 가장 어려운 높이 full을 mul^ramp로 나눔 (어려워지는 빠르기. 간격의 끝값은 그대로라 "닿지 못하는 틈이 없다"는 늘 성립)
+    //   mix: 움직이는·부서지는·구름 발판 가중치 · monster: 몬스터 나올 확률 · storm: 먹구름 빠르기
+    //   target: 판이 끝날 때 adaptRun에 주는 perf = 오른 높이 ÷ target (1 = 잘하는 아이의 보통 판. 아이 흉내 봇으로 정함)
+    ADAPT: { ramp: 1, mix: 1.5, monster: 1.5, storm: 1, target: { easy: 500, normal: 120, hard: 60 } },
+
+    // ─── 깜짝 선물 · 피버 타임 · 비밀 방 (2026-09-27, 소유자 "추천대로") ───────────
+    // 깜짝 선물 상자: 오른 시간 every초 [최소, 최대]마다 하나, 화면 바로 위 길 발판 위에 놓인다 (블랙홀 구간·처음 안내 중에는 안 나옴).
+    //   grab: 몸이 닿지 않아도 이만큼(점) 가까우면 먹는다 (너그럽게). 먹으면 반짝이 + "선물: 코인 25개!". 상(kinds 가중치): 코인 coins개 [최소, 최대] (판이 끝날 때 받는 코인에 더함) ·
+    //   로켓 · 방패 방울 · 다음 판 시작 아이템 하나(가득이면 itemCoins 코인). 뽑기 느낌이 없게 모두 좋은 것만
+    GIFT: { every: [60, 100], r: 20, grab: 18, coins: [15, 40], itemCoins: 20, kinds: { coins: 5, rocket: 2, shield: 2, item: 2 } },
+    // 피버 타임: 이어서 더 높은 발판을 밟을 때마다(add + perCombo × 콤보, 콤보는 cap까지) · 몬스터를 밟을 때마다(stomp) 게이지가 찬다.
+    //   가득 차면 time초 동안 FEVER: 별 점수 × starMul, 보이는 길 발판 위에 별이 더(spawn 확률), 새로 생기는 줄에도 별이 더(extra 확률).
+    //   피버 중에는 게이지가 차지 않는다
+    FEVER: { time: 10, add: 0.018, perCombo: 0.004, cap: 10, stomp: 0.1, starMul: 2, spawn: 0.8, extra: 0.6 },
+    // 비밀 방: every m [최소, 최대]마다 길 발판(보통 발판) 위에 빛나는 구름 문. 닿으면 time초 동안 별과 스프링이 가득한 조용한 방.
+    //   방 안에서는 떨어지지 않고(바닥에서 튄다), 높이·먹구름·블랙홀이 멈춘다. 끝나면 "비밀 방 끝!" 하고 문 자리로 돌아와 한 번 튄다.
+    //   first: 처음 문이 나올 수 있는 높이(m) · stars: 방 안 별 수 · springs: 방 안 스프링 수 · r: 문에 닿는 거리
+    ROOM: { every: [200, 300], first: 90, time: 20, stars: 30, springs: 3, r: 26 },
+
     // 구조 구름·방패 방울이 던져 올리는 높이 (화면 높이 배율, 상한 520점)
     RESCUE: { jump: 0.75, max: 520 },
 
@@ -105,12 +160,47 @@
       { id: 'cloud', name: '구름 위', from: 100, color: '#bfe9ff', banner: '구름 위 도착!',
         sky: ['#0f2150', '#2c4f9a', '#7fb2e6'], glow: ['#9fd8ff', '#5d7bff'], stars: 0.35, clouds: 0.85, mix: { cloud: 1.5 } },
       { id: 'space', name: '우주',    from: 250, color: '#b388ff', banner: '우주 도착!',
-        sky: ['#05070f', '#0d1633', '#1c1446'], glow: ['#3a2a8a', '#0d6a8a'], stars: 0.85, clouds: 0, mix: { moving: 1.3, star: 0.05 } },
-      { id: 'stars', name: '별나라',  from: 500, color: '#ffe66d', banner: '별나라 도착!',
-        sky: ['#0b0418', '#2a0c42', '#40104a'], glow: ['#ff5ec8', '#ffe66d'], stars: 1, clouds: 0, mix: { spring: 1.3, star: 0.12 } },
+        sky: ['#05070f', '#0d1633', '#1c1446'], glow: ['#3a2a8a', '#0d6a8a'], stars: 0.85, clouds: 0, mix: { moving: 1.3, star: 0.05, monster: 1.2 } },
+      { id: 'stars', name: '별나라',  from: 700, color: '#ffe66d', banner: '별나라 도착!',
+        sky: ['#0b0418', '#2a0c42', '#40104a'], glow: ['#ff5ec8', '#ffe66d'], stars: 1, clouds: 0, mix: { spring: 1.3, star: 0.12, monster: 1.3 } },
     ],
-    // 구역이 바뀔 때 배경이 섞여 넘어가는 높이 (m, 경계 앞쪽)
+    // 구역이 바뀔 때 배경이 섞여 넘어가는 높이 (m, 경계 앞쪽). 행성 사이는 PLANET_FADE
     ZONE_FADE: 25,
+
+    // ─── 태양계 여행 (2026-09-27, 소유자: "다른 게임도 우주배경 반영", 뿅뿅 우주선과 같은 행성) ───
+    // 우주 구역(250m)부터 50m마다 행성 하나씩 지나 오른다: 수성 250 · 금성 300 · 지구 350 · 화성 400 · 목성 450 ·
+    // 토성 500 · 천왕성 550 · 해왕성 600 · 명왕성 650, 그 위 700m부터 별나라(은하).
+    // 50m 간격: 쉬움 아이 흉내 봇이 한 판에 평균 450 ~ 500m를 올라 행성 너덧 개를 보고, 쉬움이 가장 어려워지는 700m에서 은하에 닿는다.
+    //   at: 도착 높이(m) · side: 행성이 떠 가는 쪽(기둥 왼쪽·오른쪽 번갈아) · size: 크기 배율 · line: 도착 배너 한 줄
+    //   sky: 그 행성 구간 하늘 [위, 가운데, 아래] · glow: 하늘 빛 덩어리 두 색 (render.js가 한 번 그려 둔다)
+    PLANETS: [
+      { id: 'mercury', name: '수성',   at: 250, side: 1,  size: 0.8,  color: '#d8d0c4', line: '태양과 가장 가까운 행성',
+        sky: ['#07070a', '#2a1e12', '#3a2a14'], glow: ['#ffb070', '#5a4630'] },
+      { id: 'venus',   name: '금성',   at: 300, side: -1, size: 0.95, color: '#ffcf6b', line: '노란 구름이 빙글빙글',
+        sky: ['#0b0804', '#3a2206', '#5a3a0c'], glow: ['#ffcf6b', '#8a5a14'] },
+      { id: 'earth',   name: '지구',   at: 350, side: 1,  size: 1,    color: '#6fc3ff', line: '우리 집! 옆에 달도 있어요',
+        sky: ['#040810', '#0b2a3a', '#0d3a6b'], glow: ['#3d9bff', '#1a6a8a'] },
+      { id: 'mars',    name: '화성',   at: 400, side: -1, size: 0.85, color: '#ff7a4d', line: '빨간 모래 행성',
+        sky: ['#0a0506', '#2a0f16', '#5a1a0c'], glow: ['#ff7a4d', '#6a1a2a'] },
+      { id: 'jupiter', name: '목성',   at: 450, side: 1,  size: 1.35, color: '#f0b98a', line: '가장 큰 행성, 커다란 빨간 점',
+        sky: ['#08060a', '#2a1a2a', '#4a2a1a'], glow: ['#f0b98a', '#6a3a2a'] },
+      { id: 'saturn',  name: '토성',   at: 500, side: -1, size: 0.9,  color: '#f3d58c', line: '멋진 고리를 두른 행성',
+        sky: ['#07060a', '#1f1a2e', '#4a3a14'], glow: ['#f3d58c', '#4a3a6a'] },
+      { id: 'uranus',  name: '천왕성', at: 550, side: 1,  size: 0.95, color: '#9ef0f0', line: '옆으로 누워 도는 얼음 행성',
+        sky: ['#040a0c', '#0b2a3a', '#0e4a50'], glow: ['#9ef0f0', '#1a5a6a'] },
+      { id: 'neptune', name: '해왕성', at: 600, side: -1, size: 0.95, color: '#5b8cff', line: '바람이 가장 센 파란 행성',
+        sky: ['#03050e', '#0a1a4a', '#0f2a7a'], glow: ['#5b8cff', '#2a3a9a'] },
+      { id: 'pluto',   name: '명왕성', at: 650, side: 1,  size: 0.55, color: '#e8d2b8', line: '작고 추운 하트 행성',
+        sky: ['#05050a', '#10141e', '#1a1a2a'], glow: ['#e8d2b8', '#3a3a5a'] },
+    ],
+    PLANET_FADE: 14,
+
+    // ─── 블랙홀 구간 (2026-09-27) ────────────────────────────────
+    // 가끔 len(m) 동안 기둥 한쪽에 블랙홀이 나타나 주인공을 그쪽으로 살짝 끈다 (좌우로 늘 pull 점/초씩 밀림).
+    // 끄는 힘은 늘 좌우 최고 속도보다 훨씬 작아 언제나 빠져나올 수 있고, "닿지 못하는 틈이 없다"도 끄는 힘을 빼고 잰다 (테스트).
+    // 로켓 중에는 끌리지 않는다. 두 구간 사이는 늘 gap(m) [최소, 최대]만큼 떨어져 있어 연달아 오지 않는다.
+    //   first: 난이도별 처음 나올 수 있는 높이(m) (쉬움은 300m 전에는 없다) · pull: 난이도별 끄는 힘(점/초)
+    BLACKHOLE: { len: 30, gap: [110, 200], first: { easy: 300, normal: 180, hard: 130 }, pull: { easy: 28, normal: 44, hard: 60 } },
 
     // 높이 눈금: 작은 눈금 10m, 빛나는 선 50m, 100m마다 큰 축하
     MILE: { tick: 10, line: 50, big: 100 },
@@ -136,9 +226,12 @@
       // 2026-09-27 높이 구역·콤보와 함께
       { id: 'cloudz',   tier: 1, name: '구름 위 도착',  desc: '100m 구름 위까지',             check: r => r.height >= 100 },
       { id: 'spacez',   tier: 2, name: '우주 도착',     desc: '250m 우주까지',                check: r => r.height >= 250 },
-      { id: 'starz',    tier: 3, name: '별나라 도착',   desc: '500m 별나라까지',              check: r => r.height >= 500 },
+      // 2026-09-27 태양계 여행으로 별나라가 500m에서 700m(명왕성 다음)로 옮겨 갔다. 이미 딴 메달은 그대로
+      { id: 'starz',    tier: 3, name: '별나라 도착',   desc: '700m 별나라까지',              check: r => r.height >= 700 },
       { id: 'combo20',  tier: 3, name: '콤보 20',       desc: '콤보 20 만들기',               check: r => r.maxCombo >= 20 },
       { id: 'hard100',  tier: 3, name: '어려움 100',    desc: '어려움으로 100m',              check: r => r.diff === 'hard' && r.height >= 100 },
+      // 2026-09-27 밟는 몬스터와 함께
+      { id: 'stomp20',  tier: 2, name: '꾹꾹 20',       desc: '모두 합쳐 몬스터 20마리 밟기', check: (r, R) => (R.total.stomps || 0) >= 20 },
     ],
 
     // ─── 코인 · 상점 · 미션 (shop.js) ───────────────────────────
@@ -147,16 +240,38 @@
     // 그 합에 난이도 배율(level: 보통·어려움이 더 많이), 그 뒤 코인 보너스 강화만큼 더
     COINS: { perMeter: 20, perStars: 6, zone: [0, 4, 8, 12], level: { easy: 1, normal: 1.6, hard: 2.2 } },
 
-    // 꾸미기: 로봇 공 색과 모자. body: 광택 공 [밝은 곳, 가운데, 어두운 곳], rim: 아래 반사광 r,g,b, glow: 둘레 빛 r,g,b
-    // hat: 머리 장식 (render.js drawHat). price 0 = 처음부터 있음
-    SKINS: [
-      { id: 'basic',  name: '기본',      price: 0,    desc: '반짝이는 하늘색 공',        body: ['#effdff', '#5ee7ff', '#1b5fd0'], rim: '255,90,170',  glow: '94,231,255',  hat: 'antenna' },
-      { id: 'berry',  name: '딸기',      price: 150,  desc: '빨간 공에 초록 잎 꼭지',    body: ['#fff0f3', '#ff5f7e', '#a8123d'], rim: '255,230,109', glow: '255,95,126',  hat: 'leaf' },
-      { id: 'mint',   name: '민트',      price: 300,  desc: '시원한 민트색, 새싹 두 잎', body: ['#f0fff9', '#4dffc0', '#0d8a66'], rim: '94,231,255',  glow: '77,255,192',  hat: 'sprout' },
-      { id: 'bolt',   name: '번개',      price: 500,  desc: '노란 공, 번개 안테나',      body: ['#fffbe0', '#ffd23f', '#c26a00'], rim: '255,94,60',   glow: '255,210,63',  hat: 'bolt' },
-      { id: 'helmet', name: '우주 헬멧', price: 800,  desc: '하얀 공에 유리 헬멧',       body: ['#ffffff', '#cfd8e6', '#5a6a86'], rim: '94,231,255',  glow: '200,220,255', hat: 'helmet' },
-      { id: 'gold',   name: '황금',      price: 1200, desc: '번쩍이는 황금 공과 왕관',   body: ['#fffbe6', '#ffcf3a', '#9a5a00'], rim: '255,255,255', glow: '255,207,58',  hat: 'crown' },
+    // 캐릭터 다섯 (2026-09-27 소유자 요청: 게임마다 고를 수 있는 캐릭터 5종).
+    // 모두 한 가지씩 작은 장점이 있고 단점은 없다. 저마다 다른 쪽이 좋아서 어느 하나가 모든 면에서 앞서지 않는다.
+    // 장점은 늘 기본(통통 로봇)보다 같거나 좋은 쪽이라 "닿지 못하는 틈이 없다"가 모든 캐릭터에 그대로 성립한다.
+    //   trait: world.js create의 opts.char가 읽는 배율·값 (없는 칸은 기본)
+    //     magnet : 별을 먹는 거리 배율 (몸과 별 반지름 합에 곱함)
+    //     jump   : 한 번 튀는 높이 배율 (스프링은 그대로)
+    //     speed  : 좌우 최고 속도 배율 · accel: 붙는 힘 배율
+    //     fall   : 내려올 때 중력 배율 (1보다 작으면 천천히 내려온다. 오를 때는 그대로라 튀는 높이는 같다)
+    //     rocket : 로켓 시간 배율 · spring: 스프링 높이 배율
+    //   look: 그리기 모양 (render.js drawChar) · glow: 둘레 빛 r,g,b · body: 광택 몸 [밝은 곳, 가운데, 어두운 곳] · rim: 아래 반사광
+    CHARS: [
+      { id: 'robot',   name: '통통 로봇',   price: 0,    look: 'robot',   trait: { magnet: 1.7 },
+        desc: '별 자석이 있어 별을 멀리서도 먹어요', short: '별을 멀리서도 쏙',
+        body: ['#effdff', '#5ee7ff', '#1b5fd0'], rim: '255,90,170', glow: '94,231,255' },
+      { id: 'frog',    name: '개구리',      price: 300,  look: 'frog',    trait: { jump: 1.1 },
+        desc: '뒷다리가 튼튼해 조금 더 높이 뛰어요', short: '더 높이 점프',
+        body: ['#f2ffe0', '#6cf25a', '#157a2c'], rim: '255,230,109', glow: '108,242,90' },
+      { id: 'rabbit',  name: '토끼',        price: 500,  look: 'rabbit',  trait: { speed: 1.14, accel: 1.14, decel: 1.14 },
+        desc: '재빨라서 왼쪽·오른쪽으로 더 빨리 가요', short: '옆으로 더 빨리',
+        body: ['#ffffff', '#ffd6ec', '#c0608f'], rim: '255,120,190', glow: '255,160,215' },
+      { id: 'penguin', name: '펭귄',        price: 800,  look: 'penguin', trait: { fall: 0.8 },
+        desc: '날개를 파닥여 천천히 내려와요', short: '천천히 내려오기',
+        body: ['#8fa6d8', '#2a3a6e', '#0b1230'], rim: '94,231,255', glow: '127,180,255' },
+      { id: 'alien',   name: '꼬마 외계인', price: 1200, look: 'alien',   trait: { rocket: 1.35, spring: 1.15 },
+        desc: '제트팩 덕분에 로켓·스프링이 더 세요', short: '로켓·스프링 더 세게',
+        body: ['#f6e6ff', '#c07bff', '#5a1fa8'], rim: '94,255,200', glow: '192,123,255' },
     ],
+    // 예전 꾸미기(2026-09-27 하루 쓴 SKINS) 저장본 옮기기: 가진 꾸미기를 값이 같은 캐릭터로, 맞는 것이 없으면 값만큼 코인을 한 번 돌려준다
+    OLD_SKINS: {
+      basic: { to: 'robot' }, mint: { to: 'frog' }, bolt: { to: 'rabbit' }, helmet: { to: 'penguin' }, gold: { to: 'alien' },
+      berry: { refund: 150 },
+    },
 
     // 강화 (5단계, 한 번 사면 모든 판에). per: 한 단계 효과 (world.js create의 upgrades가 읽는다)
     UPGRADES: [
@@ -184,10 +299,12 @@
       { id: 'crumb30',  kind: 'life', stat: 'crumbles', goal: 30,   reward: 80,  text: '금 간 발판 30번 밟기 (누적)' },
       { id: 'bnc300',   kind: 'life', stat: 'bounces',  goal: 300,  reward: 90,  text: '발판 300번 밟기 (누적)' },
       { id: 'games5',   kind: 'life', stat: 'games',    goal: 5,    reward: 70,  text: '5판 하기 (누적)' },
+      { id: 'stomp15',  kind: 'life', stat: 'stomps',   goal: 15,   reward: 90,  text: '몬스터 15마리 밟기 (누적)' },
       { id: 'h100',     kind: 'run',  stat: 'height',   goal: 100,  reward: 80,  text: '한 판에 100m 오르기' },
       { id: 'h250',     kind: 'run',  stat: 'height',   goal: 250,  reward: 150, text: '한 판에 250m (우주 도착)' },
-      { id: 'h500',     kind: 'run',  stat: 'height',   goal: 500,  reward: 250, text: '한 판에 500m (별나라 도착)' },
+      { id: 'h500',     kind: 'run',  stat: 'height',   goal: 500,  reward: 250, text: '한 판에 500m (토성 도착)' },
       { id: 'star30',   kind: 'run',  stat: 'stars',    goal: 30,   reward: 100, text: '한 판에 별 30개' },
+      { id: 'stomp5',   kind: 'run',  stat: 'stomps',   goal: 5,    reward: 110, text: '한 판에 몬스터 5마리 밟기' },
       { id: 'combo12',  kind: 'run',  stat: 'maxCombo', goal: 12,   reward: 120, text: '한 판에 콤보 12' },
       { id: 't120',     kind: 'run',  stat: 'time',     goal: 120,  reward: 100, text: '한 판에 2분 동안 오르기' },
       { id: 'n150',     kind: 'run',  stat: 'height',   goal: 150,  reward: 150, text: '보통으로 150m', diff: 'normal' },

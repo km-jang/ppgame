@@ -1,10 +1,11 @@
 'use strict';
-// 코인 · 상점(꾸미기 · 강화 · 시작 아이템) · 미션. DOM을 쓰지 않는다 (node 테스트가 그대로 불러 쓴다: tests/jumpshop.test.js).
+// 코인 · 상점(캐릭터 · 강화 · 시작 아이템) · 미션. DOM을 쓰지 않는다 (node 테스트가 그대로 불러 쓴다: tests/jumpshop.test.js).
 // 뿅뿅 우주선 game/js/shop.js와 같은 짜임.
 //
 // 저장 키
-//   jump.shop1 : { v:1, coins, skin, skins:{id:true}, up:{speed,rocket,coin,cloud: 0~5},
+//   jump.shop1 : { v:2, coins, char, chars:{id:true}, up:{speed,rocket,coin,cloud: 0~5},
 //                  items:{rocketStart,shieldStart: 개수}, missions:[{id,prog,done}], mseed, life:{earned,games,diffs:{easy,normal,hard}} }
+//   v:1 (예전 꾸미기 skin·skins)은 불러올 때 캐릭터로 옮긴다 (D.OLD_SKINS: 값이 같은 캐릭터로, 없으면 값만큼 코인 한 번 돌려줌)
 // 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js, HUB)에 둔다. 지갑은 바꿔 끼울 수 있다 (테스트는 가짜 지갑):
 //   wallet = { coins(), setCoins(n), moveIn(game, n) }. 지갑이 없으면 이 저장본의 coins만 쓴다
 (function (JP) {
@@ -14,18 +15,18 @@
   const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
   const int = v => Math.floor(num(v));
   const isObj = v => v != null && typeof v === 'object' && !Array.isArray(v);
-  const skinDef = id => D.SKINS.find(s => s.id === id) || null;
+  const charDef = id => D.CHARS.find(c => c.id === id) || null;
   const upDef = id => D.UPGRADES.find(u => u.id === id) || null;
   const itemDef = id => D.START_ITEMS.find(u => u.id === id) || null;
   const missionDef = id => D.MISSIONS.find(m => m.id === id) || null;
 
   function blank() {
-    const skins = {}, up = {}, items = {}, diffs = {};
-    for (const s of D.SKINS) if (!s.price) skins[s.id] = true;
+    const chars = {}, up = {}, items = {}, diffs = {};
+    for (const c of D.CHARS) if (!c.price) chars[c.id] = true;
     for (const u of D.UPGRADES) up[u.id] = 0;
     for (const it of D.START_ITEMS) items[it.id] = 0;
     for (const d of D.DIFF_ORDER) diffs[d] = false;
-    const st = { v: 1, coins: 0, skin: D.SKINS[0].id, skins, up, items, missions: [], mseed: 1, life: { earned: 0, games: 0, diffs } };
+    const st = { v: 2, coins: 0, char: D.CHARS[0].id, chars, up, items, missions: [], mseed: 1, life: { earned: 0, games: 0, diffs } };
     fillMissions(st);
     return st;
   }
@@ -35,8 +36,22 @@
     const st = blank();
     if (!isObj(raw)) return st;
     st.coins = int(raw.coins);
-    if (isObj(raw.skins)) for (const s of D.SKINS) if (raw.skins[s.id] === true) st.skins[s.id] = true;
-    if (typeof raw.skin === 'string' && st.skins[raw.skin]) st.skin = raw.skin;
+    if (isObj(raw.chars)) {
+      for (const c of D.CHARS) if (raw.chars[c.id] === true) st.chars[c.id] = true;
+      if (typeof raw.char === 'string' && st.chars[raw.char]) st.char = raw.char;
+    } else if (isObj(raw.skins)) {
+      // 예전 꾸미기 저장본: 값이 같은 캐릭터로 옮기고, 맞는 캐릭터가 없는 것은 값을 돌려줄 몫(refund)으로 모은다.
+      // refund는 load가 지갑에 한 번 넣고 곧바로 새 모양(chars)으로 저장하므로 두 번 돌려주지 않는다
+      let refund = 0;
+      for (const id of Object.keys(D.OLD_SKINS)) {
+        if (raw.skins[id] !== true) continue;
+        const m = D.OLD_SKINS[id];
+        if (m.to && charDef(m.to)) st.chars[m.to] = true; else refund += num(m.refund);
+      }
+      const was = typeof raw.skin === 'string' && D.OLD_SKINS[raw.skin];
+      if (was && was.to && st.chars[was.to]) st.char = was.to;
+      if (refund) st.refund = refund;
+    }
     if (isObj(raw.up)) for (const u of D.UPGRADES) st.up[u.id] = Math.min(D.UPGRADE_MAX, int(raw.up[u.id]));
     if (isObj(raw.items)) for (const it of D.START_ITEMS) st.items[it.id] = Math.min(it.max, int(raw.items[it.id]));
     st.mseed = int(raw.mseed) || 1;
@@ -64,6 +79,12 @@
     const st = clean((store || JP.store).get(KEY, null));
     const Wl = wallet === undefined ? hubWallet() : wallet;
     if (Wl) { if (Wl.moveIn) Wl.moveIn('jump', st.coins); st.coins = int(Wl.coins()); }
+    // 예전 꾸미기 값 돌려주기 (한 번만: 곧바로 새 모양으로 저장)
+    if (st.refund) {
+      st.coins += st.refund;
+      delete st.refund;
+      save(st, store, Wl);
+    }
     return st;
   }
   function save(st, store, wallet) {
@@ -81,8 +102,8 @@
   // ─── 가격 ─────────────────────────────────────────────────
   // 살 수 없으면(이미 가짐·최대 단계·가득) null
   function price(st, id) {
-    const s = skinDef(id);
-    if (s) return st.skins[id] ? null : s.price;
+    const c = charDef(id);
+    if (c) return st.chars[id] ? null : c.price;
     const u = upDef(id);
     if (u) { const lv = st.up[id] || 0; return lv >= D.UPGRADE_MAX ? null : u.prices[lv]; }
     const it = itemDef(id);
@@ -90,23 +111,24 @@
     return null;
   }
 
-  // 무엇이든 산다 (꾸미기·강화·시작 아이템). {ok, reason: 'owned'|'max'|'coins'|'unknown', cost}
+  // 무엇이든 산다 (캐릭터·강화·시작 아이템). 캐릭터는 사면 바로 고른다. {ok, reason: 'owned'|'max'|'coins'|'unknown', cost}
   function buy(st, id) {
-    const s = skinDef(id), u = upDef(id), it = itemDef(id);
+    const s = charDef(id), u = upDef(id), it = itemDef(id);
     if (!s && !u && !it) return { ok: false, reason: 'unknown' };
     const cost = price(st, id);
     if (cost == null) return { ok: false, reason: s ? 'owned' : 'max' };
     if (st.coins < cost) return { ok: false, reason: 'coins', cost };
     st.coins -= cost;
-    if (s) { st.skins[id] = true; st.skin = id; }
+    if (s) { st.chars[id] = true; st.char = id; }
     else if (u) st.up[id] = (st.up[id] || 0) + 1;
     else st.items[id] = (st.items[id] || 0) + 1;
     return { ok: true, cost };
   }
 
-  function selectSkin(st, id) {
-    if (!st.skins[id]) return false;
-    st.skin = id;
+  // 가진 캐릭터만 고를 수 있다
+  function selectChar(st, id) {
+    if (!charDef(id) || !st.chars[id]) return false;
+    st.char = id;
     return true;
   }
 
@@ -118,7 +140,7 @@
   }
   // World.create에 더할 값
   function worldOpts(st, loadout) {
-    return { upgrades: Object.assign({}, st.up), loadout: loadout || {} };
+    return { upgrades: Object.assign({}, st.up), loadout: loadout || {}, char: st.char };
   }
 
   // ─── 판 요약 · 코인 ───────────────────────────────────────
@@ -126,7 +148,8 @@
     const r = JP.World.runStats(W);
     return {
       diff: r.diff, height: r.height, stars: r.stars, springs: r.springs, rockets: r.rockets, saves: r.saves,
-      crumbles: r.crumbles || 0, bounces: r.bounces, maxCombo: r.maxCombo, time: Math.floor(r.time), zone: r.zone, games: 1,
+      crumbles: r.crumbles || 0, bounces: r.bounces, maxCombo: r.maxCombo, time: Math.floor(r.time), zone: r.zone, stomps: r.stomps || 0, games: 1,
+      gifts: r.gifts || 0, giftCoins: r.giftCoins || 0, giftItems: (r.giftItems || []).slice(), fevers: r.fevers || 0, rooms: r.rooms || 0,
     };
   }
 
@@ -142,7 +165,9 @@
     const base = raw + parts.level;
     const lv = st ? (st.up.coin || 0) : 0;
     parts.bonus = Math.floor(base * lv * upDef('coin').per);
-    return { parts, total: base + parts.bonus };
+    // 깜짝 선물 코인: 난이도·강화 배율 없이 그대로 더한다
+    parts.gift = int(run.giftCoins);
+    return { parts, total: base + parts.bonus + parts.gift };
   }
 
   // ─── 미션 ─────────────────────────────────────────────────
@@ -193,6 +218,13 @@
   // 판이 끝났을 때: 코인 지급 + 미션 진행. {coins, parts, done:[새로 끝난 미션 id]}
   function finishRun(st, run) {
     const c = coinsFor(run, st);
+    // 깜짝 선물로 받은 다음 판 시작 아이템 (가득이면 그만큼 코인)
+    for (const id of Array.isArray(run.giftItems) ? run.giftItems : []) {
+      const it = itemDef(id);
+      if (!it) continue;
+      if ((st.items[id] || 0) < it.max) st.items[id] = (st.items[id] || 0) + 1;
+      else { c.parts.gift += D.GIFT.itemCoins; c.total += D.GIFT.itemCoins; }
+    }
     st.coins += c.total;
     st.life.earned += c.total;
     st.life.games += 1;
@@ -210,5 +242,5 @@
     });
   }
 
-  JP.Shop = { KEY, blank, clean, load, save, sync, price, buy, selectSkin, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, skinDef, upDef, itemDef, missionDef };
+  JP.Shop = { KEY, blank, clean, load, save, sync, price, buy, selectChar, selectSkin: selectChar, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, charDef, upDef, itemDef, missionDef };
 })(JP);

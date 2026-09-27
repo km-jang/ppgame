@@ -72,6 +72,15 @@ async function until(page, fn, arg, ms) {
     await HB.goto(ROOT + '/index.html');
     assert(await until(HB, b => document.getElementById('hub-coins').textContent === (b + 250).toLocaleString(), before), '게임 고르기에 코인이 안 보임');
   });
+  await test('스티커북: 판 결과로 스티커가 붙으면 새 표시, 열면 24칸이 보이고 새 표시가 꺼진다', async () => {
+    await HB.evaluate(() => { HUB.reportRun('jump', { height: 120 }, 20); renderHub(); });
+    assert(await HB.evaluate(() => !document.getElementById('stk-new').hidden), '새 스티커 표시 없음');
+    await HB.tap('#stk-open');
+    assert(await until(HB, () => document.getElementById('stickers').classList.contains('on')), '스티커북이 안 열림');
+    assert(await HB.evaluate(() => document.querySelectorAll('#stk-list .stk').length === HUB.STICKERS.length && document.querySelectorAll('#stk-list .stk.got').length >= 2), '스티커 칸');
+    assert(await HB.evaluate(() => document.getElementById('stk-new').hidden), '열었는데 새 표시가 남음');
+    await HB.tap('#stk-close');
+  });
   await test('게임 고르기 콘솔 오류 없음', async () => { assert(!hb.errors.length, hb.errors.join(' | ')); });
   await hb.ctx.close();
 

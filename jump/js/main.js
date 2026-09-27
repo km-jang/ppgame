@@ -34,9 +34,9 @@
   // 코인·상점·미션 (shop.js, 저장 키 jump.shop1). 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js)
   const SH = JP.Shop;
   let shop = SH.load();
-  let shopTab = 'skins';
+  let shopTab = 'chars';
   let lastEarn = null;   // 이번 판에 받은 코인 {coins, parts, done}
-  view.skin = shop.skin;
+  view.char = shop.char;
   const fmt = n => Math.floor(n).toLocaleString();
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let medalCheckT = 0;
@@ -159,11 +159,13 @@
   }
 
   function renderTitleShop() {
-    const K = SH.skinDef(shop.skin) || D.SKINS[0];
-    view.skin = K.id;
-    JP.Render.paintSkin($('skin-preview'), K.id);
-    $('skin-name').textContent = K.name;
-    $('skin-desc').textContent = K.desc;
+    const K = SH.charDef(shop.char) || D.CHARS[0];
+    view.char = K.id;
+    if (demo && demo.char !== K.id) demo = null;   // 시연 판도 고른 캐릭터로 새로
+    JP.Render.paintChar($('char-preview'), K.id);
+    $('char-name').textContent = K.name;
+    $('char-desc').textContent = K.desc;
+    $('btn-char').style.setProperty('--sc', 'rgb(' + K.glow + ')');
     $('coin-count').textContent = fmt(shop.coins);
     $('title-missions').innerHTML = missionsHtml('미션');
     const lo = D.START_ITEMS.filter(it => shop.items[it.id] > 0).map(it => it.name + (shop.items[it.id] > 1 ? ' ×' + shop.items[it.id] : ''));
@@ -182,14 +184,14 @@
     const list = $('shop-list');
     list.className = 'shop-list t-' + shopTab;
     let h = '';
-    if (shopTab === 'skins') {
-      $('shop-sub').textContent = '로봇 공의 색과 모자를 바꿔요. 산 것은 눌러서 고르세요';
-      h = D.SKINS.map(k => {
-        const own = !!shop.skins[k.id], cur = shop.skin === k.id;
+    if (shopTab === 'chars') {
+      $('shop-sub').textContent = '캐릭터마다 좋은 점이 하나씩 있어요. 산 캐릭터는 눌러서 고르세요';
+      h = D.CHARS.map(k => {
+        const own = !!shop.chars[k.id], cur = shop.char === k.id;
         return '<div class="sitem ship' + (cur ? ' cur' : '') + (own ? '' : ' locked') + '" style="--sc:rgb(' + k.glow + ')">' +
-          '<canvas class="ship-cv" width="128" height="128" data-skin="' + k.id + '" aria-hidden="true"></canvas>' +
+          '<canvas class="ship-cv" width="128" height="128" data-char="' + k.id + '" aria-hidden="true"></canvas>' +
           '<b class="s-name">' + esc(k.name) + '</b>' +
-          '<span class="s-desc">' + esc(k.desc) + '</span>' +
+          '<span class="s-desc"><i class="trait">' + esc(k.short) + '</i> ' + esc(k.desc) + '</span>' +
           (cur ? '<span class="maxed on">사용 중</span>' : own ? '<button type="button" class="use" data-use="' + k.id + '">고르기</button>' : priceBtn(k.id, '')) +
         '</div>';
       }).join('');
@@ -213,7 +215,7 @@
       }).join('');
     }
     list.innerHTML = h;
-    for (const cv of list.querySelectorAll('canvas[data-skin]')) JP.Render.paintSkin(cv, cv.dataset.skin);
+    for (const cv of list.querySelectorAll('canvas[data-char]')) JP.Render.paintChar(cv, cv.dataset.char);
   }
 
   function openShop(tab) {
@@ -231,14 +233,14 @@
     show('scr-title');
   }
 
-  const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 꾸미기예요', max: '더는 살 수 없어요' };
+  const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 캐릭터예요', max: '더는 살 수 없어요' };
   function buyThing(id) {
     const r = SH.buy(shop, id);
     if (r.ok) {
       SH.save(shop);
       JP.Audio.play('buy');
       vibrate(20);
-      if (SH.skinDef(id)) toast(SH.skinDef(id).name + ' 로봇으로 바꿨어요!');
+      if (SH.charDef(id)) toast(SH.charDef(id).name + ' 출동!');
     } else {
       JP.Audio.play('deny');
       toast(NAMES[r.reason] || '살 수 없어요');
@@ -247,8 +249,8 @@
     renderTitleShop();
     return r;
   }
-  function useSkin(id) {
-    const ok = SH.selectSkin(shop, id);
+  function useChar(id) {
+    const ok = SH.selectChar(shop, id);
     if (ok) { SH.save(shop); JP.Audio.play('pick'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
@@ -284,9 +286,9 @@
 
   // 게임 오버: 받은 코인 (부분별) + 미션 진행
   function renderEarn() {
-    const e = lastEarn || { coins: 0, parts: { height: 0, stars: 0, zone: 0, level: 0, bonus: 0 }, done: [] };
+    const e = lastEarn || { coins: 0, parts: { height: 0, stars: 0, zone: 0, level: 0, bonus: 0, gift: 0 }, done: [] };
     $('over-coins').textContent = '+0';
-    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['난이도 보너스', P.level], ['강화 보너스', P.bonus]];
+    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['난이도 보너스', P.level], ['강화 보너스', P.bonus], ['선물', P.gift || 0]];
     $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
@@ -317,11 +319,19 @@
       HUB.report('jump', { best, bestText: best ? '최고 ' + best.toLocaleString() + 'm' : '', medals: Object.keys(rec.medals).length, medalMax: D.MEDALS.length, games: rec.total.games });
     } catch (e) { /* 무시 */ }
   }
+  // 알아서 맞춰 주는 난이도 (common/hub.js): 판을 시작할 때 배율, 끝날 때 얼마나 잘했나(오른 높이 ÷ 기준 높이)
+  function adaptMul(d) {
+    try { return typeof HUB !== 'undefined' && HUB.adaptMul ? HUB.adaptMul('jump', d) : 1; } catch (e) { return 1; }
+  }
+  function adaptRun() {
+    try { if (typeof HUB !== 'undefined' && HUB.adaptRun) HUB.adaptRun('jump', W.diff, W.height / (D.ADAPT.target[W.diff] || 100)); } catch (e) { /* 무시 */ }
+  }
   function reportHub() {
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
-      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, games: 1 }, W.t);
+      // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터·지나온 가장 먼 행성(1 수성 … 9 명왕성)·선물·피버·비밀 방 (이번 판)
+      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet, gifts: W.giftsGot, fevers: W.fevers, rooms: W.rooms, games: 1 }, W.t);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -339,7 +349,7 @@
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다. 강화는 계속
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
-    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial }, SH.worldOpts(shop, lo)));
+    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial, adapt: opts.adapt != null ? opts.adapt : adaptMul(diff) }, SH.worldOpts(shop, lo)));
     view.bestH = rec.byDiff[diff].height;
     medalCheckT = 0;
     input.reset();
@@ -385,21 +395,22 @@
     lastEarn = SH.finishRun(shop, SH.runOf(W));
     SH.save(shop);
     reportHub();
+    if (!auto) adaptRun();
     renderEarn();
-    $('over-records').innerHTML = chips.map(x => '<span>신기록 · ' + x + '</span>').join('');
+    $('over-records').innerHTML = chips.map(x => '<span>신기록 · ' + x + '</span>').join('') + (W.stomps ? '<span>꾹 밟은 몬스터 ' + W.stomps + '</span>' : '');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     if (fresh.length) setTimeout(() => { if (mode === 'over') JP.Audio.play('medal'); }, 900);
     // 쉬움은 부드럽게 끝난다 (칭찬하는 말, 빨간색 없음)
     const soft = W.easy;
     $('scr-over').classList.toggle('soft', soft);
-    $('over-title').textContent = soft ? (W.height >= 30 ? '높이 날았어요!' : '잘했어요!') : W.cause === 'mine' ? '가시 폭탄에 닿았다' : '아래로 떨어졌다';
+    $('over-title').textContent = soft ? (W.height >= 30 ? '높이 날았어요!' : '잘했어요!') : ({ mine: '가시 폭탄에 닿았다', monster: '몬스터에 부딪혔다', storm: '먹구름에 잡혔다' }[W.cause] || '아래로 떨어졌다');
     $('over-sub').textContent = soft ? '구름이 다 쉬러 갔어요. 한 번 더 해 볼까요?' : '';
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-height').textContent = W.height + 'm';
     $('over-combo').textContent = W.maxCombo;
     $('over-diff').textContent = D.DIFFICULTY[W.diff].name;
-    $('over-zone').textContent = D.ZONES[W.zone].name + ' 구역';
+    $('over-zone').textContent = W.zone === 2 && W.planet > 0 ? D.PLANETS[W.planet - 1].name + ' 근처' : D.ZONES[W.zone].name + ' 구역';
     $('over-new-txt').textContent = D.DIFFICULTY[W.diff].name + ' 최고 점수 경신';
     $('over-stars').textContent = W.starsGot;
     $('over-time').textContent = JP.fmtTime(W.t);
@@ -409,21 +420,27 @@
   }
 
   function drainEvents(world, sound) {
-    const zoneNow = world.events.includes('zone');
+    const zoneNow = world.events.includes('zone'), planetNow = world.events.includes('planet');
     for (const ev of world.events) {
       if (!sound) continue;
       if (ev === 'tut') { tutNeed = false; RC.tutorialDone(JP.store); }
-      if (ev === 'mile' && zoneNow) continue;   // 구역 축하와 겹치면 구역 소리만
-      if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo });
+      if (ev === 'mile' && (zoneNow || planetNow)) continue;   // 구역·행성 축하와 겹치면 그 소리만
+      if (ev === 'zone' && planetNow) continue;
+      if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo + (world.feverT > 0 ? 5 : 0), fever: world.feverT > 0 });
       else if (ev === 'over') {
-        JP.Audio.play(world.cause === 'fall' && !world.easy ? 'fall' : 'over', { soft: world.easy });
+        JP.Audio.play((world.cause === 'fall' || world.cause === 'storm') && !world.easy ? 'fall' : 'over', { soft: world.easy });
         vibrate(world.easy ? 60 : 220);
       } else JP.Audio.play(ev);
       if (ev === 'spring' || ev === 'rescue') vibrate([15, 30, 25]);
       else if (ev === 'star') vibrate(8);
       else if (ev === 'crumble' || ev === 'save') vibrate(30);
+      else if (ev === 'stomp') vibrate([12, 20, 18]);
+      else if (ev === 'bump') vibrate(15);
+      else if (ev === 'storm') vibrate([40, 60, 40]);
       else if (ev === 'rocket' || ev === 'shield') vibrate(20);
-      else if (ev === 'zone') vibrate([20, 40, 20, 40, 30]);
+      else if (ev === 'zone' || ev === 'planet') vibrate([20, 40, 20, 40, 30]);
+      else if (ev === 'hole') vibrate([30, 50, 30]);
+      else if (ev === 'gift' || ev === 'fever' || ev === 'room') vibrate([20, 40, 20]);
     }
     world.events.length = 0;
   }
@@ -461,15 +478,15 @@
   $('btn-start').addEventListener('click', () => { keep(); newGame(); });
   $('btn-medals').addEventListener('click', () => { JP.Audio.unlock(); openMedals(); });
   $('btn-medals-back').addEventListener('click', toTitle);
-  $('btn-shop').addEventListener('click', () => { JP.Audio.unlock(); openShop('skins'); });
-  $('btn-skin').addEventListener('click', () => { JP.Audio.unlock(); openShop('skins'); });
+  $('btn-shop').addEventListener('click', () => { JP.Audio.unlock(); openShop('chars'); });
+  $('btn-char').addEventListener('click', () => { JP.Audio.unlock(); openShop('chars'); });
   $('btn-shop-back').addEventListener('click', closeShop);
   for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); });
   $('shop-list').addEventListener('click', e => {
     const b = e.target.closest('[data-buy],[data-use]');
     if (!b) return;
     JP.Audio.unlock();
-    if (b.dataset.buy) buyThing(b.dataset.buy); else useSkin(b.dataset.use);
+    if (b.dataset.buy) buyThing(b.dataset.buy); else useChar(b.dataset.use);
   });
   for (const id of ['title-missions', 'over-missions']) {
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) { JP.Audio.unlock(); claimMission(+b.dataset.claim, b); } });
@@ -522,7 +539,7 @@
     if (mode === 'title' || mode === 'shop') {
       // 시연: 자동 운전 로봇이 시작 화면 뒤에서 통통 튄다. 끝나면 잠시 뒤 새로
       fit(demo);
-      if (!demo) { demo = JP.World.create(777, { diff: 'easy', viewH: view.viewH }); demoRest = 0; }
+      if (!demo) { demo = JP.World.create(777, { diff: 'easy', viewH: view.viewH, char: shop.char }); demoRest = 0; }
       if (demo.phase === 'play') { demo.input.dir = JP.World.botDir(demo); JP.World.step(demo, dt); }
       else if ((demoRest += dt) > 1.5) demo = null;
       if (demo && demo.t > 90) demo = null;   // 너무 높이 가면 처음부터
@@ -584,9 +601,9 @@
     // 상점·미션 (shop.js)
     get shop() { return shop; }, get missions() { return SH.missionView(shop); }, get lastEarn() { return lastEarn; },
     giveCoins(n) { shop.coins += n; SH.save(shop); renderTitleShop(); if (mode === 'shop') renderShop(); return shop.coins; },
-    openShop, closeShop, claim: i => claimMission(i), buy: id => buyThing(id), selectSkin: id => useSkin(id),
+    openShop, closeShop, claim: i => claimMission(i), buy: id => buyThing(id), selectChar: id => useChar(id), selectSkin: id => useChar(id),
     reload() { rec = RC.load(JP.store); shop = SH.load(); renderBest(); renderTitleShop(); }, resetTutorial() { tutNeed = true; JP.store.set(RC.TUT_KEY, false); },
-    newGame, pause, resume, toTitle, openMedals,
+    newGame, pause, resume, toTitle, openMedals, adaptMul,
     autopilot(on) { auto = on !== false; return auto; },
     get pad() { return input; }, get view() { return view; },
   };

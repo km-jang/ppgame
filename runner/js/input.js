@@ -1,30 +1,32 @@
 'use strict';
-// 키보드·밀기(스와이프)·누르기 입력을 동작('left' 'right' 'jump')으로 바꾼다.
+// 키보드·밀기(스와이프)·누르기 입력을 동작('left' 'right' 'jump' 'slide')으로 바꾼다.
 // 동작이 정해지면 onMove(dir, touch), 그 밖의 키는 onKey(code)로 알린다 (main.js가 채운다).
 (function (RN) {
   const KEY_MOVE = {
     ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
     ArrowUp: 'jump', KeyW: 'jump', Space: 'jump',
+    ArrowDown: 'slide', KeyS: 'slide',
   };
-  // 밀기 방향 → 동작 (아래로 밀기는 쓰지 않는다)
-  const SWIPE_MOVE = { left: 'left', right: 'right', up: 'jump' };
+  // 밀기 방향 → 동작 (상하좌우 네 방향: 아래로 밀면 미끄러지기)
+  const SWIPE_MOVE = { left: 'left', right: 'right', up: 'jump', down: 'slide' };
 
   function createInput(el) {
     const S = { onMove: null, onKey: null, threshold: 24, used: false, active: false };
 
     window.addEventListener('keydown', e => {
       const mv = KEY_MOVE[e.code];
-      if (mv || e.code === 'ArrowDown') e.preventDefault();
+      if (mv) e.preventDefault();
       if (e.repeat) return;
       // 게임 중이 아니면 스페이스는 다른 키처럼 onKey로 (시작·다시 하기)
       if (mv && S.onMove && S.active) S.onMove(mv, false);
       else if (S.onKey) S.onKey(e.code);
     });
 
-    // 밀기: 화면 아무 데서나 옆으로 밀면 줄 바꾸기, 위로 밀면 점프 (냠냠 뱀과 같은 손맛).
+    // 밀기: 화면 아무 데서나 옆으로 밀면 줄 바꾸기, 위로 밀면 점프, 아래로 밀면 미끄러지기 (냠냠 뱀과 같은 손맛).
     // 기준 거리만큼 움직일 때마다 그 자리를 새 기준으로 삼아, 손을 떼지 않고 오른쪽 → 왼쪽으로 밀어도 두 번 움직인다.
     // 아주 빠르게 튕기듯 밀어 움직임 신호가 모자라도 손을 뗄 때 한 번 더 살핀다.
     // 거의 안 움직이고 뗐으면 누르기: 화면 왼쪽 3분의 1은 왼쪽, 오른쪽 3분의 1은 오른쪽, 가운데는 점프.
+    // 미끄러지기는 누르기로는 하지 않는다: 우주선 근처(아래쪽)를 눌러 뛰려던 아이가 잘못 미끄러져 문에 부딪히지 않게, 아래로 미는 것만 (일부러 하는 동작)
     // 그리기: render.js가 S.swipe(민 자리 화살표)를 읽는다
     S.swipe = null;
     const ptrs = new Map();
