@@ -18,19 +18,20 @@
 //   bolt    멀리서 번개가 가끔 번쩍 (폭풍). 움직임 줄이기면 번쩍임 없이 구름빛만
 //   aurora  하늘에 오로라 띠가 천천히 일렁인다 (떠돌이 행성·극지)
 //   haze    노란 안개가 천천히 흘러간다 (금성)
+// line: 도착할 때 띄우는 재미 한 줄 (배우는 사실이 아니라 느낌. 소유자 결정: 학습 요소 없음)
 // amount: 0 ~ 1 (1이면 게임이 정한 최대 입자 수), wind: 옆 바람 -1 ~ 1 (+ 오른쪽), color: 입자 색 두 개
 var WORLDS = (typeof WORLDS !== 'undefined' && WORLDS) || {};
 (function (W) {
   const SOLAR_WEATHER = {
     mercury: { kind: 'ember',   amount: 0.35, wind: 0,    color: ['#ffb36b', '#ff6a3d'], line: '뜨거운 불씨가 날려요' },
-    venus:   { kind: 'haze',    amount: 0.6,  wind: 0.3,  color: ['#ffe08a', '#e0b050'], line: '노란 구름 안개' },
-    earth:   { kind: 'rain',    amount: 0.25, wind: 0.1,  color: ['#9fd8ff', '#ffffff'], line: '시원한 빗방울' },
-    mars:    { kind: 'sand',    amount: 0.5,  wind: 0.8,  color: ['#ff9a6b', '#c9583a'], line: '빨간 모래바람' },
+    venus:   { kind: 'haze',    amount: 0.6,  wind: 0.3,  color: ['#ffe08a', '#e0b050'], line: '노란 안개가 뭉게뭉게' },
+    earth:   { kind: 'rain',    amount: 0.25, wind: 0.1,  color: ['#9fd8ff', '#ffffff'], line: '우리 집! 시원한 빗방울' },
+    mars:    { kind: 'sand',    amount: 0.5,  wind: 0.8,  color: ['#ff9a6b', '#c9583a'], line: '빨간 모래바람이 쌩쌩' },
     jupiter: { kind: 'bolt',    amount: 0.5,  wind: 0.4,  color: ['#fff3c4', '#f0b98a'], line: '번쩍번쩍 큰 폭풍' },
-    saturn:  { kind: 'sparkle', amount: 0.4,  wind: 0,    color: ['#fff1c2', '#f3d58c'], line: '고리 얼음이 반짝' },
-    uranus:  { kind: 'snow',    amount: 0.5,  wind: -0.3, color: ['#e8ffff', '#9ef0f0'], line: '옆으로 도는 얼음 행성' },
+    saturn:  { kind: 'sparkle', amount: 0.4,  wind: 0,    color: ['#fff1c2', '#f3d58c'], line: '반짝이 고리가 빙글빙글' },
+    uranus:  { kind: 'snow',    amount: 0.5,  wind: -0.3, color: ['#e8ffff', '#9ef0f0'], line: '데굴데굴 얼음 행성' },
     neptune: { kind: 'snow',    amount: 0.8,  wind: 0.9,  color: ['#dfe9ff', '#8fb0ff'], line: '쌩쌩 눈보라' },
-    pluto:   { kind: 'snow',    amount: 0.4,  wind: 0,    color: ['#ffffff', '#f3dcc8'], line: '조용히 내리는 눈' },
+    pluto:   { kind: 'snow',    amount: 0.4,  wind: 0,    color: ['#ffffff', '#f3dcc8'], line: '소복소복 하트 눈 행성' },
   };
 
   // 외계 행성 여덟. sky: 하늘 [위, 가운데, 아래] · glow: 빛 덩어리 두 색 · body: 행성 몸 [밝은, 어두운] · accent: 무늬·테 색
