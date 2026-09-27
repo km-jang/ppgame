@@ -109,8 +109,8 @@
       magnetRange: 16, boostMul: 1.7,
     },
 
-    // 방패가 깨졌을 때·부스트가 끝났을 때 잠깐 깜빡이는 시간 (부딪힌 뒤 시간은 난이도의 inv)
-    HIT: { shieldInv: 1.0, boostGrace: 1.0, get inv() { return DIFFICULTY.easy.inv; } },
+    // 방패가 깨졌을 때·부스트가 끝났을 때·불사조가 다시 살아났을 때 잠깐 깜빡이는 시간 (부딪힌 뒤 시간은 난이도의 inv)
+    HIT: { shieldInv: 1.0, boostGrace: 1.0, revive: 2.5, get inv() { return DIFFICULTY.easy.inv; } },
 
     // 처음 한 번만 나오는 안내: 옆으로 밀기 → 레이저 문이 오면 위로 밀기 (그동안 slow배로 느려진다).
     // 안내용 레이저 문은 세 줄 모두 막지만 부딪혀도 하트를 잃지 않는다. tries번 놓치면 안내를 마친다
@@ -150,17 +150,41 @@
 
 // ═══ 상점 · 미션 (2026-09-27, 소유자: "미션·상점·기록을 모든 게임에", 코인은 네 게임이 함께 쓰는 지갑) ═══
 (function (RN) {
-  // 꾸미기: 우주선 모양·색·엔진 불꽃 (그리기만 바뀌고 규칙은 같다. render.js drawShipBody)
-  // shape: jet 기본 제트 · bolt 뾰족 번개 · whale 둥근 고래 · comet 꼬리 달린 별똥 · phoenix 깃털 날개
-  // body: [밝은 곳, 가운데, 어두운 곳] · stripe: 날개 줄무늬 · flame: 엔진 불꽃 (r,g,b) · core: 조종석 빛
-  const SKINS = [
-    { id: 'basic',   name: '기본',   price: 0,    shape: 'jet',     body: ['#d9fbff', '#5ee7ff', '#1a9ec0'], stripe: '#ff2e88', flame: '255,46,136',  core: '#5ee7ff', desc: '청록 날개, 분홍 불꽃' },
-    { id: 'bolt',    name: '번개',   price: 150,  shape: 'bolt',    body: ['#fffbd0', '#ffe066', '#d9a400'], stripe: '#20242e', flame: '255,230,109', core: '#ffe066', desc: '뾰족한 노랑 날개, 번개 불꽃' },
-    { id: 'whale',   name: '고래',   price: 300,  shape: 'whale',   body: ['#d8e8ff', '#5b8cff', '#2a3fa8'], stripe: '#bff8ff', flame: '120,220,255', core: '#bff8ff', desc: '둥글둥글 파란 고래, 물빛 불꽃' },
-    { id: 'comet',   name: '별똥',   price: 500,  shape: 'comet',   body: ['#ffffff', '#ffc2e6', '#c05a9a'], stripe: '#ffe66d', flame: '255,150,220', core: '#ffe66d', desc: '반짝 꼬리를 단 분홍 별똥' },
-    { id: 'phoenix', name: '불사조', price: 800,  shape: 'phoenix', body: ['#fff0c0', '#ff8a3d', '#c0301a'], stripe: '#ffe66d', flame: '255,120,40',  core: '#ffe66d', desc: '깃털 날개, 활활 주황 불꽃' },
-    { id: 'gold',    name: '황금',   price: 1200, shape: 'jet',     body: ['#fffbe0', '#ffd24a', '#a87400'], stripe: '#ffffff', flame: '255,215,90',  core: '#ffffff', desc: '번쩍번쩍 황금 우주선', shine: true },
+  // 캐릭터 5종 (2026-09-27, 소유자: "각 게임마다 캐릭터를 고를 수 있게 5종, 다양하게").
+  // 모양이 확 다르고, 작은 특기가 하나씩 있다. 특기는 돕기만 하고 손해는 없다 (서로 다른 쪽을 도와서 어느 하나가 다 낫지 않게).
+  // 그리기: render.js drawCharBody (shape). 특기 숫자: trait (world.js create가 읽는다)
+  //   perfectMul: 완벽한 별길 보너스 배율 · magnet: 자석 시간 +초 · magnetRange: 자석이 끌어오는 거리(m)
+  //   heart: 하트 +개 (쉬움·보통) · hardShield: 어려움에서는 방패를 두르고 출발
+  //   laneT: 줄 바꾸기 시간(초, 작을수록 빠름) · nearMul: 아슬아슬 보너스 배율
+  //   boost: 부스트 시간 +초 · revive: 한 판에 이만큼 다시 살아난다
+  // body: [밝은 곳, 가운데, 어두운 곳] · accent: 무늬 색 · flame: 엔진 불꽃·몸 밑 빛 (r,g,b) · core: 조종석 빛 · ui: 상점 카드 색
+  const CHARS = [
+    { id: 'jet', name: '슝슝 제트', price: 0, shape: 'jet', ui: '#5ee7ff',
+      body: ['#d9fbff', '#5ee7ff', '#1a9ec0'], accent: '#ff2e88', flame: '255,46,136', core: '#5ee7ff',
+      look: '청록 날개, 분홍 불꽃', desc: '균형형: 별 한 줄 다 먹기 보너스 1.5배',
+      trait: { perfectMul: 1.5 } },
+    { id: 'ufo', name: '비행접시', price: 300, shape: 'ufo', ui: '#b6ff5c',
+      body: ['#ffffff', '#c9d3e6', '#56607a'], accent: '#b6ff5c', flame: '182,255,92', core: '#b6ff5c',
+      look: '둥근 접시, 연두 유리 지붕, 도는 불빛', desc: '자석이 3초 더 오래, 더 멀리서 별을 끌어와요',
+      trait: { magnet: 3, magnetRange: 24 } },
+    { id: 'whale', name: '우주 고래', price: 500, shape: 'whale', ui: '#7aa6ff',
+      body: ['#e0ecff', '#5b8cff', '#2a3fa8'], accent: '#bff8ff', flame: '120,220,255', core: '#bff8ff',
+      look: '꼬리를 흔드는 파란 고래, 물빛 반짝이', desc: '하트 +1 (어려움에서는 방패를 두르고 출발)',
+      trait: { heart: 1, hardShield: true } },
+    { id: 'fox', name: '번개 여우', price: 800, shape: 'fox', ui: '#ff9a3d',
+      body: ['#ffe6cc', '#ff8a2a', '#a8420c'], accent: '#ffe66d', flame: '255,236,140', core: '#ffe66d',
+      look: '귀 날개가 쫑긋한 주황 여우', desc: '줄 바꾸기가 빨라요, 아슬아슬 보너스 2배',
+      trait: { laneT: 0.13, nearMul: 2 } },
+    { id: 'phoenix', name: '불사조', price: 1200, shape: 'phoenix', ui: '#ff5a7a',
+      body: ['#fff0c0', '#ff4f6a', '#8a0f3c'], accent: '#ffd24a', flame: '255,150,40', core: '#ffe66d',
+      look: '불꽃 날개를 펄럭이는 새', desc: '부스트 1.5초 더, 한 판에 한 번 다시 살아나요',
+      trait: { boost: 1.5, revive: 1 } },
   ];
+  // 옛 꾸미기(모양만 달랐던 우주선 6종)를 가진 저장본 옮기기: to = 이 캐릭터를 준다, refund = 값을 한 번 돌려준다
+  const OLD_SKINS = {
+    basic: { to: 'jet' }, bolt: { to: 'fox' }, whale: { to: 'whale' }, phoenix: { to: 'phoenix' },
+    comet: { refund: 500 }, gold: { refund: 1200 },
+  };
 
   // 강화 (5단계). per: 한 단계 효과. prices: 단계별 값 (1단계부터). world.js create(opts.up)가 읽는다
   const UPGRADES = [
@@ -203,5 +227,5 @@
   ];
   const MISSION_SLOTS = 3;
 
-  Object.assign(RN.DATA, { SKINS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, MISSIONS, MISSION_SLOTS });
+  Object.assign(RN.DATA, { CHARS, OLD_SKINS, SKINS: CHARS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, MISSIONS, MISSION_SLOTS });
 })(RN);

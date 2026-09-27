@@ -136,6 +136,8 @@
     W.wait = W.easy ? Infinity : D.START.wait; W.acc = 0; W.alpha = 0;   // 쉬움: 방향을 누를 때까지 기다린다
     W.item = null; W.itemT = D.ITEM.first * W.itemGapMul;
     W.eff = { slow: 0, double: 0, ghost: 0 };
+    // 캐릭터 특기: 판(레벨)마다 처음 몇 초 유령
+    if (W.startGhost > 0) W.eff.ghost = W.startGhost;
     W.lastEat = -99; W.combo = 0; W.mult = 1;
     W.food = null;
     spawnFood(W);
@@ -148,7 +150,13 @@
   }
   function upPer(id) { const u = (D.UPGRADES || []).find(x => x.id === id); return u ? u.per : 0; }
 
-  // opts: {mode: 'classic' | 'endless' | 'stage', level, easy,
+  // 캐릭터(opts.char: id)의 특기 수치. 모르는 id는 첫 캐릭터(네온 뱀)
+  function charDef(id) {
+    const L = D.CHARS || [];
+    return L.find(c => c.id === id) || L[0] || { id: 'neon', traits: {} };
+  }
+
+  // opts: {mode: 'classic' | 'endless' | 'stage', level, easy, char: 캐릭터 id,
   //        up: {goldTime, itemFreq, comboTime: 0~5단계} (상점 강화), start: {ghost, slow, double: true} (시작 아이템)}
   function create(cols, rows, seed, opts) {
     opts = opts || {};
@@ -177,9 +185,15 @@
     W.startLevel = W.level;
     // 상점 강화: 황금 구슬 시간 · 아이템 간격 · 콤보 시간 (규칙 수치는 W에 들고 다닌다)
     const up = opts.up || {};
-    W.goldLife = D.FOOD.goldLife + upLevel(up, 'goldTime') * upPer('goldTime');
-    W.itemGapMul = Math.max(0.4, 1 - upLevel(up, 'itemFreq') * upPer('itemFreq'));
-    W.comboWindow = D.COMBO.window + upLevel(up, 'comboTime') * upPer('comboTime');
+    // 캐릭터 특기는 강화 위에 더한다 (char를 안 넘기면 특기 없음: 규칙 테스트·옛 호출)
+    const ch = charDef(opts.char), T = (opts.char && ch.id === opts.char && ch.traits) || {};
+    W.char = ch.id;
+    W.goldLife = D.FOOD.goldLife + upLevel(up, 'goldTime') * upPer('goldTime') + (T.goldPlus || 0);
+    W.itemGapMul = Math.max(0.3, Math.max(0.4, 1 - upLevel(up, 'itemFreq') * upPer('itemFreq')) * (T.itemMul || 1));
+    W.comboWindow = D.COMBO.window + upLevel(up, 'comboTime') * upPer('comboTime') + (T.comboPlus || 0);
+    W.speedMul = T.speedMul || 1;
+    W.startGhost = T.startGhost || 0;
+    W.ghostMul = T.ghostMul || 1;
     setup(W);
     // 시작 아이템: 첫 레벨에만 효과를 켜 둔다 (출발 대기 동안은 줄지 않는다)
     W.startItems = [];
@@ -201,7 +215,7 @@
       ? Math.min(D.SPEED.max, W.lv.speed + len * D.SPEED.stagePerGrow)
       : Math.min(D.SPEED.max, D.SPEED.base + len * D.SPEED.perGrow);
     if (W.eff && W.eff.slow > 0) s *= D.ITEM.slowMul;
-    return s;
+    return s * (W.speedMul || 1);
   }
 
   function freeCells(W) {
@@ -270,7 +284,7 @@
       W.score += K.points;
       W.fx.push({ kind: 'cut', x: it.x, y: it.y, n: cut });
     } else {
-      W.eff[it.kind] = K.time;
+      W.eff[it.kind] = K.time * (it.kind === 'ghost' ? W.ghostMul || 1 : 1);
       W.fx.push({ kind: 'power', x: it.x, y: it.y, item: it.kind });
     }
     W.lastPower = it.kind;
@@ -492,5 +506,5 @@
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, DIRS, OPP };
 })(SN);

@@ -147,16 +147,38 @@
     // 그 합에 난이도 배율(level: 보통·어려움이 더 많이), 그 뒤 코인 보너스 강화만큼 더
     COINS: { perMeter: 20, perStars: 6, zone: [0, 4, 8, 12], level: { easy: 1, normal: 1.6, hard: 2.2 } },
 
-    // 꾸미기: 로봇 공 색과 모자. body: 광택 공 [밝은 곳, 가운데, 어두운 곳], rim: 아래 반사광 r,g,b, glow: 둘레 빛 r,g,b
-    // hat: 머리 장식 (render.js drawHat). price 0 = 처음부터 있음
-    SKINS: [
-      { id: 'basic',  name: '기본',      price: 0,    desc: '반짝이는 하늘색 공',        body: ['#effdff', '#5ee7ff', '#1b5fd0'], rim: '255,90,170',  glow: '94,231,255',  hat: 'antenna' },
-      { id: 'berry',  name: '딸기',      price: 150,  desc: '빨간 공에 초록 잎 꼭지',    body: ['#fff0f3', '#ff5f7e', '#a8123d'], rim: '255,230,109', glow: '255,95,126',  hat: 'leaf' },
-      { id: 'mint',   name: '민트',      price: 300,  desc: '시원한 민트색, 새싹 두 잎', body: ['#f0fff9', '#4dffc0', '#0d8a66'], rim: '94,231,255',  glow: '77,255,192',  hat: 'sprout' },
-      { id: 'bolt',   name: '번개',      price: 500,  desc: '노란 공, 번개 안테나',      body: ['#fffbe0', '#ffd23f', '#c26a00'], rim: '255,94,60',   glow: '255,210,63',  hat: 'bolt' },
-      { id: 'helmet', name: '우주 헬멧', price: 800,  desc: '하얀 공에 유리 헬멧',       body: ['#ffffff', '#cfd8e6', '#5a6a86'], rim: '94,231,255',  glow: '200,220,255', hat: 'helmet' },
-      { id: 'gold',   name: '황금',      price: 1200, desc: '번쩍이는 황금 공과 왕관',   body: ['#fffbe6', '#ffcf3a', '#9a5a00'], rim: '255,255,255', glow: '255,207,58',  hat: 'crown' },
+    // 캐릭터 다섯 (2026-09-27 소유자 요청: 게임마다 고를 수 있는 캐릭터 5종).
+    // 모두 한 가지씩 작은 장점이 있고 단점은 없다. 저마다 다른 쪽이 좋아서 어느 하나가 모든 면에서 앞서지 않는다.
+    // 장점은 늘 기본(통통 로봇)보다 같거나 좋은 쪽이라 "닿지 못하는 틈이 없다"가 모든 캐릭터에 그대로 성립한다.
+    //   trait: world.js create의 opts.char가 읽는 배율·값 (없는 칸은 기본)
+    //     magnet : 별을 먹는 거리 배율 (몸과 별 반지름 합에 곱함)
+    //     jump   : 한 번 튀는 높이 배율 (스프링은 그대로)
+    //     speed  : 좌우 최고 속도 배율 · accel: 붙는 힘 배율
+    //     fall   : 내려올 때 중력 배율 (1보다 작으면 천천히 내려온다. 오를 때는 그대로라 튀는 높이는 같다)
+    //     rocket : 로켓 시간 배율 · spring: 스프링 높이 배율
+    //   look: 그리기 모양 (render.js drawChar) · glow: 둘레 빛 r,g,b · body: 광택 몸 [밝은 곳, 가운데, 어두운 곳] · rim: 아래 반사광
+    CHARS: [
+      { id: 'robot',   name: '통통 로봇',   price: 0,    look: 'robot',   trait: { magnet: 1.7 },
+        desc: '별 자석이 있어 별을 멀리서도 먹어요', short: '별을 멀리서도 쏙',
+        body: ['#effdff', '#5ee7ff', '#1b5fd0'], rim: '255,90,170', glow: '94,231,255' },
+      { id: 'frog',    name: '개구리',      price: 300,  look: 'frog',    trait: { jump: 1.1 },
+        desc: '뒷다리가 튼튼해 조금 더 높이 뛰어요', short: '더 높이 점프',
+        body: ['#f2ffe0', '#6cf25a', '#157a2c'], rim: '255,230,109', glow: '108,242,90' },
+      { id: 'rabbit',  name: '토끼',        price: 500,  look: 'rabbit',  trait: { speed: 1.14, accel: 1.12 },
+        desc: '재빨라서 왼쪽·오른쪽으로 더 빨리 가요', short: '옆으로 더 빨리',
+        body: ['#ffffff', '#ffd6ec', '#c0608f'], rim: '255,120,190', glow: '255,160,215' },
+      { id: 'penguin', name: '펭귄',        price: 800,  look: 'penguin', trait: { fall: 0.8 },
+        desc: '날개를 파닥여 천천히 내려와요', short: '천천히 내려오기',
+        body: ['#8fa6d8', '#2a3a6e', '#0b1230'], rim: '94,231,255', glow: '127,180,255' },
+      { id: 'alien',   name: '꼬마 외계인', price: 1200, look: 'alien',   trait: { rocket: 1.35, spring: 1.15 },
+        desc: '제트팩 덕분에 로켓·스프링이 더 세요', short: '로켓·스프링 더 세게',
+        body: ['#f6e6ff', '#c07bff', '#5a1fa8'], rim: '94,255,200', glow: '192,123,255' },
     ],
+    // 예전 꾸미기(2026-09-27 하루 쓴 SKINS) 저장본 옮기기: 가진 꾸미기를 값이 같은 캐릭터로, 맞는 것이 없으면 값만큼 코인을 한 번 돌려준다
+    OLD_SKINS: {
+      basic: { to: 'robot' }, mint: { to: 'frog' }, bolt: { to: 'rabbit' }, helmet: { to: 'penguin' }, gold: { to: 'alien' },
+      berry: { refund: 150 },
+    },
 
     // 강화 (5단계, 한 번 사면 모든 판에). per: 한 단계 효과 (world.js create의 upgrades가 읽는다)
     UPGRADES: [

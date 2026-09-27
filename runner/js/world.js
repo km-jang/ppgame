@@ -37,10 +37,13 @@
 
   // 상점 강화 한 단계 효과 (data.js UPGRADES)
   const upPer = id => { const u = (D.UPGRADES || []).find(x => x.id === id); return u ? u.per : 0; };
+  // 캐릭터 (data.js CHARS). 옛 꾸미기 id(basic 등)나 모르는 id는 첫 캐릭터
+  const NO_CHAR = { id: 'jet', trait: {} };
+  const charOf = id => ((D.CHARS || []).find(c => c.id === id)) || (D.CHARS && D.CHARS[0]) || NO_CHAR;
 
   // opts: { diff ('easy'|'normal'|'hard') 또는 easy (옛 방식, 기본 true), auto (자동 운전), wait (출발 대기 초),
   //         tutorial (처음 한 번 안내), up (상점 강화 단계 {magnet, shield, boost, coin}),
-  //         loadout (시작 아이템 {shield, boost, heart}), skin (꾸미기 id, 그리기만) }
+  //         loadout (시작 아이템 {shield, boost, heart}), char (캐릭터 id, data.js CHARS. 옛 이름 skin도 받는다) }
   function create(seed, opts) {
     opts = opts || {};
     const diff = diffId(opts), C = D.DIFFICULTY[diff];
@@ -65,10 +68,20 @@
     };
     // 상점 강화: 자석·부스트 시간, 방패가 막은 뒤 깜빡이는 시간
     const up = opts.up || {};
-    W.skin = opts.skin || 'basic';
-    W.magnetTime = D.ITEM.kinds.magnet.time + Math.min(5, up.magnet || 0) * upPer('magnet');
-    W.boostTime = D.ITEM.kinds.boost.time + Math.min(5, up.boost || 0) * upPer('boost');
+    // 캐릭터 특기 (data.js CHARS trait). 모르는 id면 첫 캐릭터
+    const ch = charOf(opts.char || opts.skin), T = ch.trait || {};
+    W.char = ch.id;
+    W.skin = ch.id;   // 옛 이름
+    W.laneT = T.laneT || P.laneT;
+    W.magnetTime = D.ITEM.kinds.magnet.time + Math.min(5, up.magnet || 0) * upPer('magnet') + (T.magnet || 0);
+    W.magnetRange = T.magnetRange || D.ITEM.magnetRange;
+    W.boostTime = D.ITEM.kinds.boost.time + Math.min(5, up.boost || 0) * upPer('boost') + (T.boost || 0);
     W.shieldInv = D.HIT.shieldInv + Math.min(5, up.shield || 0) * upPer('shield');
+    W.perfectPts = Math.round(D.STAR.perfect * (T.perfectMul || 1));
+    W.nearPts = Math.round(D.NEAR.bonus * (T.nearMul || 1));
+    W.revives = T.revive || 0; W.revived = 0;
+    if (T.heart && diff !== 'hard') W.hearts += T.heart;
+    if (T.hardShield && diff === 'hard') W.shield = true;
     // 시작 아이템
     const lo = opts.loadout || {};
     if (lo.shield) W.shield = true;
@@ -238,7 +251,12 @@
     }
     W.hearts--; W.hits++; W.inv = cfg(W).inv; W.chain = 0; W.hitAt = W.dist;
     W.fx.push({ kind: 'hit', x: o.x, z: o.z, what: o.kind });
-    if (W.hearts <= 0) {
+    if (W.hearts <= 0 && W.revived < W.revives) {
+      // 불사조: 한 판에 한 번 다시 살아난다 (하트 하나, 조금 길게 깜빡)
+      W.revived++; W.hearts = 1; W.inv = Math.max(W.inv, D.HIT.revive);
+      W.events.push('revive');
+      W.fx.push({ kind: 'revive', x: W.p.x, z: W.dist });
+    } else if (W.hearts <= 0) {
       W.hearts = 0; W.phase = 'over'; W.cause = o.kind; W.inv = 0;
       W.events.push('over');
       W.fx.push({ kind: 'crash', x: W.p.x, z: W.dist });
@@ -271,9 +289,9 @@
     W.fx.push({ kind: 'star', x: o.x, z: o.z, y: o.y });
     const line = o.line;
     if (line && ++line.got === line.n) {
-      W.perfects++; W.bonus += D.STAR.perfect;
+      W.perfects++; W.bonus += W.perfectPts;
       W.events.push('perfect');
-      W.fx.push({ kind: 'perfect', x: o.x, z: o.z, y: o.y, pts: D.STAR.perfect });
+      W.fx.push({ kind: 'perfect', x: o.x, z: o.z, y: o.y, pts: W.perfectPts });
     }
   }
 
@@ -287,7 +305,7 @@
 
     // 줄 바꾸기: laneT초 동안 곡선을 따라 미끄러진다 (도중에 또 바꾸면 지금 자리에서 다시)
     if (p.lt < 1) {
-      p.lt = Math.min(1, p.lt + dt / P.laneT);
+      p.lt = Math.min(1, p.lt + dt / W.laneT);
       p.x = p.from + (p.lane - p.from) * laneEase(p.lt);
       if (p.lt >= 1) p.x = p.lane;
     }
@@ -362,7 +380,7 @@
       }
       if (o.kind === 'star' || o.kind === 'item') {
         // 자석: 가까운 별을 모든 줄에서 끌어온다
-        if (mag && o.kind === 'star' && rel < D.ITEM.magnetRange && rel > -1.5) {
+        if (mag && o.kind === 'star' && rel < W.magnetRange && rel > -1.5) {
           const k = Math.min(1, dt * 12);
           o.x += (p.x - o.x) * k; o.y += (cy - o.y) * k;
           o.z -= rel * Math.min(1, dt * 4); rel = o.z - W.dist;
@@ -403,9 +421,9 @@
     const p = W.p, N = D.NEAR, side = Math.abs(o.x - p.x);
     if (W.eff.boost > 0 || W.inv > 0 || side < P.hitW || side > N.side) return false;
     if (Math.round(o.x) !== p.fromLane || W.t - p.fromT > N.window || W.t - W.lastNear < N.cool) return false;
-    W.lastNear = W.t; W.nears++; W.bonus += N.bonus;
+    W.lastNear = W.t; W.nears++; W.bonus += W.nearPts;
     W.events.push('near');
-    W.fx.push({ kind: 'near', x: p.x, z: W.dist, pts: N.bonus });
+    W.fx.push({ kind: 'near', x: p.x, z: W.dist, pts: W.nearPts });
     return true;
   }
 
@@ -473,5 +491,5 @@
     };
   }
 
-  RN.World = { create, step, tick, move, jump, speed, baseSpeed, level, rowWeights, makeRow, fill, bot, dangerAhead, runStats, zoneAt, diffId, cfg, jumpY };
+  RN.World = { create, charOf, step, tick, move, jump, speed, baseSpeed, level, rowWeights, makeRow, fill, bot, dangerAhead, runStats, zoneAt, diffId, cfg, jumpY };
 })(RN);

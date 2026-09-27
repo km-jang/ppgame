@@ -3,8 +3,10 @@
 // 뿅뿅 우주선 game/js/shop.js와 같은 짜임.
 //
 // 저장 키
-//   runner.shop1 : { v:1, coins, skin, skins:{id:true}, up:{magnet,shield,boost,coin: 0~5},
+//   runner.shop1 : { v:2, coins, char, chars:{id:true}, up:{magnet,shield,boost,coin: 0~5},
 //                    items:{sshield,sboost,sheart: 개수}, missions:[{id,prog,done}], mseed, life:{earned,games} }
+//   옛 v1 저장본(skin, skins: 모양만 다른 우주선 6종)은 읽을 때 캐릭터로 옮긴다 (data.js OLD_SKINS:
+//   비슷한 캐릭터를 주거나, 없으면 값을 지갑에 한 번 돌려준다). 옮긴 뒤 바로 v2로 저장해서 두 번 돌려주지 않는다
 // 코인은 네 게임이 함께 쓰는 별코인 지갑(common/hub.js, HUB)에 둔다. wallet = { coins(), setCoins(n) }.
 // load·save에 wallet을 넘기면 그것을 쓰고(테스트의 가짜 지갑), 안 넘기면 HUB, HUB도 없으면 이 저장본의 coins를 쓴다
 (function (RN) {
@@ -14,20 +16,37 @@
   const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
   const int = v => Math.floor(num(v));
   const isObj = v => v != null && typeof v === 'object' && !Array.isArray(v);
-  const skinDef = id => D.SKINS.find(s => s.id === id) || null;
+  const charDef = id => D.CHARS.find(s => s.id === id) || null;
   const upDef = id => D.UPGRADES.find(u => u.id === id) || null;
   const itemDef = id => D.START_ITEMS.find(u => u.id === id) || null;
   const missionDef = id => D.MISSIONS.find(m => m.id === id) || null;
 
   function blank() {
-    const skins = {};
-    for (const s of D.SKINS) if (!s.price) skins[s.id] = true;
+    const chars = {};
+    for (const s of D.CHARS) if (!s.price) chars[s.id] = true;
     const up = {}, items = {};
     for (const u of D.UPGRADES) up[u.id] = 0;
     for (const it of D.START_ITEMS) items[it.id] = 0;
-    const st = { v: 1, coins: 0, skin: D.SKINS[0].id, skins, up, items, missions: [], mseed: 1, life: { earned: 0, games: 0 } };
+    const st = { v: 2, coins: 0, char: D.CHARS[0].id, chars, up, items, missions: [], mseed: 1, life: { earned: 0, games: 0 } };
     fillMissions(st);
     return st;
+  }
+
+  // 옛 꾸미기 → 캐릭터. 가진 것마다 OLD_SKINS를 보고 캐릭터를 주거나 값을 모아 st.refund에 (load가 지갑에 넣는다)
+  function migrate(st, raw) {
+    let refund = 0;
+    if (isObj(raw.skins)) {
+      for (const id of Object.keys(D.OLD_SKINS)) {
+        if (raw.skins[id] !== true) continue;
+        const m = D.OLD_SKINS[id];
+        if (m.to && charDef(m.to)) st.chars[m.to] = true;
+        else if (m.refund) refund += m.refund;
+      }
+    }
+    const was = typeof raw.skin === 'string' && D.OLD_SKINS[raw.skin];
+    if (was && was.to && st.chars[was.to]) st.char = was.to;
+    st.migrated = true;
+    if (refund) st.refund = refund;
   }
 
   // 아무 값이나 받아 올바른 모양으로 (망가진 저장본이면 기본값)
@@ -35,8 +54,10 @@
     const st = blank();
     if (!isObj(raw)) return st;
     st.coins = int(raw.coins);
-    if (isObj(raw.skins)) for (const s of D.SKINS) if (raw.skins[s.id] === true) st.skins[s.id] = true;
-    if (typeof raw.skin === 'string' && st.skins[raw.skin]) st.skin = raw.skin;
+    if (raw.v === 2) {
+      if (isObj(raw.chars)) for (const s of D.CHARS) if (raw.chars[s.id] === true) st.chars[s.id] = true;
+      if (typeof raw.char === 'string' && st.chars[raw.char]) st.char = raw.char;
+    } else migrate(st, raw);
     if (isObj(raw.up)) for (const u of D.UPGRADES) st.up[u.id] = Math.min(D.UPGRADE_MAX, int(raw.up[u.id]));
     if (isObj(raw.items)) for (const it of D.START_ITEMS) st.items[it.id] = Math.min(it.max, int(raw.items[it.id]));
     st.mseed = int(raw.mseed) || 1;
@@ -58,9 +79,19 @@
   const hubWallet = () => (typeof HUB !== 'undefined' && HUB && HUB.coins && HUB.setCoins ? HUB : null);
   const pickWallet = w => (w !== undefined ? w : hubWallet());
   function load(store, wallet) {
-    const st = clean((store || RN.store).get(KEY, null));
+    const S = store || RN.store, raw = S.get(KEY, null);
+    const st = clean(raw);
     const W = pickWallet(wallet);
     if (W) { try { st.coins = int(W.coins()); } catch (e) { /* 지갑이 막혀도 게임은 돈다 */ } }
+    // 옛 저장본을 옮겼으면: 돌려줄 값을 지갑에 넣고 곧바로 새 모양으로 저장 (한 번만)
+    const moved = st.migrated && isObj(raw);
+    const refund = st.refund || 0;
+    delete st.migrated; delete st.refund;
+    if (moved) {
+      st.coins += refund;
+      save(st, S, wallet);
+      if (refund) st.refunded = refund;   // 화면이 한 번 알려 주고 지운다 (저장본에는 남지 않게 clean이 무시)
+    }
     return st;
   }
   function save(st, store, wallet) {
@@ -72,8 +103,8 @@
   // ─── 가격 ─────────────────────────────────────────────────
   // 살 수 없으면(이미 가짐·최대 단계·가득) null
   function price(st, id) {
-    const s = skinDef(id);
-    if (s) return st.skins[id] ? null : s.price;
+    const s = charDef(id);
+    if (s) return st.chars[id] ? null : s.price;
     const u = upDef(id);
     if (u) { const lv = st.up[id] || 0; return lv >= D.UPGRADE_MAX ? null : u.prices[lv]; }
     const it = itemDef(id);
@@ -83,21 +114,22 @@
 
   // 무엇이든 산다 (꾸미기·강화·시작 아이템). {ok, reason: 'owned'|'max'|'coins'|'unknown', cost}
   function buy(st, id) {
-    const s = skinDef(id), u = upDef(id), it = itemDef(id);
+    const s = charDef(id), u = upDef(id), it = itemDef(id);
     if (!s && !u && !it) return { ok: false, reason: 'unknown' };
     const cost = price(st, id);
     if (cost == null) return { ok: false, reason: s ? 'owned' : 'max' };
     if (st.coins < cost) return { ok: false, reason: 'coins', cost };
     st.coins -= cost;
-    if (s) { st.skins[id] = true; st.skin = id; }
+    if (s) { st.chars[id] = true; st.char = id; }
     else if (u) st.up[id] = (st.up[id] || 0) + 1;
     else st.items[id] = (st.items[id] || 0) + 1;
     return { ok: true, cost };
   }
 
-  function selectSkin(st, id) {
-    if (!st.skins[id]) return false;
-    st.skin = id;
+  // 가진 캐릭터만 고를 수 있다
+  function selectChar(st, id) {
+    if (!charDef(id) || !st.chars[id]) return false;
+    st.char = id;
     return true;
   }
 
@@ -111,9 +143,9 @@
     return lo;
   }
 
-  // world.js create()에 넘기는 값 (강화 단계·시작 아이템·꾸미기)
+  // world.js create()에 넘기는 값 (강화 단계·시작 아이템·캐릭터)
   function worldOpts(st, loadout) {
-    return { up: Object.assign({}, st.up), loadout: loadout || {}, skin: st.skin };
+    return { up: Object.assign({}, st.up), loadout: loadout || {}, char: st.char };
   }
 
   // ─── 판 요약 · 코인 ───────────────────────────────────────
@@ -203,5 +235,5 @@
     });
   }
 
-  RN.Shop = { KEY, blank, clean, load, save, price, buy, selectSkin, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, skinDef, upDef, itemDef, missionDef };
+  RN.Shop = { KEY, blank, clean, load, save, price, buy, selectChar, selectSkin: selectChar, charDef, skinDef: charDef, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, upDef, itemDef, missionDef };
 })(RN);

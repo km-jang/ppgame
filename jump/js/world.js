@@ -18,6 +18,33 @@
   }
 
   const clamp01 = v => Math.max(0, Math.min(1, v));
+  // 캐릭터 고르기 (D.CHARS). 모르는 id면 첫 캐릭터(통통 로봇)
+  const charOf = id => D.CHARS.find(c => c.id === id) || D.CHARS[0];
+  // 캐릭터의 몸 움직임 값: 튀는 높이·스프링 높이·오를 때/내려올 때 중력·별 먹는 거리 배율
+  function physOf(ch) {
+    const T = charOf(ch).trait || {};
+    return {
+      jump: P0.jump * (T.jump || 1), spring: D.SPRING.jump * (T.spring || 1),
+      gUp: P0.gravity, gDown: P0.gravity * (T.fall || 1), magnet: T.magnet || 1,
+    };
+  }
+  // 지금 (높이 y0, 세로 속도 vy)에서 t초 뒤 높이. 오를 때와 내려올 때 중력이 다를 수 있다 (펭귄)
+  function yAfter(y0, vy, t, F) {
+    if (vy > 0) {
+      const up = vy / F.gUp;
+      if (t <= up) return y0 + vy * t - F.gUp * t * t / 2;
+      const top = y0 + vy * vy / (2 * F.gUp), k = t - up;
+      return top - F.gDown * k * k / 2;
+    }
+    return y0 + vy * t - F.gDown * t * t / 2;
+  }
+  // 지금부터 높이 y에 (내려오며) 닿기까지 걸리는 시간. 닿지 못하면 -1
+  function fallTime(y0, vy, y, F) {
+    let t0 = 0, top = y0, v = vy;
+    if (vy > 0) { t0 = vy / F.gUp; top = y0 + vy * vy / (2 * F.gUp); v = 0; }
+    const q = v * v + 2 * F.gDown * (top - y);
+    return q < 0 ? -1 : t0 + (v + Math.sqrt(q)) / F.gDown;
+  }
   // 난이도 표 고르기: opts.diff가 먼저, 없으면 예전 방식 opts.easy (true 쉬움 · 그 밖 보통)
   function levelOf(opts) {
     opts = opts || {};
@@ -99,7 +126,7 @@
     // 가시 폭탄 (보통·어려움): 이번 줄과 앞 줄 사이, 두 발판에서 가로로 멀리
     const M = D.MINE, LM = L.mine;
     if (LM && y / D.METER >= LM.from && rand() < lerp(LM.chance[0], LM.chance[1], d)) {
-      const my = (W.genY + y) / 2, reach = P0.jump + P0.r * 2 + M.r + 20;
+      const my = (W.genY + y) / 2, reach = W.phys.jump + P0.r * 2 + M.r + 20;
       for (let k = 0; k < 6; k++) {
         const mx = 30 + rand() * (WW - 60);
         // 튀어 오르는 길에 걸리지 않게: 폭탄 아래 한 번 튀는 높이 안의 모든 발판에서 가로로 멀리
@@ -131,28 +158,31 @@
     if (W.mines.length && W.mines[0].y <= low) W.mines = W.mines.filter(o => keep(o) && !o.gone);
   }
 
-  // 상점 강화를 적용한 값 (upgrades: {speed, rocket, cloud: 0~5}). 없으면 강화 없음
-  function applyUpgrades(L, up) {
+  // 상점 강화와 캐릭터 장점을 적용한 값 (upgrades: {speed, rocket, cloud: 0~5}, ch: 캐릭터 id). 없으면 그대로
+  function applyUpgrades(L, up, ch) {
     up = up || {};
+    const T = charOf(ch).trait || {};
     const U = id => { const d = D.UPGRADES.find(u => u.id === id); const lv = Math.max(0, Math.min(D.UPGRADE_MAX, Math.floor(Number(up[id]) || 0))); return d ? lv * d.per : 0; };
     return {
-      ctl: Object.assign({}, L.ctl, { maxVx: L.ctl.maxVx * (1 + U('speed')) }),
-      rocketTime: D.ROCKET.time * (1 + U('rocket')),
+      ctl: Object.assign({}, L.ctl, { maxVx: L.ctl.maxVx * (1 + U('speed')) * (T.speed || 1), accel: L.ctl.accel * (T.accel || 1) }),
+      rocketTime: D.ROCKET.time * (1 + U('rocket')) * (T.rocket || 1),
       rescues: L.rescues > 0 ? L.rescues + Math.round(U('cloud')) : 0,   // 구조 구름 강화는 쉬움만
     };
   }
 
   // opts: {diff: 'easy'|'normal'|'hard', easy (예전 방식), viewH, tutorial,
-  //        upgrades: {speed, rocket, cloud} (상점 강화), loadout: {rocket, shield} (시작 아이템)}
+  //        upgrades: {speed, rocket, cloud} (상점 강화), loadout: {rocket, shield} (시작 아이템),
+  //        char: 캐릭터 id (D.CHARS, 없으면 통통 로봇)}
   function create(seed, opts) {
     opts = opts || {};
     const rand = JP.rng(seed == null ? (Date.now() ^ 0x5bd1e995) : seed);
     const L = levelOf(opts);
     const easy = L.id === 'easy';
     const viewH = opts.viewH || 600;
-    const UP = applyUpgrades(L, opts.upgrades);
+    const ch = charOf(opts.char);
+    const UP = applyUpgrades(L, opts.upgrades, ch.id);
     const W = {
-      rand, easy, diff: L.id, L, ctl: UP.ctl, rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
+      rand, easy, diff: L.id, L, ctl: UP.ctl, char: ch.id, phys: physOf(ch.id), rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
       p: { x: WW / 2, y: P0.r, vx: 0, vy: 0, px: WW / 2, py: P0.r, face: 1, land: -9 },
       input: { dir: 0 },          // -1 왼쪽 · 0 · 1 오른쪽 (main.js·봇이 채운다)
       cam: -viewH * D.CAM.start, pcam: 0,
@@ -205,7 +235,7 @@
     const P = W.p;
     P.y = p.y + P0.r;
     const spring = p.kind === 'spring';
-    P.vy = jumpV(spring ? D.SPRING.jump : P0.jump);
+    P.vy = jumpV(spring ? W.phys.spring : W.phys.jump);
     P.land = W.t;
     p.hit = W.t;
     W.bounces++;
@@ -263,7 +293,7 @@
       P.vy = D.ROCKET.speed;
       if (W.rocket <= 0) { W.rocket = 0; P.vy = D.ROCKET.after; }
     } else {
-      P.vy -= P0.gravity * H;
+      P.vy -= (P.vy > 0 ? W.phys.gUp : W.phys.gDown) * H;
     }
     P.y += P.vy * H;
 
@@ -280,9 +310,9 @@
     }
 
     // 별
-    const sr = (r + D.STAR.r) * (r + D.STAR.r);
+    const sd = (r + D.STAR.r) * W.phys.magnet, sr = sd * sd;
     for (const s of W.stars) {
-      if (s.got || Math.abs(s.y - P.y) > 40) continue;
+      if (s.got || Math.abs(s.y - P.y) > sd) continue;
       const dx = wrapDelta(P.x, s.x), dy = s.y - P.y;
       if (dx * dx + dy * dy < sr) {
         s.got = true; W.starsGot++;
@@ -315,7 +345,7 @@
       if (W.rocket > 0) { m.gone = true; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
       if (W.shield) {
         W.shield = false; W.saves++; m.gone = true;
-        P.vy = Math.max(P.vy, jumpV(P0.jump));
+        P.vy = Math.max(P.vy, jumpV(W.phys.jump));
         W.events.push('save'); W.fx.push({ kind: 'save', x: m.x, y: m.y });
         continue;
       }
@@ -370,15 +400,12 @@
   // ─── 자동 운전 (시작 화면 시연·테스트용) ─────────────────────
   // 닿을 수 있는 발판 중 가장 높은 것(스프링은 더 좋게, 가시 폭탄 근처는 빼고)을 골라 그쪽으로 간다
   function botDir(W) {
-    const P = W.p, g = P0.gravity, C = W.ctl;
+    const P = W.p, F = W.phys, C = W.ctl;
     if (W.phase !== 'play') return 0;
     if (W.rocket > 0) return 0;
-    const apex = P.y + (P.vy > 0 ? P.vy * P.vy / (2 * g) : 0);
+    const apex = P.y + (P.vy > 0 ? P.vy * P.vy / (2 * F.gUp) : 0);
     // 지금부터 높이 y에 (내려오며) 닿기까지 걸리는 시간. 닿지 못하면 -1
-    const timeTo = y => {
-      const q = P.vy * P.vy + 2 * g * (P.y - y);
-      return q < 0 ? -1 : (P.vy + Math.sqrt(q)) / g;
-    };
+    const timeTo = y => fallTime(P.y, P.vy, y, F);
     const fromY = P.y - P0.r;
     let t = W.botT;
     const bad = p => !p || p.broken || W.plats.indexOf(p) < 0 || p.y + P0.r > apex - 8 || (P.vy <= 0 && fromY < p.y - 1);
@@ -423,10 +450,10 @@
   // 고른 방향으로 잠깐(0.4초) 가 보면 가시 폭탄에 닿는지 살펴, 닿으면 다른 방향을 고른다
   function dodge(W, want) {
     if (!W.mines.length || W.shield) return want;
-    const P = W.p, g = P0.gravity, lim = (P0.r + D.MINE.r + 10) * (P0.r + D.MINE.r + 10);
+    const P = W.p, lim = (P0.r + D.MINE.r + 10) * (P0.r + D.MINE.r + 10);
     const hits = dir => {
       for (let k = 1; k <= 8; k++) {
-        const t = k * 0.05, x = P.x + (dir ? dir * W.ctl.maxVx : P.vx * 0.3) * t, y = P.y + P.vy * t - g * t * t / 2;
+        const t = k * 0.05, x = P.x + (dir ? dir * W.ctl.maxVx : P.vx * 0.3) * t, y = yAfter(P.y, P.vy, t, W.phys);
         for (const m of W.mines) {
           if (m.gone) continue;
           const dx = wrapDelta(x, m.x), dy = m.y - y;
@@ -444,9 +471,12 @@
     return {
       diff: W.diff, easy: W.easy, height: W.height, score: W.score, stars: W.starsGot, springs: W.springs,
       rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo, rescued: W.rescued, bounces: W.bounces, time: W.t,
-      zone: W.zone, crumbles: W.crumbles,
+      zone: W.zone, crumbles: W.crumbles, char: W.char,
     };
   }
 
-  JP.World = { create, applyUpgrades, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV };
+  // 테스트·봇용: W에서 높이 y에 내려와 닿기까지 시간
+  const timeTo = (W, y) => fallTime(W.p.y, W.p.vy, y, W.phys);
+
+  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV };
 })(JP);

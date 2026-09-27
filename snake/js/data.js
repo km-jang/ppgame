@@ -78,15 +78,29 @@
     // 아이가 보통 한 판 하면 20~60개쯤
     COINS: { perScore: 20, perGold: 3, perLevel: 15 },
 
-    // 꾸미기: 뱀 몸·머리 색 (render.js가 그린다). price 0 = 처음부터 가짐
-    SKINS: [
-      { id: 'neon',    name: '기본 네온', price: 0,    color: '#5ee7ff', desc: '청록에서 파랑으로 흐르는 처음 뱀' },
-      { id: 'rainbow', name: '무지개',    price: 300,  color: '#ff7ad9', desc: '마디마다 색이 바뀌며 흘러가요' },
-      { id: 'fire',    name: '불꽃',      price: 500,  color: '#ff9f43', desc: '노랑에서 빨강으로 이글이글' },
-      { id: 'star',    name: '별빛',      price: 700,  color: '#c7a6ff', desc: '밤하늘 몸에 별이 반짝반짝' },
-      { id: 'ice',     name: '얼음',      price: 900,  color: '#bff8ff', desc: '하얗게 빛나는 차가운 얼음 뱀' },
-      { id: 'gold',    name: '황금',      price: 1400, color: '#ffd23f', desc: '번쩍번쩍 빛나는 황금 뱀' },
+    // 캐릭터 5종 (2026-09-27, 소유자: "캐릭터를 고를 수 있게 5종 정도, 다양하게"). 모양은 render.js가 그린다.
+    // 특기는 모두 돕기만 하고 벌은 없다. 서로 다른 쪽을 도와서 어느 하나가 모든 면에서 낫지 않다.
+    // trait (world.js create의 opts.char가 읽는다):
+    //   speedMul: 속도 배율 · itemMul: 아이템 간격 배율(작을수록 자주) · comboPlus: 콤보 시간 +초
+    //   goldPlus: 황금 구슬 시간 +초 · startGhost: 판(레벨) 시작 유령 초 · ghostMul: 유령 아이템 시간 배율
+    // price 0 = 처음부터 가짐. color: 이름·카드 색
+    CHARS: [
+      { id: 'neon',   name: '네온 뱀',       price: 0,    color: '#5ee7ff', look: '반짝이는 청록 몸에 노란 코',
+        trait: '느긋해요: 속도 6% 천천히',           traits: { speedMul: 0.94 } },
+      { id: 'robot',  name: '로봇 뱀',       price: 300,  color: '#c9d6e3', look: '쇠 마디와 빛나는 눈 가리개',
+        trait: '아이템이 25% 더 자주 나와요',         traits: { itemMul: 0.75 } },
+      { id: 'dragon', name: '꼬마 용',       price: 500,  color: '#ff9f43', look: '작은 뿔과 날개, 꼬리에 불꽃',
+        trait: '콤보가 1.2초 더 이어져요',            traits: { comboPlus: 1.2 } },
+      { id: 'bug',    name: '무지개 애벌레', price: 800,  color: '#ff7ad9', look: '동글동글 무지개 마디와 더듬이',
+        trait: '황금 구슬이 3초 더 오래 남아요',       traits: { goldPlus: 3 } },
+      { id: 'galaxy', name: '은하 해룡',     price: 1200, color: '#c7a6ff', look: '별이 비치는 몸에 금빛 왕관',
+        trait: '출발 3초 유령 · 유령 아이템 1.6배',    traits: { startGhost: 3, ghostMul: 1.6 } },
     ],
+    // 예전 꾸미기(색만 바꾸던 것)를 가진 저장본: 비슷한 캐릭터로 바꿔 주고, 맞는 것이 없으면 값을 한 번 돌려준다
+    OLD_SKINS: {
+      rainbow: { to: 'bug' }, fire: { to: 'dragon' }, star: { to: 'galaxy' },
+      ice: { refund: 900 }, gold: { refund: 1400 },
+    },
 
     // 강화: 한 번 사면 모든 판에 계속 (5단계). per: 한 단계마다 늘어나는 양. world.js create()의 opts.up으로 들어간다
     UPGRADES: [
