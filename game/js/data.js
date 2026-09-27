@@ -369,7 +369,7 @@
   const GIFT = {
     first: [45, 75], gap: [60, 100],
     quiet: 4, bossQuiet: 7, holeQuiet: 7, retry: 1.5,
-    life: 8, r: 21, hits: 3, bob: 16, margin: 40, band: [0.22, 0.78],
+    life: 8, r: 26, hits: 3, bob: 16, margin: 44, band: [0.22, 0.78],
     popup: 2.6,       // 가운데 위 "선물: 코인 25개!" 알림 (초)
     confetti: 42,     // 열릴 때 색종이 수
     rewards: [
@@ -395,8 +395,8 @@
   // 끝나면 bye초 동안 손을 흔들고("고마워!") 떠난다. 동료·캡슐은 한 번에 하나뿐. 맞지 않고 적을 막지도 않는다
   const WINGMAN = {
     firstWave: 2, every: [2, 3], delay: [5, 12],
-    capR: 18, capHits: 3, capSpeed: 70, capLife: 20,
-    time: 25, bye: 2.2, rate: 3, dmgMul: 0.5, bulletSpeed: 480, range: 560, r: 8, side: 56, follow: 6,
+    capR: 22, capHits: 3, capSpeed: 70, capLife: 20,
+    time: 25, bye: 2.2, rate: 3, dmgMul: 0.5, bulletSpeed: 480, range: 560, r: 10, side: 60, follow: 6,
   };
 
   Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS, GIFT, FEVER, WINGMAN });

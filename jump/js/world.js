@@ -145,7 +145,11 @@
         if (Math.abs(wrapDelta(ex, x)) < w + 24) continue;
         // 길 발판이 움직이면 그 발판이 지나다니는 줄을 비우고 앞 줄과의 가운데 높이에
         const ey = kind === 'moving' ? (W.genY + y) / 2 + 8 : y + (rand() - 0.5) * 30;
-        extra = addPlat(W, pickKind(L.extra, d, rand, mix, warm ? ['normal'] : null), ex, ey, w);
+        const ek = pickKind(L.extra, d, rand, mix, warm ? ['normal'] : null);
+        // 먼저 놓인 몬스터와 겹쳐 보이면 곁 발판은 놓지 않는다 (곁 발판은 길이 아니라 없어도 된다. 난수는 똑같이 쓴다)
+        const MO = D.MONSTER, hit = W.monsters.some(m => !m.gone && ey > m.y0 - MO.r - m.float - 4 && ey - D.PLAT.h < m.y0 + MO.r + m.float + 6 &&
+          Math.abs(wrapDelta(ex, m.x0)) < w / 2 + m.range + MO.r + 6);
+        if (!hit) extra = addPlat(W, ek, ex, ey, w);
         xs.push(ex);
         break;
       }
@@ -205,7 +209,8 @@
   //   앞 길 발판에서 이번 길 발판으로 건너가는 길목에도 두지 않는다.
   //   곁 발판·가시 폭탄·다른 몬스터와는 겹쳐 보이지 않게 조금 떨어뜨린다.
   // host: 슬라임이 앉은 곁 발판 (그 발판은 빼고 잰다. 위에서 내려오면 밟기라 괜찮다)
-  function monsterSpotOk(W, x, hr, my, host, main) {
+  function monsterSpotOk(W, x, hr, my, host, main, fl) {
+    fl = fl || 0;   // 둥실거리는 폭 (위아래로 이만큼 더 차지한다)
     const M = D.MONSTER, r = P0.r;
     // 위쪽은 그 발판에 내려앉은 주인공 몸이 몬스터에 닿을 수 있는 높이까지만 (발판 윗면이 몬스터 가운데보다 몸 반지름 넘게 위면 안 닿는다)
     const below = W.phys.jump + r * 2 + M.r + 10, above = M.r + 4;
@@ -216,7 +221,7 @@
       const dx = Math.abs(wrapDelta(x, p.x)) - hr;
       if (p.kind === 'spring' && p.y >= my - belowSpring && p.y <= my + above && dx < M.pad) return false;
       // 어느 발판과도 겹쳐 보이지 않게 (발판은 윗면 p.y에서 아래로 두께 D.PLAT.h)
-      if (p.y > my - M.r - 4 && p.y - D.PLAT.h < my + M.r + 6 && dx < p.w / 2 + M.r + 6) return false;
+      if (p.y > my - M.r - fl - 4 && p.y - D.PLAT.h < my + M.r + fl + 6 && dx < p.w / 2 + M.r + 6) return false;
       if (p.main) {
         if (p.y < my - below || p.y > my + above) continue;
         // 움직이는 길 발판은 오가는 범위 전체를 막는다 (어디서 튀어 오를지 모르니까)
@@ -284,7 +289,7 @@
       my = (W.genY + y) / 2;
       for (let k = 0; k < 8 && !ok; k++) {
         x = 30 + rand() * (WW - 60);
-        ok = monsterSpotOk(W, x, hr, my, null, main);
+        ok = monsterSpotOk(W, x, hr, my, null, main, K.float);
       }
     }
     if (!ok) return null;

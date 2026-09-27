@@ -544,6 +544,85 @@
     return (itemSprites[kind] = c);
   }
 
+  // ─── 깜짝 선물 상자 · 워프 고리 (한 번 미리 그려 두고 찍는다) ───
+  // 선물: 분홍 상자 + 금빛 리본 십자 + 위에 나비 리본 + 둘레 빛 (미리 그릴 때만 빛 번짐)
+  let giftSpr = null;
+  function giftSprite() {
+    if (giftSpr) return giftSpr;
+    const c = mk(128, 128), g = c.getContext('2d');
+    const halo = g.createRadialGradient(64, 68, 14, 64, 68, 64);
+    halo.addColorStop(0, 'rgba(255,214,90,0.75)'); halo.addColorStop(0.55, 'rgba(255,95,168,0.3)'); halo.addColorStop(1, 'rgba(255,95,168,0)');
+    g.fillStyle = halo; g.fillRect(0, 0, 128, 128);
+    const x = 34, y = 50, w = 60, h = 50;
+    // 뚜껑 아래 상자
+    const body = g.createLinearGradient(0, y, 0, y + h);
+    body.addColorStop(0, '#ff8cc4'); body.addColorStop(1, '#c21e6e');
+    g.fillStyle = body; g.beginPath(); g.roundRect ? g.roundRect(x, y + 8, w, h - 8, 6) : g.rect(x, y + 8, w, h - 8); g.fill();
+    // 뚜껑
+    const lid = g.createLinearGradient(0, y, 0, y + 14);
+    lid.addColorStop(0, '#ffb3da'); lid.addColorStop(1, '#ff4f9e');
+    g.fillStyle = lid; g.beginPath(); g.roundRect ? g.roundRect(x - 5, y, w + 10, 15, 5) : g.rect(x - 5, y, w + 10, 15); g.fill();
+    // 리본 십자
+    const gold = g.createLinearGradient(0, y, 0, y + h);
+    gold.addColorStop(0, '#fff2a8'); gold.addColorStop(1, '#f0a818');
+    g.fillStyle = gold;
+    g.fillRect(64 - 7, y, 14, h); g.fillRect(x, y + 26, w, 11);
+    // 나비 리본
+    g.shadowColor = 'rgba(255,230,109,0.9)'; g.shadowBlur = 8;
+    for (const d of [-1, 1]) {
+      g.beginPath(); g.moveTo(64, y + 2);
+      g.bezierCurveTo(64 + d * 8, y - 22, 64 + d * 30, y - 16, 64 + d * 22, y + 1);
+      g.closePath(); g.fill();
+    }
+    g.shadowBlur = 0;
+    g.fillStyle = '#ffe66d'; g.beginPath(); g.arc(64, y + 1, 6, 0, TAU); g.fill();
+    // 반사 · 테두리
+    g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(x + 13, y + 20, 6, 12, 0.3, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2;
+    g.beginPath(); g.roundRect ? g.roundRect(x, y + 8, w, h - 8, 6) : g.rect(x, y + 8, w, h - 8); g.stroke();
+    return (giftSpr = c);
+  }
+  // 워프 고리: 청록 → 분홍으로 빛나는 세로 타원 고리 + 안쪽 은은한 소용돌이
+  let warpSpr = null;
+  const WARP_W = 160, WARP_H = 200;
+  function warpSprite() {
+    if (warpSpr) return warpSpr;
+    const c = mk(WARP_W, WARP_H), g = c.getContext('2d'), cx = WARP_W / 2, cy = WARP_H / 2;
+    const inner = g.createRadialGradient(cx, cy, 4, cx, cy, 70);
+    inner.addColorStop(0, 'rgba(255,255,255,0.55)'); inner.addColorStop(0.4, 'rgba(120,200,255,0.25)'); inner.addColorStop(1, 'rgba(180,90,255,0.05)');
+    g.fillStyle = inner; g.beginPath(); g.ellipse(cx, cy, 58, 80, 0, 0, TAU); g.fill();
+    const ringCol = g.createLinearGradient(0, 0, 0, WARP_H);
+    ringCol.addColorStop(0, '#5ee7ff'); ringCol.addColorStop(0.5, '#b36bff'); ringCol.addColorStop(1, '#ff5fa8');
+    g.shadowColor = '#8fe9ff'; g.shadowBlur = 18;
+    g.strokeStyle = ringCol; g.lineWidth = 13;
+    g.beginPath(); g.ellipse(cx, cy, 62, 84, 0, 0, TAU); g.stroke();
+    g.shadowBlur = 0;
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3;
+    g.beginPath(); g.ellipse(cx, cy, 62, 84, 0, 0, TAU); g.stroke();
+    // 소용돌이 줄 셋
+    g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 3;
+    for (let k = 0; k < 3; k++) {
+      g.beginPath();
+      for (let i = 0; i <= 30; i++) { const a = k * TAU / 3 + i * 0.16, r = 6 + i * 1.6; g.lineTo(cx + Math.cos(a) * r * 0.75, cy + Math.sin(a) * r); }
+      g.stroke();
+    }
+    return (warpSpr = c);
+  }
+  // 워프 터널 고리 (빛나는 원, 한 장을 크기만 바꿔 찍는다)
+  let tunSpr = null;
+  function tunnelRing() {
+    if (tunSpr) return tunSpr;
+    const c = mk(256, 256), g = c.getContext('2d');
+    g.shadowColor = '#ffffff'; g.shadowBlur = 14;
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 6;
+    g.beginPath(); g.arc(128, 128, 110, 0, TAU); g.stroke();
+    return (tunSpr = c);
+  }
+  const startItemName = id => { const it = (D.START_ITEMS || []).find(x => x.id === id); return it ? '다음 판 ' + it.name : '시작 아이템'; };
+  // 무지개 색 (피버): h는 0 → 1
+  const RAINBOW = ['#ff4d6d', '#ff9a3d', '#ffe66d', '#7dff7a', '#5ee7ff', '#7a8cff', '#d77bff'];
+  const rainbowAt = h => RAINBOW[((Math.floor(h * RAINBOW.length) % RAINBOW.length) + RAINBOW.length) % RAINBOW.length];
+
   // 곳 이름표 → 그림: 행성 차례(0~9)는 PLANET_ART, 'bh0'·'bh2'는 블랙홀
   const artOf = key => (typeof key === 'string' && key.startsWith('bh') ? BH_ART : PLANET_ART[+key] || PLANET_ART[0]);
   const stopOf = zone => RN.World.placeOf(zone).stop;
@@ -569,6 +648,16 @@
       P.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, max: life, color: colors[i % colors.length], size: size * (0.6 + Math.random() * 0.8) });
     }
   }
+  // 색종이: 위로 튀었다가 천천히 떨어지는 네모 (움직임 줄이기면 적게, 떨어지지 않고 제자리에서 사라진다)
+  function confetti(x, y, n, sp, size, calm) {
+    const P = R.parts;
+    for (let i = 0; i < n; i++) {
+      if (P.length >= D.FX.maxParticles) P.shift();
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, v = sp * (0.5 + Math.random() * 0.7), life = 0.9 + Math.random() * 0.6;
+      P.push({ x, y, vx: calm ? 0 : Math.cos(a) * v, vy: calm ? 0 : Math.sin(a) * v, g: calm ? 0 : sp * 1.6, conf: true, life, max: life,
+        color: RAINBOW[i % RAINBOW.length], size: size * (0.7 + Math.random() * 0.6) });
+    }
+  }
   function ring(x, y, r, color, life) {
     if (R.parts.length >= D.FX.maxParticles) R.parts.shift();
     R.parts.push({ ring: true, x, y, r, color, life, max: life });
@@ -581,7 +670,7 @@
     for (const f of W.fx) {
       const q = proj(L, f.x, Math.max(0, f.z - dist), f.kind === 'star' || f.kind === 'power' ? (f.y || 0.5) : 0.9);
       if (f.kind === 'star') {
-        burst(q.x, q.y, D.FX.starSparks, ['#ffe66d', '#fff4c2', '#ffffff'], s0 * 3, s0 * 0.07);
+        burst(q.x, q.y, D.FX.starSparks, f.fever ? RAINBOW : ['#ffe66d', '#fff4c2', '#ffffff'], s0 * 3, s0 * 0.07);
         if (W.chain >= 5 && W.chain % 5 === 0 && !W.fx.some(g => g.kind === 'perfect')) text(q.x, q.y - s0 * 0.6, W.chain + '연속!', '#ffe66d', s0 * 0.3);
       } else if (f.kind === 'power') {
         const K = ITEM[f.item];
@@ -645,6 +734,20 @@
         ring(sq.x, sq.y, s0 * 1.6, '#ffd24a', 0.6); ring(sq.x, sq.y, s0 * 2.6, '#ff5a7a', 0.8);
         burst(sq.x, sq.y, 30, ['#ffd24a', '#ff8a3d', '#ff5a7a', '#fff4c2'], s0 * 6, s0 * 0.11);
         text(sq.x, sq.y - s0 * 1.25, '불사조 부활! 다시 날아요', '#ffd24a', s0 * 0.34, 1.6);
+      } else if (f.kind === 'gift') {
+        // 선물 상자: 색종이 + 큰 글자 "선물: 코인 25개!"
+        const txt = f.kind === 'gift' && f.n ? '코인 ' + f.n + '개!' : f.item ? (ITEM[f.item] ? ITEM[f.item].name : '') + '!' : startItemName(f.id) + '!';
+        const sub = f.id ? '다음 판 시작할 때 써요' : f.item === 'shield' ? '한 번 부딪혀도 괜찮아요' : f.item === 'magnet' ? '별을 끌어와요' : f.item === 'boost' ? '슝! 부딪혀도 부숴요' : '판이 끝나면 받아요';
+        R.banner = { big: '선물: ' + txt, sub, color: '#ffd24a', t: 0, max: 2.4, disp: true, gift: true };
+        ring(q.x, q.y, s0 * 1.8, '#ff5fa8', 0.6);
+        confetti(q.x, q.y, v.calm ? 16 : 44, s0 * 7, s0 * 0.14, v.calm);
+        confetti(L.cx, L.hy * 0.6, v.calm ? 10 : 30, s0 * 6, s0 * 0.14, v.calm);
+      } else if (f.kind === 'fever') {
+        R.banner = { big: 'FEVER!', sub: '별 점수 2배! 별이 잔뜩!', color: '#ff5fa8', t: 0, max: 2.4, disp: true, rainbow: true };
+        confetti(L.cx, L.hy * 0.55, v.calm ? 12 : 36, s0 * 6, s0 * 0.12, v.calm);
+      } else if (f.kind === 'warp') {
+        R.banner = { big: '워프!', sub: '+' + f.pts + '점 · ' + D.WARP.dist + 'm 앞으로 슝!', color: '#8fe9ff', t: 0, max: 2.0, disp: true };
+        R.flash = v.calm ? 0 : D.FX.flash * 0.8; R.flashColor = '190,240,255';
       } else if (f.kind === 'tutok') {
         text(sq.x, sq.y - s0 * 0.8, '잘했어요!', '#ffe66d', s0 * 0.45, 1.4);
         burst(sq.x, sq.y, 24, ['#ffe66d', '#5ee7ff', '#ffffff'], s0 * 5, s0 * 0.1);
@@ -661,7 +764,8 @@
       const q = P[i];
       q.life -= dt;
       if (q.life <= 0) { P.splice(i, 1); continue; }
-      if (!q.ring) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.9; q.vy *= 0.9; }
+      if (q.conf) { q.vy += q.g * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.97; }
+      else if (!q.ring) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.9; q.vy *= 0.9; }
     }
     for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y -= 36 * dt; if (q.life <= 0) R.texts.splice(i, 1); }
     R.shake = Math.max(0, R.shake - dt * 40);
@@ -679,8 +783,10 @@
         ctx.strokeStyle = q.color; ctx.lineWidth = 2 + a * 4;
         ctx.beginPath(); ctx.arc(q.x, q.y, q.r * (1.1 - a * 0.8), 0, TAU); ctx.stroke();
       } else {
-        const s = q.size * (0.5 + a * 0.5);
-        ctx.fillStyle = q.color; ctx.fillRect(q.x - s / 2, q.y - s / 2, s, s);
+        const s = q.size * (q.conf ? 1 : 0.5 + a * 0.5);
+        ctx.fillStyle = q.color;
+        if (q.conf) { ctx.globalAlpha = Math.min(1, a * 2); ctx.fillRect(q.x - s / 2, q.y - s * 0.3, s, s * 0.6); }
+        else ctx.fillRect(q.x - s / 2, q.y - s / 2, s, s);
       }
     }
     ctx.globalAlpha = 1;
@@ -1123,6 +1229,156 @@
     else if (o.kind === 'bomb') drawBomb(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'star') drawStar(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'item') drawItem(ctx, W, L, o, rel, fade, v);
+    else if (o.kind === 'gift') drawGift(ctx, W, L, o, rel, fade, v);
+    else if (o.kind === 'warp') drawWarp(ctx, W, L, o, rel, fade, v);
+  }
+
+  // 이름표 (멀리서도 읽히게 글자가 너무 작아지지 않는다)
+  function tag(ctx, x, y, txt, color, s) {
+    const fs = Math.round(Math.max(14, Math.min(26, s * 0.42)));
+    ctx.font = fs + 'px ' + DISP;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.9)'; ctx.strokeText(txt, x, y - fs * 0.7);
+    ctx.fillStyle = color; ctx.fillText(txt, x, y - fs * 0.7);
+    ctx.textBaseline = 'alphabetic';
+  }
+  // 선물 상자: 둥실 떠서 천천히 돈다. 높이 뜬 것은 바닥에서 빛기둥, 막대 밑은 낮게 (움직임 줄이기면 가만히)
+  function drawGift(ctx, W, L, o, rel, fade, v) {
+    const bob = v.calm ? 0 : Math.sin(W.t * 4 + o.z) * 0.1;
+    const q = proj(L, o.x, rel, o.y + bob), size = q.s * (o.need === 'slide' ? 1.1 : 1.45);
+    ctx.globalAlpha = fade;
+    if (o.need === 'jump') {
+      const b = proj(L, o.x, rel, 0);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,214,90,0.18)';
+      ctx.fillRect(q.x - q.s * 0.12, q.y, q.s * 0.24, b.y - q.y);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // 둘레 반짝이 네 개가 돈다
+    const tt = v.calm ? 0.3 : W.t * 1.6;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 4; k++) {
+      const a = tt + k * TAU / 4;
+      glow(ctx, 'rgba(255,240,170,0.95)', q.x + Math.cos(a) * size * 0.55, q.y + Math.sin(a) * size * 0.3, size * 0.1, fade);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    const wob = v.calm ? 0 : Math.sin(W.t * 3 + o.z) * 0.12;
+    ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(wob);
+    ctx.drawImage(giftSprite(), -size / 2, -size / 2, size, size);
+    ctx.restore();
+    if (rel > 2) tag(ctx, q.x, q.y - size * 0.36, o.need === 'jump' ? '뛰어서 선물!' : o.need === 'slide' ? '미끄러져 선물!' : '선물!', '#ffd24a', q.s);
+    ctx.globalAlpha = 1;
+  }
+  // 워프 관문: 바닥에 선 빛나는 고리 (그 줄로 지나가면 워프). 바닥에 빛 웅덩이
+  function drawWarp(ctx, W, L, o, rel, fade, v) {
+    ctx.globalAlpha = fade * 0.45;
+    ctx.fillStyle = '#5ee7ff';
+    floorQuad(ctx, L, o.x, rel, 0.45, 0.6); ctx.fill();
+    const q = proj(L, o.x, rel, 1.15), hgt = q.s * 2.3, wid = hgt * WARP_W / WARP_H;
+    const pulse = v.calm ? 1 : 1 + Math.sin(W.t * 6) * 0.04;
+    ctx.globalAlpha = fade;
+    ctx.globalCompositeOperation = 'lighter';
+    glow(ctx, 'rgba(140,200,255,0.8)', q.x, q.y, hgt * 0.75, fade * 0.5);
+    ctx.drawImage(warpSprite(), q.x - wid * pulse / 2, q.y - hgt * pulse / 2, wid * pulse, hgt * pulse);
+    // 고리를 따라 도는 불빛
+    const tt = v.calm ? 0 : W.t * 2.2;
+    for (let k = 0; k < 6; k++) {
+      const a = tt + k * TAU / 6;
+      glow(ctx, k % 2 ? 'rgba(255,95,168,0.95)' : 'rgba(94,231,255,0.95)', q.x + Math.cos(a) * wid * 0.39, q.y + Math.sin(a) * hgt * 0.42, q.s * 0.2, fade);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    if (rel > 2) tag(ctx, q.x, q.y - hgt * 0.5, '워프!', '#8fe9ff', q.s);
+    ctx.globalAlpha = 1;
+  }
+
+  // 피버: 길 양쪽 가장자리가 무지개로 빛난다 (움직임 줄이기면 금빛 한 색, 깜빡이지 않음)
+  function drawFeverEdges(ctx, W, L, v) {
+    const k = Math.min(1, W.fever / 0.4, (D.FEVER.dur - W.fever) / 0.3);
+    if (k <= 0) return;
+    const near = -CAMZ + 1.2, far = D.VIEW;
+    const t = performance.now() / 1000;
+    for (const lx of [-0.5, 2.5]) {
+      const a = proj(L, lx, near), b = proj(L, lx, far);
+      let col;
+      if (v.calm) col = '#ffd24a';
+      else {
+        col = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        const sh = (t * 0.6) % 1;
+        for (let i = 0; i <= 6; i++) col.addColorStop(i / 6, rainbowAt(i / 7 + sh));
+      }
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = 0.28 * k; ctx.lineWidth = Math.max(10, L.lane * 0.09);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.globalAlpha = 0.95 * k; ctx.lineWidth = Math.max(3, L.lane * 0.025);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 워프 터널: 가운데로 빨려 드는 빛 고리와 길게 늘어난 별 (움직임 줄이기면 멈춘 고리만)
+  function drawTunnel(ctx, W, L, v) {
+    const Wp = W.warp;
+    const k = Math.min(1, (Wp.max - Wp.t) / 0.25, Wp.t / 0.3);
+    if (k <= 0) return;
+    const cx = L.cx, cy = L.hy + (L.py - L.hy) * 0.25, maxR = Math.hypot(v.w, v.h) * 0.62;
+    ctx.globalAlpha = 0.82 * k;
+    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+    bg.addColorStop(0, '#ffffff'); bg.addColorStop(0.08, '#7fdcff'); bg.addColorStop(0.35, '#3a1a7a'); bg.addColorStop(1, '#0a0620');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, v.w, v.h);
+    ctx.globalCompositeOperation = 'lighter';
+    const tt = v.calm ? 0 : (Wp.max - Wp.t);
+    const spr = tunnelRing();
+    for (let i = 0; i < 9; i++) {
+      const u = ((i / 9 + tt * 0.9) % 1), r = u * u * maxR;
+      if (r < 6) continue;
+      ctx.globalAlpha = k * Math.min(1, u * 2) * 0.55;
+      ctx.drawImage(spr, cx - r * 1.16, cy - r * 1.16, r * 2.32, r * 2.32);
+    }
+    // 길게 늘어난 별
+    if (!R.warpStars || R.warpStars.length !== 60) {
+      R.warpStars = [];
+      for (let i = 0; i < 60; i++) R.warpStars.push({ a: Math.random() * TAU, r: Math.random(), v: 0.6 + Math.random() * 0.9, c: i % 3 });
+    }
+    ctx.lineCap = 'round';
+    for (const q of R.warpStars) {
+      if (!v.calm) { q.r += q.v * (R.dt || 0.016) * 1.6; if (q.r > 1) { q.r = 0.05; q.a = Math.random() * TAU; } }
+      const r0 = q.r * q.r * maxR, r1 = r0 + (v.calm ? 0.04 : 0.08 + q.r * 0.3) * maxR;
+      ctx.globalAlpha = k * Math.min(1, q.r * 3) * 0.9;
+      ctx.strokeStyle = q.c === 0 ? '#ffffff' : q.c === 1 ? '#8fe9ff' : '#ff9fcb';
+      ctx.lineWidth = 1.5 + q.r * 3;
+      ctx.beginPath(); ctx.moveTo(cx + Math.cos(q.a) * r0, cy + Math.sin(q.a) * r0); ctx.lineTo(cx + Math.cos(q.a) * r1, cy + Math.sin(q.a) * r1); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
+  // 피버 게이지: 오른쪽 위 거리 아래 작은 막대. 피버 중에는 무지개로 남은 시간 (움직임 줄이기면 한 색)
+  function drawFeverMeter(ctx, W, v) {
+    if (W.phase !== 'play' || (W.tut && W.tut.step !== 'done')) return;
+    const s = v.ui, right = v.w - v.hudRight, narrow = v.w < 600;
+    const w = 128 * s, h = 11 * s, y = v.hudMid + (narrow ? 44 : 20) * s, x = right - w;
+    const on = W.fever > 0, k = on ? W.fever / D.FEVER.dur : W.feverM;
+    ctx.fillStyle = 'rgba(12,16,26,0.72)';
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - 2 * s, y - 2 * s, w + 4 * s, h + 4 * s, h * 0.6); else ctx.rect(x - 2 * s, y - 2 * s, w + 4 * s, h + 4 * s); ctx.fill();
+    if (k > 0) {
+      let col;
+      if (on && !v.calm) {
+        col = ctx.createLinearGradient(x, 0, x + w, 0);
+        const sh = (performance.now() / 1000 * 0.8) % 1;
+        for (let i = 0; i <= 6; i++) col.addColorStop(i / 6, rainbowAt(i / 7 + sh));
+      } else if (on) col = '#ffd24a';
+      else { col = ctx.createLinearGradient(x, 0, x + w, 0); col.addColorStop(0, '#ff9fcb'); col.addColorStop(1, '#ffd24a'); }
+      ctx.fillStyle = col;
+      ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, Math.max(h, w * k), h, h / 2); else ctx.rect(x, y, w * k, h); ctx.fill();
+    }
+    ctx.font = Math.round(14 * s) + 'px ' + DISP;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,7,12,0.85)';
+    const lab = on ? 'FEVER ' + Math.ceil(W.fever) : '피버';
+    ctx.strokeText(lab, x - 7 * s, y + h / 2 + 1);
+    ctx.fillStyle = on ? '#ffd24a' : '#ffc2de'; ctx.fillText(lab, x - 7 * s, y + h / 2 + 1);
+    ctx.textBaseline = 'alphabetic';
   }
 
   // ─── 캐릭터 5종 (data.js CHARS) ───
@@ -1728,7 +1984,12 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = (b.small && !b.disp ? 'italic 700 ' + fs + 'px ' + NUM : fs + 'px ' + DISP);
     ctx.lineWidth = Math.max(4, fs * 0.12); ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.strokeText(b.big, cx, cy);
-    ctx.fillStyle = b.color; ctx.fillText(b.big, cx, cy);
+    if (b.rainbow && !v.calm) {
+      const tw = ctx.measureText(b.big).width, gr = ctx.createLinearGradient(cx - tw / 2, 0, cx + tw / 2, 0), sh = (performance.now() / 1000 * 0.7) % 1;
+      for (let i = 0; i <= 6; i++) gr.addColorStop(i / 6, rainbowAt(i / 7 + sh));
+      ctx.fillStyle = gr;
+    } else ctx.fillStyle = b.color;
+    ctx.fillText(b.big, cx, cy);
     if (b.sub) {
       ctx.font = Math.round(Math.max(16, fs * 0.45)) + 'px ' + DISP;
       ctx.lineWidth = 4; ctx.strokeText(b.sub, cx, cy + fs * 0.75);
@@ -1751,11 +2012,14 @@
     takeFx(W, v, L, dist);
     updateFx(dt || 0);
     drawBackground(ctx, W, v, L, dist, dt || 0);
+    if (W.fever > 0) drawFeverEdges(ctx, W, L, v);
+    if (W.warp) drawTunnel(ctx, W, L, v);
     drawPirate(ctx, W, L, v, dt || 0);
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     // 먼 것부터 그리고, 우주선보다 뒤(카메라 쪽)로 지나간 것은 우주선 다음에
-    const list = W.obs.filter(o => !o.done).sort((a, b) => b.z - a.z);
+    // 워프 터널 안에서는 길 위 물체를 그리지 않는다 (장애물도 없다)
+    const list = W.warp ? [] : W.obs.filter(o => !o.done).sort((a, b) => b.z - a.z);
     let i = 0;
     for (; i < list.length && list[i].z - dist > 0.3; i++) drawObject(ctx, W, L, list[i], dist, v);
     drawShip(ctx, W, L, v);
@@ -1769,7 +2033,7 @@
     }
     // 부스트: 화면 가장자리가 노랗게
     if (W.eff.boost > 0) { ctx.fillStyle = 'rgba(255,230,109,' + (0.05 + Math.min(1, W.eff.boost) * 0.04).toFixed(3) + ')'; ctx.fillRect(0, 0, v.w, v.h); }
-    if (v.hud !== false) { if (W.phase === 'play') drawBanner(ctx, v, L); drawHud(ctx, W, v); drawIntro(ctx, W, v, L); drawSwipe(ctx, W, v); }
+    if (v.hud !== false) { if (W.phase === 'play') drawBanner(ctx, v, L); drawHud(ctx, W, v); drawFeverMeter(ctx, W, v); drawIntro(ctx, W, v, L); drawSwipe(ctx, W, v); }
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)

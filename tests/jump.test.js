@@ -813,6 +813,10 @@ function checkMonsters(diff, seed, n, char, adapt) {
     assert(!host || !host.main, 'never sits on a path platform');
     assert(!host || host.kind === 'normal', 'host is a normal platform');
     for (const p of plats.values()) {
+      // 어느 발판과도 겹쳐 보이지 않는다 (앉은 발판·움직이는 발판 빼고)
+      if (p.id !== m.host && p.kind !== 'moving' && p.y > m.y0 - MO.r - m.float - 2 && p.y - D.PLAT.h < m.y0 + MO.r + m.float + 2) {
+        assert(Math.abs(wrapDelta(m.x0, p.x)) - m.range >= p.w / 2 + MO.r, diff + ' monster overlaps a platform');
+      }
       if (!p.main || p.y < m.y0 - below || p.y > m.y0 + above) continue;
       assert(p.kind !== 'moving', diff + ' monster above a moving path platform');
       const dx = Math.abs(wrapDelta(m.x0, p.x)) - m.range;

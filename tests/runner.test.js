@@ -1406,5 +1406,302 @@ test('알아서 맞춰 주는 난이도: 사람 같은 로봇이 쉽게 맞춘 �
   assert(mid.dist / T.normal > 1 && mid.dist / T.normal < 2.5, 'normal perf of the human bot ' + (mid.dist / T.normal).toFixed(2));
 });
 
+
+// ─── 깜짝 선물 상자 · 피버 타임 · 워프 관문 (2026-09-27) ───
+const GF = D.GIFT, FV = D.FEVER, WP = D.WARP;
+// 우주선 앞 물체가 dz m 안으로 올 때까지 달린다
+function runTo(W, o, dz) { for (let i = 0; i < 120 * 20 && W.phase === 'play' && o.z - W.dist > dz; i++) tick(W); }
+
+test('깜짝 선물 상자: 처음 35~55초, 그 뒤 60~100초마다. 처음 안내·해적선·블랙홀 근처에는 안 놓이고, 선물이 앞에 있으면 해적선이 기다린다', () => {
+  for (let seed = 1; seed <= 40; seed++) { const W = create(seed); assert(W.giftT >= GF.first[0] && W.giftT <= GF.first[1], 'first ' + W.giftT); }
+  let gifts = 0, pir = 0;
+  for (const id of D.DIFF_ORDER) {
+    for (let seed = 1; seed <= 4; seed++) {
+      const W = create(seed, { diff: id, wait: 0, bh: 1, pirateAt: 61 });
+      let lastAt = -1, firstAt = -1;
+      while (W.runT < 420 && W.phase === 'play') {
+        W.inv = 99; W.hearts = 9;
+        tick(W);
+        if (W.events.includes('giftHere')) {
+          gifts++;
+          const g = W.obs.filter(o => o.kind === 'gift').pop();
+          assert(!W.pir && W.pirGuard == null, id + ' gift during pirate');
+          assert(!W.bhs.some(b => g.z > b.start - GF.bhPad && g.z < b.end + GF.bhPad), id + ' gift near a black hole at ' + Math.floor(g.z));
+          if (firstAt < 0) { firstAt = W.runT; assert(firstAt >= GF.first[0] - 0.01, 'first gift at ' + firstAt.toFixed(1)); }
+          if (lastAt >= 0) assert(W.runT - lastAt >= GF.every[0] - 0.01, id + ' gifts too close: ' + (W.runT - lastAt).toFixed(1));
+          lastAt = W.runT;
+        }
+        if (W.events.includes('pirate')) pir++;
+        if (W.pir) assert(!W.obs.some(o => !o.done && (o.kind === 'gift' || o.kind === 'warp') && o.z > W.dist + 1), id + ' gift or warp gate ahead during a pirate chase');
+        if (W.bh) assert(!W.obs.some(o => !o.done && o.kind === 'gift' && o.z >= W.bh.start && o.z < W.bh.end), 'gift inside a black hole');
+        W.events.length = 0; W.fx.length = 0;
+      }
+    }
+  }
+  assert(gifts >= 30 && pir >= 5, 'gifts ' + gifts + ' pirates ' + pir);
+  // 처음 안내 중에는 시계가 멈추고 선물도 없다
+  const T = create(3, { tutorial: true, wait: 0 });
+  T.giftT = 0;
+  for (let i = 0; i < 120 * 20 && T.tut.step !== 'done'; i++) { T.inv = 99; tick(T); assert(!T.giftReady && !T.obs.some(o => o.kind === 'gift'), 'no gift in tutorial'); }
+});
+
+test('선물 상자 안전한 줄 약속: 빈 줄 바닥 · 문 위(뛰어서) · 빈 줄 높이(뛰어서) · 막대 밑(미끄러져서)만, 그 줄에는 늘 빈 줄이 따로 있다 (세 난이도, 캐릭터마다, 가장 어렵게 맞춘 난이도까지)', () => {
+  const seen = { lane: 0, gate: 0, high: 0, bar: 0 };
+  for (const c of D.CHARS) {
+    for (const id of D.DIFF_ORDER) {
+      for (const adapt of [1, D.ADAPT.max]) {
+        for (let seed = 1; seed <= 4; seed++) {
+          const W = create(seed, { diff: id, char: c.id, adapt });
+          W.runT = 1e6;
+          const vmax = RN.World.cfg(W).speed.max, need = 2 * W.laneT + 0.1;
+          let prev = null;
+          for (let i = 0; i < 60; i++) {
+            W.giftReady = true;
+            const row = makeRow(W);
+            assert(row.open.length >= 1, 'passable lane');
+            if (prev) assert((row.z - prev.z - 2 * D.PLAYER.hitZ) / vmax >= need, 'gap with gifts');
+            prev = row;
+            const g = W.obs.find(o => o.kind === 'gift' && o.row === row.id);
+            if (!g) continue;
+            assert(row.free.length >= 1, 'gift row keeps a free lane: ' + row.pat);
+            const k = row.lanes[g.x];
+            assert(k !== 'meteor' && k !== 'mover', 'gift on a meteor lane');
+            if (k === 'gate') { assert(g.need === 'jump' && g.y > D.OBST.gateH + 0.5, 'gift over a gate needs a jump'); seen.gate++; }
+            else if (k === 'bar') { assert(g.need === 'slide' && g.y < D.OBST.barLo, 'gift under a bar needs a slide'); seen.bar++; }
+            else if (g.need === 'jump') seen.high++;
+            else { assert(g.need === '', 'plain gift'); seen.lane++; }
+            if (row.item) assert(W.obs.find(o => o.kind === 'item' && o.row === row.id).x !== g.x, 'gift and item in different lanes');
+          }
+        }
+      }
+    }
+  }
+  assert(seen.lane > 50 && seen.gate > 10 && seen.high > 5 && seen.bar > 10, JSON.stringify(seen));
+});
+
+test('선물 상자 줍기: 바닥 선물은 지나가면, 문 위 선물은 뛰어서, 막대 밑 선물은 미끄러져서. 알맞게 하면 안 부딪힌다', () => {
+  // 바닥
+  let W = empty(); W.giftT = 1e9;
+  put(W, 'gift', 1, 8, { y: GF.y, need: '' });
+  run(W, 1.2);
+  assert(W.gifts === 1 && W.hits === 0 && W.events.includes('gift'), 'plain gift');
+  // 문 위: 안 뛰면 문에 걸리고 선물도 못 먹는다
+  W = empty(); W.giftT = 1e9;
+  put(W, 'gate', 1, 8); put(W, 'gift', 1, 8, { y: GF.jumpY, need: 'jump' });
+  run(W, 1.2);
+  assert(W.gifts === 0 && W.hits === 1, 'no jump: hit gate, no gift');
+  W = empty(); W.giftT = 1e9;
+  const g1 = put(W, 'gift', 1, 8, { y: GF.jumpY, need: 'jump' }); put(W, 'gate', 1, 8);
+  runTo(W, g1, speed(W) * 0.3); move(W, 'jump'); run(W, 1);
+  assert(W.gifts === 1 && W.hits === 0 && W.gates === 1, 'jump: gift and gate');
+  // 빈 줄 높이: 안 뛰면 그냥 지나가고(안 부딪힘), 뛰면 먹는다
+  W = empty(); W.giftT = 1e9;
+  put(W, 'gift', 1, 8, { y: GF.jumpY, need: 'jump' });
+  run(W, 1.2);
+  assert(W.gifts === 0 && W.hits === 0, 'high gift: missing is fine');
+  // 막대 밑: 미끄러지면 먹고 안 부딪힌다, 그냥 가면 막대에 콩
+  W = empty(); W.giftT = 1e9;
+  const g2 = put(W, 'gift', 1, 8, { y: GF.slideY, need: 'slide' }); put(W, 'bar', 1, 8);
+  runTo(W, g2, speed(W) * 0.3); move(W, 'slide'); run(W, 1);
+  assert(W.gifts === 1 && W.hits === 0 && W.bars === 1, 'slide: gift and bar');
+  W = empty(); W.giftT = 1e9;
+  put(W, 'gift', 1, 8, { y: GF.slideY, need: 'slide' }); put(W, 'bar', 1, 8);
+  run(W, 1.2);
+  assert(W.gifts === 0 && W.hits === 1, 'no slide: bar, no gift');
+});
+
+test('선물: 코인(15~40, 판이 끝날 때 받는 코인에 더해짐) · 바로 쓰는 아이템 · 다음 판 시작 아이템 (가득이면 코인)', () => {
+  const kinds = {}, items = {};
+  for (let seed = 1; seed <= 80; seed++) {
+    const W = empty({ diff: seed % 3 === 0 ? 'hard' : 'easy' });
+    W.shield = seed % 2 === 0;
+    const hadShield = W.shield;
+    const got = RN.World.takeGift(W, { x: 1, z: W.dist, y: GF.y });
+    kinds[got.kind] = (kinds[got.kind] || 0) + 1;
+    if (got.kind === 'coins') assert(got.n >= GF.coins[0] && got.n <= GF.coins[1] && W.giftCoins === got.n, 'coins ' + got.n);
+    if (got.kind === 'power') {
+      assert(GF.powers.includes(got.item) && !(hadShield && got.item === 'shield'), 'power ' + got.item);
+      assert(got.item === 'shield' ? W.shield : W.eff[got.item] > 0, 'power applied');
+    }
+    if (got.kind === 'item') { items[got.id] = true; assert(D.START_ITEMS.some(it => it.id === got.id) && W.giftItems[0] === got.id, 'item ' + got.id); if (W.diff === 'hard') assert(got.id !== 'sheart', 'no heart start item on hard'); }
+    assert(W.gifts === 1 && W.fx.some(f => f.kind === 'gift'), 'counted and shown');
+  }
+  assert(kinds.coins > kinds.power && kinds.power > 5 && kinds.item > 5, JSON.stringify(kinds));
+  // 코인 흐름: 선물 코인은 배율 없이 그대로, 판 요약·결과 화면 부분에 '선물'
+  const W = empty({ diff: 'normal' });
+  W.dist = 800; W.stars = 40; W.giftCoins = 25; W.gifts = 2; W.giftItems = ['sboost', 'sshield'];
+  const run1 = SH.runOf(W);
+  assert(run1.giftCoins === 25 && run1.gifts === 2 && run1.giftItems.length === 2, 'runOf');
+  const base = SH.coinsFor(Object.assign({}, run1, { giftCoins: 0 }));
+  const c = SH.coinsFor(run1);
+  assert(c.parts.gift === 25 && c.total === base.total + 25, 'gift coins added: ' + c.total + ' vs ' + base.total);
+  const st = SH.blank(); st.items.sshield = 3;   // 방패 출발은 가득
+  const r = SH.finishRun(st, run1);
+  assert(st.items.sboost === 1 && st.items.sshield === 3, 'start item given (full one not)');
+  assert(r.parts.gift === 25 + GF.fullCoins && r.coins === c.total + GF.fullCoins && st.coins === r.coins, 'full item becomes coins: ' + r.coins);
+  const s = runStats(W);
+  assert(s.gifts === 2 && s.fevers === 0 && s.warps === 0, 'runStats');
+});
+
+test('피버 타임: 별·완벽한 별길·아슬아슬로 게이지가 차고, 가득 차면 10초 동안 별 점수 2배, 끝나면 원래대로 (피버 중·처음 안내 중에는 안 참)', () => {
+  const W = empty(); W.giftT = 1e9;
+  // 별 한 줄(5개)을 다 먹는다
+  const line = { n: 5, got: 0 };
+  for (let i = 0; i < 5; i++) put(W, 'star', 1, 6 + i * 1.5, { y: 0.5, line });
+  run(W, 1.5);
+  const want = 5 * FV.star + (5 - FV.chainFrom + 1) * FV.chain + FV.perfect;
+  assert(W.stars === 5 && W.perfects === 1 && Math.abs(W.feverM - want) < 1e-9, 'meter ' + W.feverM + ' want ' + want);
+  // 가득 차기 직전 → 별 하나로 피버
+  W.feverM = 0.999;
+  put(W, 'star', 1, 5, { y: 0.5 });
+  run(W, 0.6);
+  assert(W.fever > FV.dur - 0.6 && W.fevers === 1 && W.feverM === 0 && W.events.includes('fever'), 'fever on ' + W.fever);
+  // 피버 중: 별 하나 = 20점, 게이지는 그대로
+  const b0 = W.bonus, s0 = W.stars;
+  put(W, 'star', 1, 5, { y: 0.5 });
+  run(W, 0.6);
+  assert(W.stars === s0 + 1 && W.bonus - b0 === D.STAR.value * (FV.mul - 1), 'double stars: +' + (W.bonus - b0));
+  assert(W.feverM === 0, 'meter does not fill during fever');
+  run(W, FV.dur);
+  assert(W.fever === 0 && W.events.includes('feverEnd'), 'fever ends after ' + FV.dur + 's');
+  const b1 = W.bonus;
+  put(W, 'star', 1, 5, { y: 0.5 });
+  run(W, 0.6);
+  assert(W.bonus === b1 && W.feverM > 0, 'normal again');
+  // 아슬아슬도 채운다
+  const N = empty(); N.giftT = 1e9;
+  put(N, 'meteor', 1, 3);
+  move(N, 'right');
+  run(N, 1);
+  assert(N.nears === 1 && Math.abs(N.feverM - FV.near) < 1e-9, 'near fills ' + N.feverM);
+  // 처음 안내 중에는 안 찬다
+  const T = create(1, { tutorial: true });
+  RN.World.feverAdd(T, 2);
+  assert(T.fever === 0 && T.feverM === 0, 'no fever in tutorial');
+  const st = runStats(Object.assign(W, {}));
+  assert(st.fevers === 1, 'fevers in runStats');
+});
+
+test('피버 타임: 빈 줄마다 별 한 줄 더, 처음 별 소나기는 부딪히는 것이 없는 곳에만 (세 난이도)', () => {
+  for (const id of D.DIFF_ORDER) {
+    const W = create(5, { diff: id, wait: 0 });
+    W.runT = 50;
+    RN.World.startFever(W);
+    let rows = 0;
+    for (let i = 0; i < 12; i++) {
+      const row = makeRow(W);
+      if (row.pat === 'stars' || !row.free.length) continue;
+      if ((row.z - W.dist) / speed(W) > W.fever) break;   // 닿을 때 피버가 끝나는 줄은 빼고
+      for (const l of row.free) assert(W.obs.some(o => o.kind === 'star' && o.row === row.id && o.x === l), id + ' fever stars in free lane ' + l + ' of ' + row.pat);
+      rows++;
+    }
+    assert(rows >= 2, id + ' rows ' + rows);
+    // 별 소나기: 실제로 달리며
+    const V = create(9, { diff: id, wait: 0 });
+    for (let i = 0; i < 120 * 20; i++) { V.inv = 99; V.hearts = 9; tick(V); }
+    RN.World.startFever(V);
+    let rain = 0;
+    const known = new Set(V.obs);
+    for (let i = 0; i < 120 * FV.rain; i++) {
+      V.inv = 99; V.hearts = 9; tick(V);
+      for (const o of V.obs) {
+        if (known.has(o)) continue;
+        known.add(o);
+        if (!o.rain) continue;
+        rain++;
+        for (const q of V.obs) if (!q.done && ['meteor', 'gate', 'bar', 'bomb'].includes(q.kind) && Math.abs(q.z - o.z) < 4 && (q.moving ? [q.from, q.to].includes(o.x) : Math.round(q.x) === o.x)) assert(false, id + ' rain star next to a ' + q.kind);
+      }
+    }
+    assert(rain >= 5, id + ' rain ' + rain);
+  }
+});
+
+test('워프 관문: 행성 구간마다 약 80% (수성 구간은 없음), 빈 줄에만, 그 줄의 안전한 줄 약속은 그대로. 해적선·블랙홀·처음 안내 중에는 없음', () => {
+  let legs = 0, warps = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const W = create(seed, { bh: 0 });
+    W.runT = 1e6;
+    const byLeg = {};
+    while (W.nextZ < 12 * D.ROUTE.leg) {
+      const row = makeRow(W);
+      assert(row.open.length >= 1, 'passable');
+      const g = W.obs.find(o => o.kind === 'warp' && o.row === row.id);
+      if (!g) continue;
+      assert(row.free.indexOf(g.x) >= 0, 'warp gate stands in a free lane');
+      const k = Math.floor(g.z / D.ROUTE.leg);
+      assert(k >= WP.from && !byLeg[k], 'one per leg from leg ' + WP.from);
+      byLeg[k] = true;
+      const into = g.z - k * D.ROUTE.leg;
+      assert(into >= WP.pos[0] && into <= WP.pos[1] + WP.slack, 'position in leg ' + into.toFixed(0));
+    }
+    legs += 11; warps += Object.keys(byLeg).length;
+  }
+  const rate = warps / legs;
+  assert(rate > WP.chance - 0.15 && rate <= WP.chance + 0.1, 'warp rate ' + rate.toFixed(2));
+  // 해적선 · 처음 안내 · 블랙홀 중에는 없다
+  const P0 = create(2, { bh: 0 }); P0.runT = 1e6; P0.pir = { t: 99 };
+  for (let i = 0; i < 200; i++) makeRow(P0);
+  assert(!P0.obs.some(o => o.kind === 'warp'), 'no warp during a pirate chase');
+  const T0 = create(2, { tutorial: true, bh: 0 }); T0.runT = 1e6;
+  for (let i = 0; i < 200; i++) makeRow(T0);
+  assert(!T0.obs.some(o => o.kind === 'warp'), 'no warp during the tutorial');
+  const B0 = create(2, { bh: 0 }); B0.runT = 1e6;
+  B0.bhs = [{ leg: 0, start: 0, end: 1e6, side: 0 }]; B0.bhLeg = 1e9;
+  for (let i = 0; i < 200; i++) makeRow(B0);
+  assert(!B0.obs.some(o => o.kind === 'warp'), 'no warp near a black hole');
+});
+
+test('워프: 고리 문을 지나면 2초 동안 장애물 없는 터널로 200m 앞으로 (+50점), 행성을 넘으면 도착 글자, 놓쳐도 괜찮다 (세 난이도, 실제로 달리며)', () => {
+  for (const id of D.DIFF_ORDER) {
+    const W = create(7, { diff: id, wait: 0, bh: 0 });
+    for (let i = 0; i < 120 * 12; i++) { W.inv = 99; W.hearts = 9; tick(W); }
+    W.inv = 0; W.hearts = 9; W.shield = false; W.eff.boost = 0;
+    // 지금 줄 바로 앞에 워프 관문 (그 자리 장애물은 치운다)
+    W.obs = W.obs.filter(o => !(Math.abs(o.z - (W.dist + 4)) < 3 && Math.round(o.x) === W.p.lane));
+    const zone0 = W.zone, leg = D.ROUTE.leg;
+    W.dist = Math.max(W.dist, (zone0 + 1) * leg - 120);   // 워프 중에 다음 행성으로 넘어가게
+    W.pdist = W.dist;
+    W.obs = W.obs.filter(o => o.kind !== 'arch');
+    put(W, 'warp', W.p.lane, 3);
+    const b0 = W.bonus, hits0 = W.hits;
+    let from = -1, zoneEv = false;
+    for (let i = 0; i < 120 * 4 && W.phase === 'play'; i++) {
+      tick(W);
+      if (W.events.includes('warp')) from = W.warp.from;
+      if (W.events.includes('zone')) zoneEv = true;
+      if (W.warp) {
+        // 터널 안: 부딪히는 것이 하나도 없다 (나온 뒤 clear m까지)
+        assert(!W.obs.some(o => !o.done && ['meteor', 'gate', 'bar', 'bomb'].includes(o.kind) && o.z > W.dist - D.PLAYER.hitZ && o.z < W.warp.to + WP.clear), id + ' obstacle inside the warp');
+        assert(W.nextZ >= W.warp.to + WP.clear - 1e-6, 'rows resume after the landing');
+      }
+      W.events.length = 0; W.fx.length = 0;
+      if (from >= 0 && !W.warp) break;
+    }
+    assert(from >= 0 && W.warps === 1, id + ' warped');
+    assert(W.dist >= from + WP.dist && W.dist < from + WP.dist + 3, id + ' jumped ' + (W.dist - from).toFixed(1) + 'm');
+    assert(W.bonus - b0 >= WP.bonus && W.hits === hits0, id + ' bonus and no hits');
+    assert(zoneEv && W.zone === zone0 + 1, id + ' planet banner after crossing');
+    assert(W.clean >= WP.dist, 'distance counts for the clean-run mission');
+  }
+  // 놓친 워프: 아무 일 없다
+  const M = empty(); M.giftT = 1e9;
+  put(M, 'warp', 0, 5);
+  run(M, 1.5);
+  assert(M.warps === 0 && !M.warp && M.hits === 0 && M.phase === 'play', 'missed warp is fine');
+});
+
+test('선물·피버·워프가 있어도 같은 씨앗이면 같은 길, 주사율이 달라도 같은 결과', () => {
+  const a = create(4242, { easy: false, auto: true }), b = create(4242, { easy: false, auto: true });
+  run(a, 150); run(b, 150);
+  assert(a.gifts + a.warps + a.fevers > 0, 'something happened');
+  assert([a.dist, a.stars, a.gifts, a.warps, a.fevers, a.score].join() === [b.dist, b.stars, b.gifts, b.warps, b.fevers, b.score].join(), 'same seed same run');
+  const res = [60, 90, 144].map(hz => {
+    const W = create(99, { auto: true });
+    for (let i = 0; i < hz * 150; i++) step(W, 1 / hz);
+    return [W.ticks, W.dist.toFixed(6), W.stars, W.gifts, W.warps, W.fevers, W.score].join(',');
+  });
+  assert(res[0] === res[1] && res[1] === res[2], res.join(' | '));
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

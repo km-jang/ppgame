@@ -1363,7 +1363,7 @@
     W.gift = null;
     const G = D.GIFT, p = W.player, rw = reward || giftReward(W);
     const per = Math.ceil(G.confetti / CONFETTI.length);
-    for (const c of CONFETTI) burst(W, g.x, g.y, c, per, 340, 5);
+    for (const c of CONFETTI) burst(W, g.x, g.y, c, per, 360, 7);
     W.particles.push({ pop: true, x: g.x, y: g.y, r: 34, life: 0.16, max: 0.16, color: '#ffffff' });
     W.particles.push({ ring: true, x: g.x, y: g.y, r: 110, life: 0.5, max: 0.5, color: '#ffd23f' });
     W.stats.gifts += 1;

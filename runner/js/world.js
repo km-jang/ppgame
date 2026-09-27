@@ -299,7 +299,9 @@
   // 문·막대 줄에 놓을 때도 그 줄에 빈 줄이 따로 있어야 한다. 놓을 곳이 없으면 다음 줄에서 다시
   function placeGift(W, row, tutRow, itemLane) {
     const G = D.GIFT, r = W.grand, z = row.z;
-    if (!W.giftReady || tutRow || !row.free.length || !calmAt(W, z, z, G.bhPad)) return;
+    if (!W.giftReady || tutRow || !row.free.length) return;
+    planBlackHoles(W, z + G.bhPad + 10);   // 이 근처 블랙홀 구간을 먼저 정해 두고 본다
+    if (!calmAt(W, z, z, G.bhPad)) return;
     const variant = RN.weighted(Object.keys(G.variant).map(k => ({ k, w: G.variant[k] })), r).k;
     const free = row.free.filter(l => l !== itemLane && l !== row.warp);
     const of = kind => [0, 1, 2].filter(l => row.lanes[l] === kind);

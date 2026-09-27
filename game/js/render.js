@@ -1322,7 +1322,7 @@
     // 남은 시간이 3초 아래면 천천히 깜빡여 곧 떠난다고 알려 준다 (움직임 줄이기면 옅게만)
     const fade = w.bye <= 0 && w.t < 3 ? (calm ? 0.7 : 0.6 + 0.4 * Math.abs(Math.cos(w.t * 3))) : 1;
     ctx.globalAlpha = fade;
-    glow(ctx, 'rgba(' + L.glow + ',0.6)', w.x, w.y, 24, 0.7);
+    glow(ctx, 'rgba(' + L.glow + ',0.6)', w.x, w.y, 30, 0.8);
     ctx.globalAlpha = fade;
     ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = 3; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(w.x + Math.cos(rot) * R * 0.4, w.y + Math.sin(rot) * R * 0.4); ctx.lineTo(w.x + Math.cos(rot) * (R + 7), w.y + Math.sin(rot) * (R + 7)); ctx.stroke();
@@ -1362,7 +1362,7 @@
   }
 
   function drawFeverFrame(ctx, W, calm) {
-    if (!(W.feverT > 0)) return;
+    if (!(W.feverT > 0) || W.phase === 'over') return;
     const F = D.FEVER, end = Math.min(1, W.feverT / 1.2);
     if (calm) {
       // 움직임 줄이기: 깜빡임 없이 고정된 분홍 테두리만
