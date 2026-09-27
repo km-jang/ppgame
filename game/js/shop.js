@@ -54,8 +54,20 @@
     return st;
   }
 
-  function load(store) { return clean((store || NG.store).get(KEY, null)); }
-  function save(st, store) { (store || NG.store).set(KEY, st); }
+  // 코인은 네 게임이 함께 쓰는 별코인 지갑(common/hub.js, HUB)에 둔다. 처음 한 번은 여기 모아 둔 코인을 지갑으로 옮긴다.
+  // HUB가 없으면(node 테스트) 예전처럼 이 저장본의 coins를 쓴다
+  const hub = () => (typeof HUB !== 'undefined' && HUB && HUB.coins ? HUB : null);
+  function load(store) {
+    const st = clean((store || NG.store).get(KEY, null));
+    const H = !store && hub();
+    if (H) { H.moveIn('ngun', st.coins); st.coins = H.coins(); }
+    return st;
+  }
+  function save(st, store) {
+    const H = !store && hub();
+    if (H) H.setCoins(st.coins);
+    (store || NG.store).set(KEY, st);
+  }
 
   // ─── 가격 ─────────────────────────────────────────────────
   // 살 수 없으면(이미 가짐·최대 단계·가득) null
