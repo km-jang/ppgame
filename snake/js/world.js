@@ -134,14 +134,22 @@
     W.snake = snake; W.prev = copy(snake);
     W.dir = 'right'; W.queue = []; W.grow = 0;
     W.wait = W.easy ? Infinity : D.START.wait; W.acc = 0; W.alpha = 0;   // 쉬움: 방향을 누를 때까지 기다린다
-    W.item = null; W.itemT = D.ITEM.first;
+    W.item = null; W.itemT = D.ITEM.first * W.itemGapMul;
     W.eff = { slow: 0, double: 0, ghost: 0 };
     W.lastEat = -99; W.combo = 0; W.mult = 1;
     W.food = null;
     spawnFood(W);
   }
 
-  // opts: {mode: 'classic' | 'endless' | 'stage', level}
+  // 강화 단계(opts.up)를 규칙 수치로. 없는 강화는 0단계
+  function upLevel(up, id) {
+    const n = up && Number(up[id]);
+    return Number.isFinite(n) && n > 0 ? Math.min(D.UPGRADE_MAX || 5, Math.floor(n)) : 0;
+  }
+  function upPer(id) { const u = (D.UPGRADES || []).find(x => x.id === id); return u ? u.per : 0; }
+
+  // opts: {mode: 'classic' | 'endless' | 'stage', level, easy,
+  //        up: {goldTime, itemFreq, comboTime: 0~5단계} (상점 강화), start: {ghost, slow, double: true} (시작 아이템)}
   function create(cols, rows, seed, opts) {
     opts = opts || {};
     const rand = SN.rng(seed == null ? (Date.now() ^ 0x5bd1e995) : seed);
@@ -167,7 +175,20 @@
       fx: [],             // 그리기 연출용: {kind, x, y}
     };
     W.startLevel = W.level;
+    // 상점 강화: 황금 구슬 시간 · 아이템 간격 · 콤보 시간 (규칙 수치는 W에 들고 다닌다)
+    const up = opts.up || {};
+    W.goldLife = D.FOOD.goldLife + upLevel(up, 'goldTime') * upPer('goldTime');
+    W.itemGapMul = Math.max(0.4, 1 - upLevel(up, 'itemFreq') * upPer('itemFreq'));
+    W.comboWindow = D.COMBO.window + upLevel(up, 'comboTime') * upPer('comboTime');
     setup(W);
+    // 시작 아이템: 첫 레벨에만 효과를 켜 둔다 (출발 대기 동안은 줄지 않는다)
+    W.startItems = [];
+    const st = opts.start || {};
+    for (const it of D.START_ITEMS || []) {
+      if (!st[it.id]) continue;
+      W.eff[it.eff] = Math.max(W.eff[it.eff] || 0, it.time);
+      W.startItems.push(it.id);
+    }
     return W;
   }
 
@@ -309,7 +330,7 @@
       let pts = (gold ? D.FOOD.goldPoints : D.FOOD.points) + bonus;
       if (W.fun) {
         // 콤보: 빨리 이어 먹을수록 배율이 오른다
-        W.combo = W.time - W.lastEat <= D.COMBO.window ? W.combo + 1 : 1;
+        W.combo = W.time - W.lastEat <= W.comboWindow ? W.combo + 1 : 1;
         W.lastEat = W.time;
         W.maxCombo = Math.max(W.maxCombo, W.combo);
         const m = Math.min(D.COMBO.max, 1 + Math.floor((W.combo - 1) / D.COMBO.step));
@@ -357,7 +378,7 @@
   // 시간 흐름에 따른 것들: 황금 구슬 식기, 아이템 나타남·사라짐, 효과 시간
   function timers(W, dt) {
     if (!W.fun) return;
-    if (W.food && W.food.gold && W.t - W.food.born > D.FOOD.goldLife) {
+    if (W.food && W.food.gold && W.t - W.food.born > W.goldLife) {
       W.food.gold = false; W.food.born = W.t;
       W.fx.push({ kind: 'cool', x: W.food.x, y: W.food.y });
       W.events.push('cool');
@@ -371,7 +392,7 @@
       W.itemT -= dt;
       if (W.itemT <= 0) {
         spawnItem(W);
-        W.itemT = D.ITEM.gapMin + W.rand() * (D.ITEM.gapMax - D.ITEM.gapMin);
+        W.itemT = (D.ITEM.gapMin + W.rand() * (D.ITEM.gapMax - D.ITEM.gapMin)) * W.itemGapMul;
       }
     }
   }
@@ -464,7 +485,10 @@
     return {
       mode: W.mode, score: W.score, golds: W.golds, eaten: W.eaten, maxLen: W.maxLen, maxCombo: W.maxCombo,
       powers: W.powers, powerKinds: Object.keys(W.powerSeen).length, portals: W.portalsUsed, wraps: W.wraps,
-      levelsCleared: W.levelsCleared, level: W.level, time: W.time,
+      levelsCleared: W.levelsCleared, level: W.level, time: W.time, easy: W.easy,
+      // 이번 판에 깬 가장 높은 레벨 (스테이지만, 못 깼으면 0) · 보통 난이도일 때만 센 길이 (미션용)
+      lvlTop: W.mode === 'stage' && W.levelsCleared > 0 ? W.startLevel + W.levelsCleared - 1 : 0,
+      normalLen: W.easy ? 0 : W.maxLen,
     };
   }
 

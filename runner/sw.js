@@ -1,7 +1,7 @@
 'use strict';
 // 오프라인 실행: 게임 파일을 기기에 저장해 두고 인터넷 없이도 연다.
 // 파일이 바뀌면 VERSION을 올린다. 옛 저장본은 runner- 로 시작하는 것만 지운다 (다른 게임 것은 건드리지 않음).
-const VERSION = 'runner-v1';
+const VERSION = 'runner-v2';
 const FILES = ['./', 'index.html', 'style.css', 'manifest.json', 'icon.svg',
   'js/util.js', 'js/data.js', 'js/world.js', 'js/render.js', 'js/input.js', 'js/audio.js', 'js/main.js'];
 

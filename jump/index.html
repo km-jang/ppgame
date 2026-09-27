@@ -31,6 +31,7 @@
     <symbol id="i-spring" viewBox="0 0 24 24"><path d="M4 19h16v3H4zM7 4h10v3H7zm1 5 8 2-8 2 8 2-1 2-9-2.2v-1.6L12 12 6 10.6V9z"/></symbol>
     <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M12 1c3 2.4 4.5 6 4.3 10.6l2.7 3.4v4l-3.6-2.2H8.6L5 19v-4l2.7-3.4C7.5 7 9 3.4 12 1zm0 6.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM10 19h4l-2 4z"/></symbol>
     <symbol id="i-mine" viewBox="0 0 24 24"><path d="M12 1l1.6 4.1 4-1.9-1.4 4.2 4.3 1-3.4 2.8 3.4 2.8-4.3 1 1.4 4.2-4-1.9L12 23l-1.6-4.1-4 1.9 1.4-4.2-4.3-1 3.4-2.8-3.4-2.8 4.3-1-1.4-4.2 4 1.9z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 2 4 11h5v6h6v-6h5zM6 19h12v3H6z"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
   </svg>
 
@@ -48,8 +49,9 @@
       <p class="tagline">발판을 밟고 하늘 높이 올라가요</p>
       <p id="best" class="best"></p>
       <div class="level-seg" role="group" aria-label="난이도">
-        <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>구조 구름 3번 · 폭탄 없음</small></button>
-        <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>가시 폭탄 · 떨어지면 끝</small></button>
+        <button type="button" data-diff="easy" aria-pressed="true"><b>쉬움</b><small>구조 구름 3번<br>폭탄 없음</small></button>
+        <button type="button" data-diff="normal" aria-pressed="false"><b>보통</b><small>가시 폭탄<br>떨어지면 끝</small></button>
+        <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>좁고 빠른 발판<br>폭탄 일찍</small></button>
       </div>
       <div class="modes">
         <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>시작하기</span> <kbd class="only-pc">Enter</kbd></button>
@@ -60,7 +62,8 @@
         <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 모으면 점수가 쑥쑥</span></li>
         <li><svg class="i green" aria-hidden="true"><use href="#i-spring"/></svg><span><b>스프링</b> 아주 높이 통! · <b class="orange">금 간 발판</b>은 한 번만</span></li>
         <li><svg class="i orange" aria-hidden="true"><use href="#i-rocket"/></svg><span><b>로켓 · 방패 방울</b> 모두 좋은 것</span></li>
-        <li><svg class="i red" aria-hidden="true"><use href="#i-mine"/></svg><span><b class="danger">위험! 피해요</b> 빨간 가시 폭탄 (보통)</span></li>
+        <li><svg class="i violet" aria-hidden="true"><use href="#i-up"/></svg><span><b>높이 오르면</b> 구름 위 · 우주 · 별나라</span></li>
+        <li><svg class="i red" aria-hidden="true"><use href="#i-mine"/></svg><span><b class="danger">위험! 피해요</b> 빨간 가시 폭탄 (보통·어려움)</span></li>
       </ul>
       <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
     </div>
@@ -92,11 +95,13 @@
     <div class="panel">
       <h2 id="over-title">아래로 떨어졌다</h2>
       <p id="over-sub" class="sub over-sub"></p>
+      <p class="over-diff">난이도 <b id="over-diff">쉬움</b> · <b id="over-zone">하늘 구역</b></p>
       <p class="score-big"><span id="over-score">0</span><small>점</small></p>
-      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 점수 경신</p>
+      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg><span id="over-new-txt">최고 점수 경신</span></p>
       <dl class="stats">
         <div><dt>높이</dt><dd id="over-height">0m</dd></div>
         <div><dt>별</dt><dd id="over-stars">0</dd></div>
+        <div><dt>최고 콤보</dt><dd id="over-combo">0</dd></div>
         <div><dt>시간</dt><dd id="over-time">0:00</dd></div>
       </dl>
       <div id="over-records" class="chips"></div>
@@ -109,6 +114,7 @@
   <script src="js/util.js"></script>
   <script src="js/data.js"></script>
   <script src="js/world.js"></script>
+  <script src="js/records.js"></script>
   <script src="js/render.js"></script>
   <script src="js/input.js"></script>
   <script src="js/audio.js"></script>

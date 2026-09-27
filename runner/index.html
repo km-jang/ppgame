@@ -33,6 +33,7 @@
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></symbol>
     <symbol id="i-magnet" viewBox="0 0 24 24"><path d="M4 3h5v9a3 3 0 0 0 6 0V3h5v9a8 8 0 0 1-16 0zm0 2v3h5V5zm11 0v3h5V5z"/></symbol>
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M14 1L4 14h7l-2 9 11-13h-7z"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
   </svg>
 
@@ -50,8 +51,9 @@
       <p class="tagline">별을 모으며 우주 길을 달려요</p>
       <p id="best" class="best"></p>
       <div class="level-seg" role="group" aria-label="난이도">
-        <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>천천히 · 하트 3개</small></button>
-        <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>빠르게 · 움직이는 운석</small></button>
+        <button type="button" data-diff="easy" aria-pressed="true"><b>쉬움</b><small>천천히 · 하트 3</small></button>
+        <button type="button" data-diff="normal" aria-pressed="false"><b>보통</b><small>빠르게 · 하트 2</small></button>
+        <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>아주 빠르게 · 하트 1</small></button>
       </div>
       <div class="modes">
         <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>출발!</span> <kbd class="only-pc">Enter</kbd></button>
@@ -60,9 +62,9 @@
       <ul class="help">
         <li><svg class="i" aria-hidden="true"><use href="#i-lr"/></svg><span><b class="only-touch">옆으로 밀거나 양옆 누르기</b><b class="only-pc">← → 방향키</b> 줄 바꾸기</span></li>
         <li><svg class="i" aria-hidden="true"><use href="#i-up"/></svg><span><b class="only-touch">위로 밀기</b><b class="only-pc">↑ · 스페이스</b> 점프, 레이저 문 넘기</span></li>
-        <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 모으면 점수가 쑥쑥</span></li>
+        <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 한 줄을 다 먹으면 완벽!</span></li>
         <li><svg class="i red" aria-hidden="true"><use href="#i-rock"/></svg><span><b class="danger">위험! 피해요</b> 빨간 운석 · 빨간 레이저</span></li>
-        <li><span class="glyphs"><svg class="i" aria-hidden="true" style="color:#5ee7ff"><use href="#i-shield"/></svg><svg class="i" aria-hidden="true" style="color:#ff5fa8"><use href="#i-magnet"/></svg><svg class="i" aria-hidden="true" style="color:#ffe66d"><use href="#i-bolt"/></svg></span><span><b>방패 · 자석 · 부스트</b> 모두 좋은 것</span></li>
+        <li><span class="glyphs"><svg class="i" aria-hidden="true" style="color:#5ee7ff"><use href="#i-shield"/></svg><svg class="i" aria-hidden="true" style="color:#ff5fa8"><use href="#i-magnet"/></svg><svg class="i" aria-hidden="true" style="color:#ffe66d"><use href="#i-bolt"/></svg><svg class="i" aria-hidden="true" style="color:#ff6b8a"><use href="#i-heart"/></svg></span><span><b>방패 · 자석 · 부스트 · 하트</b> 모두 좋은 것</span></li>
       </ul>
       <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
     </div>
@@ -100,6 +102,7 @@
         <div><dt>별</dt><dd id="over-stars">0</dd></div>
         <div><dt>시간</dt><dd id="over-time">0:00</dd></div>
       </dl>
+      <p id="over-diff" class="over-diff"></p>
       <div id="over-records" class="chips"></div>
       <div id="over-medals" class="new-medals"></div>
       <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>

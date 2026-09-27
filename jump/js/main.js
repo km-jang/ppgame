@@ -12,8 +12,7 @@
   const calmQuery = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   const input = JP.createInput(canvas);
   const MUTE_KEY = 'jump.muted';
-  const EASY_KEY = 'jump.easy';
-  const REC_KEY = 'jump.rec';
+  const RC = JP.Records;
 
   const view = { dpr: 1, w: 0, h: 0, ui: 1, hudMid: 32, hudLeft: 150, hudRight: 14, hudH: 64, touch: isTouch, calm: false, bestH: 0 };
   view.pad = input;   // 누른 쪽 화살표 그리기용 (render.js가 읽기만 한다)
@@ -25,18 +24,13 @@
   let mode = 'title';  // title | play | paused | over
   let auto = false;    // 자동 운전 (테스트·시연용)
   let overAt = 0;
-  let easy = JP.store.get(EASY_KEY, true) !== false;   // 쉬움이 기본. 이 기기에 기억한다
+  let diff = RC.loadDiff(JP.store);   // 쉬움이 기본. 이 기기에 기억한다 (예전 쉬움 켜기 키도 이어받음)
+  let tutNeed = RC.needTutorial(JP.store);   // 처음 해 보는 판에만 큰 조작 안내
   let lastSeed;        // 다시 하기용 (시드를 정해 시작했으면 같은 판)
 
-  // 기록 장부: 최고 높이·점수, 모두 합친 수, 받은 메달 (이 기기 안에만)
-  const blankRec = () => ({ best: { height: 0, score: 0, stars: 0 }, total: { games: 0, stars: 0, height: 0, rescues: 0 }, medals: {} });
-  function loadRec() {
-    const r = blankRec(), got = JP.store.get(REC_KEY, null);
-    if (got && typeof got === 'object') for (const k of Object.keys(r)) Object.assign(r[k], got[k] || {});
-    return r;
-  }
-  let rec = loadRec();
-  const saveRec = () => JP.store.set(REC_KEY, rec);
+  // 기록 장부: 난이도별 최고 높이·점수, 모두 합친 수, 받은 메달 (이 기기 안에만, records.js)
+  let rec = RC.load(JP.store);
+  const saveRec = () => RC.save(rec, JP.store);
   let medalCheckT = 0;
   let lastTs = 0;
   let frozenDrawn = false; // 일시정지 화면에선 한 번만 그리고 쉰다 (배터리)
@@ -49,12 +43,17 @@
     Object.assign(view, JP.Render.layout(view.w, view.h, view.hudH));
     if (world) world.viewH = view.viewH;
   }
-  function renderEasy() {
-    for (const b of document.querySelectorAll('[data-easy]')) b.setAttribute('aria-pressed', String((b.dataset.easy === '1') === easy));
+  function renderDiff() {
+    for (const b of document.querySelectorAll('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === diff));
+    renderBest();
   }
-  function setEasy(on) {
-    easy = !!on; JP.store.set(EASY_KEY, easy); renderEasy();
+  function setDiff(id) {
+    if (!D.DIFFICULTY[id]) return diff;
+    diff = id; RC.saveDiff(diff, JP.store); renderDiff();
+    return diff;
   }
+  // 예전 손잡이 (쉬움 켜기·끄기): 켜면 쉬움, 끄면 보통
+  const setEasy = on => setDiff(on ? 'easy' : 'normal');
 
   // HUD 줄은 왼쪽 위 버튼 묶음과 같은 높이. 기둥은 (세로 화면이면) 그 아래부터.
   // 일시정지 버튼은 게임 중에만 보이므로 화면이 바뀔 때마다 다시 잰다
@@ -101,8 +100,9 @@
   }
 
   function renderBest() {
-    view.bestH = rec.best.height;
-    $('best').textContent = rec.best.height > 0 ? '최고 ' + rec.best.height + 'm · ' + rec.best.score.toLocaleString() + '점' : '얼마나 높이 갈 수 있을까요?';
+    const b = rec.byDiff[diff], name = D.DIFFICULTY[diff].name;
+    view.bestH = b.height;
+    $('best').textContent = b.height > 0 ? name + ' 최고 ' + b.height + 'm · ' + b.score.toLocaleString() + '점' : name + ' 첫 도전! 얼마나 높이 갈까요?';
     $('medal-count').textContent = Object.keys(rec.medals).length + '/' + D.MEDALS.length;
   }
 
@@ -129,23 +129,25 @@
   function openMedals() {
     $('medal-sub').textContent = '메달 ' + Object.keys(rec.medals).length + ' / ' + D.MEDALS.length;
     $('medal-list').innerHTML = D.MEDALS.map(m => medalHtml(m, !rec.medals[m.id])).join('');
-    const B = rec.best, T = rec.total, rows = [
-      ['최고 높이', B.height + 'm'], ['최고 점수', B.score.toLocaleString()], ['한 판 최고 별', B.stars],
+    const T = rec.total, rows = D.DIFF_ORDER.map(d => [D.DIFFICULTY[d].name + ' 최고', rec.byDiff[d].height + 'm · ' + rec.byDiff[d].score.toLocaleString() + '점']).concat([
       ['모두 한 판', T.games], ['모은 별', T.stars.toLocaleString()], ['모두 오른 높이', T.height.toLocaleString() + 'm'],
-    ];
+    ]);
     $('record-list').innerHTML = rows.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + v + '</dd></div>').join('');
     show('scr-medals');
   }
 
   // ─── 흐름 ──────────────────────────────────────────────────
-  // opts: {easy} (없으면 지금 고른 난이도)
+  // opts: {diff: 'easy'|'normal'|'hard'} 또는 예전 방식 {easy} (없으면 지금 고른 난이도), {tutorial} 처음 안내 강제
   function newGame(seed, opts) {
     JP.Audio.unlock();
-    if (opts && typeof opts.easy === 'boolean') setEasy(opts.easy);
+    opts = opts || {};
+    if (opts.diff && D.DIFFICULTY[opts.diff]) setDiff(opts.diff);
+    else if (typeof opts.easy === 'boolean') setEasy(opts.easy);
     lastSeed = seed;
     fit(null);
-    W = JP.World.create(seed, { easy, viewH: view.viewH });
-    view.bestH = rec.best.height;
+    const tutorial = typeof opts.tutorial === 'boolean' ? opts.tutorial : tutNeed && !auto;
+    W = JP.World.create(seed, { diff, viewH: view.viewH, tutorial });
+    view.bestH = rec.byDiff[diff].height;
     medalCheckT = 0;
     input.reset();
     mode = 'play';
@@ -180,16 +182,11 @@
   function gameOver() {
     mode = 'over';
     overAt = performance.now();
-    // 기록 장부: 신기록은 칩으로 보여 준다
-    const newRec = [], B = rec.best, T = rec.total;
-    T.games++; T.stars += W.starsGot; T.height += W.height; T.rescues += W.rescued;
-    const isBest = W.score > B.score && W.score > 0;
-    if (isBest) B.score = W.score;
-    if (W.height > B.height) { B.height = W.height; newRec.push('최고 높이 ' + W.height + 'm'); }
-    if (W.starsGot > B.stars) { B.stars = W.starsGot; newRec.push('별 ' + W.starsGot + '개'); }
+    // 기록 장부 (난이도별): 신기록은 칩으로 보여 준다
+    const { isBest, chips } = RC.finish(rec, JP.World.runStats(W));
     saveRec();
     const fresh = checkMedals(false);
-    $('over-records').innerHTML = newRec.map(x => '<span>신기록 · ' + x + '</span>').join('');
+    $('over-records').innerHTML = chips.map(x => '<span>신기록 · ' + x + '</span>').join('');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     if (fresh.length) setTimeout(() => { if (mode === 'over') JP.Audio.play('medal'); }, 900);
     // 쉬움은 부드럽게 끝난다 (칭찬하는 말, 빨간색 없음)
@@ -200,6 +197,10 @@
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-height').textContent = W.height + 'm';
+    $('over-combo').textContent = W.maxCombo;
+    $('over-diff').textContent = D.DIFFICULTY[W.diff].name;
+    $('over-zone').textContent = D.ZONES[W.zone].name + ' 구역';
+    $('over-new-txt').textContent = D.DIFFICULTY[W.diff].name + ' 최고 점수 경신';
     $('over-stars').textContent = W.starsGot;
     $('over-time').textContent = JP.fmtTime(W.t);
     wakeLock(false);
@@ -208,8 +209,11 @@
   }
 
   function drainEvents(world, sound) {
+    const zoneNow = world.events.includes('zone');
     for (const ev of world.events) {
       if (!sound) continue;
+      if (ev === 'tut') { tutNeed = false; RC.tutorialDone(JP.store); }
+      if (ev === 'mile' && zoneNow) continue;   // 구역 축하와 겹치면 구역 소리만
       if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo });
       else if (ev === 'over') {
         JP.Audio.play(world.cause === 'fall' && !world.easy ? 'fall' : 'over', { soft: world.easy });
@@ -219,6 +223,7 @@
       else if (ev === 'star') vibrate(8);
       else if (ev === 'crumble' || ev === 'save') vibrate(30);
       else if (ev === 'rocket' || ev === 'shield') vibrate(20);
+      else if (ev === 'zone') vibrate([20, 40, 20, 40, 30]);
     }
     world.events.length = 0;
   }
@@ -229,7 +234,7 @@
 
   // ─── 입력 연결 ─────────────────────────────────────────────
   input.onPress = () => JP.Audio.unlock();
-  for (const b of document.querySelectorAll('[data-easy]')) b.addEventListener('click', () => { JP.Audio.unlock(); setEasy(b.dataset.easy === '1'); });
+  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { JP.Audio.unlock(); setDiff(b.dataset.diff); });
   input.onKey = code => {
     JP.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
@@ -303,7 +308,7 @@
     if (mode === 'title') {
       // 시연: 자동 운전 로봇이 시작 화면 뒤에서 통통 튄다. 끝나면 잠시 뒤 새로
       fit(demo);
-      if (!demo) { demo = JP.World.create(777, { easy: true, viewH: view.viewH }); demoRest = 0; }
+      if (!demo) { demo = JP.World.create(777, { diff: 'easy', viewH: view.viewH }); demoRest = 0; }
       if (demo.phase === 'play') { demo.input.dir = JP.World.botDir(demo); JP.World.step(demo, dt); }
       else if ((demoRest += dt) > 1.5) demo = null;
       if (demo && demo.t > 90) demo = null;   // 너무 높이 가면 처음부터
@@ -335,7 +340,7 @@
   }
 
   // ─── 시작 ──────────────────────────────────────────────────
-  renderEasy();
+  renderDiff();
   JP.Audio.setMuted(JP.store.get(MUTE_KEY, false));
   $('btn-mute').classList.toggle('muted', JP.Audio.muted);
   resize();
@@ -357,7 +362,9 @@
     get world() { return W; },
     get mode() { return mode; },
     get demo() { return demo; },
-    get rec() { return rec; }, get easy() { return easy; }, setEasy,
+    get rec() { return rec; }, get easy() { return diff === 'easy'; }, setEasy,
+    get diff() { return diff; }, setDiff,
+    get tutorial() { return tutNeed; }, resetTutorial() { tutNeed = true; JP.store.set(RC.TUT_KEY, false); },
     newGame, pause, resume, toTitle, openMedals,
     autopilot(on) { auto = on !== false; return auto; },
     get pad() { return input; }, get view() { return view; },
