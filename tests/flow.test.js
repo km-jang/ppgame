@@ -386,6 +386,30 @@ async function takeGift(page) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     assert(await until(Z, () => SN.debug.world.dir === 'down' || SN.debug.world.queue.includes('down')), '아래로 밀었는데 안 바뀜');
   });
+  await test('밀기: 조이스틱 밖에서 밀면 조이스틱은 제자리, ㄱ자로 밀면 두 번 꺾이고 화살표가 뜬다', async () => {
+    await Z.evaluate(() => { SN.debug.setEasy(false); SN.debug.newGame(6, { mode: 'endless' }); });
+    await Z.waitForTimeout(200);
+    const cdp = await Z.context().newCDPSession(Z);
+    const pt = (x, y) => [{ x, y, id: 3 }];
+    const t0 = await Z.evaluate(() => SN.debug.world.turns);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(400, 300) });
+    for (let i = 1; i <= 3; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(400, 300 + i * 15) });
+    assert(await Z.evaluate(() => !SN.debug.pad.stick && !!SN.debug.pad.swipe && SN.debug.pad.swipe.dir === 'down'), '밀기가 조이스틱을 끌고 오거나 화살표가 안 뜸');
+    for (let i = 1; i <= 3; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(400 - i * 15, 345) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert(await until(Z, t => SN.debug.world.turns - t >= 2 || SN.debug.world.phase === 'over', t0, 3000), 'ㄱ자 밀기에서 두 번 안 꺾임');
+  });
+  await test('밀기: 아주 짧게 튕기듯 밀어도 뗄 때 꺾인다', async () => {
+    await Z.evaluate(() => { SN.debug.setEasy(false); SN.debug.newGame(7, { mode: 'endless' }); });
+    await Z.waitForTimeout(200);
+    const cdp = await Z.context().newCDPSession(Z);
+    const th = await Z.evaluate(() => SN.debug.pad.threshold);
+    const pt = (x, y) => [{ x, y, id: 4 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(500, 300) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(500, 300 - th * 0.7) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert(await until(Z, () => SN.debug.world.dir === 'up' || SN.debug.world.queue.includes('up')), '짧은 튕기기를 못 알아들음');
+  });
   await test('쉬움(기본): 화면 안 작은 조이스틱을 밀면 출발·방향 전환, 판은 거의 화면 가득, 판 끝을 넘으면 반대편', async () => {
     await Z.evaluate(() => { SN.debug.setEasy(true); SN.debug.newGame(8, { mode: 'endless' }); });
     await Z.waitForTimeout(300);
