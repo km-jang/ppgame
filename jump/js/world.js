@@ -179,6 +179,14 @@
         break;
       }
     }
+    // 피버 중에 새로 생기는 줄: 길 발판 위에 별 하나 더 (따로 도는 난수 W.grand, 발판 자리는 그대로)
+    if (W.feverT > 0 && W.grand() < D.FEVER.extra) W.stars.push({ id: ++W.ids, x: main.kind === 'moving' ? WW / 2 : x, y: y + 60, got: false });
+    // 비밀 방 문: 정해 둔 높이를 지나면 보통 길 발판 위에 (블랙홀 구간이 아닐 때)
+    if (y >= W.nextDoor && main.kind === 'normal' && !warm && !holeAt(W, y / D.METER)) {
+      W.doors.push({ id: ++W.ids, x, y: y + D.ROOM.r, used: false, seen: -1 });
+      const RE = D.ROOM.every;
+      W.nextDoor = y + (RE[0] + W.grand() * (RE[1] - RE[0])) * D.METER;
+    }
     // 밟는 몬스터: 따로 도는 난수(W.mrand)를 써서 발판 자리는 몬스터가 있든 없든 같다
     const LO = L.monster;
     if (LO && !warm && y / D.METER >= LO.from && W.mrand() < lerp(LO.chance[0], LO.chance[1], d) * W.A.monster * (Z.mix.monster || 1)) {
@@ -301,6 +309,8 @@
     if (W.items.length && W.items[0].y <= low) W.items = W.items.filter(o => keep(o) && !o.got);
     if (W.mines.length && W.mines[0].y <= low) W.mines = W.mines.filter(o => keep(o) && !o.gone);
     if (W.monsters.length && W.monsters[0].y0 <= low) W.monsters = W.monsters.filter(o => o.y0 > low);
+    if (W.doors.length && W.doors[0].y <= low) W.doors = W.doors.filter(o => o.y > low && !o.used);
+    if (W.gifts.length && W.gifts[0].y <= low) W.gifts = W.gifts.filter(o => o.y > low && !o.got);
   }
 
   // 상점 강화와 캐릭터 장점을 적용한 값 (upgrades: {speed, rocket, cloud: 0~5}, ch: 캐릭터 id). 없으면 그대로
@@ -332,7 +342,13 @@
     const ch = charOf(opts.char);
     const UP = applyUpgrades(L, opts.upgrades, ch.id);
     const W = {
-      rand, mrand: JP.rng((s0 ^ 0x2c1b3c6d) + 7), hrand: JP.rng((s0 ^ 0x51ed2701) + 3), A, adapt: A.mul,
+      rand, mrand: JP.rng((s0 ^ 0x2c1b3c6d) + 7), hrand: JP.rng((s0 ^ 0x51ed2701) + 3), grand: JP.rng((s0 ^ 0x6a09e667) + 11), A, adapt: A.mul,
+      // 깜짝 선물 (D.GIFT): 놓인 상자 · 다음 선물 시각(오른 시간 초) · 이번 판 선물 코인 · 다음 판 시작 아이템
+      gifts: [], giftAt: 0, giftCoins: 0, giftItems: [], giftsGot: 0,
+      // 피버 타임 (D.FEVER): 게이지 0 ~ 1 · 남은 시간 · 횟수
+      fever: 0, feverT: 0, fevers: 0,
+      // 비밀 방 (D.ROOM): 문 목록 · 다음 문 높이(점) · 지금 방 · 들어간 횟수
+      doors: [], nextDoor: 0, room: null, rooms: 0,
       // 블랙홀 구간 (D.BLACKHOLE): 목록 · 처음 나올 수 있는 높이 · 끄는 힘 · 지금 들어 있는 구간
       holeList: [], holeFirst: D.BLACKHOLE.first[L.id] || 300, pull: D.BLACKHOLE.pull[L.id] || 0, hole: null, holes: 0,
       planet: 0,   /* 지나온 가장 먼 행성 (1 수성 … 9 명왕성) */
@@ -362,6 +378,9 @@
       fx: [],       // 그리기 연출용: {kind, x, y}
     };
     W.pcam = W.cam;
+    { const G = D.GIFT.every, RE = D.ROOM.every;
+      W.giftAt = G[0] + W.grand() * (G[1] - G[0]);
+      W.nextDoor = (D.ROOM.first + W.grand() * (RE[1] - RE[0]) * 0.5) * D.METER; }
     // 바닥: 기둥 가로 전체를 덮는 첫 발판
     addPlat(W, 'ground', WW / 2, 0, WW);
     generate(W);
@@ -399,10 +418,90 @@
     P.vy = jumpV(W.phys.jump * M.stomp);
     P.land = W.t;
     W.stomps++;
-    const pts = Math.round(M.points * comboMul(W.combo));
+    feverAdd(W, D.FEVER.stomp);
+    const pts = Math.round(M.points * comboMul(W.combo) * (W.feverT > 0 ? D.FEVER.starMul : 1));
     W.starPts += pts;
     W.events.push('stomp');
     W.fx.push({ kind: 'stomp', x: m.x, y: m.y, mk: m.kind, pts });
+  }
+
+  // 피버 게이지를 채운다. 가득 차면 FEVER (보이는 길 발판 위에 별이 더 생긴다)
+  function feverAdd(W, v) {
+    if (W.feverT > 0 || W.room) return;
+    W.fever += v;
+    if (W.fever < 1) return;
+    const F = D.FEVER;
+    W.fever = 0; W.feverT = F.time; W.fevers++;
+    W.events.push('fever'); W.fx.push({ kind: 'fever', x: W.p.x, y: W.p.y });
+    for (const p of W.plats) {
+      if (!p.main || p.y < W.cam + 40 || p.y > W.genY) continue;
+      if (W.grand() < F.spawn && !W.stars.some(s => !s.got && Math.abs(s.y - p.y - 60) < 30 && Math.abs(wrapDelta(s.x, p.x)) < 40)) {
+        W.stars.push({ id: ++W.ids, x: p.kind === 'moving' ? WW / 2 : p.x, y: p.y + 60, got: false });
+      }
+    }
+  }
+
+  // 깜짝 선물 놓기: 화면 바로 위의 길 발판 위에 (블랙홀 구간·처음 안내 중에는 미룬다). 놓으면 다음 선물 시각을 정한다
+  function placeGift(W) {
+    if (W.tut && !W.tut.done) return false;
+    const G = D.GIFT;
+    for (const p of W.plats) {
+      if (!p.main || p.kind === 'moving' || p.kind === 'cloud' || p.y < W.cam + W.viewH * 1.05 || p.y > W.cam + W.viewH * 1.9) continue;
+      if (holeAt(W, p.y / D.METER) || W.doors.some(d => Math.abs(d.y - p.y) < 60)) continue;
+      W.gifts.push({ id: ++W.ids, x: p.x, y: p.y + G.r + 4, got: false, seen: -1 });
+      W.giftAt = W.t + G.every[0] + W.grand() * (G.every[1] - G.every[0]);
+      return true;
+    }
+    return false;
+  }
+  // 선물 열기: 모두 좋은 것만 (코인 · 로켓 · 방패 방울 · 다음 판 시작 아이템)
+  function openGift(W, g) {
+    const G = D.GIFT;
+    g.got = true; W.giftsGot++;
+    const items = Object.keys(G.kinds).map(k => ({ k, w: G.kinds[k] }));
+    let kind = JP.weighted(items, W.grand).k;
+    if (kind === 'shield' && W.shield) kind = 'coins';
+    const f = { kind: 'gift', reward: kind, x: g.x, y: g.y, n: 0, item: '' };
+    if (kind === 'coins') { f.n = G.coins[0] + Math.floor(W.grand() * (G.coins[1] - G.coins[0] + 1)); W.giftCoins += f.n; }
+    else if (kind === 'rocket') { W.rocket = W.rocketTime; W.rockets++; W.events.push('rocket'); }
+    else if (kind === 'shield') { W.shield = true; W.events.push('shield'); }
+    else { f.item = W.grand() < 0.5 ? 'rocketStart' : 'shieldStart'; W.giftItems.push(f.item); }
+    W.events.push('gift'); W.fx.push(f);
+  }
+
+  // 비밀 방: 들어가면 지금 판(발판·별·아이템·폭탄·몬스터·카메라)을 잠시 넣어 두고, 화면 한 칸짜리 방을 만든다
+  function enterRoom(W, door) {
+    const P = W.p, RM = D.ROOM, base = W.cam, top = base + W.viewH;
+    door.used = true;
+    W.rooms++;
+    W.room = { t: RM.time, door, base, top, saved: { plats: W.plats, stars: W.stars, items: W.items, mines: W.mines, monsters: W.monsters, gifts: W.gifts, doors: W.doors, rocket: W.rocket } };
+    W.plats = []; W.stars = []; W.items = []; W.mines = []; W.monsters = []; W.gifts = []; W.doors = [];
+    W.rocket = 0;
+    const floor = addPlat(W, 'ground', WW / 2, base + 24, WW);
+    floor.room = true;
+    const rr = JP.rng(door.id * 7 + 1);
+    // 스프링 몇 개와 쉬어 가는 발판, 별이 가득
+    for (let i = 0; i < RM.springs; i++) addPlat(W, 'spring', WW * (i + 0.5) / RM.springs, base + 110 + (i % 2) * 70, 70);
+    for (let i = 0; i < 4; i++) addPlat(W, 'normal', WW * (0.15 + rr() * 0.7), base + W.viewH * (0.45 + i * 0.12), 80);
+    for (let i = 0; i < RM.stars; i++) {
+      const col = i % 6, row = Math.floor(i / 6);
+      W.stars.push({ id: ++W.ids, x: WW * (col + 0.5) / 6 + (row % 2) * 20, y: base + 90 + row * (W.viewH - 150) / Math.max(1, Math.ceil(RM.stars / 6) - 1), got: false });
+    }
+    P.x = P.px = WW / 2; P.y = P.py = floor.y + P0.r; P.vx = 0; P.vy = jumpV(W.phys.jump);
+    W.combo = 0; W.lastLand = floor.y;
+    W.events.push('room'); W.fx.push({ kind: 'room', x: door.x, y: door.y });
+  }
+  function leaveRoom(W) {
+    const Rm = W.room, S = Rm.saved, P = W.p;
+    W.plats = S.plats; W.stars = S.stars; W.items = S.items; W.mines = S.mines; W.monsters = S.monsters; W.gifts = S.gifts; W.doors = S.doors;
+    W.rocket = 0;
+    W.room = null;
+    // 문 자리로 돌아와 한 번 튄다
+    P.x = P.px = Rm.door.x; P.y = P.py = Rm.door.y - D.ROOM.r + P0.r; P.vx = 0; P.vy = jumpV(W.phys.jump);
+    W.cam = W.pcam = Rm.base;
+    W.combo = 0; W.lastLand = Rm.door.y - D.ROOM.r;
+    if (W.storm) W.storm.py = W.storm.y;
+    W.events.push('roomEnd'); W.fx.push({ kind: 'roomEnd', x: P.x, y: P.y });
   }
 
   function land(W, p) {
@@ -413,7 +512,7 @@
     P.land = W.t;
     p.hit = W.t;
     W.bounces++;
-    if (p.y > W.lastLand + 1) W.combo++; else W.combo = 0;
+    if (p.y > W.lastLand + 1) { W.combo++; feverAdd(W, D.FEVER.add + D.FEVER.perCombo * Math.min(D.FEVER.cap, W.combo)); } else W.combo = 0;
     W.maxCombo = Math.max(W.maxCombo, W.combo);
     W.lastLand = p.y;
     if (spring) { W.springs++; W.events.push('spring'); W.fx.push({ kind: 'spring', x: P.x, y: p.y }); }
@@ -429,6 +528,9 @@
     W.ticks++;
     W.t += H;
     P.px = P.x; P.py = P.y; W.pcam = W.cam;
+    const room = W.room;
+    // 피버 시간
+    if (W.feverT > 0 && (W.feverT -= H) <= 0) { W.feverT = 0; W.events.push('feverEnd'); }
 
     // 발판 움직이기
     for (const p of W.plats) {
@@ -473,7 +575,7 @@
     }
     P.x += P.vx * H;
     // 블랙홀 구간: 그쪽으로 살짝 끌린다 (로켓 중에는 괜찮다). 처음 들어설 때 한 번 알린다
-    const hole = holeAt(W, P.y / D.METER);
+    const hole = room ? null : holeAt(W, P.y / D.METER);
     if (hole && hole !== W.hole) { W.holes++; W.events.push('hole'); W.fx.push({ kind: 'hole', side: hole.side, x: P.x, y: P.y }); }
     W.hole = hole;
     if (hole && W.rocket <= 0) P.x += hole.side * W.pull * H;
@@ -510,8 +612,8 @@
       const dx = wrapDelta(P.x, s.x), dy = s.y - P.y;
       if (dx * dx + dy * dy < sr) {
         s.got = true; W.starsGot++;
-        // 콤보 중이면 별 점수가 조금 더 (배율 상한 D.COMBO.max)
-        const pts = Math.round(D.STAR.points * comboMul(W.combo));
+        // 콤보 중이면 별 점수가 조금 더 (배율 상한 D.COMBO.max), 피버 중이면 × starMul
+        const pts = Math.round(D.STAR.points * comboMul(W.combo) * (W.feverT > 0 ? D.FEVER.starMul : 1));
         W.starPts += pts;
         W.events.push('star'); W.fx.push({ kind: 'star', x: s.x, y: s.y, pts });
       }
@@ -574,6 +676,34 @@
       die(W, 'monster');
       return;
     }
+
+    // 깜짝 선물 · 비밀 방 문
+    const gr2 = (r + D.GIFT.r + D.GIFT.grab) * (r + D.GIFT.r + D.GIFT.grab);
+    for (const g of W.gifts) {
+      if (g.got) continue;
+      if (g.seen < 0 && g.y < W.cam + W.viewH) g.seen = W.t;
+      const dx = wrapDelta(P.x, g.x), dy = g.y - P.y;
+      if (dx * dx + dy * dy < gr2) openGift(W, g);
+    }
+    const dr2 = (r + D.ROOM.r) * (r + D.ROOM.r);
+    for (const d of W.doors) {
+      if (d.used) continue;
+      if (d.seen < 0 && d.y < W.cam + W.viewH) d.seen = W.t;
+      const dx = wrapDelta(P.x, d.x), dy = d.y - P.y;
+      if (dx * dx + dy * dy < dr2 && W.rocket <= 0) { enterRoom(W, d); return; }
+    }
+
+    // 비밀 방 안: 높이·카메라·먹구름·떨어짐이 멈춘다. 바닥에서 튀고 천장에 닿으면 살짝 되돌아온다. 시간이 다 되면 문 자리로
+    if (room) {
+      if (P.y > room.top - r) { P.y = room.top - r; if (P.vy > 0) P.vy = -P.vy * 0.3; }
+      if (P.y < room.base + r) { P.y = room.base + 24 + r; P.vy = jumpV(W.phys.jump); }
+      W.score = W.height + W.starPts;
+      if ((room.t -= H) <= 0) leaveRoom(W);
+      return;
+    }
+
+    // 깜짝 선물: 오른 시간이 되면 화면 바로 위 길 발판에 놓는다
+    if (W.t >= W.giftAt) placeGift(W);
 
     // 높이 · 점수 · 카메라 (카메라는 올라가기만 한다)
     if (P.y > W.maxY) W.maxY = P.y;
@@ -767,11 +897,12 @@
       diff: W.diff, easy: W.easy, height: W.height, score: W.score, stars: W.starsGot, springs: W.springs,
       rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo, rescued: W.rescued, bounces: W.bounces, time: W.t,
       zone: W.zone, crumbles: W.crumbles, char: W.char, stomps: W.stomps, bumps: W.bumps, adapt: W.adapt, planet: W.planet, holes: W.holes,
+      gifts: W.giftsGot, giftCoins: W.giftCoins, giftItems: W.giftItems.slice(), fevers: W.fevers, rooms: W.rooms,
     };
   }
 
   // 테스트·봇용: W에서 높이 y에 내려와 닿기까지 시간
   const timeTo = (W, y) => fallTime(W.p.y, W.p.vy, y, W.phys);
 
-  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, holeAt, holesUpTo };
+  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, holeAt, holesUpTo, feverAdd, placeGift, openGift, enterRoom, leaveRoom };
 })(JP);

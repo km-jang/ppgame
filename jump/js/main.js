@@ -286,9 +286,9 @@
 
   // 게임 오버: 받은 코인 (부분별) + 미션 진행
   function renderEarn() {
-    const e = lastEarn || { coins: 0, parts: { height: 0, stars: 0, zone: 0, level: 0, bonus: 0 }, done: [] };
+    const e = lastEarn || { coins: 0, parts: { height: 0, stars: 0, zone: 0, level: 0, bonus: 0, gift: 0 }, done: [] };
     $('over-coins').textContent = '+0';
-    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['난이도 보너스', P.level], ['강화 보너스', P.bonus]];
+    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['난이도 보너스', P.level], ['강화 보너스', P.bonus], ['선물', P.gift || 0]];
     $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
@@ -330,8 +330,8 @@
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
-      // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터·지나온 가장 먼 행성(1 수성 … 9 명왕성) (이번 판)
-      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet, games: 1 }, W.t);
+      // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터·지나온 가장 먼 행성(1 수성 … 9 명왕성)·선물·피버·비밀 방 (이번 판)
+      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet, gifts: W.giftsGot, fevers: W.fevers, rooms: W.rooms, games: 1 }, W.t);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -426,7 +426,7 @@
       if (ev === 'tut') { tutNeed = false; RC.tutorialDone(JP.store); }
       if (ev === 'mile' && (zoneNow || planetNow)) continue;   // 구역·행성 축하와 겹치면 그 소리만
       if (ev === 'zone' && planetNow) continue;
-      if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo });
+      if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo + (world.feverT > 0 ? 5 : 0), fever: world.feverT > 0 });
       else if (ev === 'over') {
         JP.Audio.play((world.cause === 'fall' || world.cause === 'storm') && !world.easy ? 'fall' : 'over', { soft: world.easy });
         vibrate(world.easy ? 60 : 220);
@@ -440,6 +440,7 @@
       else if (ev === 'rocket' || ev === 'shield') vibrate(20);
       else if (ev === 'zone' || ev === 'planet') vibrate([20, 40, 20, 40, 30]);
       else if (ev === 'hole') vibrate([30, 50, 30]);
+      else if (ev === 'gift' || ev === 'fever' || ev === 'room') vibrate([20, 40, 20]);
     }
     world.events.length = 0;
   }

@@ -155,6 +155,7 @@
       diff: W.diff, dist: s.dist, stars: s.stars, gates: s.gates, items: s.items, nears: s.nears, perfects: s.perfects,
       boosts: s.boosts, zone: s.zone, milestones: s.milestones, clean: Math.floor(W.clean || 0), time: s.time, games: 1,
       slides: s.slides || 0, bars: s.bars || 0, bhs: s.bhs || 0, pirates: s.pirates || 0,
+      gifts: s.gifts || 0, giftCoins: s.giftCoins || 0, giftItems: (s.giftItems || []).slice(), fevers: s.fevers || 0, warps: s.warps || 0,
     };
   }
 
@@ -172,7 +173,21 @@
     parts.diff = Math.floor(base * mul) - base;
     const lv = st ? (st.up.coin || 0) : 0;
     parts.bonus = Math.floor((base + parts.diff) * lv * upDef('coin').per);
-    return { parts, total: base + parts.diff + parts.bonus };
+    // 깜짝 선물 상자에서 나온 코인은 배율 없이 그대로 더한다
+    parts.gift = int(run.giftCoins);
+    return { parts, total: base + parts.diff + parts.bonus + parts.gift };
+  }
+
+  // 선물 상자에서 나온 다음 판 시작 아이템을 넣는다. 가득이면 그 대신 코인 (GIFT.fullCoins). 더한 코인 수
+  function giveGiftItems(st, ids) {
+    let coins = 0;
+    for (const id of Array.isArray(ids) ? ids : []) {
+      const it = itemDef(id);
+      if (!it) continue;
+      if ((st.items[id] || 0) < it.max) st.items[id] = (st.items[id] || 0) + 1;
+      else coins += D.GIFT.fullCoins;
+    }
+    return coins;
   }
 
   // ─── 미션 ─────────────────────────────────────────────────
@@ -221,6 +236,8 @@
   // 판이 끝났을 때: 코인 지급 + 미션 진행. {coins, parts, done:[새로 끝난 미션 id]}
   function finishRun(st, run) {
     const c = coinsFor(run, st);
+    const extra = giveGiftItems(st, run.giftItems);
+    if (extra) { c.parts.gift += extra; c.total += extra; }
     st.coins += c.total;
     st.life.earned += c.total;
     st.life.games += 1;
@@ -236,5 +253,5 @@
     });
   }
 
-  RN.Shop = { KEY, blank, clean, load, save, price, buy, selectChar, selectSkin: selectChar, charDef, skinDef: charDef, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, upDef, itemDef, missionDef };
+  RN.Shop = { KEY, blank, clean, load, save, price, buy, selectChar, selectSkin: selectChar, charDef, skinDef: charDef, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, giveGiftItems, missionView, upDef, itemDef, missionDef };
 })(RN);

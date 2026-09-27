@@ -71,7 +71,8 @@
   // opts: { diff ('easy'|'normal'|'hard') 또는 easy (옛 방식, 기본 true), auto (자동 운전), wait (출발 대기 초),
   //         adapt (알아서 맞춰 주는 난이도 배율 0.85 ~ 1.12, 기본 1), bh (블랙홀 확률, 테스트용), pirateAt (첫 해적선 초, 테스트용),
   //         tutorial (처음 한 번 안내), up (상점 강화 단계 {magnet, shield, boost, coin}),
-  //         loadout (시작 아이템 {shield, boost, heart}), char (캐릭터 id, data.js CHARS. 옛 이름 skin도 받는다) }
+  //         loadout (시작 아이템 {shield, boost, heart}), char (캐릭터 id, data.js CHARS. 옛 이름 skin도 받는다),
+  //         warp (워프 관문 확률, 테스트용) }
   function create(seed, opts) {
     opts = opts || {};
     const diff = diffId(opts), C = D.DIFFICULTY[diff];
@@ -132,6 +133,14 @@
     W.bhChance = opts.bh != null ? opts.bh : BH.chance;
     W.brand = RN.rng(((seed == null ? 1 : seed) * 2654435761 + 97) >>> 0);
     W.prand = RN.rng(((seed == null ? 1 : seed) * 40503 + 7) >>> 0);
+    // 깜짝 선물 · 피버 · 워프: 이것도 길(W.rand)과 따로 굴린다 (있든 없든 같은 씨앗이면 같은 줄)
+    W.grand = RN.rng(((seed == null ? 1 : seed) * 1103515245 + 29) >>> 0);
+    W.wrand = RN.rng(((seed == null ? 1 : seed) * 22695477 + 3) >>> 0);
+    W.giftT = range(D.GIFT.first, W.grand); W.giftReady = false;
+    W.gifts = 0; W.giftCoins = 0; W.giftItems = []; W.giftLog = [];
+    W.fever = 0; W.feverM = 0; W.fevers = 0; W.feverRainT = 0;
+    W.warp = null; W.warps = 0; W.warpLeg = -1; W.warpAt = null;
+    W.warpChance = opts.warp != null ? opts.warp : D.WARP.chance;   // 테스트용으로 바꿀 수 있다
     fill(W);
     return W;
   }
@@ -210,7 +219,7 @@
     if (pat === 'stars') {
       const a = guide, b = a === 1 ? (r() < 0.5 ? 0 : 2) : 1, line = { n: n * 2, got: 0 };
       for (let i = 0; i < n * 2; i++) W.obs.push({ kind: 'star', x: i < n ? a : b, y: 0.5, z: z - span + (span * 2) * i / (n * 2 - 1), row: id, line });
-    } else if (pat !== 'tut' && pat !== 'tuts' && r() < C.starLine) {
+    } else if (pat !== 'tut' && pat !== 'tuts' && (r() < C.starLine || feverAt(W, tArrive))) {   // 피버 때는 늘 (r()는 늘 굴린다)
       const line = { n, got: 0 };
       for (let i = 0; i < n; i++) W.obs.push({ kind: 'star', x: guide, y: 0.5, z: z - span + span * i / (n - 1) - 1.5, row: id, line });
     }
@@ -236,9 +245,87 @@
         W.events.push('item');
       }
     }
+    const itemLane = row.item ? guide : -1;
+    placeWarp(W, row, tutRow, itemLane);
+    placeGift(W, row, tutRow, itemLane);
+    // 피버: 이 줄에 닿을 때 피버 중이면 빈 줄마다 별 한 줄 더 (길 안내 줄은 이미 있다)
+    if (!tutRow && pat !== 'stars' && feverAt(W, tArrive)) {
+      for (const l of row.free) {
+        if (l === guide) continue;
+        const line = { n, got: 0, fever: true };
+        for (let i = 0; i < n; i++) W.obs.push({ kind: 'star', x: l, y: 0.5, z: z - span + span * i / (n - 1) - 1.5, row: id, line });
+      }
+    }
     W.nextZ = z + gapM;
     W.lastRow = row;
     return row;
+  }
+
+  // ─── 깜짝 선물 · 워프 관문 놓기 ─────────────────────────────
+  const tutOn = W => !!(W.tut && W.tut.step !== 'done');
+  // 이 거리 근처(앞뒤 pad m)에 블랙홀 구간이 있나
+  const nearHole = (W, z0, z1, pad) => !!W.bh || W.bhs.some(b => z1 > b.start - pad && z0 < b.end + pad);
+  // 해적선·블랙홀·처음 안내·워프 중이 아니면 놓아도 된다
+  const calmAt = (W, z0, z1, pad) => !W.pir && W.pirGuard == null && !W.warp && !tutOn(W) && !nearHole(W, z0, z1, pad);
+  // 그 줄에 닿을 때 피버 중일까
+  const feverAt = (W, tArrive) => W.fever > 0 && tArrive < W.runT + W.fever;
+  const pick = (a, r) => a[Math.floor(r() * a.length) % a.length];
+
+  // 워프 관문: 행성 구간마다 한 번 정한다 (chance, 구간 안 어디쯤). 그 뒤 첫 줄의 빈 줄에 선다 (그 줄의 안전한 줄 약속은 그대로)
+  function placeWarp(W, row, tutRow, itemLane) {
+    const WP = D.WARP, leg = D.ROUTE.leg, z = row.z, k = Math.floor(z / leg);
+    if (k > W.warpLeg) {
+      W.warpLeg = k;
+      const roll = W.wrand(), posU = W.wrand();   // 늘 두 번 굴린다
+      W.warpAt = k >= WP.from && roll < W.warpChance ? k * leg + WP.pos[0] + (WP.pos[1] - WP.pos[0]) * posU : null;
+    }
+    if (W.warpAt == null || z < W.warpAt) return;
+    if (z > W.warpAt + WP.slack) { W.warpAt = null; return; }
+    if (tutRow || !row.free.length) return;
+    // 날아갈 길 끝까지 블랙홀 구간을 미리 정해 두고, 겹치면 놓지 않는다
+    const end = z + WP.dist + WP.clear;
+    planBlackHoles(W, end + 60);
+    if (!calmAt(W, z - 30, end, 30)) return;
+    const lanes = row.free.filter(l => l !== itemLane);
+    if (!lanes.length) return;
+    const lane = pick(lanes, W.wrand);
+    W.obs.push({ kind: 'warp', x: lane, y: 0, z, row: row.id });
+    row.warp = lane;
+    W.warpAt = null;
+    W.events.push('warpHere');
+  }
+
+  // 선물 상자: 때가 됐으면(giftReady) 알맞은 줄에. 빈 줄 바닥 · 문 위(뛰어서) · 빈 줄 높이(뛰어서) · 막대 밑(미끄러져서).
+  // 문·막대 줄에 놓을 때도 그 줄에 빈 줄이 따로 있어야 한다. 놓을 곳이 없으면 다음 줄에서 다시
+  function placeGift(W, row, tutRow, itemLane) {
+    const G = D.GIFT, r = W.grand, z = row.z;
+    if (!W.giftReady || tutRow || !row.free.length || !calmAt(W, z, z, G.bhPad)) return;
+    const variant = RN.weighted(Object.keys(G.variant).map(k => ({ k, w: G.variant[k] })), r).k;
+    const free = row.free.filter(l => l !== itemLane && l !== row.warp);
+    const of = kind => [0, 1, 2].filter(l => row.lanes[l] === kind);
+    let lane = -1, need = '', y = G.y;
+    if (variant === 'jump') {
+      const g = of('gate'), c = g.length ? g : free;
+      if (c.length) { lane = pick(c, r); need = 'jump'; y = G.jumpY; }
+    } else if (variant === 'slide') {
+      const b = of('bar');
+      if (b.length) { lane = pick(b, r); need = 'slide'; y = G.slideY; }
+    }
+    if (lane < 0) {
+      if (!free.length) return;
+      lane = pick(free, r); need = ''; y = G.y;
+    }
+    // 같은 자리의 별은 치운다 (선물이 가려지지 않게)
+    for (const o of W.obs) {
+      if (o.row !== row.id || o.kind !== 'star' || o.done || o.x !== lane || Math.abs(o.z - z) >= 1.6 || Math.abs(o.y - y) >= 0.9) continue;
+      o.done = true;
+      if (o.line) o.line.n--;   // 치운 별은 "완벽!"에서 빼고 센다
+    }
+    W.obs.push({ kind: 'gift', x: lane, y, z, row: row.id, need });
+    row.gift = lane;
+    W.giftReady = false;
+    W.giftT = range(G.every, r);
+    W.events.push('giftHere');
   }
 
   // 앞쪽 VIEW m까지 줄과 기념 아치를 채운다. 블랙홀 구간은 조금 더 앞(배경을 미리 그릴 수 있게)까지 정해 둔다
@@ -285,6 +372,16 @@
       if (ls.indexOf(l) >= 0) return false;
     }
     return true;
+  }
+
+  // z 근처(앞뒤 pad m) l 줄에 부딪히는 것이 없나 (피버 별 소나기를 안전한 곳에만)
+  function laneFreeAt(W, l, z, pad) {
+    for (const o of W.obs) {
+      if (o.done || !HARM[o.kind] || Math.abs(o.z - z) > pad + P.hitZ) continue;
+      const ls = o.moving ? [o.from, o.to] : [Math.round(o.x)];
+      if (ls.indexOf(l) >= 0) return false;
+    }
+    return z < W.nextZ - pad - P.hitZ;   // 아직 안 만든 줄과도 겹치지 않게
   }
 
   // ─── 조작 ─────────────────────────────────────────────────
@@ -401,13 +498,76 @@
   }
 
   function usePower(W, o) {
-    const K = D.ITEM.kinds[o.item];
     o.done = true; W.items++; W.kinds[o.item] = true;
-    if (o.item === 'shield') W.shield = true;
-    else if (o.item === 'heart') { W.hearts = Math.min(W.maxHearts, W.hearts + 1); W.heals++; }
-    else W.eff[o.item] = o.item === 'magnet' ? W.magnetTime : o.item === 'boost' ? W.boostTime : K.time;
-    if (o.item === 'boost') { W.boosts++; W.events.push('boost'); } else if (o.item === 'heart') W.events.push('heal'); else W.events.push('power');
+    applyPower(W, o.item);
     W.fx.push({ kind: 'power', x: o.x, z: o.z, y: o.y, item: o.item });
+  }
+  // 아이템 효과 켜기 (아이템 구슬·선물 상자 공용)
+  function applyPower(W, item) {
+    const K = D.ITEM.kinds[item];
+    if (item === 'shield') W.shield = true;
+    else if (item === 'heart') { W.hearts = Math.min(W.maxHearts, W.hearts + 1); W.heals++; }
+    else W.eff[item] = item === 'magnet' ? W.magnetTime : item === 'boost' ? W.boostTime : K.time;
+    if (item === 'boost') { W.boosts++; W.events.push('boost'); } else if (item === 'heart') W.events.push('heal'); else W.events.push('power');
+  }
+
+  // 선물 상자를 열었다: 늘 좋은 것 하나 (코인 · 바로 쓰는 아이템 · 다음 판 시작 아이템). 뽑기 느낌 없이 바로 보여 준다
+  function takeGift(W, o) {
+    const G = D.GIFT, r = W.grand;
+    o.done = true; W.gifts++;
+    const kinds = Object.keys(G.reward).map(k => ({ k, w: G.reward[k] }));
+    const kind = RN.weighted(kinds, r).k;
+    const got = { kind };
+    if (kind === 'coins') {
+      got.n = Math.round(G.coins[0] + (G.coins[1] - G.coins[0]) * r());
+      W.giftCoins += got.n;
+    } else if (kind === 'power') {
+      const ps = G.powers.filter(k => !(k === 'shield' && W.shield));
+      got.item = pick(ps.length ? ps : ['magnet'], r);
+      applyPower(W, got.item);
+    } else {
+      const its = G.items.filter(id => !(id === 'sheart' && W.diff === 'hard'));   // 어려움에서는 하트 출발을 못 쓰니 다른 것
+      got.id = pick(its, r);
+      W.giftItems.push(got.id);
+    }
+    W.giftLog.push(got);
+    W.events.push('gift');
+    W.fx.push(Object.assign({ kind: 'gift', x: o.x, z: o.z, y: o.y }, got));
+    return got;
+  }
+
+  // ─── 피버 타임 ─────────────────────────────────────────────
+  // 게이지 채우기. 가득 차면 피버 시작 (피버 중·처음 안내 중에는 안 찬다)
+  function feverAdd(W, amt) {
+    if (W.fever > 0 || tutOn(W) || W.phase !== 'play') return;
+    W.feverM = Math.min(1, W.feverM + amt);
+    if (W.feverM >= 1 - 1e-9) startFever(W);
+  }
+  function startFever(W) {
+    const F = D.FEVER;
+    W.fever = F.dur; W.feverM = 0; W.fevers++; W.feverRainT = 0;
+    W.events.push('fever');
+    W.fx.push({ kind: 'fever' });
+  }
+
+  // ─── 워프 ─────────────────────────────────────────────────
+  // 고리 문을 지났다: dur초 동안 터널로 dist m 앞으로. 앞에 있던 장애물·별·선물은 치우고(선물은 다음 줄에 다시), 나와서 clear m까지는 빈 길
+  function startWarp(W, o) {
+    const WP = D.WARP;
+    o.done = true;
+    for (let i = W.obs.length - 1; i >= 0; i--) {
+      const q = W.obs[i];
+      if (q === o || q.kind === 'arch' || q.z - W.dist < -P.hitZ) continue;
+      if (q.kind === 'gift' && !q.done) W.giftReady = true;
+      W.obs.splice(i, 1);
+    }
+    W.warp = { t: WP.dur, max: WP.dur, from: W.dist, to: W.dist + WP.dist };
+    W.nextZ = W.warp.to + WP.clear;
+    W.warpAt = null;
+    W.warps++; W.bonus += WP.bonus;
+    W.pull = null;
+    W.events.push('warp');
+    W.fx.push({ kind: 'warp', pts: WP.bonus });
   }
 
   function takeStar(W, o) {
@@ -415,13 +575,18 @@
     W.chain = W.t - W.lastStar <= D.STAR.chainGap ? W.chain + 1 : 1;
     W.lastStar = W.t;
     W.events.push('star');
-    W.fx.push({ kind: 'star', x: o.x, z: o.z, y: o.y });
+    const F = D.FEVER, fev = W.fever > 0;
+    // 피버: 별 점수 mul배 (별 수는 그대로, 늘어난 만큼은 보너스로)
+    if (fev) W.bonus += D.STAR.value * (F.mul - 1);
+    W.fx.push({ kind: 'star', x: o.x, z: o.z, y: o.y, fever: fev });
     const line = o.line;
     if (line && ++line.got === line.n) {
       W.perfects++; W.bonus += W.perfectPts;
       W.events.push('perfect');
       W.fx.push({ kind: 'perfect', x: o.x, z: o.z, y: o.y, pts: W.perfectPts });
+      feverAdd(W, F.perfect);
     }
+    feverAdd(W, F.star + (W.chain >= F.chainFrom ? F.chain : 0));
   }
 
   // ─── 한 칸(1/120초) ───────────────────────────────────────
@@ -473,6 +638,19 @@
         W.obs.push({ kind: 'star', x: Math.floor(W.rand() * 3), y: 0.5, z: W.dist + 25 + W.rand() * 20, rain: true });
       }
     }
+    // 피버: 남은 시간, 처음 몇 초는 비어 있는 줄에 별이 쏟아진다
+    if (W.fever > 0) {
+      const F = D.FEVER;
+      W.fever = Math.max(0, W.fever - dt);
+      if (W.fever === 0) W.events.push('feverEnd');
+      else if (F.dur - W.fever < F.rain && (W.feverRainT -= dt) <= 0) {
+        W.feverRainT = F.rainEvery;
+        const z = W.dist + 25 + W.grand() * 20, l = Math.floor(W.grand() * 3);
+        if (!W.warp && laneFreeAt(W, l, z, 4)) W.obs.push({ kind: 'star', x: l, y: 0.5, z, rain: true });
+      }
+    }
+    // 선물 상자 차례 (처음 안내 중에는 시계가 멈춘다)
+    if (!W.giftReady && !tutOn(W) && (W.giftT -= dt) <= 0) W.giftReady = true;
     const IC = cfg(W).item;
     if ((W.itemT -= dt) <= 0) { W.itemReady = true; W.itemT = IC.gap[0] + (IC.gap[1] - IC.gap[0]) * W.rand(); }
 
@@ -492,8 +670,14 @@
     }
     W.slow += (slowTo - W.slow) * Math.min(1, dt * 4);
 
-    const v = speed(W);
+    // 워프 중: dur초 동안 정해진 거리만큼 쭉 (장애물 없음)
+    const v = W.warp ? D.WARP.dist / D.WARP.dur : speed(W);
     W.dist += v * dt;
+    if (W.warp && (W.warp.t -= dt) <= 0) {
+      W.dist = Math.max(W.dist, W.warp.to);
+      W.warp = null;
+      W.events.push('warpOut');
+    }
     if (W.dist - W.hitAt > W.clean) W.clean = W.dist - W.hitAt;
 
     // 태양계 여행: 다음 행성 도착
@@ -529,6 +713,17 @@
         if (Math.abs(rel) < 1.3 && Math.abs(o.x - p.x) < 0.6 && Math.abs(o.y - cy) < 1.1) {
           if (o.kind === 'star') takeStar(W, o); else usePower(W, o);
         }
+        continue;
+      }
+      if (o.kind === 'gift') {
+        // 선물 상자: 그 줄에서 닿으면 연다. 문 위·높이 뜬 것은 뛰어서(need jump), 막대 밑은 미끄러져서(need slide)
+        const ok = o.need === 'jump' ? p.y >= D.OBST.gateH + 0.2 : o.need === 'slide' ? p.sl > 0 && p.y < 0.05 : Math.abs(o.y - cy) < 1.1;
+        if (ok && Math.abs(rel) < 1.3 && Math.abs(o.x - p.x) < 0.6) takeGift(W, o);
+        continue;
+      }
+      if (o.kind === 'warp') {
+        // 워프 관문: 높이와 상관없이 그 줄로 지나가면
+        if (Math.abs(rel) < 1.2 && Math.abs(o.x - p.x) < 0.6) { startWarp(W, o); break; }
         continue;
       }
       // 움직이는 운석: 가까이 오면 옆 줄로 미끄러진다
@@ -633,7 +828,9 @@
       if ((W.pirT -= dt) > 0) return;
       const span = C.speed.max * D.ITEM.boostMul * PD.dur + 60;
       planBlackHoles(W, W.dist + span + 20);
-      const clash = W.bh || W.bhs.some(b => b.end > W.dist - 5 && b.start < W.dist + span);
+      // 블랙홀 구간 · 워프 중 · 앞에 선물 상자나 워프 관문이 있으면 조금 뒤에 다시 본다
+      const clash = W.bh || W.warp || W.bhs.some(b => b.end > W.dist - 5 && b.start < W.dist + span) ||
+        W.obs.some(o => !o.done && (o.kind === 'gift' || o.kind === 'warp') && o.z > W.dist - 2);
       if (W.runT < PD.minT || (W.tut && W.tut.step !== 'done') || clash) { W.pirT = PD.retry; return; }
       W.pir = { t: PD.dur, max: PD.dur, shotT: PD.firstShot, laser: null, bombs: PC.bombs, bombT: PD.dur / (PC.bombs + 1), shots: 0 };
       W.pirGuard = W.dist + span;
@@ -708,6 +905,7 @@
     W.lastNear = W.t; W.nears++; W.bonus += W.nearPts;
     W.events.push('near');
     W.fx.push({ kind: 'near', x: p.x, z: W.dist, pts: W.nearPts });
+    feverAdd(W, D.FEVER.near);
     return true;
   }
 
@@ -734,11 +932,19 @@
       } else if (o.kind === 'gate' || o.kind === 'bomb') {
         if (Math.abs(o.x - p.x) < P.hitW && rel > P.hitZ * 0.5 && rel < v * P.jumpT * 0.4 && p.y <= 0 && !p.drop) jump(W);
         gain[o.x] -= 0.5;
+        if (o.x !== p.lane && rel < v * 0.3) near[o.x] = Math.min(near[o.x], Math.max(0, rel));   // 곧 닿는 문 줄로는 옮기지 않는다 (뛸 틈이 없다)
       } else if (o.kind === 'bar') {
         if (Math.abs(o.x - p.x) < P.hitW && rel > P.hitZ * 0.5 && rel < v * P.slideT * 0.4 && p.sl < rel / v + 0.15 && !p.drop) slide(W);
         gain[o.x] -= 0.5;
+        if (o.x !== p.lane && rel < v * 0.3) near[o.x] = Math.min(near[o.x], Math.max(0, rel));
       } else if (o.kind === 'star') gain[Math.round(o.x)] += 1;
       else if (o.kind === 'item') gain[Math.round(o.x)] += 4;
+      else if (o.kind === 'warp') gain[o.x] += 3;
+      else if (o.kind === 'gift') {
+        gain[o.x] += 4;
+        // 높이 뜬 선물(문이 없는 줄)은 뛰어서 먹는다. 문·막대 밑 선물은 위에서 이미 뛰고 미끄러진다
+        if (o.need === 'jump' && Math.abs(o.x - p.x) < P.hitW && rel > P.hitZ * 0.5 && rel < v * P.jumpT * 0.4 && p.y <= 0 && !p.drop) jump(W);
+      }
     }
     // 해적 레이저가 빛나는 줄은 운석처럼 피한다
     if (W.pir && W.pir.laser) near[W.pir.laser.lane] = 0;
@@ -784,8 +990,9 @@
       zone: zoneAt(W.dist), nears: W.nears, perfects: W.perfects, milestones: W.milestones, heals: W.heals,
       slides: W.slides, bars: W.bars, bhs: W.bhPassed, pulls: W.pulls, resists: W.resists, lap: placeOf(zoneAt(W.dist)).lap,
       pirates: W.pirates, planet: Math.min(9, zoneAt(W.dist) + 1),
+      gifts: W.gifts, giftCoins: W.giftCoins, giftItems: W.giftItems.slice(), fevers: W.fevers, warps: W.warps,
     };
   }
 
-  RN.World = { create, charOf, step, tick, move, jump, slide, speed, baseSpeed, level, rowWeights, makeRow, fill, bot, dangerAhead, runStats, zoneAt, placeOf, bhAt, laneClear, planBlackHoles, pickLaserLane, adaptCfg, diffId, cfg, jumpY };
+  RN.World = { create, charOf, step, tick, move, jump, slide, speed, baseSpeed, level, rowWeights, makeRow, fill, bot, dangerAhead, runStats, zoneAt, placeOf, bhAt, laneClear, planBlackHoles, pickLaserLane, adaptCfg, diffId, cfg, jumpY, feverAdd, startFever, takeGift, startWarp, placeGift, placeWarp, laneFreeAt };
 })(RN);

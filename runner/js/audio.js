@@ -128,6 +128,20 @@
     start: { gap: 0.2, fn(t) { tone(t, 'square', 392, 392, 0.08, 0.1); tone(t + 0.09, 'square', 523, 523, 0.08, 0.1); tone(t + 0.18, 'square', 784, 784, 0.14, 0.1); } },
     // 불사조 부활: 아래에서 위로 솟는 불꽃 소리
     revive: { gap: 0.5, fn(t) { tone(t, 'sine', 330, 990, 0.45, 0.14); [784, 1047, 1319, 1568].forEach((f, i) => tone(t + 0.1 + i * 0.06, 'triangle', f, f, 0.2, 0.1)); noise(t, 'bandpass', 800, 4000, 0.4, 0.08); } },
+    // 깜짝 선물 상자: 멀리서 나타남(작은 방울 소리) · 열었다(리본 푸는 소리 + 반짝 화음)
+    giftHere: { gap: 0.5, fn(t) { [1568, 2093, 1568].forEach((f, i) => tone(t + i * 0.09, 'sine', f, f, 0.14, 0.06)); } },
+    gift: { gap: 0.3, fn(t) {
+      noise(t, 'bandpass', 1500, 5000, 0.18, 0.1);
+      [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(t + 0.08 + i * 0.06, 'triangle', f, f, 0.26, 0.1));
+      tone(t + 0.4, 'square', 1976, 1976, 0.05, 0.04); tone(t + 0.45, 'square', 2637, 2637, 0.08, 0.04);
+    } },
+    // 피버 시작: 계단처럼 빠르게 오르는 음 · 끝: 부드럽게 내려오는 두 음
+    fever: { gap: 0.5, fn(t) { [523, 659, 784, 1047, 1319, 1568, 2093].forEach((f, i) => tone(t + i * 0.05, 'square', f, f, 0.12, 0.06)); noise(t + 0.3, 'highpass', 5000, 9000, 0.4, 0.05); } },
+    feverEnd: { gap: 0.5, fn(t) { tone(t, 'triangle', 1047, 1047, 0.15, 0.07); tone(t + 0.12, 'triangle', 784, 784, 0.25, 0.07); } },
+    // 워프 관문: 멀리서 나타남(윙윙 떨리는 음) · 들어감(솟구치는 바람) · 나옴(뿅)
+    warpHere: { gap: 0.5, fn(t) { tone(t, 'sine', 440, 880, 0.3, 0.05); tone(t + 0.15, 'sine', 660, 1320, 0.3, 0.04); } },
+    warp: { gap: 0.5, fn(t) { tone(t, 'sawtooth', 160, 1800, 0.9, 0.08); noise(t, 'bandpass', 300, 6000, 1.2, 0.14); tone(t + 0.2, 'sine', 880, 1760, 0.6, 0.05); } },
+    warpOut: { gap: 0.5, fn(t) { noise(t, 'lowpass', 4000, 300, 0.3, 0.1); tone(t, 'triangle', 1319, 659, 0.25, 0.08); } },
     medal: { gap: 0.3, fn(t) { [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.35, 0.14)); noise(t, 'highpass', 5000, 9000, 0.4, 0.06); } },
   };
 
@@ -141,10 +155,29 @@
     try { s.fn(now + 0.005, o); } catch (e) { /* 소리 실패는 게임을 멈추지 않는다 */ }
   }
 
+  // 피버 박자: 켜져 있는 동안 0.14초마다 통통 튀는 5음계 아르페지오 (파일 없이 합성, 끄면 바로 멈춘다)
+  const BEAT = [0, 4, 7, 12, 7, 4, 9, 12];
+  let beatT = 0, beatOn = false, beatN = 0;
+  function feverBeat(on) {
+    if (!on || !ac || muted || ac.state !== 'running') { beatOn = false; return; }
+    const now = ac.currentTime;
+    if (!beatOn) { beatOn = true; beatT = now + 0.05; beatN = 0; }
+    if (beatT < now) beatT = now + 0.02;   // 화면이 오래 멈췄다 돌아오면 밀린 박자는 버린다
+    // 조금 앞까지 미리 예약해 둔다 (화면이 잠깐 끊겨도 박자가 고르게)
+    while (beatT < now + 0.25) {
+      const k = Math.pow(2, BEAT[beatN % BEAT.length] / 12);
+      try {
+        tone(beatT, 'square', 523 * k, 523 * k, 0.07, 0.035);
+        if (beatN % 2 === 0) tone(beatT, 'sine', 131, 110, 0.1, 0.09);
+      } catch (e) { /* 무시 */ }
+      beatT += 0.14; beatN++;
+    }
+  }
+
   function setMuted(m) {
     muted = !!m;
     if (ac) master.gain.setTargetAtTime(muted ? 0 : VOL, ac.currentTime, 0.02);
   }
 
-  RN.Audio = { unlock, play, setMuted, get muted() { return muted; } };
+  RN.Audio = { unlock, play, setMuted, feverBeat, get muted() { return muted; } };
 })(RN);

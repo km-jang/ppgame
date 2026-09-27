@@ -369,6 +369,25 @@
         R.big = null;
         ring(f.x, f.y, 100 * s, P.color, 0.7);
         burst(f.x, f.y, 26, [P.color, '#ffffff'], 440, 5 * s);
+      } else if (f.kind === 'gift') {
+        // 깜짝 선물: 알록달록 색종이 + 무엇을 받았는지
+        const title = f.reward === 'coins' ? '선물: 코인 ' + f.n + '개!' : f.reward === 'rocket' ? '선물: 로켓!' : f.reward === 'shield' ? '선물: 방패 방울!'
+          : '선물: 다음 판 ' + (f.item === 'rocketStart' ? '로켓 출발' : '방패 방울') + '!';
+        R.banner = { title, sub: f.reward === 'item' ? '다음 판 시작할 때 자동으로 써요' : '', color: '#ffe66d', life: 2.4, max: 2.4, text: true };
+        R.big = null;
+        ring(f.x, f.y, 70 * s, '#ffe66d', 0.5);
+        burst(f.x, f.y, 40, ['#ff5ec8', '#ffe66d', '#5ee7ff', '#7dff6a', '#ff9f43', '#ffffff'], 520, 6 * s);
+      } else if (f.kind === 'fever') {
+        R.banner = { title: 'FEVER!', sub: '별 점수 두 배! ' + D.FEVER.time + '초', color: '#ff9ee0', life: 2.2, max: 2.2, text: true };
+        R.big = null;
+        ring(f.x, f.y, 120 * s, '#ff9ee0', 0.7);
+        burst(f.x, f.y, 36, ['#ff5ec8', '#ffe66d', '#5ee7ff', '#7dff6a'], 560, 6 * s);
+      } else if (f.kind === 'room') {
+        R.banner = { title: '비밀 방!', sub: D.ROOM.time + '초 동안 별을 모아요 · 떨어지지 않아요', color: '#d9c8ff', life: 2.6, max: 2.6, text: true };
+        R.big = null; R.parts.length = 0;
+      } else if (f.kind === 'roomEnd') {
+        R.banner = { title: '비밀 방 끝!', sub: '원래 자리로 돌아왔어요', color: '#d9c8ff', life: 2, max: 2, text: true };
+        ring(f.x, f.y, 80 * s, '#d9c8ff', 0.6);
       } else if (f.kind === 'hole') {
         R.banner = { title: '블랙홀 주의!', sub: (f.side < 0 ? '왼쪽' : '오른쪽') + '으로 살짝 끌려가요 · 반대쪽을 눌러요', color: '#c9a0ff', life: 2.8, max: 2.8, text: true };
         R.big = null;
@@ -1029,6 +1048,146 @@
     ctx.globalAlpha = 1;
   }
 
+  // ─── 깜짝 선물 · 비밀 방 문 ─────────────────────────────────
+  // 선물 상자: 리본 두른 반짝 상자 (크기별 한 번). 문: 빛나는 구름 문 (크기별 한 번)
+  const giftCache = {};
+  function giftSprite(rp, dpr, kind) {
+    const key = kind + '|' + rp + '|' + dpr;
+    if (giftCache[key]) return giftCache[key];
+    const m = Math.ceil(rp * 0.6) + 4, w = kind === 'door' ? rp * 2.4 : rp * 2, h = kind === 'door' ? rp * 3 : rp * 2;
+    const c = document.createElement('canvas');
+    c.width = Math.round((w + m * 2) * dpr); c.height = Math.round((h + m * 2) * dpr);
+    const g = c.getContext('2d');
+    g.scale(dpr, dpr); g.translate(m + w / 2, m + h / 2);
+    if (kind === 'gift') {
+      g.shadowColor = 'rgba(255,94,200,0.9)'; g.shadowBlur = rp * 0.6;
+      const bg = g.createLinearGradient(0, -rp, 0, rp);
+      bg.addColorStop(0, '#ff9ee0'); bg.addColorStop(1, '#b0247a');
+      g.fillStyle = bg;
+      g.beginPath(); if (g.roundRect) g.roundRect(-rp * 0.85, -rp * 0.55, rp * 1.7, rp * 1.4, rp * 0.18); else g.rect(-rp * 0.85, -rp * 0.55, rp * 1.7, rp * 1.4); g.fill();
+      g.shadowBlur = 0;
+      g.fillStyle = '#ff5ec8';
+      g.beginPath(); if (g.roundRect) g.roundRect(-rp * 0.98, -rp * 0.8, rp * 1.96, rp * 0.4, rp * 0.1); else g.rect(-rp * 0.98, -rp * 0.8, rp * 1.96, rp * 0.4); g.fill();
+      g.fillStyle = '#ffe66d';
+      g.fillRect(-rp * 0.14, -rp * 0.8, rp * 0.28, rp * 1.65);
+      g.fillRect(-rp * 0.98, -rp * 0.2, rp * 1.96, rp * 0.2);
+      // 리본 매듭
+      g.beginPath(); g.ellipse(-rp * 0.32, -rp * 0.95, rp * 0.32, rp * 0.18, -0.5, 0, TAU); g.ellipse(rp * 0.32, -rp * 0.95, rp * 0.32, rp * 0.18, 0.5, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.55)';
+      g.fillRect(-rp * 0.7, -rp * 0.45, rp * 0.2, rp * 0.9);
+    } else {
+      // 구름 문: 뭉게구름 테두리 안에 빛나는 문
+      g.shadowColor = 'rgba(210,190,255,0.95)'; g.shadowBlur = rp * 0.7;
+      g.fillStyle = '#f2ecff';
+      g.beginPath();
+      for (const [dx, dy, rr] of [[-0.9, 1.1, 0.45], [-1, 0.4, 0.42], [-0.85, -0.35, 0.44], [-0.45, -0.95, 0.46], [0.1, -1.15, 0.5], [0.6, -0.9, 0.44], [0.95, -0.3, 0.42], [1, 0.45, 0.42], [0.9, 1.1, 0.45]]) {
+        g.moveTo(dx * rp + rr * rp, dy * rp); g.arc(dx * rp, dy * rp, rr * rp, 0, TAU);
+      }
+      g.fill();
+      g.shadowBlur = 0;
+      const dg = g.createLinearGradient(0, -rp, 0, rp * 1.4);
+      dg.addColorStop(0, '#fff8d6'); dg.addColorStop(0.5, '#c9a0ff'); dg.addColorStop(1, '#6a3fd0');
+      g.fillStyle = dg;
+      g.beginPath(); g.moveTo(-rp * 0.55, rp * 1.4); g.lineTo(-rp * 0.55, -rp * 0.3); g.arc(0, -rp * 0.3, rp * 0.55, Math.PI, 0); g.lineTo(rp * 0.55, rp * 1.4); g.closePath(); g.fill();
+      g.fillStyle = '#ffe66d'; g.beginPath(); g.arc(rp * 0.3, rp * 0.5, rp * 0.08, 0, TAU); g.fill();
+    }
+    giftCache[key] = { c, w: w + m * 2, h: h + m * 2 };
+    return giftCache[key];
+  }
+  function drawGifts(ctx, W, v) {
+    const s = v.scale;
+    const bob = k => (v.calm ? 0 : Math.sin(W.t * 3 + k) * 3 * s);
+    for (const g of W.gifts) {
+      if (g.got) continue;
+      const x = SX(v, g.x), y = SY(v, g.y) + bob(g.id);
+      if (y < v.cy - 60 || y > v.cy + v.ch + 60) continue;
+      const rp = Math.max(8, Math.round(D.GIFT.r * s * 0.85)), sp = giftSprite(rp, v.dpr, 'gift');
+      glow(ctx, 'rgba(255,230,109,0.7)', x, y, rp * 2.6, v.calm ? 0.6 : 0.5 + Math.sin(W.t * 5) * 0.15);
+      ctx.drawImage(sp.c, x - sp.w / 2, y - sp.h / 2, sp.w, sp.h);
+      const age = g.seen >= 0 ? W.t - g.seen : 0;
+      if (age < 3 && v.hud !== false) {
+        const fs = Math.round(Math.max(13, 15 * v.ui));
+        ctx.globalAlpha = Math.min(1, (3 - age) * 2);
+        label(ctx, '깜짝 선물!', Math.max(v.cx + fs * 3, Math.min(v.cx + v.cw - fs * 3, x)), Math.max(v.cy + fs, y - rp * 1.8 - fs * 0.4), fs, '#ffe66d', 'rgba(5,7,12,0.85)', null);
+        ctx.globalAlpha = 1;
+      }
+    }
+    for (const d of W.doors) {
+      if (d.used) continue;
+      const x = SX(v, d.x), yb = SY(v, d.y - D.ROOM.r);   // 문 아래 끝 = 발판 윗면
+      if (yb < v.cy - 80 || yb > v.cy + v.ch + 80) continue;
+      const rp = Math.max(8, Math.round(D.ROOM.r * s * 0.62)), sp = giftSprite(rp, v.dpr, 'door');
+      glow(ctx, 'rgba(201,160,255,0.75)', x, yb - rp * 1.3, rp * 3.2, v.calm ? 0.6 : 0.5 + Math.sin(W.t * 2.5) * 0.15);
+      ctx.drawImage(sp.c, x - sp.w / 2, yb - sp.h + (sp.h - rp * 3) / 2 - rp * 0.1, sp.w, sp.h);
+      const age = d.seen >= 0 ? W.t - d.seen : 0;
+      if (age < 3.5 && v.hud !== false) {
+        const fs = Math.round(Math.max(13, 15 * v.ui));
+        ctx.globalAlpha = Math.min(1, (3.5 - age) * 2);
+        label(ctx, '비밀 방!', Math.max(v.cx + fs * 3, Math.min(v.cx + v.cw - fs * 3, x)), Math.max(v.cy + fs, yb - rp * 3.2 - fs * 0.4), fs, '#e6dcff', 'rgba(24,16,48,0.9)', '#a98bff');
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // ─── 비밀 방 · 피버 ─────────────────────────────────────────
+  // 비밀 방: 기둥 안을 조용한 별빛 방으로 덮는다 (한 번 그려 두고 찍기)
+  function roomSprite(v) {
+    const key = v.cw + '|' + v.ch + '|' + v.dpr;
+    if (R.roomKey === key) return R.roomC;
+    const c = document.createElement('canvas');
+    c.width = Math.round(v.cw * v.dpr); c.height = Math.round(v.ch * v.dpr);
+    const g = c.getContext('2d');
+    g.scale(v.dpr, v.dpr);
+    const bg = g.createLinearGradient(0, 0, 0, v.ch);
+    bg.addColorStop(0, '#120a2e'); bg.addColorStop(0.6, '#241250'); bg.addColorStop(1, '#3a1a5e');
+    g.fillStyle = bg; g.fillRect(0, 0, v.cw, v.ch);
+    const rnd = JP.rng(99);
+    for (let i = 0; i < 90; i++) {
+      g.globalAlpha = 0.25 + rnd() * 0.6;
+      g.fillStyle = rnd() < 0.2 ? '#ffe66d' : '#e8f0ff';
+      const sz = rnd() < 0.15 ? 2.5 : 1.3;
+      g.fillRect(rnd() * v.cw, rnd() * v.ch, sz, sz);
+    }
+    g.globalAlpha = 1;
+    const vg = g.createRadialGradient(v.cw / 2, v.ch / 2, Math.min(v.cw, v.ch) * 0.3, v.cw / 2, v.ch / 2, Math.hypot(v.cw, v.ch) * 0.6);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(120,80,220,0.35)');
+    g.fillStyle = vg; g.fillRect(0, 0, v.cw, v.ch);
+    R.roomKey = key; R.roomC = c;
+    return c;
+  }
+  function drawRoom(ctx, W, v) {
+    if (!W.room) return;
+    ctx.drawImage(roomSprite(v), v.cx, v.cy, v.cw, v.ch);
+  }
+  // 비밀 방 남은 시간 · 피버 남은 시간 (기둥 위쪽 가운데 막대)
+  function drawTimers(ctx, W, v) {
+    const bars = [];
+    if (W.room) bars.push(['비밀 방 ' + Math.ceil(W.room.t) + '초', W.room.t / D.ROOM.time, '#c9a0ff']);
+    if (W.feverT > 0) bars.push(['FEVER ' + Math.ceil(W.feverT) + '초', W.feverT / D.FEVER.time, '#ff9ee0']);
+    const fs = Math.round(Math.max(14, Math.min(20, v.cw * 0.04)));
+    let y = v.cy + fs * 1.2;
+    for (const [txt, k, col] of bars) {
+      const bw = Math.min(v.cw * 0.5, 220), x = v.cx + v.cw / 2;
+      label(ctx, txt, x, y, fs, col, 'rgba(8,6,20,0.85)', col);
+      ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(x - bw / 2, y + fs * 0.95, bw, 5);
+      ctx.fillStyle = col; ctx.fillRect(x - bw / 2, y + fs * 0.95, bw * Math.max(0, Math.min(1, k)), 5);
+      y += fs * 2.3;
+    }
+  }
+  // 피버: 기둥 가장자리가 무지개로 (움직임 줄이기면 흐르지 않고 가만히)
+  function drawFeverEdge(ctx, W, v) {
+    if (!(W.feverT > 0)) return;
+    const t = v.calm ? 0 : performance.now() / 1000;
+    const g = ctx.createLinearGradient(0, v.cy, 0, v.cy + v.ch);
+    for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, 'hsl(' + Math.round((i * 60 + t * 120) % 360) + ',100%,65%)');
+    ctx.strokeStyle = g; ctx.lineWidth = 5;
+    ctx.strokeRect(v.cx + 2.5, v.cy + 2.5, v.cw - 5, v.ch - 5);
+    const k = Math.min(1, W.feverT / 1.5);   // 끝나 갈 때 흐려진다
+    ctx.globalAlpha = 0.18 * k;
+    ctx.lineWidth = 16; ctx.strokeRect(v.cx + 8, v.cy + 8, v.cw - 16, v.ch - 16);
+    ctx.globalAlpha = 1;
+  }
+
   // ─── 쫓아오는 먹구름 (보통·어려움) ─────────────────────────
   // 기둥 폭의 먹구름 띠를 한 번 그려 두고, 윗면 높이에 맞춰 찍는다. 그 아래는 어두운 색으로 채운다
   function stormSprite(v) {
@@ -1574,6 +1733,16 @@
       ctx.fillStyle = '#ff9f43'; ctx.fillRect(x0 + 44 * s, y + 6 * s, bw * Math.min(1, W.rocket / W.rocketTime), 8 * s);
       y += 30 * s;
     }
+    // 피버 게이지: 가득 차면 FEVER
+    if (W.fever > 0 || W.feverT > 0) {
+      const on = W.feverT > 0, k = on ? W.feverT / D.FEVER.time : W.fever;
+      ctx.font = Math.round(15 * s) + 'px ' + DISP; ctx.fillStyle = on ? '#ff9ee0' : '#d8a8d0';
+      ctx.fillText(on ? 'FEVER!' : '피버', x0, y);
+      const bw = Math.min(sw - 60 * s, 110 * s), bx = x0 + 56 * s;
+      ctx.fillStyle = 'rgba(255,94,200,0.18)'; ctx.fillRect(bx, y + 6 * s, bw, 8 * s);
+      ctx.fillStyle = on ? '#ffe66d' : '#ff5ec8'; ctx.fillRect(bx, y + 6 * s, bw * Math.min(1, k), 8 * s);
+      y += 28 * s;
+    }
     // 블랙홀 구간: 끌리는 쪽 화살표
     if (W.hole && W.phase === 'play') {
       ctx.font = Math.round(16 * s) + 'px ' + DISP; ctx.fillStyle = '#c9a0ff';
@@ -1614,6 +1783,7 @@
     const sg = stormGap(W);
     if (sg != null) items.push(['먹구름 ' + Math.floor(sg) + 'm', sg < D.STORM.warn ? '#ff8a96' : '#b9a6ff']);
     if (W.hole && W.phase === 'play') items.push([W.hole.side < 0 ? '← 블랙홀' : '블랙홀 →', '#c9a0ff']);
+    if (W.feverT > 0) items.push(['FEVER', '#ff9ee0']); else if (W.fever >= 0.3) items.push(['피버 ' + Math.floor(W.fever * 100) + '%', '#d8a8d0']);
     items.push(['BEST ' + Math.max(v.bestH || 0, W.height) + ' m', '#bcd3e2']);
     for (const [txt, col] of items) {
       if (x - 70 * s < v.hudLeft) break; // 버튼 묶음과 겹치면 생략
@@ -1758,9 +1928,10 @@
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     ctx.beginPath(); ctx.rect(v.cx, v.cy, v.cw, v.ch); ctx.clip();
-    drawPull(ctx, W, v);
-    drawMarks(ctx, W, v);
+    drawRoom(ctx, W, v);
+    if (!W.room) { drawPull(ctx, W, v); drawMarks(ctx, W, v); }
     drawPlats(ctx, W, v, a);
+    drawGifts(ctx, W, v);
     drawStars(ctx, W, v);
     drawItems(ctx, W, v);
     drawMines(ctx, W, v);
@@ -1769,8 +1940,8 @@
     drawDust(ctx, v);
     drawPlayer(ctx, W, v, a);
     drawFx(ctx, v);
-    drawStorm(ctx, W, v, a);
-    drawBottom(ctx, W, v);
+    if (!W.room) { drawStorm(ctx, W, v, a); drawBottom(ctx, W, v); }
+    drawFeverEdge(ctx, W, v);
     ctx.restore();
     if (R.flash > 0) {
       ctx.fillStyle = 'rgba(255,77,109,' + (R.flash * 0.6).toFixed(3) + ')';
@@ -1778,7 +1949,7 @@
     }
     if (v.hud !== false) {
       if (v.side) drawSideHud(ctx, W, v); else drawTopHud(ctx, W, v);
-      if (W.phase === 'play') { drawControls(ctx, W, v); drawIntro(ctx, W, v); drawStormHint(ctx, W, v); }
+      if (W.phase === 'play') { drawControls(ctx, W, v); drawIntro(ctx, W, v); if (!W.room) drawStormHint(ctx, W, v); drawTimers(ctx, W, v); }
       drawBanner(ctx, W, v);
     }
   }

@@ -209,7 +209,9 @@
     reportSummary();
     try {
       // planet: 가 본 가장 먼 행성 (1 수성 … 9 명왕성, 2바퀴는 10부터) · blackholes: 깬 블랙홀 웨이브 수 (스티커북)
-      const fresh = HUB.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills, planet: W.stats.planet, blackholes: W.stats.holesCleared }, W.stats.time);
+      // gifts: 연 선물 상자 · fevers: 피버 타임 횟수 · wingmen: 구한 동료 우주선 (2026-09-27)
+      const fresh = HUB.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills, planet: W.stats.planet, blackholes: W.stats.holesCleared,
+        gifts: W.stats.gifts, fevers: W.stats.fevers, wingmen: W.stats.wingmen }, W.stats.time);
       if (fresh.length) toast('오늘의 미션 완료: ' + fresh[0]);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -417,10 +419,13 @@
 
   // 게임 오버: 받은 코인 (부분별) + 미션 진행
   function renderEarn() {
-    const e = lastEarn || { coins: 0, parts: { score: 0, wave: 0, boss: 0, pickup: 0, bonus: 0 }, done: [] };
+    const e = lastEarn || { coins: 0, parts: { score: 0, wave: 0, boss: 0, pickup: 0, gift: 0, bonus: 0 }, done: [] };
     $('over-coins').textContent = '+0';
-    const P = e.parts, bits = [['점수', P.score], ['웨이브', P.wave], ['보스', P.boss], ['주운 코인', P.pickup], ['강화 보너스', P.bonus]];
-    $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
+    const P = e.parts, bits = [['점수', P.score], ['웨이브', P.wave], ['보스', P.boss], ['주운 코인', P.pickup], ['선물 상자', P.gift], ['강화 보너스', P.bonus]];
+    // 선물 상자에서 받은 다음 판 시작 아이템
+    const gi = (e.items || []).map(id => { const it = SH.itemDef(id); return it ? it.name : ''; }).filter(Boolean);
+    $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('') +
+      (gi.length ? '<span>다음 판 선물 <b>' + esc(gi.join(' · ')) + '</b></span>' : '');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
   }
@@ -462,6 +467,7 @@
     clearMedalToasts();
     mode = 'play';
     NG.Audio.setDuck(false);
+    NG.Audio.setFever(false);
     NG.Audio.music('play');
     wakeLock(true);
     show(null);
@@ -473,6 +479,7 @@
     W = null;
     mode = 'title';
     NG.Audio.setDuck(false);
+    NG.Audio.setFever(false);
     NG.Audio.music('title');
     wakeLock(false);
     renderBest();
@@ -542,6 +549,7 @@
     const broken = saveRun(true);
     adaptReport();
     clearMedalToasts(); // 이번 판 메달은 결과 화면에 모아 보여 준다
+    NG.Audio.setFever(false);
     NG.Audio.music('off');
     $('over-diff').textContent = W.diff.name;
     $('over-score').textContent = W.score.toLocaleString();
@@ -590,6 +598,10 @@
         else if (ev === 'ult') vibrate([30, 40, 90]);
         else if (ev === 'ultReady') vibrate(25);
         else if (ev === 'block' || ev === 'bomb') vibrate(ev === 'bomb' ? [20, 30, 60] : 40);
+        // 피버 타임: 음악이 빨라진다 · 선물 상자·동료 구출: 짧은 진동
+        else if (ev === 'fever') { NG.Audio.setFever(true); vibrate([20, 30, 20, 30, 40]); }
+        else if (ev === 'feverEnd') NG.Audio.setFever(false);
+        else if (ev === 'gift' || ev === 'wingman') vibrate([15, 25, 30]);
       }
     }
     world.events.length = 0;

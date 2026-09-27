@@ -12,7 +12,7 @@
     // 어려움 (2026-09-27, 소유자 "어려움 버튼도 추가해줘"): 보통보다 빨리 출발하고 더 빨리 빨라진다. 판 끝·라이벌 몸은 보통처럼 위험,
     // 위험 경고는 그대로 켜져 있다. goldMul: 황금 구슬 시간 배율 · itemMul: 아이템 간격 배율(클수록 드물게)
     // stageMul·stagePerGrow: 스테이지 속도 (레벨 속도 × stageMul + 길이마다)
-    HARD: { base: 9.5, perGrow: 0.2, max: 17, stageMul: 1.15, stagePerGrow: 0.13, goldMul: 0.7, itemMul: 1.25 },
+    HARD: { base: 9, perGrow: 0.2, max: 17, stageMul: 1.15, stagePerGrow: 0.13, goldMul: 0.7, itemMul: 1.25 },
     // 난이도 세 가지 (시작 화면 단추 순서). 쉬움 = EASY, 보통 = SPEED·BOARD, 어려움 = HARD·BOARD
     DIFFS: [
       { id: 'easy',   name: '쉬움',   sub: '느리게 · 벽 통과' },
@@ -215,9 +215,30 @@
       rivalReact: -1.5, // 라이벌이 새 구슬을 알아채는 시간 (잘하면 빨리)
       rivalSmart: 1,    // 라이벌이 구슬 쪽으로 가는 확률
       // 판이 끝나면 perf = 먹은 구슬 / target 을 HUB.adaptRun에 알린다 (1 = 그 난이도에서 아이가 보통 잘한 판).
-      // 봇(botDir)이 라이벌과 겨루며 3분 동안 먹는 수의 중간값은 쉬움 약 68 · 보통 약 63. 아이의 잘한 판은 그 3분의 1쯤
+      // 봇(botDir)이 라이벌과 겨루며 3분 동안 먹는 수의 중간값은 쉬움 약 69 · 보통 약 83 · 어려움 약 61. 아이의 잘한 판은 그보다 한참 적다
       target: { easy: 22, normal: 18, hard: 14 },
     },
+
+    // ─── 재미 셋 (2026-09-27, 소유자 "추천대로") ─────────────────
+    // 깜짝 선물 상자: 무한은 움직인 시간 first초(사이 무작위) 뒤 처음, 그다음은 gap초마다. 스테이지는 stageLevels 레벨에서
+    // 레벨 시작 stageAt초 뒤 한 번. life초 동안 있다가 (마지막 blink초는 깜빡) 사라진다. 내 머리에서 minDist칸 넘게 떨어진 빈 칸.
+    // 라이벌은 못 먹는다. 상은 w 무게로 하나: 코인(min~max, 판 끝 코인에 더함) · 바로 켜지는 아이템 · 다음 판 시작 아이템
+    // (시작 아이템이 이미 가득이면 fullCoins 코인으로)
+    GIFT: {
+      firstMin: 60, firstMax: 100, gapMin: 60, gapMax: 100, life: 10, blink: 3, minDist: 4,
+      stageLevels: [3, 6, 9, 12], stageAt: 8, fullCoins: 20,
+      rewards: [
+        { kind: 'coins', w: 5, min: 15, max: 40 },
+        { kind: 'power', w: 3, items: ['ghost', 'slow', 'double'] },
+        { kind: 'start', w: 2, items: ['ghost', 'slow', 'double'] },
+      ],
+    },
+    // 피버 타임: 콤보 2 이상으로 먹을 때마다 게이지 perCombo, 쉬는 동안 초당 decay씩 줄어든다. 가득 차면 time초 동안
+    // 구슬 점수 ×mul, 구슬이 하나 더(보너스 구슬) 나온다. 무한·스테이지만
+    FEVER: { perCombo: 0.14, decay: 0.03, time: 10, mul: 2 },
+    // 거대 뱀 변신: 황금 구슬 golds개를 window초 안에 먹으면 time초 동안 거대 뱀. 스테이지 안쪽 벽을 부수고 지나가고
+    // (그 레벨 동안 부서진 채), 라이벌은 겁먹고 도망간다(사라졌다가 back초 뒤 다시). 판 끝·내 몸은 그대로
+    GIANT: { golds: 3, window: 12, time: 6, back: 5 },
 
     // 빠르게 두 번 밀어도 잃지 않게 방향을 2개까지 줄 세운다
     TURN_QUEUE: 2,

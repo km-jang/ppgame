@@ -149,6 +149,7 @@
     return {
       diff: r.diff, height: r.height, stars: r.stars, springs: r.springs, rockets: r.rockets, saves: r.saves,
       crumbles: r.crumbles || 0, bounces: r.bounces, maxCombo: r.maxCombo, time: Math.floor(r.time), zone: r.zone, stomps: r.stomps || 0, games: 1,
+      gifts: r.gifts || 0, giftCoins: r.giftCoins || 0, giftItems: (r.giftItems || []).slice(), fevers: r.fevers || 0, rooms: r.rooms || 0,
     };
   }
 
@@ -164,7 +165,9 @@
     const base = raw + parts.level;
     const lv = st ? (st.up.coin || 0) : 0;
     parts.bonus = Math.floor(base * lv * upDef('coin').per);
-    return { parts, total: base + parts.bonus };
+    // 깜짝 선물 코인: 난이도·강화 배율 없이 그대로 더한다
+    parts.gift = int(run.giftCoins);
+    return { parts, total: base + parts.bonus + parts.gift };
   }
 
   // ─── 미션 ─────────────────────────────────────────────────
@@ -215,6 +218,13 @@
   // 판이 끝났을 때: 코인 지급 + 미션 진행. {coins, parts, done:[새로 끝난 미션 id]}
   function finishRun(st, run) {
     const c = coinsFor(run, st);
+    // 깜짝 선물로 받은 다음 판 시작 아이템 (가득이면 그만큼 코인)
+    for (const id of Array.isArray(run.giftItems) ? run.giftItems : []) {
+      const it = itemDef(id);
+      if (!it) continue;
+      if ((st.items[id] || 0) < it.max) st.items[id] = (st.items[id] || 0) + 1;
+      else { c.parts.gift += D.GIFT.itemCoins; c.total += D.GIFT.itemCoins; }
+    }
     st.coins += c.total;
     st.life.earned += c.total;
     st.life.games += 1;

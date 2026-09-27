@@ -903,7 +903,15 @@ test('어려움은 분명히 더 어렵다: 아이 흉내 봇이 버틴 시간·
   }
   assert(out.easy.t > out.normal.t && out.normal.t > out.hard.t, 'time ' + JSON.stringify(out));
   assert(out.easy.e > out.normal.e && out.normal.e >= out.hard.e, 'orbs ' + JSON.stringify(out));
-  assert(out.hard.t >= 3, 'still fair: not instant ' + out.hard.t);
+  // 그래도 공평하다: 잘 피하는 봇은 어려움에서도 1분 넘게 버틴다
+  const long = [];
+  for (let seed = 1; seed <= 8; seed++) {
+    const W = create(COLS, ROWS, seed, { mode: 'endless', diff: 'hard' });
+    W.wait = 0;
+    for (let i = 0; i < 60 * 90 && W.phase === 'play'; i++) { if (!W.queue.length) turn(W, botDir(W)); step(W, 1 / 60); W.events.length = 0; W.fx.length = 0; }
+    long.push(W.time);
+  }
+  assert(med(long) >= 60, 'fair for a careful player ' + med(long));
 });
 
 test('어려움 메달·미션 값·알아서 맞추기 기준', () => {
@@ -920,6 +928,166 @@ test('어려움 메달·미션 값·알아서 맞추기 기준', () => {
   assert(D.ADAPT.target.hard > 0 && D.ADAPT.target.hard < D.ADAPT.target.normal, 'hard target');
   H.eaten = D.ADAPT.target.hard;
   assert(adaptPerf(H) === 1, 'hard perf');
+});
+
+// ─── 재미 셋: 선물 상자 · 피버 · 거대 뱀 ───
+const { spawnGift, openGift, startFever, startGiant } = SN.World;
+const GFT = D.GIFT;
+// 판을 오래 돌리는 봇 (쉬움, 판 끝을 넘어도 괜찮게), 조건이 맞으면 멈춘다
+function runUntil(W, cond, sec) {
+  W.wait = 0;
+  for (let i = 0; i < 60 * sec && W.phase === 'play'; i++) {
+    if (!W.queue.length) turn(W, botDir(W));
+    step(W, 1 / 60);
+    if (cond(W)) return true;
+    W.fx.length = 0;
+  }
+  return false;
+}
+
+test('선물 상자 무한: 60~100초 사이에 처음 나오고, 내 머리에서 떨어진 빈 칸, 10초 뒤 사라지고, 다음은 다시 60~100초 뒤', () => {
+  for (let seed = 1; seed <= 6; seed++) {
+    const W = create(24, 15, seed, { mode: 'endless', diff: 'easy', rival: false });
+    assert(W.giftT >= GFT.firstMin && W.giftT <= GFT.firstMax, 'first timer ' + W.giftT);
+    W.eff.ghost = 1e9;   // 오래 살아 있게
+    assert(runUntil(W, Q => !!Q.gift, 120), 'gift appeared');
+    assert(W.time >= GFT.firstMin - 0.05 && W.time <= GFT.firstMax + 0.1, 'appear time ' + W.time);
+    const h = W.snake[0];
+    assert(Math.abs(W.gift.x - h.x) + Math.abs(W.gift.y - h.y) > GFT.minDist, 'far from head');
+    assert(!W.snake.some(p => p.x === W.gift.x && p.y === W.gift.y) && !(W.food.x === W.gift.x && W.food.y === W.gift.y), 'free cell');
+    assert(W.events.includes('gift'), 'event');
+    assert(W.giftT >= GFT.gapMin && W.giftT <= GFT.gapMax, 'next gap ' + W.giftT);
+    const g = W.gift;
+    W.gift.x = 0; W.gift.y = 0; W.snake.forEach((p, i) => { p.x = 10 + i; p.y = 10; }); W.dir = 'left';   // 안 먹게 멀리
+    step(W, GFT.life + 0.1);
+    assert(!W.gift && W.gifts === 0 && g, 'vanished after life');
+  }
+  assert(create(COLS, ROWS, 1).giftT === Infinity, 'classic none');
+});
+
+test('선물 상자 스테이지: 3·6·9·12레벨에서 한 번, 다른 레벨은 없음', () => {
+  for (let n = 1; n <= 14; n++) {
+    const S = create(COLS, ROWS, 1, { mode: 'stage', level: n });
+    const on = GFT.stageLevels.includes(((n - 1) % 12) + 1);
+    assert(on ? S.giftT === GFT.stageAt : S.giftT === Infinity, 'level ' + n + ' ' + S.giftT);
+  }
+  const S = create(COLS, ROWS, 1, { mode: 'stage', level: 3 });
+  S.wait = 0; S.itemT = 99;
+  step(S, GFT.stageAt + 0.01);
+  assert(S.gift && S.giftT === Infinity, 'once in the level');
+});
+
+test('선물 상자 열기: 코인 15~40 · 바로 켜지는 아이템 · 다음 판 시작 아이템, 셋 다 나온다', () => {
+  const W = create(200, ROWS, 5, { mode: 'endless', rival: false });
+  const kinds = {};
+  let coins = 0;
+  for (let i = 0; i < 200; i++) {
+    W.gift = { x: 50, y: 5, life: 5, born: 0 };
+    const r = openGift(W);
+    kinds[r.kind] = (kinds[r.kind] || 0) + 1;
+    if (r.kind === 'coins') { assert(r.n >= 15 && r.n <= 40, 'coin range ' + r.n); coins += r.n; assert(r.text === '선물: 코인 ' + r.n + '개!', 'text'); }
+    if (r.kind === 'power') assert(W.eff[r.id] > 0, 'power on ' + r.id);
+  }
+  assert(kinds.coins && kinds.power && kinds.start, 'all kinds ' + JSON.stringify(kinds));
+  assert(kinds.coins > kinds.start, 'coins most common');
+  assert(W.gifts === 200 && W.giftCoins === coins && W.giftStart.length === kinds.start, 'counted');
+  const rs = runStats(W);
+  assert(rs.gifts === 200 && rs.giftCoins === coins && hubStats(W).gifts === 200, 'stats');
+  // 머리 앞에 선물 → 한 칸 가면 연다
+  const Q = create(200, ROWS, 2, { mode: 'endless', rival: false });
+  Q.wait = 0; Q.itemT = 99;
+  const d = SN.World.DIRS[Q.dir], h = Q.snake[0];
+  Q.gift = { x: h.x + d[0], y: h.y + d[1], life: 5, born: 0 };
+  ticks(Q, 1);
+  assert(Q.gifts === 1 && !Q.gift && Q.events.includes('giftopen') && Q.lastGift, 'eaten');
+});
+
+test('선물 상자는 라이벌이 못 먹는다 (라이벌은 비켜 간다)', () => {
+  for (let k = 0; k < 20; k++) {
+    const W = create(COLS, ROWS, k + 1, { mode: 'endless' });
+    W.wait = 0; W.itemT = 99; W.giftT = 1e9;
+    W.snake = [{ x: 3, y: 17 }, { x: 2, y: 17 }, { x: 1, y: 17 }, { x: 0, y: 17 }]; W.speedMul = 1e-6;
+    placeRival(W, [{ x: 20, y: 5 }, { x: 19, y: 5 }, { x: 18, y: 5 }, { x: 17, y: 5 }], 'right');
+    W.rival.smart = 1; W.rival.wander = 0;
+    W.gift = { x: 21, y: 5, life: 99, born: 0 };
+    W.food = { x: 25, y: 5, gold: false, born: W.t - 9 };
+    rivalTicks(W, 8);
+    assert(W.gift && W.gifts === 0, 'gift still there');
+    assert(!W.rival.body.some(p => p.x === 21 && p.y === 5), 'rival not on gift');
+  }
+});
+
+test('피버 타임: 콤보로 게이지가 차면 10초 동안 점수 ×2 · 구슬이 하나 더, 끝나면 보너스 구슬도 사라진다', () => {
+  const W = create(400, ROWS, 1, { mode: 'endless', rival: false });
+  W.itemT = 1e9; W.giftT = 1e9;
+  const need = Math.ceil(1 / D.FEVER.perCombo) + 1;
+  for (let i = 0; i < need && W.feverT <= 0; i++) { foodAhead(W); ticks(W, 1); }
+  assert(W.feverT > 0 && W.fevers === 1 && W.events.includes('fever'), 'fever started ' + W.fever);
+  assert(W.bonus && !(W.bonus.x === W.food.x && W.bonus.y === W.food.y), 'bonus orb');
+  // 점수 두 배
+  W.lastEat = -99; W.combo = 0; W.mult = 1;
+  let s0 = W.score; foodAhead(W); ticks(W, 1);
+  const bonusLen = Math.floor((W.snake.length - 1 - D.START.len) / D.FOOD.bonusPer) * D.FOOD.bonus;
+  assert(W.score - s0 === (D.FOOD.points + bonusLen) * D.FEVER.mul, 'x2 ' + (W.score - s0));
+  // 보너스 구슬 먹기: 길어지고 새 보너스 구슬
+  const len = W.snake.length, e0 = W.eaten;
+  const d = SN.World.DIRS[W.dir], h = W.snake[0];
+  W.bonus = { x: h.x + d[0], y: h.y + d[1], born: W.t };
+  W.food = { x: 0, y: 0, gold: false, born: W.t };
+  ticks(W, 1);
+  assert(W.eaten === e0 + 1 && W.bonus && !(W.bonus.x === h.x + d[0] && W.bonus.y === h.y + d[1]), 'bonus eaten, new one');
+  ticks(W, 1);
+  assert(W.snake.length === len + 1, 'grew');
+  // 끝
+  step(W, D.FEVER.time + 0.5);
+  assert(W.feverT === 0 && !W.bonus && W.events.includes('feverend'), 'ended');
+  s0 = W.score; W.lastEat = -99; W.combo = 0; W.mult = 1; foodAhead(W); ticks(W, 1);
+  assert(W.score - s0 < (D.FOOD.points + 20) * D.FEVER.mul && W.fever < 0.2, 'normal again');
+  // 기본 모드는 피버 없음, 게이지는 쉬면 줄어든다
+  const C0 = create(400, ROWS, 1);
+  for (let i = 0; i < 20; i++) { foodAhead(C0); ticks(C0, 1); }
+  assert(C0.fevers === 0 && C0.feverT === 0, 'classic none');
+  const Q = create(400, ROWS, 1, { mode: 'endless', rival: false });
+  Q.fever = 0.5; Q.wait = 0; Q.itemT = 1e9; Q.giftT = 1e9; Q.snake.forEach(p => { p.y = 3; }); Q.dir = 'right';
+  step(Q, 2);
+  assert(Q.fever < 0.5 && Q.fever > 0.3, 'decays ' + Q.fever);
+  assert(hubStats(W).fevers === 1, 'stats');
+});
+
+test('거대 뱀: 황금 구슬 셋을 12초 안에 먹으면 6초 변신, 벽을 부수고 라이벌은 도망, 끝나면 벽이 다시 위험', () => {
+  const W = create(400, ROWS, 1, { mode: 'endless' });
+  W.itemT = 1e9; W.giftT = 1e9;
+  for (let i = 0; i < 3; i++) { foodAhead(W, true); ticks(W, 1); }
+  assert(W.eff.giant > 0 && W.giants === 1 && W.events.includes('giant'), 'giant on');
+  assert(Math.abs(W.eff.giant - D.GIANT.time) < 0.5, 'time ' + W.eff.giant);
+  step(W, D.GIANT.time + 0.2);
+  assert(!(W.eff.giant > 0) || W.phase !== 'play', 'ends');
+  // 느리게 먹으면 안 된다
+  const S = create(400, ROWS, 1, { mode: 'endless', rival: false });
+  S.itemT = 1e9; S.giftT = 1e9;
+  for (let i = 0; i < 3; i++) { foodAhead(S, true); ticks(S, 1); S.time += D.GIANT.window * 0.6; }
+  assert(S.giants === 0, 'spread out: no giant');
+  // 라이벌은 도망간다
+  const R2 = create(COLS, ROWS, 1, { mode: 'endless' });
+  placeRival(R2, [{ x: 25, y: 15 }, { x: 24, y: 15 }, { x: 23, y: 15 }, { x: 22, y: 15 }], 'right');
+  startGiant(R2);
+  assert(R2.rival.phase === 'gone' && R2.rival.t > D.GIANT.time, 'rival scared away');
+  // 스테이지 벽 부수기
+  const T = create(COLS, ROWS, 1, { mode: 'stage', level: 3 });
+  T.wait = 0; T.itemT = 1e9; T.food = { x: 0, y: 0, gold: false, born: 0 };
+  const d = SN.World.DIRS[T.dir], h = T.snake[0], wi = (h.y + d[1]) * COLS + h.x + d[0];
+  T.walls[wi] = 1;
+  startGiant(T);
+  const ver = T.wallVer;
+  ticks(T, 1);
+  assert(T.phase === 'play' && T.walls[wi] === 0 && T.smashed === 1 && T.wallVer > ver && T.events.includes('smash'), 'smashed');
+  assert(dangerAhead(T, 3) === null || dangerAhead(T, 3).cause !== 'wall', 'no wall danger while giant');
+  T.eff.giant = 0;
+  const h2 = T.snake[0], wj = (h2.y + d[1]) * COLS + h2.x + d[0];
+  T.walls[wj] = 1;
+  ticks(T, 1);
+  assert(T.phase === 'over' && T.cause === 'wall', 'walls deadly again');
+  assert(hubStats(W).giants === 1, 'stats');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

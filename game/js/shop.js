@@ -122,6 +122,9 @@
       kills: s.kills, bosses: W.bossKills, bossKills: W.bossKills, ults: s.ults, dashes: s.dashes,
       bestCombo: s.bestCombo, cleanWaves: s.cleanWaves, maxN: W.player.gun.barrels,
       coinPicks: s.coinPicks || 0, runCoins: s.coins || 0, items: s.items || 0, blocks: s.blocks || 0, bombKills: s.bombKills || 0,
+      // 깜짝 선물 상자 · 피버 · 동료 (2026-09-27). giftCoins는 runCoins 안에 들어 있다 (결과 화면에 따로 보여 줌)
+      gifts: s.gifts || 0, giftCoins: s.giftCoins || 0, giftItems: Array.isArray(s.giftItems) ? s.giftItems.slice() : [],
+      fevers: s.fevers || 0, wingmen: s.wingmen || 0,
       games: 1,
     };
   }
@@ -129,13 +132,16 @@
   // 코인 계산: 부분별로 돌려준다 (결과 화면에 나눠 보여 줌)
   function coinsFor(run, st) {
     const C = D.COINS;
+    // 선물 상자 코인(giftCoins)은 주운 코인(runCoins) 안에 들어 있어서 따로 떼어 보여 준다. giftExtra: 가득 찬 시작 아이템 선물 대신 주는 코인
+    const giftC = Math.min(int(run.runCoins), int(run.giftCoins));
     const parts = {
       score: Math.floor(num(run.score) / C.perScore),
       wave: Math.max(0, int(run.wave) - 1) * C.perWave,
       boss: int(run.bosses) * C.perBoss,
-      pickup: int(run.runCoins),
+      pickup: int(run.runCoins) - giftC,
+      gift: giftC + int(run.giftExtra),
     };
-    const base = parts.score + parts.wave + parts.boss + parts.pickup;
+    const base = parts.score + parts.wave + parts.boss + parts.pickup + parts.gift;
     const lv = st ? (st.up.coin || 0) : 0;
     parts.bonus = Math.floor(base * lv * upDef('coin').per);
     return { parts, total: base + parts.bonus };
@@ -187,13 +193,27 @@
   }
 
   // 판이 끝났을 때: 코인 지급 + 미션 진행. {coins, parts, done:[새로 끝난 미션 id]}
+  // 선물 상자에서 받은 "다음 판 시작 아이템"을 넣는다. 칸이 가득이면 그 대신 코인 (run.giftExtra에 더함). 넣은 아이템 id 목록
+  function giveGiftItems(st, run) {
+    const got = [];
+    run.giftExtra = int(run.giftExtra);
+    for (const id of Array.isArray(run.giftItems) ? run.giftItems : []) {
+      const it = itemDef(id);
+      if (!it) continue;
+      if ((st.items[id] || 0) < it.max) { st.items[id] = (st.items[id] || 0) + 1; got.push(id); }
+      else run.giftExtra += D.GIFT.itemFullCoins;
+    }
+    return got;
+  }
+
   function finishRun(st, run) {
+    const items = giveGiftItems(st, run);
     const c = coinsFor(run, st);
     st.coins += c.total;
     st.life.earned += c.total;
     st.life.games += 1;
     const done = progressMissions(st, run);
-    return { coins: c.total, parts: c.parts, done };
+    return { coins: c.total, parts: c.parts, done, items };
   }
 
   // 미션 화면 글: {text, prog, goal, done, reward, pct}

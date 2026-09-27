@@ -1525,5 +1525,283 @@ test('스티커 통계: 놀이 본부가 행성·블랙홀 스티커를 붙이�
   assert(createWorld(1280, 800, 96, 'easy', { adapt: low }).diff.count < DA.DIFFICULTY.easy.count, 'applied to world');
 });
 
+// ─── 깜짝 선물 상자 · 피버 타임 · 동료 우주선 (2026-09-27) ─────────
+const GF = DA.GIFT, FV = DA.FEVER, WM = DA.WINGMAN;
+// 적이 한 마리 남아 있는(웨이브가 안 끝나는) 조용한 판. 내 총은 멈춤
+function funWorld(seed, d) {
+  const W = createWorld(1280, 800, seed, d);
+  clearArena(W);
+  const p = W.player; p.fireCd = 1e9; p.gun.rate = 1e-9; p.x = 640; p.y = 400;
+  const e = NG.World.spawnEnemy(W, 'grunt');
+  e.x = 60; e.y = 60; e.spawnT = 0; e.hp = e.maxHp = 1e9; e.speed = 0;
+  W.events.length = 0;
+  return { W, p, e };
+}
+function giftAt(W, x, y) {
+  const g = NG.World.spawnGift(W);
+  g.x = x; g.y = g.baseY = y; g.vx = 0;
+  return g;
+}
+
+test('선물 상자: 첫 상자는 first초 안, 그다음은 gap초마다 (규칙 난수와 따로 돌아 적 차례는 그대로)', () => {
+  // 적 차례가 선물 난수와 무관한지: 같은 시드의 웨이브 구성이 예전과 같다
+  const a = createWorld(800, 600, 5), b = createWorld(800, 600, 5);
+  b.fun(); b.fun(); b.fun();
+  nextWave(a); nextWave(b);
+  assert(a.spawnQueue.join() === b.spawnQueue.join(), 'rule rand untouched');
+  let seen = 0;
+  for (let s = 1; s <= 8; s++) {
+    const W = runLongTimes(300 + s, 60 * 400);
+    assert(W.appear.length >= 3, 'gifts appeared ' + W.appear.length);
+    assert(W.appear[0] >= GF.first[0] - 0.01 && W.appear[0] <= GF.first[1] + 12, 'first ' + W.appear[0].toFixed(1));
+    for (let i = 1; i < W.appear.length; i++) {
+      const gap = W.appear[i] - W.appear[i - 1];
+      assert(gap >= GF.gap[0] - 0.01 && gap <= GF.gap[1] + 12, 'gap ' + gap.toFixed(1));
+    }
+    seen += W.appear.length;
+  }
+  console.log('       선물 상자 400초에 평균 ' + (seen / 8).toFixed(1) + '개');
+});
+// 무적 봇으로 오래 돌리며 선물 상자가 나온 시각(플레이 시간)을 모은다. 상자가 열려도 되고 지나가도 된다
+function runLongTimes(seed, frames) {
+  const W = createWorld(1280, 800, seed);
+  W.appear = [];
+  for (let i = 0; i < frames; i++) {
+    if (W.phase === 'cards') pickCard(W, i % 3);
+    W.player.hp = W.player.maxHp;
+    step(W, bot(W), DT);
+    if (W.events.indexOf('giftAppear') >= 0) {
+      W.appear.push(W.stats.time);
+      // 나오는 순간은 막힌 때가 아니어야 한다
+      assert(W.waveT >= GF.quiet - 1e-6, 'not at wave start');
+      assert(!(W.bossWave && W.waveT < GF.bossQuiet), 'not at boss intro');
+      assert(!(W.hole && W.waveT < GF.holeQuiet), 'not at black hole start');
+      assert(!W.enemies.some(e => e.type === 'boss' && e.spawnT > 0), 'not while boss appears');
+    }
+    W.events.length = 0;
+  }
+  return W;
+}
+
+test('선물 상자: 웨이브 시작·보스 등장·블랙홀 시작·웨이브 끝·이미 떠 있을 때는 안 나온다', () => {
+  const { W } = funWorld(401);
+  W.waveT = 1; assert(NG.World.giftBlocked(W), 'wave start');
+  W.waveT = 20; assert(!NG.World.giftBlocked(W), 'free mid wave');
+  W.bossWave = true; W.waveT = GF.bossQuiet - 1; assert(NG.World.giftBlocked(W), 'boss intro');
+  W.waveT = 20; W.spawnQueue = ['boss']; assert(NG.World.giftBlocked(W), 'boss still to come');
+  W.spawnQueue = ['grunt']; W.bossWave = false;
+  W.hole = { fx: 0.5, fy: 0.5, x: 640, y: 400 }; W.waveT = GF.holeQuiet - 1; assert(NG.World.giftBlocked(W), 'hole start');
+  W.hole = null; W.waveT = 20;
+  const q = W.spawnQueue, es = W.enemies; W.spawnQueue = []; W.enemies = [];
+  assert(NG.World.giftBlocked(W), 'wave over');
+  W.spawnQueue = q; W.enemies = es;
+  NG.World.spawnGift(W); assert(NG.World.giftBlocked(W), 'one at a time');
+  // 막혀 있을 때 차례가 오면 조금 뒤 다시 본다
+  W.gift = null; W.waveT = 0; W.giftT = 0.001;
+  step(W, STILL, DT);
+  assert(!W.gift && W.giftT > 1, 'retry later ' + W.giftT);
+});
+
+test('선물 상자: 약 life초 동안 화면을 가로질러 떠 가고, 안 열면 사라진다', () => {
+  const { W } = funWorld(402);
+  W.player.x = 640; W.player.y = 40; // 상자가 지나가는 줄 밖
+  const g = NG.World.spawnGift(W);
+  assert(g.x < 0 || g.x > W.w, 'starts outside');
+  const x0 = g.x;
+  let inside = 0;
+  for (let i = 0; i < 60 * (GF.life + 1) && W.gift; i++) {
+    step(W, { moveX: 0, moveY: 0, aimAngle: Math.PI / 2 * -1, dash: false }, DT);
+    if (W.gift && W.gift.x > 0 && W.gift.x < W.w) inside += DT;
+  }
+  assert(!W.gift && W.stats.gifts === 0, 'gone unopened');
+  assert(inside > GF.life * 0.8, 'visible ' + inside.toFixed(1) + 's');
+  assert(Math.sign(x0 - 640) !== 0, 'crossed');
+});
+
+test('선물 상자: 총알 hits발(또는 닿기)로 열리고 색종이와 "선물:" 알림, gifts가 센다', () => {
+  const { W, p } = funWorld(403);
+  const g = giftAt(W, 900, 400);
+  p.gun.rate = 20; p.fireCd = 0;
+  let hits = 0;
+  for (let i = 0; i < 120 && W.gift; i++) { step(W, { moveX: 0, moveY: 0, aimAngle: 0, dash: false }, DT); hits += W.events.filter(x => x === 'giftHit').length; W.events.length = 0; }
+  assert(!W.gift && W.stats.gifts === 1, 'opened by shots');
+  assert(hits === GF.hits - 1, 'hit sounds ' + hits);
+  assert(W.giftPop && /^선물: /.test(W.giftPop.txt), 'popup ' + (W.giftPop && W.giftPop.txt));
+  assert(W.particles.length >= GF.confetti, 'confetti');
+  assert(g.hits === GF.hits, 'hits ' + g.hits);
+  // 닿아도 열린다
+  giftAt(W, p.x + 10, p.y);
+  step(W, STILL, DT);
+  assert(!W.gift && W.stats.gifts === 2, 'opened by touch');
+  // 자동 조준은 가까운 상자를 겨눈다
+  const { W: W2, p: p2 } = funWorld(404);
+  giftAt(W2, 640, 250);
+  p2.gun.rate = 5; p2.fireCd = 0;
+  step(W2, IDLE, DT);
+  assert(Math.abs(p2.aim + Math.PI / 2) < 1e-6, 'auto aim at gift ' + p2.aim);
+});
+
+test('선물 상자 선물: 코인 15~40(판 끝 코인에 "선물 상자"로) · 방패 · 드론 20초 · 필살기 가득 · 다음 판 시작 아이템', () => {
+  const { W, p } = funWorld(405);
+  const seen = {};
+  for (let i = 0; i < 400; i++) {
+    const r = NG.World.giftReward(W);
+    seen[r.id] = (seen[r.id] || 0) + 1;
+    if (r.id === 'coins') assert(r.n >= 15 && r.n <= 40 && r.n % 5 === 0, 'coins ' + r.n);
+    if (r.id === 'item') assert(DA.START_ITEMS.some(it => it.id === r.item), 'item ' + r.item);
+  }
+  for (const id of ['coins', 'shield', 'drone', 'ult', 'item']) assert(seen[id] > 10, 'reward ' + id + ' ' + seen[id]);
+  assert(seen.coins > seen.shield, 'coins most common');
+  // 이미 있는 방패, 가득 찬 필살기는 안 뽑는다
+  p.shield = 1; p.ult = DA.ULT.need;
+  for (let i = 0; i < 200; i++) { const r = NG.World.giftReward(W); assert(r.id !== 'shield' && r.id !== 'ult', 'skip owned ' + r.id); }
+  p.shield = 0; p.ult = 0;
+  // 코인
+  const open = rw => { NG.World.spawnGift(W); return NG.World.openGift(W, rw); };
+  open({ id: 'coins', n: 25 });
+  assert(W.stats.coins === 25 && W.stats.giftCoins === 25 && W.giftPop.txt === '선물: 코인 25개!', 'coins ' + W.giftPop.txt);
+  // 방패
+  open({ id: 'shield' }); assert(p.shield === 1 && W.giftPop.txt === '선물: 방패!', 'shield');
+  // 필살기
+  open({ id: 'ult' }); assert(p.ult === DA.ULT.need, 'ult');
+  // 드론: 20초 뒤 사라진다. 또 받으면 시간만 늘고 개수는 그대로
+  const d0 = p.drones;
+  open({ id: 'drone' }); assert(p.drones === d0 + 1 && p.giftDroneT === 20, 'drone');
+  for (let i = 0; i < 60 * 10; i++) step(W, STILL, DT);
+  open({ id: 'drone' }); assert(p.drones === d0 + 1 && p.giftDroneT === 20, 'drone extend');
+  for (let i = 0; i < 60 * 20 + 5; i++) step(W, STILL, DT);
+  assert(p.drones === d0 && p.giftDroneT === 0, 'drone gone ' + p.drones);
+  // 다음 판 시작 아이템 (칸이 가득이면 코인으로)
+  open({ id: 'item', item: 'shield' }); open({ id: 'item', item: 'barrel' });
+  assert(W.giftPop.txt === '선물: 다음 판 총열 +1 시작!', 'item text ' + W.giftPop.txt);
+  assert(W.stats.gifts === 7, 'count ' + W.stats.gifts);
+  const st = SH.blank(); st.items.barrel = DA.START_ITEMS.find(i => i.id === 'barrel').max;
+  const run = SH.runOf(W);
+  assert(run.gifts === 7 && run.giftCoins === 25 && run.giftItems.join() === 'shield,barrel', 'runOf ' + JSON.stringify(run.giftItems));
+  const before = SH.coinsFor(SH.runOf(W), st).total;
+  const res = SH.finishRun(st, run);
+  assert(st.items.shield === 1 && res.items.join() === 'shield', 'item given');
+  assert(res.parts.gift === 25 + GF.itemFullCoins && res.parts.pickup === 0, 'parts ' + JSON.stringify(res.parts));
+  assert(res.coins === before + GF.itemFullCoins, 'full slot -> coins');
+});
+
+test('피버: 콤보가 이어지는 처치로 게이지가 차고, need에서 time초 동안 점수 두 배, 끝나면 0부터', () => {
+  const { W } = funWorld(406);
+  const kill = () => { const e = NG.World.spawnEnemy(W, 'grunt'); e.spawnT = 0; NG.World.killEnemy(W, e, 0, 0); W.enemies = W.enemies.filter(x => !x.dead); };
+  // 콤보가 fromCombo가 되기 전 처치는 안 찬다
+  for (let i = 1; i < FV.fromCombo; i++) kill();
+  assert(W.fever === 0, 'no fill before combo ' + FV.fromCombo);
+  for (let i = 0; i < FV.need - 1; i++) kill();
+  assert(W.fever === FV.need - 1 && W.feverT === 0, 'filling ' + W.fever);
+  const sc0 = W.score; kill(); const plain = W.score - sc0;
+  assert(W.feverT === FV.time && W.stats.fevers === 1 && W.events.indexOf('fever') >= 0, 'fever on');
+  const sc1 = W.score; kill(); const doubled = W.score - sc1;
+  assert(doubled === 2 * plain, 'score x2 ' + plain + ' -> ' + doubled);
+  // 피버 중엔 게이지가 줄어들며 안 찬다
+  for (let i = 0; i < 60 * 5; i++) { step(W, STILL, DT); W.combo = 5; W.comboT = 1; }
+  assert(Math.abs(W.fever - FV.need / 2) < 1, 'draining ' + W.fever.toFixed(1));
+  for (let i = 0; i < 60 * 5 + 5; i++) step(W, STILL, DT);
+  assert(W.feverT === 0 && W.fever === 0 && W.events.indexOf('feverEnd') >= 0, 'fever off');
+  // 콤보가 끊겨 있으면 조금씩 줄어든다
+  W.combo = 0; W.fever = 10;
+  for (let i = 0; i < 60 * 5; i++) step(W, STILL, DT);
+  assert(Math.abs(W.fever - (10 - FV.idleDrain * 5)) < 0.1, 'idle drain ' + W.fever);
+});
+
+test('피버: 봇 판에서도 가끔 온다 (적·탄·체력은 그대로, 어려워지지 않음)', () => {
+  let n = 0;
+  for (let s = 1; s <= 4; s++) {
+    const W = createWorld(1280, 800, 520 + s);
+    for (let i = 0; i < 60 * 300; i++) { if (W.phase === 'cards') pickCard(W, i % 3); W.player.hp = W.player.maxHp; step(W, bot(W), DT); W.events.length = 0; }
+    n += W.stats.fevers;
+  }
+  assert(n >= 4 && n <= 24, 'fevers ' + n);
+  // 피버 중에도 적 속도·탄 속도·체력은 그대로
+  const A = funWorld(411).W, B = funWorld(411).W;
+  NG.World.startFever(B);
+  for (let i = 0; i < 60; i++) { step(A, STILL, DT); step(B, STILL, DT); }
+  assert(A.enemies[0].x === B.enemies[0].x && A.player.hp === B.player.hp && A.diff.enemySpeed === B.diff.enemySpeed, 'same game');
+  console.log('       피버 300초 봇 판 4개에 ' + n + '번');
+});
+
+test('동료 캡슐: firstWave부터 2~3웨이브마다, 웨이브 시작 몇 초 뒤, 한 번에 하나', () => {
+  const W = createWorld(1280, 800, 407);
+  const waves = [];
+  for (let n = 0; n < 30; n++) {
+    nextWave(W);
+    if (W.capT > 0) { waves.push(W.wave); assert(W.capT >= WM.delay[0] && W.capT <= WM.delay[1], 'delay ' + W.capT); }
+    W.capT = -1;
+  }
+  assert(waves[0] === WM.firstWave, 'first wave ' + waves[0]);
+  for (let i = 1; i < waves.length; i++) { const g = waves[i] - waves[i - 1]; assert(g >= WM.every[0] && g <= WM.every[1], 'every ' + g); }
+  // 동료가 있으면 캡슐 차례가 미뤄진다
+  const { W: V } = funWorld(408);
+  V.capNext = V.wave; V.wing = { x: 0, y: 0, t: 5, bye: 0, look: DA.SHIPS[1], aim: 0, cd: 1, wave: 0 };
+  V.capT = 0.01; step(V, STILL, DT);
+  assert(!V.capsule, 'no capsule while wingman');
+  V.wing = null; V.capT = 0.01; step(V, STILL, DT);
+  assert(V.capsule, 'capsule spawns');
+  assert(V.capsule.look.id !== V.player.ship, 'looks like another ship');
+});
+
+test('동료 우주선: 캡슐을 쏘거나 닿으면 나와 time초 동안 옆을 따라다니며 가장 가까운 적을 쏘고, "고마워!" 뒤 떠난다', () => {
+  const { W, p, e } = funWorld(409);
+  const c = NG.World.spawnCapsule(W);
+  c.x = 900; c.y = 400; c.vx = c.vy = 0;
+  p.gun.rate = 20; p.fireCd = 0;
+  for (let i = 0; i < 120 && W.capsule; i++) step(W, { moveX: 0, moveY: 0, aimAngle: 0, dash: false }, DT);
+  assert(!W.capsule && W.wing && W.stats.wingmen === 1, 'freed');
+  p.gun.rate = 1e-9; p.fireCd = 1e9; W.bullets.length = 0;
+  // 가까운 적과 먼 적: 가까운 쪽을 쏜다
+  const near = NG.World.spawnEnemy(W, 'grunt'); near.spawnT = 0; near.hp = near.maxHp = 1e9; near.speed = 0;
+  for (let i = 0; i < 30; i++) step(W, STILL, DT);
+  const w = W.wing;
+  near.x = w.x + 150; near.y = w.y + 10; e.x = w.x - 400; e.y = w.y;
+  assert(NG.World.wingTarget(W) === near, 'nearest target');
+  W.bullets.length = 0;
+  for (let i = 0; i < 40; i++) { near.x = w.x + 150; near.y = w.y + 10; step(W, STILL, DT); }
+  const shots = W.bullets.filter(b => b.wing);
+  assert(shots.length >= 1, 'shots ' + shots.length);
+  for (const b of shots) assert(b.vx > 0 && Math.abs(b.vy) < Math.abs(b.vx) * 0.3, 'toward near');
+  assert(shots[0].dmg === p.gun.dmg * WM.dmgMul, 'small gun');
+  // 사거리 밖 적만 있으면 안 쏜다
+  near.x = w.x + WM.range + 200; e.x = w.x - WM.range - 200;
+  W.bullets.length = 0;
+  for (let i = 0; i < 30; i++) { near.x = w.x + WM.range + 200; step(W, STILL, DT); }
+  assert(!W.bullets.some(b => b.wing), 'out of range');
+  // 옆을 따라다닌다
+  assert(Math.hypot(w.x - p.x, w.y - p.y) < WM.side + 20, 'beside player');
+  // time초 뒤 인사하고 떠난다
+  let bye = false;
+  for (let i = 0; i < 60 * (WM.time + WM.bye + 1) && W.wing; i++) {
+    step(W, STILL, DT);
+    if (W.events.indexOf('wingBye') >= 0) { bye = true; assert(W.texts.some(t => t.txt === '고마워!'), 'thanks'); assert(Math.abs(W.t - (WM.time + 0.5)) < 2.5 || W.t > WM.time, 'lifetime ' + W.t); }
+    W.events.length = 0;
+  }
+  assert(bye && !W.wing, 'left');
+  // 닿아도 열린다
+  const c2 = NG.World.spawnCapsule(W); c2.x = p.x + 5; c2.y = p.y; c2.vx = c2.vy = 0;
+  step(W, STILL, DT);
+  assert(W.wing && W.stats.wingmen === 2, 'freed by touch');
+});
+
+test('동료 캡슐: 안 열면 지나가 사라지고, 다음 웨이브에 다시 기회', () => {
+  const { W } = funWorld(410);
+  W.player.x = 20; W.player.y = 780;
+  const c = NG.World.spawnCapsule(W);
+  for (let i = 0; i < 60 * (WM.capLife + 1) && W.capsule; i++) step(W, { moveX: 0, moveY: 0, aimAngle: Math.PI, dash: false }, DT);
+  assert(!W.capsule && !W.wing, 'gone');
+  assert(W.capNext === W.wave + 1, 'retry next wave');
+  assert(c.hits === 0, 'untouched');
+});
+
+test('놀이 본부 통계: 선물·피버·동료 수를 runOf와 판 통계에 남긴다', () => {
+  const W = runLong(78, 60 * 300, false);
+  const r = SH.runOf(W);
+  for (const k of ['gifts', 'fevers', 'wingmen']) assert(Number.isInteger(r[k]) && r[k] === W.stats[k], k);
+  assert(W.stats.wingmen >= 1, 'wingmen ' + W.stats.wingmen);
+  console.log('       300초 봇 판: 선물 ' + W.stats.gifts + ' · 피버 ' + W.stats.fevers + ' · 동료 ' + W.stats.wingmen);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

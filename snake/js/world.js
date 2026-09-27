@@ -115,6 +115,78 @@
     }
   }
 
+  // ─── 재미 셋: 선물 상자 · 피버 · 거대 뱀 ─────────────────────
+  const GF = D.GIFT;
+  function giftGap(W, first) {
+    const a = first ? GF.firstMin : GF.gapMin, b = first ? GF.firstMax : GF.gapMax;
+    return a + W.funRng() * (b - a);
+  }
+  // 선물 상자 놓기: 빈 칸 중 내 머리에서 minDist칸 넘게 떨어진 곳 (없으면 아무 빈 칸)
+  function spawnGift(W) {
+    const free = freeCells(W), h = W.snake[0];
+    const far = free.filter(i => Math.abs(i % W.cols - h.x) + Math.abs(Math.floor(i / W.cols) - h.y) > GF.minDist);
+    const pool = far.length ? far : free;
+    if (!pool.length) return false;
+    const i = pool[Math.floor(W.funRng() * pool.length)];
+    W.gift = { x: i % W.cols, y: Math.floor(i / W.cols), life: GF.life, born: W.t };
+    W.events.push('gift');
+    W.fx.push({ kind: 'giftIn', x: W.gift.x, y: W.gift.y });
+    return true;
+  }
+  // 선물 열기: 상 하나 (코인 · 바로 켜지는 아이템 · 다음 판 시작 아이템)
+  function openGift(W) {
+    const g = W.gift;
+    W.gift = null; W.gifts++;
+    const r = SN.weighted(GF.rewards, W.funRng);
+    let out;
+    if (r.kind === 'coins') {
+      const n = r.min + Math.floor(W.funRng() * (r.max - r.min + 1));
+      W.giftCoins += n;
+      out = { kind: 'coins', n, text: '선물: 코인 ' + n + '개!' };
+    } else {
+      const id = r.items[Math.floor(W.funRng() * r.items.length)];
+      if (r.kind === 'power') {
+        usePower(W, { kind: id, x: g.x, y: g.y });
+        out = { kind: 'power', id, text: '선물: ' + D.ITEM.kinds[id].name + '!' };
+      } else {
+        W.giftStart.push(id);
+        const it = (D.START_ITEMS || []).find(x => x.id === id);
+        out = { kind: 'start', id, text: '선물: 다음 판 ' + (it ? it.name : id) + '!' };
+      }
+    }
+    W.lastGift = out;
+    W.events.push('giftopen');
+    W.fx.push({ kind: 'gift', x: g.x, y: g.y, text: out.text });
+    return out;
+  }
+  // 피버 보너스 구슬 (보통 구슬과 같지만 황금 차례와 상관없음)
+  function spawnBonus(W) {
+    const free = freeCells(W);
+    if (!free.length) { W.bonus = null; return false; }
+    const i = free[Math.floor(W.funRng() * free.length)];
+    W.bonus = { x: i % W.cols, y: Math.floor(i / W.cols), born: W.t };
+    return true;
+  }
+  function startFever(W) {
+    W.fever = 0; W.feverT = D.FEVER.time; W.fevers++;
+    W.events.push('fever');
+    const h = W.snake[0];
+    W.fx.push({ kind: 'fever', x: h.x, y: h.y });
+    spawnBonus(W);
+  }
+  function startGiant(W) {
+    W.eff.giant = D.GIANT.time; W.giants++; W.goldTimes = [];
+    W.events.push('giant');
+    const h = W.snake[0];
+    W.fx.push({ kind: 'giant', x: h.x, y: h.y });
+    // 라이벌은 겁먹고 도망간다 (사라졌다가 조금 뒤 다른 자리에서)
+    const V = W.rival;
+    if (V && (V.phase === 'play' || V.phase === 'warn') && V.body.length) {
+      W.fx.push({ kind: 'rivalOut', x: V.body[0].x, y: V.body[0].y, scared: true });
+      V.phase = 'gone'; V.t = D.GIANT.time + D.GIANT.back; V.body = []; V.prev = [];
+    }
+  }
+
   // ─── 우주 여행 배경 (그림만, 규칙에는 영향 없음) ────────────────
   // W.space: {scene: 지금 하늘 id, step: 장면 차례(무한), planet: 지나온 행성 수 - 1, lap, hole: 지금 블랙홀인가,
   //           max: 이번 판에 간 가장 먼 행성 번호(1 = 수성, 2바퀴면 10부터), changedAt: 장면이 바뀐 시각(W.t), rng: 따로 쓰는 난수}
@@ -179,7 +251,12 @@
     W.dir = 'right'; W.queue = []; W.grow = 0;
     W.wait = W.easy ? Infinity : D.START.wait; W.acc = 0; W.alpha = 0;   // 쉬움: 방향을 누를 때까지 기다린다
     W.item = null; W.itemT = D.ITEM.first * W.itemGapMul;
-    W.eff = { slow: 0, double: 0, ghost: 0 };
+    W.eff = { slow: 0, double: 0, ghost: 0, giant: 0 };
+    // 재미 셋: 선물 상자 · 피버 보너스 구슬 · 부서진 벽 표시 (레벨마다 새로)
+    W.gift = null; W.bonus = null; W.wallVer = (W.wallVer || 0) + 1;
+    W.feverT = 0; W.goldTimes = [];
+    W.giftT = W.mode === 'endless' ? (W.giftT > 0 && W.giftT < Infinity ? W.giftT : giftGap(W, true))
+      : W.mode === 'stage' && D.GIFT.stageLevels.includes(((W.level - 1) % D.LEVELS.length) + 1) ? D.GIFT.stageAt : Infinity;
     // 캐릭터 특기: 판(레벨)마다 처음 몇 초 유령
     if (W.startGhost > 0) W.eff.ghost = W.startGhost;
     W.lastEat = -99; W.combo = 0; W.mult = 1;
@@ -257,6 +334,9 @@
     W.startGhost = T.startGhost || 0;
     W.ghostMul = T.ghostMul || 1;
     spaceInit(W, seed0);
+    W.funRng = SN.rng(((seed0 >>> 0) ^ 0x68e31da4) * 13 + 5);   // 선물 자리·상 (먹이 흐름을 흔들지 않게 따로)
+    W.gifts = 0; W.giftCoins = 0; W.giftStart = []; W.lastGift = null; W.giftT = 0;
+    W.fever = 0; W.fevers = 0; W.giants = 0; W.smashed = 0;
     // 라이벌 뱀: 무한 모드에만. 규칙용 난수는 따로 써서 내 판(먹이 자리)의 흐름을 흔들지 않는다
     W.rival = null;
     if (mode === 'endless' && opts.rival !== false) {
@@ -305,6 +385,8 @@
     if (W.walls) for (let i = 0; i < used.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) used[i] = 1;
     if (W.food) used[W.food.y * W.cols + W.food.x] = 1;
     if (W.item) used[W.item.y * W.cols + W.item.x] = 1;
+    if (W.gift) used[W.gift.y * W.cols + W.gift.x] = 1;
+    if (W.bonus) used[W.bonus.y * W.cols + W.bonus.x] = 1;
     const free = [];
     for (let i = 0; i < used.length; i++) if (!used[i]) free.push(i);
     return free;
@@ -391,8 +473,12 @@
       W.events.push('wrap');
     }
     if (W.walls && W.walls[ny * C + nx]) {
-      if (!ghost) return die(W, 'wall');
-      W.wraps++; W.events.push('wrap');
+      if (W.eff && W.eff.giant > 0) {
+        // 거대 뱀: 안쪽 벽을 부수고 지나간다 (이 레벨 동안 부서진 채)
+        W.walls[ny * C + nx] = 0; W.wallVer++; W.smashed++;
+        W.events.push('smash'); W.fx.push({ kind: 'smash', x: nx, y: ny });
+      } else if (!ghost) return die(W, 'wall');
+      else { W.wraps++; W.events.push('wrap'); }
     }
     // 포털: 들어간 칸의 짝으로 순간 이동 (같은 방향으로 계속)
     const pid = W.portalAt ? W.portalAt[ny * C + nx] : -1;
@@ -404,7 +490,9 @@
       W.fx.push({ kind: 'portal', x: from.x, y: from.y }, { kind: 'portal', x: nx, y: ny });
     }
 
-    const eat = !!W.food && W.food.x === nx && W.food.y === ny;
+    const eatMain = !!W.food && W.food.x === nx && W.food.y === ny;
+    const eatBonus = !eatMain && !!W.bonus && W.bonus.x === nx && W.bonus.y === ny;
+    const eat = eatMain || eatBonus;
     if (!ghost) {
       // 이번에 꼬리가 빠지면 꼬리 끝 칸으로는 들어가도 된다
       const tailMoves = W.grow === 0 && !eat;
@@ -415,7 +503,7 @@
       }
       // 라이벌 몸: 보통은 내 몸처럼 위험, 쉬움은 그냥 지나가고 라이벌이 멈칫 (꼬리 끝 칸은 곧 빠지니 괜찮다)
       if (rivalAt(W, nx, ny, true)) {
-        if (!W.easy) return die(W, 'rival');
+        if (!W.easy && !(W.eff.giant > 0)) return die(W, 'rival');
         const V = W.rival;
         if (!(V.stun > 0)) { V.passes++; W.events.push('pass'); W.fx.push({ kind: 'pass', x: nx, y: ny }); }
         V.stun = Math.max(V.stun, D.RIVAL.passStun);
@@ -425,7 +513,7 @@
     W.prev = copy(W.snake);
     W.snake.unshift({ x: nx, y: ny });
     if (eat) {
-      const gold = W.food.gold;
+      const gold = eatMain && W.food.gold;
       W.grow++;
       W.eaten++;
       const bonus = Math.floor((W.snake.length - 1 - D.START.len) / D.FOOD.bonusPer) * D.FOOD.bonus;
@@ -438,7 +526,15 @@
         const m = Math.min(D.COMBO.max, 1 + Math.floor((W.combo - 1) / D.COMBO.step));
         if (m > W.mult) W.events.push('combo');
         W.mult = m;
-        pts *= m * (W.eff.double > 0 ? 2 : 1);
+        pts *= m * (W.eff.double > 0 ? 2 : 1) * (W.feverT > 0 ? D.FEVER.mul : 1);
+        // 피버 게이지: 콤보 2 이상으로 먹을 때마다 찬다
+        if (W.feverT <= 0 && W.combo >= 2) { W.fever = Math.min(1, W.fever + D.FEVER.perCombo); if (W.fever >= 1) startFever(W); }
+        // 거대 뱀: 황금 구슬 셋을 짧은 시간 안에
+        if (gold) {
+          W.goldTimes = W.goldTimes.filter(t => W.time - t <= D.GIANT.window);
+          W.goldTimes.push(W.time);
+          if (W.goldTimes.length >= D.GIANT.golds && !(W.eff.giant > 0)) startGiant(W);
+        }
       }
       W.score += pts;
       W.lastPts = pts;
@@ -451,6 +547,8 @@
     if (W.grow > 0) W.grow--; else W.snake.pop();
     W.maxLen = Math.max(W.maxLen, W.snake.length);
     if (W.item && W.item.x === nx && W.item.y === ny) { const it = W.item; W.item = null; usePower(W, it); }
+    if (W.gift && W.gift.x === nx && W.gift.y === ny) openGift(W);
+    if (eatBonus) { W.bonus = null; if (W.feverT > 0) spawnBonus(W); }
     if (W.mode === 'stage' && W.got >= W.goal) {
       // 레벨 깸: 잠깐 멈추고 다음 레벨로 (main.js가 clearTime 뒤 nextLevel을 부른다)
       W.phase = 'clear'; W.clearT = 0; W.levelsCleared++;
@@ -459,7 +557,7 @@
       W.events.push('clear');
       return;
     }
-    if (eat && !spawnFood(W)) {
+    if (eatMain && !spawnFood(W)) {
       // 판을 가득 채웠다: 이긴 것으로 끝낸다
       W.phase = 'over';
       W.won = true;
@@ -487,6 +585,15 @@
       W.events.push('cool');
     }
     for (const k in W.eff) W.eff[k] = Math.max(0, W.eff[k] - dt);
+    // 피버: 도는 동안 줄고, 끝나면 보너스 구슬도 사라진다. 쉬는 동안 게이지가 천천히 준다
+    if (W.feverT > 0) { W.feverT -= dt; if (W.feverT <= 0) { W.feverT = 0; W.bonus = null; W.events.push('feverend'); } }
+    else W.fever = Math.max(0, W.fever - D.FEVER.decay * dt);
+    // 선물 상자
+    if (W.gift) { W.gift.life -= dt; if (W.gift.life <= 0) { W.gift = null; W.events.push('giftgone'); } }
+    else if (W.giftT < Infinity) {
+      W.giftT -= dt;
+      if (W.giftT <= 0) { spawnGift(W); W.giftT = W.mode === 'endless' ? giftGap(W, false) : Infinity; }
+    }
     if (!itemsOn(W)) return;
     if (W.item) {
       W.item.life -= dt;
@@ -573,6 +680,7 @@
     const block = new Uint8Array(C * R);   // 라이벌이 피하는 칸: 벽 · 자기 몸(빠질 꼬리 빼고) · 내 몸
     for (let i = 0; i < B.length - (V.grow ? 0 : 1); i++) block[B[i].y * C + B[i].x] = 1;
     if (W.walls) for (let i = 0; i < block.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) block[i] = 1;
+    if (W.gift) block[W.gift.y * C + W.gift.x] = 1;   // 선물 상자는 내 것 (라이벌은 비켜 간다)
     const mine = new Uint8Array(C * R);
     for (const p of W.snake) mine[p.y * C + p.x] = 1;
     const reach = (sx, sy, limit) => {
@@ -688,6 +796,7 @@
       len: W.maxLen, golds: W.golds, orbs: W.eaten, planet: W.space.max,
       level: W.mode === 'stage' && W.levelsCleared > 0 ? W.startLevel + W.levelsCleared - 1 : 0,
       rivalWin: r && r.diff > 0 ? 1 : 0,
+      gifts: W.gifts, fevers: W.fevers, giants: W.giants,
     };
   }
   // 알아서 맞춰 주는 난이도: 이번 판이 그 난이도 기준으로 얼마나 잘했나 (1이 보통, HUB.adaptRun이 0~3으로 자른다)
@@ -774,11 +883,11 @@
         if (!W.easy) return { dist: k, x: Math.max(0, Math.min(C - 1, x)), y: Math.max(0, Math.min(R - 1, y)), cause: 'edge' };
         x = (x + C) % C; y = (y + R) % R;
       }
-      if (W.walls && W.walls[y * C + x]) return { dist: k, x, y, cause: 'wall' };
+      if (W.walls && W.walls[y * C + x] && !(W.eff && W.eff.giant > 0)) return { dist: k, x, y, cause: 'wall' };
       if (W.portalAt && W.portalAt[y * C + x] >= 0) return null;   // 포털 너머는 살피지 않는다
       for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return { dist: k, x, y, cause: 'self' };
       // 라이벌 몸 (보통만. 쉬움은 지나가도 괜찮다). 곧 빠질 꼬리 끝 칸은 빼고
-      if (!W.easy && rivalAt(W, x, y, true)) return { dist: k, x, y, cause: 'rival' };
+      if (!W.easy && !(W.eff && W.eff.giant > 0) && rivalAt(W, x, y, true)) return { dist: k, x, y, cause: 'rival' };
     }
     return null;
   }
@@ -794,9 +903,11 @@
       normalLen: W.easy ? 0 : W.maxLen,
       // 어려움으로 한 판 (미션용)
       hardLen: W.hard ? W.maxLen : 0, hardTime: W.hard ? W.time : 0,
+      // 재미 셋: 선물 상자 · 선물 코인 · 다음 판 시작 아이템 선물 · 피버 · 거대 뱀
+      gifts: W.gifts, giftCoins: W.giftCoins, giftStart: W.giftStart.slice(), fevers: W.fevers, giants: W.giants,
       rivalMet: !!(W.rival && W.rival.met), rivalEaten: W.rival ? W.rival.eaten : 0,
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, diffOf, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, diffOf, spawnGift, openGift, startFever, startGiant, DIRS, OPP };
 })(SN);

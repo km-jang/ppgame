@@ -102,6 +102,33 @@
   //   mix: 어려운 줄 모양 가중치 × mul^mix (쉬운 줄은 ÷) · pirate: 해적선 간격 ÷ (1 + (mul-1) × pirate)
   // target: 판이 끝날 때 성적 = 달린 거리 ÷ target (1 = 그 난이도에서 보통 잘하는 아이. 서툰 아이 로봇과 사람 같은 로봇 평균 거리의 사이 값:
   //         쉬움 5,600 ~ 9,000m · 보통 800 ~ 2,600m · 어려움 360 ~ 1,120m)
+  // ─── 깜짝 선물 상자 (네 게임 공통 기획, 2026-09-27 소유자 승인 "추천대로") ───
+  // 가끔(first초 뒤 처음, 그 뒤 every초마다) 빛나는 선물 상자가 한 줄에 떠 온다. 해적선·블랙홀·처음 안내 중에는 없다.
+  // 놓는 곳 (variant 가중치): lane 빈 줄 바닥 · jump 레이저 문 위 또는 빈 줄 높이 떠서 (뛰어야 먹는다) · slide 위쪽 막대 밑 (미끄러져야 먹는다).
+  //   문·막대 줄에 놓을 때도 그 줄에 빈 줄이 따로 있을 때만 (선물 때문에 부딪힐 수밖에 없는 일은 없다)
+  // bhPad: 블랙홀 구간 앞뒤 이만큼(m) 안에는 놓지 않는다
+  // 선물 (reward 가중치, 뽑기 느낌 없이 늘 좋은 것 하나): coins 코인(coins 범위, 판이 끝날 때 받는 코인에 더해진다) ·
+  //   power 바로 쓰는 아이템(powers 중 하나, 방패가 이미 있으면 방패는 빼고) · item 다음 판 시작 아이템(items 중 하나, 가득이면 fullCoins 코인으로)
+  const GIFT = {
+    first: [35, 55], every: [60, 100], bhPad: 30,
+    variant: { lane: 5, jump: 2, slide: 2 }, y: 0.8, jumpY: 1.9, slideY: 0.3,
+    reward: { coins: 5, power: 3, item: 2 }, coins: [15, 40],
+    powers: ['shield', 'magnet', 'boost'], items: ['sshield', 'sboost', 'sheart'], fullCoins: 20,
+  };
+
+  // ─── 피버 타임 ───
+  // 별을 이어 먹고(star, 연속 chainFrom개부터는 chain을 더), 별 한 줄을 다 먹고(perfect), 아슬아슬하게 비키면(near) 게이지가 찬다 (0 → 1).
+  // 가득 차면 dur초 동안 피버: 별 점수 mul배, 빈 줄마다 별 한 줄 더, 처음 rain초 동안은 비어 있는 줄에 별이 쏟아진다(rainEvery초마다).
+  // 피버 중에는 게이지가 안 찬다. 처음 안내 중에는 안 찬다. 게이지는 줄지 않는다 (아이 기준: 잃는 것 없음)
+  const FEVER = { star: 0.003, chain: 0.003, chainFrom: 3, perfect: 0.035, near: 0.04, dur: 10, mul: 2, rain: 3.5, rainEvery: 0.14 };
+
+  // ─── 워프 관문 ───
+  // 행성 구간(ROUTE.leg m)마다 chance 확률로 하나. from번째 구간(0 수성)부터, 구간 안 pos m 지점 뒤 첫 줄의 빈 줄에 빛나는 고리 문이 선다.
+  // slack m 안에 놓을 줄이 없으면 그 구간은 건너뛴다. 해적선·블랙홀·처음 안내 중에는 없고, 날아갈 길(dist m + clear m) 안에 블랙홀이 있어도 없다.
+  // 지나가면 dur초 동안 워프 터널(장애물 없음, 안전) → dist m 앞으로 (거리에 들어간다) + bonus점. 나와서 clear m 동안은 장애물이 없다.
+  // 놓쳐도 아무 일 없다
+  const WARP = { chance: 0.8, from: 1, pos: [110, 230], slack: 90, dist: 200, dur: 2, clear: 45, bonus: 50 };
+
   const ADAPT = { min: 0.85, max: 1.12, speed: 0.3, ramp: 0.6, gap: 0.45, mix: 1, pirate: 1,
     hardRows: ['two', 'mg', 'mb', 'gg', 'bb', 'gb', 'g3', 'b3', 'mgb', 'mover'], easyRows: ['one', 'stars', 'gate', 'bar'],
     target: { easy: 6000, normal: 1400, hard: 600 } };
@@ -111,7 +138,7 @@
     TICK: 1 / 120,
     LANES: 3,
 
-    DIFFICULTY, DIFF_ORDER, ZONES, ROUTE, BLACKHOLE, PIRATE, ADAPT,
+    DIFFICULTY, DIFF_ORDER, ZONES, ROUTE, BLACKHOLE, PIRATE, ADAPT, GIFT, FEVER, WARP,
 
     // 앞쪽 이만큼(m)까지 물체를 미리 만들어 둔다 (지평선 끝). 뒤로 behind m 지나면 지운다
     // actGap: 빈 줄이 없는 줄(벽) 다음 줄까지 적어도 이만큼(초) 띄운다 (점프·미끄러지기 뒤 숨 돌리기)

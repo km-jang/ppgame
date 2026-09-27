@@ -308,7 +308,7 @@
   function renderEarn() {
     const e = lastEarn || { coins: 0, parts: {}, done: [] }, P = e.parts;
     $('over-coins').textContent = '+0';
-    const bits = [['거리', P.dist], ['별', P.stars], ['기념 아치', P.arch], ['행성', P.zone], ['난이도', P.diff], ['강화 보너스', P.bonus]];
+    const bits = [['거리', P.dist], ['별', P.stars], ['기념 아치', P.arch], ['행성', P.zone], ['난이도', P.diff], ['강화 보너스', P.bonus], ['선물', P.gift]];
     $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
@@ -347,7 +347,9 @@
     try {
       const s = RN.World.runStats(W);
       // 스티커·오늘의 미션: 거리 · 별 · 넘은 레이저 문 · 미끄러지기 · 가장 멀리 간 행성(1 수성 ~ 9 명왕성) · 따돌린 해적선
-      const fresh = HUB.reportRun('runner', { dist: s.dist, stars: s.stars, jumps: s.gates, slides: s.slides, planet: s.planet, pirates: s.pirates, games: 1 }, W.runT);
+      //   · 연 선물 상자 · 피버 타임 · 지나간 워프 관문
+      const fresh = HUB.reportRun('runner', { dist: s.dist, stars: s.stars, jumps: s.gates, slides: s.slides, planet: s.planet, pirates: s.pirates,
+        gifts: s.gifts, fevers: s.fevers, warps: s.warps, games: 1 }, W.runT);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -411,6 +413,8 @@
       else if (ev === 'shield' || ev === 'smash') vibrate(30);
       else if (ev === 'power' || ev === 'boost' || ev === 'heal') vibrate([20, 30, 20]);
       else if (ev === 'pull') vibrate([30, 20, 30]);
+      else if (ev === 'gift') vibrate([20, 30, 20, 30, 40]);
+      else if (ev === 'fever' || ev === 'warp') vibrate([25, 25, 25]);
     }
     world.events.length = 0;
   }
@@ -514,6 +518,7 @@
     lastTs = ts;
 
     if (mode === 'title' || mode === 'shop') {
+      RN.Audio.feverBeat(false);
       // 시연: 자동 운전 우주선이 시작 화면 뒤에서 달린다. 끝나면(드물게) 새로
       if (!demo || demo.phase !== 'play' || demo.dist > 3400) demo = RN.World.create(777 + Math.floor(Math.random() * 1000), { diff: 'easy', auto: true, wait: 0, char: shop.char });
       RN.World.step(demo, dt);
@@ -531,6 +536,8 @@
         if (W.phase === 'over') gameOver();
         frozenDrawn = false;
       }
+      // 피버 동안 빠른 배경 박자 (멈춤·결과 화면에서는 멈춘다)
+      RN.Audio.feverBeat(mode === 'play' && W.phase === 'play' && W.fever > 0);
       // 결과 화면이 뜨고 연출이 끝나면 그리기를 쉰다 (배터리)
       const idle = mode === 'paused' || (mode === 'over' && performance.now() - overAt > 1300 && !RN.Render.busy());
       if (!idle || !frozenDrawn) {

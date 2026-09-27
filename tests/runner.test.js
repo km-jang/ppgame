@@ -1076,7 +1076,7 @@ test('쉬움부터 네 방향: 몸풀기(운석 하나·별) 뒤에 레이저 �
 test('자동 운전: 문에서 뛰고 막대에서 미끄러진다 (쉬움 2분, 거의 안 부딪힘)', () => {
   let gates = 0, bars = 0, slides = 0;
   for (const seed of [4, 12, 21]) {
-    const W = create(seed, { auto: true });
+    const W = create(seed, { auto: true, warp: 0 });   // 워프로 건너뛰는 200m가 없게 (문·막대를 만나는 수를 재는 것이라)
     run(W, 120);
     assert(W.phase === 'play' && W.hits <= 1, 'seed ' + seed + ' hits ' + W.hits);
     gates += W.gates; bars += W.bars; slides += W.slides;
@@ -1329,8 +1329,9 @@ test('해적선 안전한 줄 약속: 레이저를 쏠 때마다 바로 옆(또�
           }
           if (W.events.includes('bomb')) {
             bombs++;
-            const b = W.obs[W.obs.length - 1], gap = speed(W) * D.PIRATE.bombGap;
-            assert(b.kind === 'bomb' && b.z - W.dist >= speed(W) * 1.4, 'bomb far enough');
+            // 방금 떨어진 폭탄 (같은 칸에 새 줄이 뒤에 붙을 수 있어 맨 끝이 아닐 수도 있다)
+            const b = W.obs.filter(o => o.kind === 'bomb' && o.born === W.t).pop(), gap = speed(W) * D.PIRATE.bombGap;
+            assert(b && b.z - W.dist >= speed(W) * 1.4, 'bomb far enough');
             for (const o of W.obs) if (o !== b && !o.done && ['meteor', 'gate', 'bar', 'bomb'].includes(o.kind) && Math.round(o.x) === b.x) assert(Math.abs(o.z - b.z) >= gap, 'bomb too close to ' + o.kind);
           }
           W.events.length = 0; W.fx.length = 0;

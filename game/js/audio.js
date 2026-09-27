@@ -148,6 +148,23 @@
     bandWarn:{ gap: 0.3, fn: t => { tone(sfxBus, t, 'triangle', 400, 1200, 0.5, 0.08); } },
     sweep:   { gap: 0.15, fn: t => { noise(sfxBus, t, 'bandpass', 600, 3000, 0.35, 0.3, 2); } },
     crack:   { gap: 0.1, fn: t => { [2093, 2637, 3136].forEach((f, i) => tone(sfxBus, t + i * 0.03, 'triangle', f, f * 0.9, 0.15, 0.08)); noise(sfxBus, t, 'highpass', 5000, 8000, 0.1, 0.15); } },
+    // 깜짝 선물 상자 · 피버 · 동료 (2026-09-27): 상자 등장 딸랑 · 상자에 맞음 톡 · 상자 열림 팡 + 반짝 화음 ·
+    // 피버 시작 쭉 올라가는 소리 + 화음 · 피버 끝 내려가는 두 음 · 캡슐 등장 삐빅 · 동료 구출 짧은 팡파르 · 동료 인사 두 음
+    giftAppear: { gap: 1.0, fn: t => { [1568, 2093, 2637].forEach((f, i) => tone(sfxBus, t + i * 0.08, 'triangle', f, f, 0.18, 0.08)); } },
+    giftHit: { gap: 0.06, fn: t => { tone(sfxBus, t, 'triangle', 1200, 1500, 0.05, 0.08); } },
+    gift:    { gap: 0.30, fn: t => {
+      noise(sfxBus, t, 'bandpass', 2500, 5000, 0.12, 0.35, 1.5);
+      [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(sfxBus, t + 0.05 + i * 0.06, 'square', f, f, 0.14, 0.08));
+      noise(sfxBus, t + 0.2, 'highpass', 6000, 9000, 0.4, 0.07);
+    } },
+    fever:   { gap: 1.0, fn: t => {
+      tone(sfxBus, t, 'sawtooth', 300, 1500, 0.35, 0.12);
+      [523, 659, 784, 1047].forEach((f, i) => tone(sfxBus, t + 0.3 + i * 0.05, 'square', f, f, 0.3, 0.08));
+    } },
+    feverEnd:{ gap: 1.0, fn: t => { tone(sfxBus, t, 'triangle', 880, 880, 0.12, 0.1); tone(sfxBus, t + 0.12, 'triangle', 660, 660, 0.2, 0.1); } },
+    capsule: { gap: 1.0, fn: t => { tone(sfxBus, t, 'sine', 1320, 1320, 0.07, 0.07); tone(sfxBus, t + 0.12, 'sine', 1760, 1760, 0.09, 0.07); } },
+    wingman: { gap: 0.5, fn: t => { [659, 880, 1047, 1319].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.2, 0.14)); } },
+    wingBye: { gap: 0.5, fn: t => { tone(sfxBus, t, 'triangle', 1047, 1047, 0.14, 0.1); tone(sfxBus, t + 0.16, 'triangle', 1319, 1319, 0.22, 0.1); } },
     pick:    { gap: 0.05, fn: t => { [523, 659, 784].forEach((f, i) => tone(sfxBus, t + i * 0.05, 'square', f, f, 0.1, 0.12)); } },
     clear:   { gap: 0.10, fn: t => { [440, 554, 659, 880].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.18, 0.25)); } },
     wave:    { gap: 0.10, fn: t => { tone(sfxBus, t, 'triangle', 330, 660, 0.25, 0.22); } },
@@ -221,11 +238,13 @@
   let wantMusic = null;  // 요청된 모드 (unlock 전에도 기억)
   let seq = null;        // { mode, step, next, timer }
   let duck = 1;          // 일시정지 때 줄이기
+  let fever = false;     // 피버 타임: 템포를 FEVER_TEMPO배로, 반짝이는 높은 음을 한 겹 더
+  const FEVER_TEMPO = 1.15;
 
   function schedStep(m, step, t) {
     const bar = m.prog[Math.floor(step / 16) % m.prog.length];
     const s = step % 16;
-    const spb = 60 / m.bpm / 4; // 16분음표 길이
+    const spb = 60 / (m.bpm * (fever ? FEVER_TEMPO : 1)) / 4; // 16분음표 길이
     if (m.kick && s % 4 === 0) {
       tone(musicBus, t, 'sine', 140, 40, 0.16, 0.9);
     }
@@ -248,6 +267,10 @@
       const n = bar.chord[s % 3] + (s >= 8 ? 12 : 0);
       tone(musicBus, t, 'square', midi(n), midi(n), spb * 0.9, 0.05);
     }
+    if (fever && s % 2 === 0) {
+      const n = bar.chord[(s / 2) % 3] + 24;
+      tone(musicBus, t, 'triangle', midi(n), midi(n), spb * 0.8, 0.035);
+    }
     if (m.lead && LEAD[s] >= 0) {
       const n = 69 + LEAD[s] + (bar.root - 45);
       tone(musicBus, t, 'sawtooth', midi(n), midi(n), spb * 1.8, 0.08, 0.01);
@@ -257,7 +280,7 @@
   function tick() {
     if (!seq || !ac) return;
     const m = MODES[seq.mode];
-    const spb = 60 / m.bpm / 4;
+    const spb = 60 / (m.bpm * (fever ? FEVER_TEMPO : 1)) / 4;
     // 0.12초 앞까지 미리 예약 (setInterval이 흔들려도 박자가 안 밀림)
     while (seq.next < ac.currentTime + 0.12) {
       schedStep(m, seq.step, seq.next);
@@ -284,6 +307,7 @@
     if (!wantMusic) stopMusic(); else startMusic(wantMusic);
   }
 
+  function setFever(on) { fever = !!on; }
   function setDuck(on) { duck = on ? 0.35 : 1; applyGains(); }
 
   function setMuted(m) { muted = !!m; applyGains(); }
@@ -291,7 +315,7 @@
   function setMusic(on) { musicOn = !!on; applyGains(); }
 
   NG.Audio = {
-    unlock, play, music, setDuck, setMuted, setSfx, setMusic,
+    unlock, play, music, setDuck, setFever, setMuted, setSfx, setMusic,
     get muted() { return muted; }, get sfxOn() { return sfxOn; }, get musicOn() { return musicOn; },
   };
 })(NG);

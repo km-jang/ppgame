@@ -1219,6 +1219,207 @@
     ctx.textBaseline = 'alphabetic';
   }
 
+  // ─── 깜짝 선물 상자 · 동료 우주선 · 피버 (2026-09-27) ─────────
+  // 상자·캡슐 몸은 행성 적처럼 처음 한 번만 그려 두고(foeSprite, shadowBlur 없음) 찍기만 한다
+  function rrect(g, x, y, w, h, r) {
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h);
+  }
+  // 선물 상자: 분홍 상자 + 금빛 리본 십자 + 위에 나비 리본, 둘레에 따뜻한 빛
+  function giftImg(r, white) {
+    const key = 'gift|' + r;
+    const c = foeSprite(key, r * 5.2, g => {
+      softGlow(g, r * 2.5, '255,205,90', 0.6);
+      const s = r * 0.92;
+      const body = g.createLinearGradient(0, -s, 0, s);
+      body.addColorStop(0, '#ff7eb0'); body.addColorStop(1, '#d11f66');
+      g.fillStyle = body;
+      rrect(g, -s, -s * 0.55, s * 2, s * 1.55, s * 0.18); g.fill();
+      g.lineWidth = 1.6; g.strokeStyle = 'rgba(255,255,255,0.55)'; g.stroke();
+      // 뚜껑
+      g.fillStyle = '#ff9cc4';
+      rrect(g, -s * 1.12, -s * 0.9, s * 2.24, s * 0.42, s * 0.14); g.fill(); g.stroke();
+      // 리본 십자
+      g.fillStyle = '#ffd23f';
+      g.fillRect(-s * 0.17, -s * 0.9, s * 0.34, s * 1.9);
+      g.fillRect(-s, s * 0.12, s * 2, s * 0.28);
+      g.fillStyle = 'rgba(255,255,255,0.45)';
+      g.fillRect(-s * 0.17, -s * 0.9, s * 0.1, s * 1.9);
+      // 나비 리본
+      g.fillStyle = '#ffd23f'; g.strokeStyle = '#c78f00'; g.lineWidth = 1.4;
+      for (const k of [-1, 1]) {
+        g.beginPath(); g.ellipse(k * s * 0.42, -s * 1.12, s * 0.42, s * 0.24, k * -0.5, 0, TAU); g.fill(); g.stroke();
+      }
+      g.beginPath(); g.arc(0, -s * 1.05, s * 0.17, 0, TAU); g.fill(); g.stroke();
+      // 광택
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      rrect(g, -s * 0.85, -s * 0.4, s * 0.28, s * 0.9, s * 0.12); g.fill();
+    });
+    return white ? whiteOf(key, c) : c;
+  }
+  // 구조 캡슐: 유리 알약 안에 작은 동료 기체
+  function capsuleImg(r, look, white) {
+    const key = 'cap|' + r + '|' + look.id;
+    const c = foeSprite(key, r * 4.6, g => {
+      softGlow(g, r * 2.2, '140,230,255', 0.45);
+      g.fillStyle = 'rgba(150,225,255,0.2)';
+      rrect(g, -r * 1.25, -r * 0.8, r * 2.5, r * 1.6, r * 0.8); g.fill();
+      g.lineWidth = 2.5; g.strokeStyle = '#9fe8ff'; g.stroke();
+      drawShip(g, look, 0, 0, r * 0.42, -Math.PI / 2, false);
+      g.fillStyle = '#6b7a90';
+      g.fillRect(-r * 0.95, -r * 0.78, r * 0.2, r * 1.56);
+      g.fillRect(r * 0.75, -r * 0.78, r * 0.2, r * 1.56);
+      g.fillStyle = 'rgba(255,255,255,0.5)';
+      rrect(g, -r * 0.7, -r * 0.62, r * 1.3, r * 0.22, r * 0.11); g.fill();
+    });
+    return white ? whiteOf(key, c) : c;
+  }
+
+  // 남은 발 수: 상자·캡슐 아래 작은 점 (찬 점 = 맞힌 수)
+  function hitPips(ctx, x, y, hits, need, col) {
+    for (let i = 0; i < need; i++) {
+      const px = x + (i - (need - 1) / 2) * 11;
+      ctx.beginPath(); ctx.arc(px, y, 3.6, 0, TAU);
+      ctx.fillStyle = i < hits ? col : 'rgba(12,16,26,0.75)'; ctx.fill();
+      ctx.lineWidth = 1.2; ctx.strokeStyle = col; ctx.stroke();
+    }
+  }
+
+  function drawFunThings(ctx, W, calm) {
+    const g = W.gift, c = W.capsule;
+    if (g) {
+      const a = Math.min(1, g.life / 0.6);
+      const rot = calm ? 0 : Math.sin(g.t * 3) * 0.12 + (g.flash > 0 ? Math.sin(g.t * 60) * 0.2 : 0);
+      stamp(ctx, giftImg(g.r, g.flash > 0), g.x, g.y, rot, a, 1 + (g.flash > 0 && !calm ? 0.08 : 0));
+      // 반짝이 두 개가 둘레를 돈다 (움직임 줄이기면 멈춤)
+      const sp = calm ? 0.8 : g.t * 2.4;
+      ctx.fillStyle = '#fff4c2';
+      for (let i = 0; i < 2; i++) {
+        const q = sp + i * Math.PI, sx = g.x + Math.cos(q) * g.r * 1.6, sy = g.y + Math.sin(q) * g.r * 1.3;
+        star(ctx, sx, sy, 5, 4, 0.35, 0); ctx.fill();
+      }
+      hitPips(ctx, g.x, g.y + g.r * 1.35, g.hits, D.GIFT.hits, '#ffd23f');
+    }
+    if (c) {
+      const a = Math.min(1, c.life / 0.8, c.t / 0.4);
+      stamp(ctx, capsuleImg(c.r, c.look, c.flash > 0), c.x, c.y + (calm ? 0 : Math.sin(c.t * 2.5) * 3), calm ? 0 : Math.sin(c.t * 1.3) * 0.15, a);
+      hitPips(ctx, c.x, c.y + c.r * 1.25, c.hits, D.WINGMAN.capHits, '#9fe8ff');
+      ctx.globalAlpha = a;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '15px ' + DISP;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText('구해 줘!', c.x + 1, c.y - c.r * 1.35 + 1);
+      ctx.fillStyle = '#9fe8ff'; ctx.fillText('구해 줘!', c.x, c.y - c.r * 1.35);
+      ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+    }
+  }
+
+  // 동료 우주선: 작은 기체 + 짧은 총열. 떠날 때는 흔들흔들 손 인사
+  function drawWing(ctx, W, calm) {
+    const w = W.wing;
+    if (!w || W.phase === 'over') return;
+    const R = D.WINGMAN.r, L = w.look;
+    const rot = w.bye > 0 && !calm ? w.aim + Math.sin(w.wave * 14) * 0.5 : w.aim;
+    // 남은 시간이 3초 아래면 천천히 깜빡여 곧 떠난다고 알려 준다 (움직임 줄이기면 옅게만)
+    const fade = w.bye <= 0 && w.t < 3 ? (calm ? 0.7 : 0.6 + 0.4 * Math.abs(Math.cos(w.t * 3))) : 1;
+    ctx.globalAlpha = fade;
+    glow(ctx, 'rgba(' + L.glow + ',0.6)', w.x, w.y, 24, 0.7);
+    ctx.globalAlpha = fade;
+    ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(w.x + Math.cos(rot) * R * 0.4, w.y + Math.sin(rot) * R * 0.4); ctx.lineTo(w.x + Math.cos(rot) * (R + 7), w.y + Math.sin(rot) * (R + 7)); ctx.stroke();
+    ctx.lineCap = 'butt';
+    drawShip(ctx, L, w.x, w.y, R, rot, false);
+    ctx.globalAlpha = 1;
+  }
+
+  // 피버 테두리: 화면 가장자리 무지개 띠 (화면 크기마다 한 번 그려 둠). 가운데는 비워서 적·탄이 잘 보인다
+  let edgeCache = null;
+  function feverEdge(w, h) {
+    const key = w + 'x' + h;
+    if (edgeCache && edgeCache.key === key) return edgeCache.c;
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+    const g = c.getContext('2d'), T = Math.max(18, Math.min(w, h) * 0.04);
+    const rb = g.createLinearGradient(0, 0, w, h);
+    ['#ff4d6d', '#ffb703', '#ffe66d', '#3dff8b', '#5ee7ff', '#8f7bff', '#ff5ec8'].forEach((col, i, arr) => rb.addColorStop(i / (arr.length - 1), col));
+    g.fillStyle = rb; g.fillRect(0, 0, w, h);
+    const m = document.createElement('canvas');
+    m.width = c.width; m.height = c.height;
+    const mg = m.getContext('2d');
+    mg.globalCompositeOperation = 'lighter';
+    const band = (x0, y0, x1, y1, rx, ry, rw, rh) => {
+      const gr = mg.createLinearGradient(x0, y0, x1, y1);
+      gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      mg.fillStyle = gr; mg.fillRect(rx, ry, rw, rh);
+    };
+    band(0, 0, 0, T, 0, 0, w, T);
+    band(0, h, 0, h - T, 0, h - T, w, T);
+    band(0, 0, T, 0, 0, 0, T, h);
+    band(w, 0, w - T, 0, w - T, 0, T, h);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(m, 0, 0);
+    edgeCache = { key, c };
+    return c;
+  }
+
+  function drawFeverFrame(ctx, W, calm) {
+    if (!(W.feverT > 0)) return;
+    const F = D.FEVER, end = Math.min(1, W.feverT / 1.2);
+    if (calm) {
+      // 움직임 줄이기: 깜빡임 없이 고정된 분홍 테두리만
+      ctx.globalAlpha = 0.75 * end;
+      ctx.strokeStyle = '#ff9ed8'; ctx.lineWidth = 6;
+      ctx.strokeRect(3, 3, W.w - 6, W.h - 6);
+    } else {
+      ctx.globalAlpha = (0.65 + 0.15 * Math.sin((F.time - W.feverT) * 4)) * end;
+      ctx.drawImage(feverEdge(W.w, W.h), 0, 0, W.w, W.h);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 큰 글자 알림 둘: 선물 상자 "선물: 코인 25개!" · 피버 시작 "FEVER!"
+  function drawFunBanners(ctx, W, view) {
+    const s = view.ui || 1, calm = view.calm;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (W.feverBanner > 0 && W.phase === 'play') {
+      const F = D.FEVER, age = F.banner - W.feverBanner;
+      const a = Math.min(1, W.feverBanner / 0.4, calm ? 1 : age / 0.12);
+      const pop = calm ? 1 : 1 + Math.max(0, 0.3 - age) * 1.8;
+      const fs = Math.round(Math.min(80, W.w / 8) * pop), y = W.h * 0.34;
+      ctx.globalAlpha = a;
+      ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillText('FEVER!', W.w / 2 + 3, y + 3);
+      const tw = ctx.measureText('FEVER!').width;
+      const gr = ctx.createLinearGradient(W.w / 2 - tw / 2, 0, W.w / 2 + tw / 2, 0);
+      ['#ff4d6d', '#ffb703', '#ffe66d', '#3dff8b', '#5ee7ff', '#c77dff'].forEach((c, i, arr) => gr.addColorStop(i / (arr.length - 1), c));
+      ctx.fillStyle = gr;
+      ctx.fillText('FEVER!', W.w / 2, y);
+      ctx.font = Math.round(Math.min(26, W.w / 30)) + 'px ' + DISP;
+      ctx.fillStyle = '#fff4c2';
+      ctx.fillText('점수 두 배!', W.w / 2, y + fs * 0.62);
+      ctx.globalAlpha = 1;
+    }
+    const gp = W.giftPop;
+    if (gp && W.phase !== 'over') {
+      const age = gp.max - gp.life;
+      const a = Math.min(1, gp.life / 0.4, calm ? 1 : age / 0.1);
+      const pop = calm ? 1 : 1 + Math.max(0, 0.22 - age) * 1.5;
+      const fs = Math.round(Math.min(40, Math.max(24, W.w / 26)) * pop);
+      const y = Math.max(W.h * 0.2, view.hudTop + 104 * s);
+      ctx.font = fs + 'px ' + DISP;
+      const tw = ctx.measureText(gp.txt).width, bw = tw + fs * 2.6, bh = fs * 1.6;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(12,16,26,0.84)';
+      rrect(ctx, W.w / 2 - bw / 2, y - bh / 2, bw, bh, bh / 2); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = gp.col; ctx.stroke();
+      stamp(ctx, giftImg(D.GIFT.r, false), W.w / 2 - bw / 2 + fs * 0.95, y, 0, a, fs / (D.GIFT.r * 5.2) * 1.9);
+      ctx.fillStyle = gp.col;
+      ctx.fillText(gp.txt, W.w / 2 + fs * 0.5, y + 1);
+      ctx.globalAlpha = 1;
+    }
+    ctx.textBaseline = 'alphabetic';
+  }
+
   function drawEnemies(ctx, W) {
     for (const e of W.enemies) {
       if (e.spawnT > 0) {
@@ -1444,12 +1645,25 @@
     ctx.globalCompositeOperation = 'source-over';
   }
 
+  const SPARK = ['#ff6b8a', '#ffc94d', '#fff27a', '#6dffa8', '#7ef0ff', '#b69cff', '#ff8ce0'];
   function drawBullets(ctx, W) {
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = '#ffe66d';
-    for (const b of W.bullets) {
+    const fever = W.feverT > 0, spin = Math.floor(W.t * 12);
+    for (let i = 0; i < W.bullets.length; i++) {
+      const b = W.bullets[i];
+      if (b.wing) { ctx.fillStyle = '#9fe8ff'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill(); ctx.fillStyle = '#ffe66d'; continue; }
+      if (fever) {
+        // 피버: 총알마다 무지개 색이 돌고 흰 반짝임 (모양·크기는 그대로라 헷갈리지 않는다)
+        ctx.fillStyle = SPARK[(i + spin) % SPARK.length];
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 1, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(b.x, b.y, Math.max(1.2, b.r * 0.45), 0, TAU); ctx.fill();
+        continue;
+      }
       ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
     }
+    ctx.fillStyle = '#ffe66d';
     ctx.globalCompositeOperation = 'source-over';
     for (const b of W.eBullets) {
       // 보스마다 탄 모양이 다르다: 별(호박) · 육각(민트) · 따라오는 구슬(보라) · 톱날(은)
@@ -1671,6 +1885,9 @@
     if (p.shield > 0) list.push([I.shield.color, '방패', '', 1]);
     if (p.heatT > 0) list.push([I.heat.color, '과열', p.heatT.toFixed(1), p.heatT / I.heat.time]);
     if (p.magT > 0) list.push([I.magnet.color, '자석', p.magT.toFixed(1), p.magT / I.magnet.time]);
+    // 선물 드론 · 동료 우주선 남은 초
+    if (p.giftDroneT > 0) list.push(['#a6ffc9', '드론', p.giftDroneT.toFixed(1), p.giftDroneT / D.GIFT.rewards.find(r => r.id === 'drone').time]);
+    if (W.wing && W.wing.bye <= 0) list.push([W.wing.look.color, '동료', W.wing.t.toFixed(1), W.wing.t / D.WINGMAN.time]);
     const h = 17 * s, w = 76 * s;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -1738,7 +1955,19 @@
     ctx.shadowBlur = 0;
     ctx.fillStyle = full ? (Math.floor(W.t * 3) % 2 ? '#fff4c2' : '#ffd23f') : '#8a6d2a';
     ctx.fillText(full ? (view.ui > 1 ? 'N-BURST!' : 'N-BURST [Q]') : 'N-BURST', x0 + 80 * s, uy - 3 * s);
-    drawEffectChips(ctx, W, x0, uy + 12 * s, s);
+    // 피버 게이지: 콤보로 차고, 피버 중엔 남은 시간만큼 줄어든다 (무지개)
+    const F = D.FEVER, fk = Math.min(1, (W.fever || 0) / F.need), fy = uy + 14 * s, on = W.feverT > 0;
+    ctx.fillStyle = 'rgba(255,94,200,0.16)';
+    ctx.fillRect(x0, fy, 76 * s, 5 * s);
+    if (fk > 0) {
+      const gr = ctx.createLinearGradient(x0, 0, x0 + 76 * s, 0);
+      gr.addColorStop(0, '#ff4d6d'); gr.addColorStop(0.35, '#ffe66d'); gr.addColorStop(0.7, '#3dff8b'); gr.addColorStop(1, '#5ee7ff');
+      ctx.fillStyle = gr;
+      ctx.fillRect(x0, fy, 76 * s * fk, 5 * s);
+    }
+    ctx.fillStyle = on ? '#ff9ed8' : '#8a5a7c';
+    ctx.fillText(on ? 'FEVER x' + F.scoreMul + ' ' + Math.ceil(W.feverT) : 'FEVER', x0 + 80 * s, fy - 3 * s);
+    drawEffectChips(ctx, W, x0, fy + 12 * s, s);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e8f7ff';
@@ -1892,10 +2121,13 @@
     drawWarnings(ctx, W);
     drawBullets(ctx, W);
     drawMeteorRocks(ctx, W);
+    drawFunThings(ctx, W, view.calm);
     drawShocks(ctx, W);
     drawPlayer(ctx, W);
+    drawWing(ctx, W, view.calm);
     drawTags(ctx, W, view.calm);
     ctx.restore();
+    if (view.hud !== false) drawFeverFrame(ctx, W, view.calm);
     drawDanger(ctx, W);
     if (W.flash > 0) {
       ctx.fillStyle = 'rgba(255,77,109,' + (W.flash * 0.6) + ')';
@@ -1905,7 +2137,7 @@
       ctx.fillStyle = 'rgba(255,255,255,' + Math.min(view.calm ? 0.12 : 0.4, W.whiteFlash * 0.8) + ')';
       ctx.fillRect(0, 0, W.w, W.h);
     }
-    if (view.hud !== false) drawHud(ctx, W, view);
+    if (view.hud !== false) { drawHud(ctx, W, view); drawFunBanners(ctx, W, view); }
     if (touch && view.touchHint) drawTouchHint(ctx, W, touch);
   }
 

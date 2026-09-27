@@ -93,6 +93,13 @@
     bump: { gap: 0.15, fn(t) { tone(t, 'sine', 520, 140, 0.3, 0.14); tone(t + 0.05, 'triangle', 900, 700, 0.12, 0.05); } },
     pass: { gap: 0.2, fn(t) { noise(t, 'bandpass', 2000, 600, 0.2, 0.08); tone(t, 'sine', 900, 1400, 0.12, 0.05); } },
     rivaleat: { gap: 0.08, fn(t) { tone(t, 'triangle', 330, 260, 0.12, 0.06); } },
+    // 재미 셋: 선물 상자 나타남(딸랑) · 열기(팡파르) · 피버 시작(빠르게 오르는 음계) · 피버 끝 · 거대 변신(낮게 부풂) · 벽 부숨(쾅)
+    gift: { gap: 0.5, fn(t) { [1319, 1760].forEach((f, i) => tone(t + i * 0.08, 'triangle', f, f, 0.18, 0.08)); } },
+    giftopen: { gap: 0.3, fn(t) { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(t + i * 0.06, 'square', f, f, 0.14, 0.08)); noise(t + 0.25, 'highpass', 5000, 9000, 0.35, 0.06); } },
+    fever: { gap: 0.5, fn(t) { [523, 587, 659, 784, 880, 1047, 1175, 1319].forEach((f, i) => tone(t + i * 0.045, 'square', f, f, 0.08, 0.07)); } },
+    feverend: { gap: 0.5, fn(t) { tone(t, 'triangle', 880, 440, 0.3, 0.07); } },
+    giant: { gap: 0.5, fn(t) { tone(t, 'sawtooth', 110, 330, 0.5, 0.12); tone(t + 0.1, 'square', 220, 660, 0.4, 0.06); } },
+    smash: { gap: 0.08, fn(t) { noise(t, 'lowpass', 1800, 200, 0.25, 0.25); tone(t, 'sine', 140, 60, 0.2, 0.2); } },
     // 새 하늘(행성·블랙홀)에 도착: 반짝이는 화음
     planet: { gap: 0.5, fn(t) { [659, 880, 1175, 1568].forEach((f, i) => tone(t + i * 0.07, 'sine', f, f, 0.35, 0.07)); } },
     wrap: { gap: 0.08, fn(t) { noise(t, 'bandpass', 800, 3000, 0.15, 0.1); } },

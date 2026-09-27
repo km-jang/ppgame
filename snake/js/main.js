@@ -309,7 +309,7 @@
   function renderEarn() {
     const e = lastEarn || { coins: 0, parts: { score: 0, gold: 0, level: 0, bonus: 0 }, done: [] };
     $('over-coins').textContent = '+0';
-    const P = e.parts, bits = [['점수', P.score], ['황금 구슬', P.gold], ['깬 레벨', P.level], ['강화 보너스', P.bonus]];
+    const P = e.parts, bits = [['점수', P.score], ['황금 구슬', P.gold], ['깬 레벨', P.level], ['강화 보너스', P.bonus], ['선물 상자', P.gift]];
     $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
@@ -534,6 +534,9 @@
       else SN.Audio.play(ev);
       if (ev === 'rival') { toast(rivalToast ? '라이벌이 다시 왔어요' : '라이벌 뱀 등장! 구슬을 먼저 먹어요'); rivalToast = true; }
       else if (ev === 'bump') vibrate([15, 20, 15]);
+      else if (ev === 'giftopen' || ev === 'fever') vibrate([20, 30, 20]);
+      else if (ev === 'giant') vibrate(60);
+      else if (ev === 'smash') vibrate(25);
       if (ev === 'over') vibrate(250);
       else if (ev === 'gold') vibrate([20, 30, 40]);
       else if (ev === 'power' || ev === 'combo') vibrate(20);

@@ -275,5 +275,21 @@ test('몬스터 밟기: 판 요약에 stomps, 미션 "몬스터 밟기" (누적�
   assert(Number.isFinite(st.missions[2].prog), 'old run shape');
 });
 
+test('깜짝 선물: 선물 코인은 배율 없이 그대로 더하고, 시작 아이템은 다음 판으로 (가득이면 코인)', () => {
+  const st = SH.blank();
+  const base = SH.coinsFor(run({ diff: 'hard', height: 100 }), st).total;
+  const c = SH.coinsFor(run({ diff: 'hard', height: 100, giftCoins: 25 }), st);
+  assert(c.parts.gift === 25 && c.total === base + 25, 'gift coins ' + JSON.stringify(c.parts));
+  const e = SH.finishRun(st, run({ giftCoins: 10, giftItems: ['rocketStart', 'nope'] }));
+  assert(st.items.rocketStart === 1 && e.parts.gift === 10, 'item for next game');
+  st.items.shieldStart = D.START_ITEMS.find(i => i.id === 'shieldStart').max;
+  const f = SH.finishRun(st, run({ giftItems: ['shieldStart'] }));
+  assert(f.parts.gift === D.GIFT.itemCoins && st.items.shieldStart === 3, 'full becomes coins');
+  const W = create(1, { diff: 'normal' });
+  W.giftCoins = 7; W.giftItems.push('rocketStart'); W.giftsGot = 2; W.fevers = 1; W.rooms = 1;
+  const r = SH.runOf(W);
+  assert(r.giftCoins === 7 && r.giftItems[0] === 'rocketStart' && r.gifts === 2 && r.fevers === 1 && r.rooms === 1, 'runOf');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

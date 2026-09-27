@@ -357,5 +357,47 @@
   ];
   const MISSION_SLOTS = 3;
 
-  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS });
+  // ═══ 깜짝 선물 상자 · 피버 타임 · 동료 우주선 (2026-09-27, 소유자 "추천대로") ═══
+  // 셋 다 판을 어렵게 만들지 않는 "반가운 일"이다. 뽑기는 게임 규칙 난수(W.rand)와 따로 도는 난수(W.fun)를 써서
+  // 적·카드·운석이 나오는 차례는 예전과 똑같다
+
+  // 깜짝 선물 상자: 플레이 시간 gap초(사이 아무 값)마다 한 번, 반짝이는 선물 상자가 life초 동안 화면을 가로질러 둥실 떠 간다.
+  // 총알 hits발(또는 닿기)로 열린다. 웨이브 시작 quiet초·보스 웨이브 bossQuiet초·블랙홀 웨이브 holeQuiet초 동안은 안 나오고
+  // (보스 등장·블랙홀 시작 방해 안 함), 그때 차례가 오면 retry초 뒤 다시 본다. 웨이브 끝(적이 다 나오고 다 잡힘)에도 안 나온다
+  // 선물(rewards, w 가중치): 코인 min~max(step 단위, 판 끝 코인에 더해짐) · 방패 · 드론 time초 · 필살기 가득 · 다음 판 시작 아이템 하나
+  // 방패가 이미 있으면 방패, 필살기가 이미 가득이면 필살기는 뽑지 않는다. 시작 아이템 칸이 가득이면 판 끝에 itemFullCoins 코인으로
+  const GIFT = {
+    first: [45, 75], gap: [60, 100],
+    quiet: 4, bossQuiet: 7, holeQuiet: 7, retry: 1.5,
+    life: 8, r: 21, hits: 3, bob: 16, margin: 40, band: [0.22, 0.78],
+    popup: 2.6,       // 가운데 위 "선물: 코인 25개!" 알림 (초)
+    confetti: 42,     // 열릴 때 색종이 수
+    rewards: [
+      { id: 'coins',  w: 5, min: 15, max: 40, step: 5 },
+      { id: 'shield', w: 2 },
+      { id: 'drone',  w: 2, time: 20 },
+      { id: 'ult',    w: 2 },
+      { id: 'item',   w: 1.5 },
+    ],
+    itemFullCoins: 30,
+  };
+
+  // 피버 타임: 콤보가 fromCombo 이상인 처치마다 게이지 1 (보스는 bossAdd 더). need가 차면 time초 동안 FEVER:
+  // 점수 scoreMul배 · 화면 가장자리 무지개 · 음악 빨라짐 · 반짝이는 총알 · 가운데 위 "FEVER!" (banner초).
+  // 콤보가 끊겨 있는 동안은 게이지가 초당 idleDrain씩 조금 줄고, 피버가 끝나면 0부터 다시
+  // 적·탄·체력은 그대로 (어려워지지 않는다). 움직임 줄이기 설정이면 깜빡임 없이 고정 테두리와 글자만
+  // 원 그리기 봇(아이 흉내) 실측: 5분에 2~3번, 첫 피버는 1분 반 안팎 (PLAN.md 5.13)
+  const FEVER = { need: 35, fromCombo: 2, bossAdd: 10, idleDrain: 0.25, time: 10, scoreMul: 2, banner: 1.6 };
+
+  // 동료 우주선: firstWave 웨이브부터 2~3웨이브(every)마다 한 번, 웨이브 시작 delay초(사이 아무 값) 뒤 구조 캡슐이 가장자리에서
+  // capSpeed로 화면을 가로질러 떠 온다 (capLife초 뒤 사라짐). 총알 capHits발(또는 닿기)로 열면 작은 동료 기체가 나와
+  // time초 동안 내 옆(side px, 조준 뒤쪽)을 따라다니며 range 안의 가장 가까운 적에게 초당 rate발(위력 = 내 위력 × dmgMul)을 쏜다.
+  // 끝나면 bye초 동안 손을 흔들고("고마워!") 떠난다. 동료·캡슐은 한 번에 하나뿐. 맞지 않고 적을 막지도 않는다
+  const WINGMAN = {
+    firstWave: 2, every: [2, 3], delay: [5, 12],
+    capR: 18, capHits: 3, capSpeed: 70, capLife: 20,
+    time: 25, bye: 2.2, rate: 3, dmgMul: 0.5, bulletSpeed: 480, range: 560, r: 8, side: 56, follow: 6,
+  };
+
+  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS, GIFT, FEVER, WINGMAN });
 })(NG);

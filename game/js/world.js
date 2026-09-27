@@ -85,9 +85,12 @@
     const base = D.DIFFICULTY[diff] || D.DIFFICULTY.normal;
     const ad = adaptDiff(base, opts && opts.adapt);
     const df = ad.diff;
+    const sd = seed == null ? (Date.now() & 0xffffffff) : seed;
     const W = {
       w, h, t: 0, diff: df, adapt: ad.mul, gapMul: ad.gapMul,
-      rand: NG.rng(seed == null ? (Date.now() & 0xffffffff) : seed),
+      rand: NG.rng(sd),
+      // 선물 상자·동료 캡슐 뽑기용 난수: 규칙 난수(rand)와 따로 돌아서 적·카드·운석 차례를 바꾸지 않는다
+      fun: NG.rng(((sd >>> 0) ^ 0x5bd1e995) + 7),
       phase: 'play', // play | cards | over
       wave: 0, banner: 0, bossWave: false, bossKills: 0,
       spawnQueue: [], spawnTimer: 0, clearT: -1,
@@ -103,14 +106,23 @@
       combo: 0, comboT: 0, comboPop: 0, // 연속 처치 수, 끊기기까지 남은 시간, HUD 튀어 오름
       waveHit: false,                    // 이번 웨이브에 한 대라도 맞았나
       pendDash: false, pendUlt: false,   // 화면 멈춤(히트스톱) 중에 누른 대시·필살기는 멈춤이 풀린 뒤 쓴다
+      // 깜짝 선물 상자 · 피버 타임 · 동료 우주선 (2026-09-27). waveT: 이번 웨이브가 시작된 뒤 흐른 시간
+      waveT: 0, gift: null, giftT: 0, giftPop: null,
+      fever: 0, feverT: 0, feverBanner: 0,
+      capsule: null, capT: -1, capNext: 0, wing: null,
       stats: { kills: 0, shots: 0, time: 0, picks: [], ults: 0,
         dashes: 0, hurts: 0, cleanWaves: 0, cleanBoss: 0, bestCombo: 0, ultBoss: 0, ultBest: 0,
         coinPicks: 0, coins: 0, items: 0, blocks: 0, bombKills: 0, // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
-        planet: 0, holesCleared: 0 }, // 스티커: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10 …) · 깬 블랙홀 웨이브 수 // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
+        planet: 0, holesCleared: 0,
+        gifts: 0, giftCoins: 0, giftItems: [], fevers: 0, wingmen: 0 }, // 연 선물 상자 · 선물 코인 · 다음 판 시작 아이템 선물 · 피버 횟수 · 구한 동료 // 스티커: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10 …) · 깬 블랙홀 웨이브 수 // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
     };
+    W.giftT = between(W.fun, D.GIFT.first);
+    W.capNext = D.WINGMAN.firstWave;
     startWave(W);
     return W;
   }
+  // [a, b] 사이 아무 값
+  const between = (r, ab) => ab[0] + r() * (ab[1] - ab[0]);
 
   function resize(W, w, h) {
     W.w = w; W.h = h;
@@ -201,6 +213,13 @@
     W.eBullets.length = 0; W.lasers.length = 0;
     W.waveHit = false;
     W.pendDash = W.pendUlt = false;
+    W.waveT = 0;
+    // 동료 캡슐: 차례가 된 웨이브이고 동료·캡슐이 없으면 웨이브 시작 몇 초 뒤에 (있으면 다음 웨이브에 다시)
+    const WM = D.WINGMAN;
+    if (W.wave >= W.capNext && !W.wing && !W.capsule) {
+      W.capT = between(W.fun, WM.delay);
+      W.capNext = W.wave + WM.every[0] + Math.floor(W.fun() * (WM.every[1] - WM.every[0] + 1));
+    }
     // 하이브 기체 특기: 5웨이브에 드론 하나 더
     if (W.player.passive === 'hive' && W.wave === 5 && W.player.look) W.player.drones += 1;
     W.events.push(W.bossWave ? 'boss' : 'wave');
@@ -314,6 +333,8 @@
     W.cards = drawCards(W, 3);
     W.eBullets.length = 0; W.lasers.length = 0; W.meteors.length = 0; W.mists.length = 0;
     W.pendDash = W.pendUlt = false;
+    // 캡슐이 나오기 전에 웨이브가 끝났으면 다음 웨이브에 다시
+    if (W.capT > 0) { W.capT = -1; W.capNext = W.wave + 1; }
     if (W.hole) W.stats.holesCleared += 1;
     if (!W.waveHit) {
       W.stats.cleanWaves += 1;
@@ -416,7 +437,8 @@
     if (W.combo >= C.show) W.comboPop = 1;
     if (C.marks.indexOf(W.combo) >= 0) W.events.push('combo');
     const mul = 1 + W.bossKills * 0.5;
-    W.score += Math.round(e.def.score * mul * W.diff.score * D.comboMul(W.combo));
+    W.score += Math.round(e.def.score * mul * W.diff.score * D.comboMul(W.combo) * feverMul(W));
+    fillFever(W, e);
     W.stats.kills += 1;
     shatter(W, e, dx, dy);
     burst(W, e.x, e.y, colorOf(e), e.type === 'boss' ? 60 : 4 + Math.round(e.r / 3), e.type === 'boss' ? 420 : 200, e.type === 'boss' ? 5 : 2.5);
@@ -728,6 +750,9 @@
     if (input.aimAngle != null) p.aim = input.aimAngle;
     else {
       target = nearestEnemy(W, p.x, p.y);
+      // 선물 상자·구조 캡슐이 가장 가까운 적보다 가까우면 그쪽을 먼저 겨눈다 (자동 조준으로도 열 수 있게)
+      const f = funTarget(W, p.x, p.y);
+      if (f && (!target || NG.dist2(p.x, p.y, f.x, f.y) < NG.dist2(p.x, p.y, target.x, target.y))) target = f;
       if (target) p.aim = Math.atan2(target.y - p.y, target.x - p.x);
     }
 
@@ -758,6 +783,9 @@
         }
       }
     }
+
+    // 선물 드론: 시간이 다 되면 하나 뺀다
+    if (p.giftDroneT > 0) { p.giftDroneT -= dt; if (p.giftDroneT <= 0) { p.giftDroneT = 0; p.drones = Math.max(0, p.drones - 1); } }
 
     // 아이템 (회복·코인·방패·과열·자석·폭탄)
     updateDrops(W, dt);
@@ -1242,6 +1270,7 @@
         else b.life = 0;
       }
       if (b.life <= 0) continue;
+      if (funHit(W, b)) continue; // 선물 상자·구조 캡슐에 맞음
       for (const e of W.enemies) {
         if (e.dead || e.spawnT > 0 || e.hide) continue;
         if (e.look && hexShieldBlocks(e, b)) {
@@ -1290,6 +1319,245 @@
       }
     }
     W.eBullets = W.eBullets.filter(b => b.life > 0);
+  }
+
+  // ─── 깜짝 선물 상자 · 피버 타임 · 동료 우주선 (2026-09-27) ───────
+  // 지금 선물 상자를 띄우면 안 되는 때: 웨이브 시작·보스 등장·블랙홀 시작, 웨이브 끝(다 잡음), 이미 떠 있음
+  function giftBlocked(W) {
+    const G = D.GIFT;
+    if (W.phase !== 'play' || W.gift) return true;
+    if (W.waveT < (W.bossWave ? G.bossQuiet : W.hole ? G.holeQuiet : G.quiet)) return true;
+    if (W.bossWave && (W.spawnQueue.indexOf('boss') >= 0 || W.enemies.some(e => e.type === 'boss' && e.spawnT > 0))) return true;
+    if (!W.spawnQueue.length && !W.enemies.some(e => !e.dead)) return true;
+    return false;
+  }
+
+  // 선물 상자 띄우기: 왼쪽 또는 오른쪽 밖에서 들어와 life초 동안 반대쪽으로 둥실둥실
+  function spawnGift(W) {
+    const G = D.GIFT, fromLeft = W.fun() < 0.5;
+    const x0 = fromLeft ? -G.margin : W.w + G.margin, x1 = fromLeft ? W.w + G.margin : -G.margin;
+    const y = W.h * (G.band[0] + W.fun() * (G.band[1] - G.band[0]));
+    W.gift = { x: x0, y, baseY: y, vx: (x1 - x0) / G.life, r: G.r, hits: 0, life: G.life, t: 0, flash: 0, ph: W.fun() * 6 };
+    W.events.push('giftAppear');
+    return W.gift;
+  }
+
+  // 선물 고르기 (가중치, 이미 있는 방패·가득 찬 필살기는 빼고). {id, n?, item?}
+  function giftReward(W) {
+    const G = D.GIFT, p = W.player;
+    const pool = G.rewards.filter(r => !(r.id === 'shield' && p.shield > 0) && !(r.id === 'ult' && p.ult >= D.ULT.need));
+    const r = NG.weighted(pool, W.fun);
+    if (r.id === 'coins') {
+      const steps = Math.floor((r.max - r.min) / r.step) + 1;
+      return { id: 'coins', n: r.min + Math.floor(W.fun() * steps) * r.step };
+    }
+    if (r.id === 'item') return { id: 'item', item: D.START_ITEMS[Math.floor(W.fun() * D.START_ITEMS.length)].id };
+    return { id: r.id };
+  }
+
+  // 선물 상자 열기: 색종이 + 선물 주기 + 큰 알림. reward를 주면 그걸로 (테스트)
+  const CONFETTI = ['#ff4d6d', '#ffd23f', '#3dff8b', '#5ee7ff', '#c77dff', '#ff9f43'];
+  function openGift(W, reward) {
+    const g = W.gift;
+    if (!g) return null;
+    W.gift = null;
+    const G = D.GIFT, p = W.player, rw = reward || giftReward(W);
+    const per = Math.ceil(G.confetti / CONFETTI.length);
+    for (const c of CONFETTI) burst(W, g.x, g.y, c, per, 340, 5);
+    W.particles.push({ pop: true, x: g.x, y: g.y, r: 34, life: 0.16, max: 0.16, color: '#ffffff' });
+    W.particles.push({ ring: true, x: g.x, y: g.y, r: 110, life: 0.5, max: 0.5, color: '#ffd23f' });
+    W.stats.gifts += 1;
+    let txt = '', col = '#ffd23f';
+    if (rw.id === 'coins') {
+      W.stats.coins += rw.n; W.stats.giftCoins += rw.n;
+      txt = '코인 ' + rw.n + '개!';
+    } else if (rw.id === 'shield') {
+      p.shield = 1; txt = '방패!'; col = '#5ee7ff';
+    } else if (rw.id === 'drone') {
+      if (!(p.giftDroneT > 0)) p.drones += 1;
+      p.giftDroneT = G.rewards.find(r => r.id === 'drone').time;
+      txt = '드론 ' + Math.round(p.giftDroneT) + '초!'; col = '#a6ffc9';
+    } else if (rw.id === 'ult') {
+      p.ult = D.ULT.need; txt = '필살기 가득!'; col = '#ffcf3a';
+      W.events.push('ultReady');
+    } else if (rw.id === 'item') {
+      const it = D.START_ITEMS.find(i => i.id === rw.item) || D.START_ITEMS[0];
+      W.stats.giftItems.push(it.id);
+      txt = '다음 판 ' + it.name + '!'; col = '#ff9ed8';
+    }
+    W.giftPop = { txt: '선물: ' + txt, col, life: G.popup, max: G.popup };
+    W.events.push('gift');
+    return rw;
+  }
+
+  // 구조 캡슐 띄우기: 가장자리에서 가운데 근처를 지나 반대쪽으로 천천히
+  function spawnCapsule(W) {
+    const WM = D.WINGMAN, R = WM.capR;
+    const pt = spawnPoint(W, R);
+    const tx = W.w * (0.3 + W.fun() * 0.4), ty = W.h * (0.3 + W.fun() * 0.4);
+    const a = Math.atan2(ty - pt.y, tx - pt.x);
+    // 동료는 내 기체가 아닌 다른 기체 모양 (작게)
+    const others = D.SHIPS.filter(s => s.id !== W.player.ship);
+    const look = others[Math.floor(W.fun() * others.length)] || D.SHIPS[0];
+    W.capsule = { x: pt.x, y: pt.y, vx: Math.cos(a) * WM.capSpeed, vy: Math.sin(a) * WM.capSpeed, r: R, hits: 0, life: WM.capLife, t: 0, flash: 0, look };
+    W.events.push('capsule');
+    return W.capsule;
+  }
+
+  // 캡슐을 열면 동료가 나온다
+  function freeCapsule(W) {
+    const c = W.capsule;
+    if (!c) return null;
+    W.capsule = null;
+    const WM = D.WINGMAN;
+    burst(W, c.x, c.y, '#9fe8ff', 14, 220, 3);
+    burst(W, c.x, c.y, c.look.color, 10, 180, 3);
+    W.particles.push({ ring: true, x: c.x, y: c.y, r: 70, life: 0.4, max: 0.4, color: c.look.color });
+    W.wing = { x: c.x, y: c.y, look: c.look, t: WM.time, bye: 0, cd: 0.4, aim: -Math.PI / 2, shots: 0, wave: 0 };
+    W.stats.wingmen += 1;
+    W.texts.push({ x: c.x, y: c.y - 24, txt: '도와줄게!', life: 1.2, col: c.look.color });
+    W.events.push('wingman');
+    return W.wing;
+  }
+
+  // 총알이 선물 상자·캡슐에 맞았나. 맞으면 총알은 사라지고 hits가 오른다
+  function funHit(W, b) {
+    for (const k of ['gift', 'capsule']) {
+      const o = W[k];
+      if (!o) continue;
+      const rr = o.r + b.r;
+      if (NG.dist2(b.x, b.y, o.x, o.y) >= rr * rr) continue;
+      b.life = 0;
+      o.hits += 1;
+      o.flash = 0.1;
+      burst(W, b.x, b.y, k === 'gift' ? '#ffd23f' : '#9fe8ff', 3, 120, 2);
+      if (k === 'gift' && o.hits >= D.GIFT.hits) openGift(W);
+      else if (k === 'capsule' && o.hits >= D.WINGMAN.capHits) freeCapsule(W);
+      else W.events.push('giftHit');
+      return true;
+    }
+    return false;
+  }
+
+  // 자동 조준이 겨눌 수 있는 선물 상자·캡슐 (화면 안에 들어온 것만)
+  function funTarget(W, x, y) {
+    let best = null, bd = Infinity;
+    for (const o of [W.gift, W.capsule]) {
+      if (!o || o.x < 0 || o.x > W.w || o.y < 0 || o.y > W.h) continue;
+      const d = NG.dist2(x, y, o.x, o.y);
+      if (d < bd) { bd = d; best = o; }
+    }
+    return best;
+  }
+
+  // 동료가 쏠 적: 동료 자리에서 range 안의 가장 가까운 적
+  function wingTarget(W) {
+    const w = W.wing, R = D.WINGMAN.range;
+    const e = w && nearestEnemy(W, w.x, w.y);
+    return e && NG.dist2(e.x, e.y, w.x, w.y) <= R * R ? e : null;
+  }
+
+  function updateWing(W, dt) {
+    const w = W.wing, WM = D.WINGMAN, p = W.player;
+    if (!w) return;
+    if (w.bye > 0) {
+      // 손 흔들고 떠나기: 처음 절반은 제자리에서 흔들흔들, 그다음 위로 날아간다
+      w.bye -= dt;
+      w.wave += dt;
+      if (w.bye < WM.bye * 0.5) { w.y -= 320 * dt; w.aim = -Math.PI / 2; }
+      if (w.bye <= 0 || w.y < -40) W.wing = null;
+      return;
+    }
+    // 내 옆(조준 반대쪽 비스듬히)을 부드럽게 따라온다
+    const a = p.aim + Math.PI * 0.62;
+    const tx = p.x + Math.cos(a) * WM.side, ty = p.y + Math.sin(a) * WM.side;
+    const k = Math.min(1, dt * WM.follow);
+    w.x += (tx - w.x) * k; w.y += (ty - w.y) * k;
+    w.x = NG.clamp(w.x, 10, W.w - 10); w.y = NG.clamp(w.y, 10, W.h - 10);
+    const e = wingTarget(W);
+    if (e) w.aim = Math.atan2(e.y - w.y, e.x - w.x);
+    w.cd -= dt;
+    if (w.cd <= 0) {
+      if (e) {
+        const c = Math.cos(w.aim), s = Math.sin(w.aim);
+        W.bullets.push({ x: w.x + c * 10, y: w.y + s * 10, vx: c * WM.bulletSpeed, vy: s * WM.bulletSpeed, r: 3,
+          dmg: p.gun.dmg * WM.dmgMul, life: WM.range / WM.bulletSpeed, pierce: 0, bounce: 0, hits: [], wing: true });
+        w.shots += 1;
+        w.cd = 1 / WM.rate;
+      } else w.cd = 0;
+    }
+    w.t -= dt;
+    if (w.t <= 0) {
+      w.t = 0;
+      w.bye = WM.bye;
+      W.texts.push({ x: w.x, y: w.y - 22, txt: '고마워!', life: 1.6, col: w.look.color });
+      W.events.push('wingBye');
+    }
+  }
+
+  // ─── 피버 타임 ─────────────────────────────────────────────
+  const feverMul = W => (W.feverT > 0 ? D.FEVER.scoreMul : 1);
+  // 콤보가 이어지는 처치마다 게이지가 찬다 (피버 중엔 안 참)
+  function fillFever(W, e) {
+    const F = D.FEVER;
+    if (W.feverT > 0 || W.combo < F.fromCombo) return;
+    W.fever += 1 + (e.type === 'boss' ? F.bossAdd : 0);
+    if (W.fever >= F.need) startFever(W);
+  }
+  function startFever(W) {
+    const F = D.FEVER;
+    W.fever = F.need;
+    W.feverT = F.time;
+    W.feverBanner = F.banner;
+    W.stats.fevers += 1;
+    W.events.push('fever');
+  }
+  function updateFever(W, dt) {
+    const F = D.FEVER;
+    if (W.feverT > 0) {
+      W.feverT -= dt;
+      W.fever = F.need * Math.max(0, W.feverT / F.time); // 끝날 때까지 게이지가 줄어든다
+      if (W.feverT <= 0) { W.feverT = 0; W.fever = 0; W.events.push('feverEnd'); }
+    } else if (W.combo <= 0 && W.fever > 0) W.fever = Math.max(0, W.fever - F.idleDrain * dt);
+  }
+
+  // 한 프레임: 선물 상자·캡슐·동료·피버
+  function updateFun(W, dt) {
+    const G = D.GIFT, WM = D.WINGMAN, p = W.player;
+    W.waveT += dt;
+    // 선물 상자 차례
+    W.giftT -= dt;
+    if (W.giftT <= 0) {
+      if (giftBlocked(W)) W.giftT = G.retry;
+      else { spawnGift(W); W.giftT = between(W.fun, G.gap); }
+    }
+    const g = W.gift;
+    if (g) {
+      g.t += dt; g.life -= dt; g.flash = Math.max(0, g.flash - dt);
+      g.x += g.vx * dt;
+      g.y = g.baseY + Math.sin(g.t * 1.8 + g.ph) * G.bob;
+      if (NG.dist2(g.x, g.y, p.x, p.y) < (g.r + p.r) * (g.r + p.r)) openGift(W);
+      else if (g.life <= 0) W.gift = null;
+    }
+    // 구조 캡슐 차례 (웨이브의 적이 남아 있을 때만)
+    if (W.capT > 0) {
+      W.capT -= dt;
+      if (W.capT <= 0) {
+        W.capT = -1;
+        if (!W.wing && !W.capsule && (W.spawnQueue.length || W.enemies.some(e => !e.dead))) spawnCapsule(W);
+        else W.capNext = W.wave + 1;
+      }
+    }
+    const c = W.capsule;
+    if (c) {
+      c.t += dt; c.life -= dt; c.flash = Math.max(0, c.flash - dt);
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      const out = c.x < -60 || c.x > W.w + 60 || c.y < -60 || c.y > W.h + 60;
+      if (NG.dist2(c.x, c.y, p.x, p.y) < (c.r + p.r) * (c.r + p.r)) freeCapsule(W);
+      else if (c.life <= 0 || (out && c.t > 3)) { W.capsule = null; W.capNext = W.wave + 1; }
+    }
+    updateWing(W, dt);
+    updateFever(W, dt);
   }
 
   // ─── 운석 (2026-09-27) ──────────────────────────────────────
@@ -1387,6 +1655,8 @@
     W.pulse = Math.max(0, W.pulse - dt * 1.6);
     W.banner = Math.max(0, W.banner - dt);
     W.comboPop = Math.max(0, W.comboPop - dt * 4);
+    W.feverBanner = Math.max(0, W.feverBanner - dt);
+    if (W.giftPop) { W.giftPop.life -= dt; if (W.giftPop.life <= 0) W.giftPop = null; }
   }
 
   function updateCombo(W, dt) {
@@ -1426,11 +1696,13 @@
     updateMeteors(W, dt);
     updateMists(W, dt);
     updateShocks(W, dt);
+    updateFun(W, dt);
     W.enemies = W.enemies.filter(e => !e.dead);
     updateSpawns(W, dt);
     updateFx(W, dt);
   }
 
   NG.World = { makePlayer, addDrop, bossLook, createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage, placeOf, holePull, meteorGap,
-    foeOf, adaptDiff, perfOf, inMist, spawnEnemy };
+    foeOf, adaptDiff, perfOf, inMist, spawnEnemy,
+    giftBlocked, spawnGift, giftReward, openGift, spawnCapsule, freeCapsule, wingTarget, startFever, killEnemy };
 })(NG);

@@ -26,7 +26,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || 'assert failed');
 // 빈 하늘: 발판·별·아이템·폭탄을 모두 치우고 새로 만들지도 않게 한다
 function empty(opts) {
   const W = create(1, Object.assign({ viewH: 600 }, opts));
-  W.plats = []; W.stars = []; W.items = []; W.mines = []; W.monsters = [];
+  W.plats = []; W.stars = []; W.items = []; W.mines = []; W.monsters = []; W.gifts = []; W.doors = []; W.giftAt = 1e9;
   W.genY = 1e9;
   return W;
 }
@@ -919,8 +919,9 @@ test('쫓아오는 먹구름은 늘 사람 닮은 봇이 오르는 평균보다 
     for (let seed = 1; seed <= n; seed++) {
       const W = create(seed, { diff, viewH: 600, adapt: 1.12 });
       const bot = makeHuman(seed, HUMAN);
-      for (let i = 0; i < 60 * 180 && W.phase === 'play'; i++) { W.input.dir = bot(W, 1 / 60); step(W, 1 / 60); clear(W); }
-      h += W.height; t += W.t;
+      let climb = 0;   // 비밀 방 안에 있던 시간은 빼고 (방 안에서는 높이도 먹구름도 멈춘다)
+      for (let i = 0; i < 60 * 180 && W.phase === 'play'; i++) { W.input.dir = bot(W, 1 / 60); const inRoom = !!W.room; step(W, 1 / 60); clear(W); if (!inRoom) climb += 1 / 60; }
+      h += W.height; t += climb;
       if (W.cause === 'storm') caught++;
     }
     const climb = h / t;
@@ -1065,6 +1066,161 @@ test('닿지 못하는 틈이 없다: 블랙홀에 끌리는 구간에서도 (�
     assert(inHole > 50, diff + ' holes were measured ' + inHole);
   }
   console.log('       ' + out.join(' / '));
+});
+
+// ─── 깜짝 선물 · 피버 타임 · 비밀 방 ──────────────────────────
+// 로켓으로 높이 올라가며 판을 만든다 (선물·피버를 억지로 켜 볼 수 있게 hook)
+function climb(diff, seed, n, hook) {
+  const W = create(seed, { diff, viewH: 600 });
+  const plats = new Map();
+  for (let i = 0; i < n; i++) {
+    if (hook) hook(W, i);
+    W.rocket = 10; W.cam += 150; W.p.y = W.cam + 300; tick(W);
+    for (const p of W.plats) plats.set(p.id, p);
+  }
+  return { W, plats: [...plats.values()] };
+}
+
+test('깜짝 선물·피버·비밀 방은 발판 자리를 바꾸지 않는다 (닿지 못하는 틈이 없다가 그대로)', () => {
+  for (const diff of LEVELS) {
+    const board = r => JSON.stringify(r.plats.filter(p => !p.perch).map(p => [p.kind, Math.round(p.x * 100), Math.round(p.y * 100)]));
+    const a = climb(diff, 5, 200);
+    const b = climb(diff, 5, 200, (W, i) => { if (i % 40 === 0) { W.feverT = D.FEVER.time; } W.giftAt = 0; W.t += 1; });
+    assert(board(a) === board(b), diff + ' same platforms with gifts and fever');
+    assert(b.W.gifts.length + b.W.giftsGot >= 0, 'ok');
+  }
+});
+
+test('깜짝 선물: 60 ~ 100초마다 화면 바로 위 길 발판 위에, 블랙홀 구간·처음 안내 중에는 없다', () => {
+  const G = D.GIFT;
+  let placed = 0;
+  for (const diff of LEVELS) for (let seed = 1; seed <= 6; seed++) {
+    const W = create(seed, { diff, viewH: 600 });
+    assert(W.giftAt >= G.every[0] && W.giftAt <= G.every[1], 'first gift time ' + W.giftAt);
+    const bot = makeHuman(seed, HUMAN);
+    let last = 0, seen = new Set();
+    for (let i = 0; i < 60 * 240 && W.phase === 'play'; i++) {
+      W.input.dir = bot(W, 1 / 60); step(W, 1 / 60); clear(W);
+      for (const g of W.gifts) if (!seen.has(g.id)) {
+        seen.add(g.id); placed++;
+        assert(W.t >= last + G.every[0] - 0.02 || last === 0, 'spacing ' + (W.t - last).toFixed(1));
+        last = W.t;
+        assert(!JP.World.holeAt(W, g.y / D.METER), 'not in a black hole stretch');
+        assert(g.y > W.cam + W.viewH, 'placed above the screen');
+        const host = W.plats.find(p => p.main && Math.abs(p.x - g.x) < 1e-6 && Math.abs(p.y + G.r + 4 - g.y) < 1e-6);
+        assert(host && host.kind !== 'moving' && host.kind !== 'cloud', 'on a path platform');
+      }
+    }
+  }
+  assert(placed >= 6, 'gifts appear ' + placed);
+  // 처음 안내 중에는 놓지 않는다
+  const T = create(1, { diff: 'easy', viewH: 600, tutorial: true });
+  T.cam = 3000; T.genY = 3000; T.t = 200;
+  assert(!JP.World.placeGift(T), 'no gift during the tutorial');
+});
+
+test('깜짝 선물: 열면 코인(15 ~ 40)·로켓·방패 방울·다음 판 시작 아이템 중 하나, 모두 좋은 것', () => {
+  const got = {};
+  for (let k = 0; k < 200; k++) {
+    const W = empty({ diff: 'normal' });
+    const gr = JP.rng(k * 7919 + 101); gr(); gr(); W.grand = gr;
+    const g = { id: 1, x: 200, y: 300, got: false, seen: -1 };
+    W.gifts.push(g);
+    put(W, 200, 300, 0); clear(W); tick(W);
+    assert(g.got && W.giftsGot === 1 && W.events.includes('gift'), 'opened');
+    const f = W.fx.find(q => q.kind === 'gift');
+    got[f.reward] = (got[f.reward] || 0) + 1;
+    if (f.reward === 'coins') assert(f.n >= D.GIFT.coins[0] && f.n <= D.GIFT.coins[1] && W.giftCoins === f.n, 'coins ' + f.n);
+    if (f.reward === 'rocket') assert(W.rocket > 0 && W.rockets === 1, 'rocket');
+    if (f.reward === 'shield') assert(W.shield, 'shield');
+    if (f.reward === 'item') assert(['rocketStart', 'shieldStart'].includes(f.item) && W.giftItems[0] === f.item, 'item');
+  }
+  assert(Object.keys(got).sort().join() === 'coins,item,rocket,shield', 'all kinds ' + JSON.stringify(got));
+  // 방패가 이미 있으면 코인으로
+  const S = empty({ diff: 'normal' }); S.shield = true; S.grand = () => 0.7;
+  S.gifts.push({ id: 1, x: 200, y: 300, got: false, seen: -1 }); put(S, 200, 300, 0); tick(S);
+  const r = runStats(S);
+  assert(r.gifts === 1 && Array.isArray(r.giftItems) && 'giftCoins' in r, 'run stats');
+});
+
+test('피버 타임: 콤보·밟기로 게이지가 차고, 가득 차면 10초 동안 별 점수 두 배 + 별이 더 생긴다', () => {
+  const F = D.FEVER;
+  const W = empty({ diff: 'normal' });
+  W.lastLand = 0; W.storm = null;   // 제자리에서 오래 재므로 먹구름은 뺀다
+  let n = 0;
+  while (W.feverT === 0 && n < 200) { n++; dropOn(W, plat(W, 'normal', 200, n * 60)); }
+  console.log('       이어서 더 높은 발판 ' + n + '번이면 FEVER');
+  assert(W.feverT > 0 && W.fevers === 1 && W.events.includes('fever') && W.fever === 0, 'fever on');
+  assert(n >= 12 && n <= 40, 'takes a while ' + n);
+  // 피버 중에는 게이지가 차지 않는다
+  W.fever = 0; JP.World.feverAdd(W, 0.5);
+  assert(W.fever === 0, 'no filling during fever');
+  // 별 점수 두 배
+  const pts0 = W.starPts;
+  W.combo = 0;
+  W.stars.push({ id: 999, x: W.p.x, y: W.p.y, got: false }); ticks(W, 1);
+  assert(W.starPts - pts0 === D.STAR.points * F.starMul, 'double stars ' + (W.starPts - pts0));
+  // 10초 뒤 끝난다
+  clear(W);
+  for (let i = 0; i < Math.round(F.time / H) + 2; i++) { put(W, 200, W.p.y, 0); tick(W); }
+  assert(W.feverT === 0 && W.events.includes('feverEnd'), 'ends after ' + F.time + 's');
+  const s1 = W.starPts; W.combo = 0; W.stars.length = 0; W.stars.push({ id: 1000, x: W.p.x, y: W.p.y, got: false }); ticks(W, 1);
+  assert(W.starPts - s1 === D.STAR.points, 'back to normal ' + (W.starPts - s1));
+  // 밟기도 게이지를 채운다 · 켜질 때 보이는 길 발판 위에 별이 생긴다
+  const M = create(2, { diff: 'normal', viewH: 600 });
+  const before = M.stars.length;
+  M.fever = 0.95; JP.World.feverAdd(M, F.stomp);
+  assert(M.feverT === F.time && M.stars.length > before, 'extra stars ' + (M.stars.length - before));
+  assert(runStats(M).fevers === 1, 'run stats');
+});
+
+test('비밀 방 문: 200 ~ 300m마다 보통 길 발판 위에, 블랙홀 구간이 아닐 때', () => {
+  const RM = D.ROOM;
+  for (const diff of LEVELS) for (let seed = 1; seed <= 3; seed++) {
+    const W = create(seed, { diff, viewH: 600 });
+    const doors = new Map(), plats = new Map();
+    for (let i = 0; i < 300; i++) {
+      W.rocket = 10; W.cam += 150; W.p.y = W.cam + 300; tick(W);
+      for (const d of W.doors) doors.set(d.id, d);
+      for (const p of W.plats) plats.set(p.id, p);
+    }
+    const L = [...doors.values()].sort((a, b) => a.y - b.y);
+    assert(L.length >= 3, diff + ' doors ' + L.length);
+    assert(L[0].y / D.METER >= RM.first, 'first door ' + (L[0].y / D.METER).toFixed(0));
+    for (let i = 0; i < L.length; i++) {
+      const d = L[i], host = [...plats.values()].find(p => p.main && p.x === d.x && Math.abs(p.y + RM.r - d.y) < 1e-6);
+      assert(host && host.kind === 'normal', 'on a normal path platform');
+      assert(!JP.World.holeAt(W, (d.y - RM.r) / D.METER), 'not in a hole stretch');
+      if (i) { const gap = (L[i].y - L[i - 1].y) / D.METER; assert(gap >= RM.every[0] - 0.01 && gap <= RM.every[1] + 30, 'spacing ' + gap.toFixed(0)); }
+    }
+  }
+});
+
+test('비밀 방: 20초 동안 떨어지지 않고 별을 모으며, 높이·먹구름이 멈춘 뒤 문 자리로 돌아온다', () => {
+  for (const diff of ['easy', 'normal']) {
+    const W = empty({ diff });
+    W.maxY = 3000; W.height = 60; W.cam = 2900; W.pcam = 2900;
+    if (W.storm) { W.storm.on = true; W.storm.y = W.storm.py = 2700; }
+    const p = plat(W, 'normal', 150, 3000);
+    const door = { id: 77, x: 150, y: 3000 + D.ROOM.r, used: false, seen: -1 };
+    W.doors.push(door);
+    put(W, 150, 3000 + R + 2, -50); clear(W); tick(W);
+    assert(W.room && W.rooms === 1 && door.used && W.events.includes('room'), diff + ' entered');
+    assert(W.stars.length === D.ROOM.stars && W.plats.some(q => q.kind === 'spring'), 'stars and springs inside');
+    const h0 = W.height, s0 = W.storm && W.storm.y, stars0 = W.starsGot;
+    // 아무것도 안 눌러도 떨어지지 않는다 (절반은 한쪽으로 쭉 눌러 본다)
+    let n = 0;
+    while (W.room && n < 200 * 120) { W.input.dir = n > 900 ? 1 : 0; tick(W); n++; assert(W.phase === 'play', 'never falls in the room'); }
+    assert(Math.abs(n * H - D.ROOM.time) < 0.02, 'lasts ' + (n * H).toFixed(2) + 's');
+    assert(W.height === h0 && W.maxY === 3000, 'height paused');
+    if (W.storm) assert(W.storm.y === s0, 'storm paused');
+    assert(W.starsGot > stars0, 'collected stars ' + (W.starsGot - stars0));
+    assert(Math.abs(W.p.x - 150) < 1e-6 && Math.abs(W.p.y - (3000 + R)) < 1e-6 && W.p.vy > 0, 'back at the door ' + W.p.x + ',' + W.p.y);
+    assert(W.plats.includes(p) && W.cam === 2900 && W.events.includes('roomEnd'), 'world restored');
+    ticks(W, 5);
+    assert(W.room === null && W.phase === 'play', 'goes on');
+    assert(runStats(W).rooms === 1, 'run stats');
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

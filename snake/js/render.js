@@ -158,6 +158,21 @@
     R.texts.push({ x, y, txt, color, size, life: 0.9, max: 0.9 });
   }
 
+  // 판 가운데 큰 글자 (선물 · FEVER · 거대 뱀). 하나만, 새로 오면 바꾼다
+  function banner(txt, color, life) { R.banner = { txt, color, life, max: life }; }
+  function drawBanner(ctx, v) {
+    const B = R.banner;
+    if (!B || B.life <= 0) return;
+    const k = B.life / B.max, a = Math.min(1, k * 3, (1 - k) * 8 + 0.2);
+    const fs = Math.round(Math.max(24, Math.min(58, v.bw / 13)));
+    const x = v.bx + v.bw / 2, y = v.by + v.bh * 0.4 - (v.calm ? 0 : (1 - k) * 20);
+    ctx.globalAlpha = a;
+    ctx.font = fs + 'px ' + DISP; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(5,7,12,0.9)'; ctx.strokeText(B.txt, x, y);
+    ctx.fillStyle = B.color; ctx.fillText(B.txt, x, y);
+    ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+  }
+
   function toPx(v, gx, gy) { return { x: v.bx + (gx + 0.5) * v.cell, y: v.by + (gy + 0.5) * v.cell }; }
 
   function burst(x, y, n, colors, speed, size) {
@@ -174,7 +189,7 @@
 
   // 규칙이 남긴 연출 요청(W.fx)을 입자로 바꾼다
   function takeFx(W, v) {
-    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; }
+    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; R.banner = null; }
     for (const f of W.fx) {
       const p = toPx(v, f.x, f.y), c = v.cell;
       if (W.fun && f.pts && (f.kind === 'eat' || f.kind === 'gold') && (W.mult > 1 || (W.eff && W.eff.double > 0) || f.kind === 'gold')) {
@@ -207,7 +222,28 @@
       } else if (f.kind === 'rivalOut') {
         ring(p.x, p.y, c * 1.8, RIVAL_PURPLE, 0.45);
         burst(p.x, p.y, 14, [RIVAL_ORANGE, RIVAL_PURPLE, '#ffffff'], c * 7, c * 0.16);
-        text(p.x, p.y - c, '뿅! 다시 올게', '#ffcf9a', c * 0.62);
+        text(p.x, p.y - c, f.scared ? '으악! 도망!' : '뿅! 다시 올게', '#ffcf9a', c * 0.62);
+      } else if (f.kind === 'giftIn') {
+        ring(p.x, p.y, c * 2, '#ff9ad5', 0.6);
+        text(p.x, p.y - c, '선물 상자!', '#ffc8e8', c * 0.62);
+      } else if (f.kind === 'gift') {
+        // 색종이 + 판 가운데 큰 글자
+        ring(p.x, p.y, c * 2.6, '#ffe66d', 0.6);
+        burst(p.x, p.y, 40, ['#ff5fa8', '#ffe66d', '#5ee7ff', '#7dff6a', '#c7a6ff', '#ffffff'], c * 13, c * 0.24);
+        banner(f.text, '#ffe66d', 1.8);
+      } else if (f.kind === 'fever') {
+        burst(p.x, p.y, 30, ['#ff5fa8', '#ffe66d', '#5ee7ff', '#7dff6a'], c * 12, c * 0.2);
+        banner('FEVER! 점수 두 배', '#ff9ad5', 1.4);
+      } else if (f.kind === 'giant') {
+        ring(p.x, p.y, c * 3.2, '#ffe66d', 0.7);
+        burst(p.x, p.y, 30, ['#ffe66d', '#ffffff', '#ff9f43'], c * 12, c * 0.24);
+        banner('거대 뱀 변신!', '#ffe66d', 1.4);
+        if (!v.calm) R.shake = D.FX.shake * 0.6;
+      } else if (f.kind === 'smash') {
+        ring(p.x, p.y, c * 1.6, '#ff9f43', 0.4);
+        burst(p.x, p.y, 18, ['#ff3b4e', '#ffc828', '#3a0a10', '#ffffff'], c * 10, c * 0.26);
+        text(p.x, p.y - c * 0.7, '쾅!', '#ffc828', c * 0.8);
+        if (!v.calm) R.shake = Math.max(R.shake, D.FX.shake * 0.4);
       } else if (f.kind === 'rivalEat') {
         ring(p.x, p.y, c * 1.2, RIVAL_ORANGE, 0.35);
         burst(p.x, p.y, 8, [RIVAL_ORANGE, RIVAL_PURPLE], c * 5, c * 0.14);
@@ -245,6 +281,7 @@
     }
     for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y -= 28 * dt; if (q.life <= 0) R.texts.splice(i, 1); }
     R.shake = Math.max(0, R.shake - dt * 40);
+    if (R.banner) { R.banner.life -= dt; if (R.banner.life <= 0) R.banner = null; }
     R.flash = Math.max(0, R.flash - dt);
   }
 
@@ -291,7 +328,7 @@
       }
       ctx.globalAlpha = 1;
     }
-    const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.diff || (W.easy ? 1 : 0)].join(',');
+    const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.diff || (W.easy ? 1 : 0), W.wallVer || 0].join(',');
     if (R.boardKey !== key || R.boardWalls !== W.walls) { R.boardKey = key; R.boardWalls = W.walls; R.board = paintBoard(v, W.cols, W.rows, v.dpr, W); }
     ctx.drawImage(R.board, v.bx - BM, v.by - BM, v.bw + BM * 2, v.bh + BM * 2);
   }
@@ -338,6 +375,77 @@
       ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.3 * pulse, 0, TAU); ctx.fill();
       ctx.fillStyle = '#ffd6e8';
       ctx.beginPath(); ctx.arc(p.x - c * 0.07, p.y - c * 0.07, c * 0.11 * pulse, 0, TAU); ctx.fill();
+    }
+  }
+
+  // ─── 재미 셋 그리기 ───────────────────────────────────────
+  // 피버 보너스 구슬: 무지개 고리를 두른 구슬
+  function drawBonus(ctx, W, v) {
+    const f = W.bonus;
+    if (!f) return;
+    const p = toPx(v, f.x, f.y), c = v.cell, k = Math.min(1, (W.t - f.born) / 0.25);
+    const hue = v.calm ? 320 : (W.t * 200) % 360;
+    glow(ctx, 'rgba(255,120,220,0.7)', p.x, p.y, c * 1.3, 0.8 * k);
+    ctx.strokeStyle = 'hsl(' + hue + ',100%,70%)'; ctx.lineWidth = Math.max(2, c * 0.09);
+    ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.42 * k, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#ff5fd0';
+    ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.28 * k, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ffe0f6';
+    ctx.beginPath(); ctx.arc(p.x - c * 0.07, p.y - c * 0.07, c * 0.1 * k, 0, TAU); ctx.fill();
+  }
+  // 선물 상자: 분홍 상자에 노란 리본. 사라지기 전 blink초는 깜빡 (움직임 줄이기면 흐리게만)
+  function giftSprite(c) {
+    const px = Math.round(c);
+    return sprite('gift' + px, px, (g, s) => {
+      const m = s * 0.12, w = s - m * 2;
+      rrect(g, m, m + s * 0.12, w, w - s * 0.12, s * 0.12);
+      const gr = g.createLinearGradient(0, m, 0, s - m);
+      gr.addColorStop(0, '#ff8ed0'); gr.addColorStop(1, '#c3237f');
+      g.fillStyle = gr; g.fill();
+      g.strokeStyle = '#5a0a38'; g.lineWidth = Math.max(1, s * 0.05); g.stroke();
+      // 뚜껑
+      rrect(g, m * 0.6, m + s * 0.04, s - m * 1.2, s * 0.2, s * 0.06);
+      g.fillStyle = '#ffb3e0'; g.fill(); g.stroke();
+      // 리본
+      g.fillStyle = '#ffe66d';
+      g.fillRect(s / 2 - s * 0.07, m + s * 0.04, s * 0.14, w - s * 0.04);
+      g.fillRect(m, s * 0.5, w, s * 0.12);
+      g.beginPath(); g.ellipse(s / 2 - s * 0.14, m, s * 0.14, s * 0.09, -0.5, 0, TAU); g.fill();
+      g.beginPath(); g.ellipse(s / 2 + s * 0.14, m, s * 0.14, s * 0.09, 0.5, 0, TAU); g.fill();
+    });
+  }
+  function drawGift(ctx, W, v) {
+    const G = W.gift;
+    if (!G) return;
+    const p = toPx(v, G.x, G.y), c = v.cell;
+    const k = Math.min(1, (W.t - G.born) / 0.3), end = G.life < D.GIFT.blink;
+    const a = end ? (v.calm ? 0.55 : (Math.floor(W.t * 8) % 2 ? 0.35 : 1)) : 1;
+    const bob = v.calm ? 0 : Math.sin(W.t * 4) * c * 0.06;
+    ctx.globalAlpha = a;
+    glow(ctx, 'rgba(255,150,220,0.75)', p.x, p.y, c * 1.8, 0.85 * k);
+    const sp = giftSprite(c * 1.1), sz = c * 1.1 * k;
+    ctx.drawImage(sp, p.x - sz / 2, p.y - sz / 2 + bob, sz, sz);
+    ctx.globalAlpha = 1;
+  }
+  // 피버: 판 테두리가 무지개 (움직임 줄이기면 고정된 금빛)
+  function drawFeverBorder(ctx, W, v) {
+    if (!(W.feverT > 0)) return;
+    const x = v.bx - 3, y = v.by - 3, w = v.bw + 6, h = v.bh + 6;
+    ctx.lineWidth = 5;
+    if (v.calm) { ctx.strokeStyle = '#ffd84a'; ctx.strokeRect(x, y, w, h); return; }
+    const t = W.t * 160, seg = 12, per = 2 * (w + h) / seg;
+    for (let i = 0; i < seg; i++) {
+      ctx.strokeStyle = 'hsl(' + ((t + i * 30) % 360) + ',100%,62%)';
+      ctx.beginPath();
+      // 둘레를 따라 한 토막
+      const d0 = i * per, d1 = d0 + per + 1;
+      const at = d => d < w ? [x + d, y] : d < w + h ? [x + w, y + d - w] : d < 2 * w + h ? [x + w - (d - w - h), y + h] : [x, y + h - (d - 2 * w - h)];
+      const pts = [d0];
+      for (const c2 of [w, w + h, 2 * w + h]) if (c2 > d0 && c2 < d1) pts.push(c2);
+      pts.push(Math.min(d1, 2 * (w + h)));
+      const q0 = at(pts[0]); ctx.moveTo(q0[0], q0[1]);
+      for (let j = 1; j < pts.length; j++) { const q = at(pts[j]); ctx.lineTo(q[0], q[1]); }
+      ctx.stroke();
     }
   }
 
@@ -885,9 +993,15 @@
     const lk = lookOf(v.char || v.skin), tm = v.calm ? 0 : W.t, d = SN.World.DIRS[W.dir];
     // 포털·벽 넘기로 떨어진 마디 사이는 잇지 않는다
     const far = i => Math.abs(S[i].x - S[i - 1].x) + Math.abs(S[i].y - S[i - 1].y) > 1;
-    paintBody(ctx, pts, far, c, lk, tm, dead, d, v.calm);
+    // 거대 뱀: 몸이 굵고 금빛으로 빛난다 (끝나기 1초 전부터 깜빡, 움직임 줄이기면 그대로)
+    const giant = W.eff && W.eff.giant > 0, gk = giant ? 1.7 : 1;
+    if (giant) {
+      const on = W.eff.giant > 1 || v.calm || Math.floor(W.t * 10) % 2;
+      if (on) { ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < n; i += 2) glow(ctx, 'rgba(255,220,90,0.6)', pts[i].x, pts[i].y, c * 1.9, 0.8); ctx.globalCompositeOperation = 'source-over'; }
+    }
+    paintBody(ctx, pts, far, c * gk, lk, tm, dead, d, v.calm);
     if (ghost) ctx.globalAlpha = 0.45 + (v.calm ? 0 : Math.sin(W.t * 12) * 0.12);
-    paintHead(ctx, pts[0], d, c, lk, tm, dead, String(n), W.eff && W.eff.double > 0);
+    paintHead(ctx, pts[0], d, c * gk, lk, tm, dead, String(n), W.eff && W.eff.double > 0);
     ctx.globalAlpha = 1;
   }
 
@@ -1013,6 +1127,9 @@
     const items = [];
     // 라이벌과 겨루기: 나 : 라이벌 먹은 구슬 (라이벌이 나온 뒤부터)
     if (W.rival && W.rival.met) items.push(['나 ' + W.eaten + ' : ' + W.rival.eaten + ' 라이벌', W.eaten >= W.rival.eaten ? '#8ff6ff' : '#ffb35c', Math.round(15 * s) + 'px ' + DISP]);
+    if (W.feverT > 0) items.push(['FEVER ' + Math.ceil(W.feverT), v.calm ? '#ffd84a' : 'hsl(' + ((W.t * 200) % 360) + ',100%,70%)']);
+    else if (W.fun && W.fever > 0.05) items.push(['FEVER ' + Math.floor(W.fever * 100) + '%', '#ff9ad5']);
+    if (W.eff && W.eff.giant > 0) items.push(['거대 ' + Math.ceil(W.eff.giant), '#ffe66d', Math.round(15 * s) + 'px ' + DISP]);
     if (W.hard) items.push(['어려움', '#ff8a96', Math.round(15 * s) + 'px ' + DISP]);
     if (W.mode === 'stage') items.push(['LV ' + W.level + '  ' + Math.min(W.got, W.goal) + '/' + W.goal, '#5ee7ff']);
     if (W.fun && W.mult > 1 && W.time - W.lastEat <= (W.comboWindow || D.COMBO.window)) items.push(['COMBO ×' + W.mult, W.mult >= 3 ? '#ff9f43' : '#ffd6e8']);
@@ -1113,12 +1230,16 @@
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     drawPortals(ctx, W, v);
     drawFood(ctx, W, v);
+    drawBonus(ctx, W, v);
     drawItem(ctx, W, v);
+    drawGift(ctx, W, v);
     drawRival(ctx, W, v);
     drawSnake(ctx, W, v);
     drawRivalTag(ctx, W, v);
     if (v.hud !== false) drawDanger(ctx, W, v);
     drawFx(ctx);
+    drawFeverBorder(ctx, W, v);
+    if (v.hud !== false) drawBanner(ctx, v);
     ctx.restore();
     if (R.flash > 0) {
       ctx.fillStyle = 'rgba(255,77,109,' + (R.flash * 0.7).toFixed(3) + ')';
@@ -1130,7 +1251,7 @@
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
-  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || !!(SN.Space && SN.Space.busy());
+  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || !!R.banner || !!(SN.Space && SN.Space.busy());
 
   SN.Render = { draw, layout, busy, drawCharPreview, drawSkinPreview: drawCharPreview, CHAR_IDS: Object.keys(LOOKS) };
 })(SN);

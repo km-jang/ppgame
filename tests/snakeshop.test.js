@@ -362,8 +362,8 @@ test('놀이 본부: 판 값(hubStats)으로 스티커가 붙고, 알아서 맞�
   assert(H.stickers().find(t => t.id === 'sn_stage').got, 'stage sticker');
   // 오늘의 미션 값 이름도 맞다 (len · golds · orbs)
   for (const m of H.DAILY.snake) assert(m.stat === 'games' || m.stat in W2.hubStats(W), 'daily stat ' + m.stat);
-  // 판 값 이름: len · golds · orbs · level · rivalWin · planet
-  assert(JSON.stringify(Object.keys(W2.hubStats(W)).sort()) === JSON.stringify(['golds', 'len', 'level', 'orbs', 'planet', 'rivalWin']), 'hub stat keys');
+  // 판 값 이름: len · golds · orbs · level · rivalWin · planet · gifts · fevers · giants
+  assert(JSON.stringify(Object.keys(W2.hubStats(W)).sort()) === JSON.stringify(['fevers', 'giants', 'gifts', 'golds', 'len', 'level', 'orbs', 'planet', 'rivalWin']), 'hub stat keys');
   assert(W2.hubStats(W).planet === 1, 'planet starts at mercury');
   // 알아서 맞추기: 처음 두 판은 1, 잘하면 올라가고 판 옵션으로 들어간다
   assert(H.adaptMul('snake', 'normal') === 1, 'warm');
@@ -400,6 +400,22 @@ test('난이도별 최고 기록: 고른 난이도만 오르고 다른 난이도
   const ctx = load(true), H = vm.runInContext('HUB', ctx);
   for (let i = 0; i < 4; i++) H.adaptRun('snake', 'hard', 2);
   assert(H.adaptMul('snake', 'hard') > 1 && H.adaptMul('snake', 'normal') === 1, 'hard key separate');
+});
+
+test('선물 상자: 코인은 판 끝 코인에 더하고, 다음 판 시작 아이템은 가방에 (가득이면 코인)', () => {
+  const { st, w } = fresh(0);
+  const r = SH.finishRun(st, run({ score: 400, giftCoins: 25, giftStart: ['slow'] }));
+  assert(r.parts.gift === 25 && r.coins === 20 + 25 && w.coins() === 45, 'gift coins ' + JSON.stringify(r));
+  assert(st.items.slow === 1, 'start item added');
+  st.items.ghost = 3;
+  const r2 = SH.finishRun(st, run({ giftStart: ['ghost'] }));
+  assert(st.items.ghost === 3 && r2.parts.gift === D.GIFT.fullCoins && r2.coins === D.GIFT.fullCoins, 'full bag gives coins');
+  // 실제 판에서 연 선물이 판 요약으로 이어진다
+  const W = WD.create(200, 20, 3, { mode: 'endless', rival: false });
+  W.gift = { x: 5, y: 5, life: 5, born: 0 };
+  WD.openGift(W);
+  const ro = SH.runOf(W);
+  assert(ro.gifts === 1 && (ro.giftCoins > 0 || ro.giftStart.length === 1 || W.powers === 1), 'run has gift');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

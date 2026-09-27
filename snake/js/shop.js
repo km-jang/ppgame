@@ -184,7 +184,9 @@
     const base = parts.score + parts.gold + parts.level;
     const lv = st ? (st.up.coin || 0) : 0;
     parts.bonus = Math.floor(base * lv * upDef('coin').per);
-    return { parts, total: base + parts.bonus };
+    // 깜짝 선물 상자 코인 (강화 보너스는 붙지 않는다)
+    parts.gift = int(run.giftCoins);
+    return { parts, total: base + parts.bonus + parts.gift };
   }
 
   // ─── 미션 ─────────────────────────────────────────────────
@@ -234,6 +236,13 @@
   // 판이 끝났을 때: 코인 지급 + 미션 진행. {coins, parts, done:[새로 끝난 미션 id]}
   function finishRun(st, run) {
     const c = coinsFor(run, st);
+    // 선물로 받은 다음 판 시작 아이템: 가방에 하나 더 (가득이면 그만큼 코인)
+    for (const id of (run && Array.isArray(run.giftStart) ? run.giftStart : [])) {
+      const it = itemDef(id);
+      if (!it) continue;
+      if ((st.items[id] || 0) < it.max) st.items[id] = (st.items[id] || 0) + 1;
+      else { c.parts.gift += D.GIFT.fullCoins; c.total += D.GIFT.fullCoins; }
+    }
     getWallet().add(c.total);
     st.life.earned += c.total;
     st.life.games += 1;
