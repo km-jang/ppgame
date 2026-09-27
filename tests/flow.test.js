@@ -51,8 +51,14 @@ async function until(page, fn, arg, ms) {
     assert(await HB.evaluate(() => document.querySelectorAll('.pick a').length === 4), '카드 수');
     assert(await HB.evaluate(() => document.getElementById('hub-coins').textContent === '0'), '처음 코인 0');
     assert(await HB.evaluate(() => document.querySelectorAll('#daily .dm').length === 3), '오늘의 미션 3개');
+    // 카드는 폴더가 아니라 index.html로 (파일로 바로 열어도 열리게)
+    const hrefs = await HB.evaluate(() => [...document.querySelectorAll('.pick a')].map(a => a.getAttribute('href')).join());
+    assert(hrefs === 'game/index.html,snake/index.html,jump/index.html,runner/index.html', '카드 주소 ' + hrefs);
     await HB.tap('#rec-open');
     assert(await HB.evaluate(() => document.getElementById('records').classList.contains('on') && document.querySelectorAll('#rec-rows .grow').length === 4), '기록실');
+    // 아직 한 게임도 안 열었어도 메달 합계는 네 게임 메달 수
+    const tot = await HB.evaluate(() => document.querySelector('#rec-tot div:nth-child(2) dd').textContent);
+    assert(/^0 \/ \d{2,}$/.test(tot) && Number(tot.split('/ ')[1]) >= 70, '메달 합계 ' + tot);
     await HB.tap('#rec-close');
     assert(await HB.evaluate(() => !document.getElementById('records').classList.contains('on')), '기록실 닫기');
   });
@@ -60,6 +66,10 @@ async function until(page, fn, arg, ms) {
     await HB.evaluate(() => { const m = HUB.daily()[0]; const d = HUB.DAILY[m.game].find(x => x.text === m.text); HUB.reportRun(m.game, { [d.stat]: m.goal }, 10); renderHub(); });
     assert(await HB.evaluate(() => !!document.querySelector('#daily [data-claim="0"]')), '받기 버튼 없음');
     const want = await HB.evaluate(() => HUB.daily()[0].reward);
+    await HB.tap('#daily [data-claim="0"]', { force: true });   // 나타나자마자 누르면(아이가 톡톡 두드리다) 안 받는다
+    await HB.waitForTimeout(100);
+    assert(await HB.evaluate(() => HUB.coins() === 0 && !!document.querySelector('#daily [data-claim="0"]')), '0.5초 안에 눌렀는데 받아짐');
+    await HB.waitForTimeout(550);
     await HB.tap('#daily [data-claim="0"]', { force: true });   // 버튼이 톡톡 튀고 있어서 기다리지 않고 누른다
     assert(await until(HB, w => document.getElementById('hub-coins').textContent === String(w), want), '코인이 안 늘어남');
   });
@@ -71,8 +81,11 @@ async function until(page, fn, arg, ms) {
     await HB.evaluate(() => NG.debug.giveCoins(250));
     await HB.goto(ROOT + '/index.html');
     assert(await until(HB, b => document.getElementById('hub-coins').textContent === (b + 250).toLocaleString(), before), '게임 고르기에 코인이 안 보임');
+    // 다른 곳에서 지갑이 바뀐 뒤 화면이 다시 보이면 새로 읽는다 (옛 잔액이 남지 않게)
+    await HB.evaluate(() => { HUB.addCoins(7); document.dispatchEvent(new Event('visibilitychange')); });
+    assert(await until(HB, b => document.getElementById('hub-coins').textContent === (b + 257).toLocaleString(), before), '다시 보일 때 지갑을 새로 안 읽음');
   });
-  await test('스티커북: 판 결과로 스티커가 붙으면 새 표시, 열면 24칸이 보이고 새 표시가 꺼진다', async () => {
+  await test('스티커북: 판 결과로 스티커가 붙으면 새 표시, 열면 모든 칸이 보이고 새 표시가 꺼진다', async () => {
     await HB.evaluate(() => { HUB.reportRun('jump', { height: 120 }, 20); renderHub(); });
     assert(await HB.evaluate(() => !document.getElementById('stk-new').hidden), '새 스티커 표시 없음');
     await HB.tap('#stk-open');
@@ -83,6 +96,35 @@ async function until(page, fn, arg, ms) {
   });
   await test('게임 고르기 콘솔 오류 없음', async () => { assert(!hb.errors.length, hb.errors.join(' | ')); });
   await hb.ctx.close();
+  // 두 탭 크기에서 글자: 카드 제목은 한 줄, 설명은 잘리지 않고, 미션 글은 15px 이상 (글꼴 서버를 막아 넓은 기본 서체로)
+  for (const vp of [{ width: 1280, height: 800 }, { width: 893, height: 533 }]) {
+    const sm = await open(browser, ROOT + '/index.html', Object.assign({}, TAB, { viewport: vp }));
+    await test('게임 고르기 글자 ' + vp.width + 'x' + vp.height + ': 제목 한 줄, 설명 안 잘림, 미션 글 크게', async () => {
+      await sm.page.waitForTimeout(700);
+      const r = await sm.page.evaluate(() => {
+        const out = [];
+        for (const a of document.querySelectorAll('.pick a')) {
+          const b = a.querySelector('b'), sm = a.querySelector('small');
+          const fs = parseFloat(getComputedStyle(b).fontSize);
+          if (b.getBoundingClientRect().height > fs * 1.6) out.push('제목 두 줄 ' + b.textContent);
+          if (b.scrollWidth > a.clientWidth) out.push('제목 넘침 ' + b.textContent);
+          if (sm.scrollWidth > sm.clientWidth + 1 || sm.scrollHeight > sm.clientHeight + 1 || getComputedStyle(sm).textOverflow === 'ellipsis') out.push('설명 잘림 ' + sm.textContent);
+          if (sm.getBoundingClientRect().bottom > a.getBoundingClientRect().bottom) out.push('설명이 카드 밖 ' + sm.textContent);
+        }
+        for (const t of document.querySelectorAll('#daily .dm .t')) {
+          const f = parseFloat(getComputedStyle(t).fontSize);
+          if (f < 15) out.push('미션 글 ' + f + 'px');
+        }
+        for (const t of document.querySelectorAll('#daily .dm .row')) if (parseFloat(getComputedStyle(t).fontSize) < 14) out.push('진행 글 작음');
+        const last = document.querySelector('.pick a:last-child').getBoundingClientRect();
+        if (last.bottom > innerHeight + 1) out.push('카드가 화면 밖 ' + Math.round(last.bottom));
+        return out;
+      });
+      assert(!r.length, r.join(' | '));
+      assert(!sm.errors.length, sm.errors.join(' | '));
+    });
+    await sm.ctx.close();
+  }
 
   console.log('N-GUN');
   const ng = await open(browser, ROOT + '/game/index.html');

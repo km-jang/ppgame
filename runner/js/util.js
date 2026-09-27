@@ -74,8 +74,21 @@ var RN = {};
       }
       return r;
     },
-    // 처음 한 번 나오는 안내를 아직 안 봤나
-    tutorialPending(store) { return !store.get(this.KEYS.tut, false); },
+    // 처음 안내를 아직 안 봤나. runner.tut: 1(또는 true) = 다 봤다, 그 밖의 숫자 = 안내를 시작한 판 수 (옛 값 false·없음 = 0).
+    // 안내를 maxRuns판(data.js TUTORIAL.maxRuns) 시작했으면 다 못 마쳤어도 더는 나오지 않는다 (매 판 안내가 나오지 않게)
+    tutorialPending(store) {
+      const v = store.get(this.KEYS.tut, 0);
+      if (v === true || v === 1) return false;
+      const max = (RN.DATA && RN.DATA.TUTORIAL && RN.DATA.TUTORIAL.maxRuns) || 2;
+      return !(typeof v === 'object' && v && v.runs >= max);
+    },
+    // 안내가 나오는 판을 시작했다 (maxRuns판째면 다 본 것으로)
+    startTutorial(store) {
+      const v = store.get(this.KEYS.tut, 0), runs = (v && typeof v === 'object' ? v.runs || 0 : 0) + 1;
+      const max = (RN.DATA && RN.DATA.TUTORIAL && RN.DATA.TUTORIAL.maxRuns) || 2;
+      store.set(this.KEYS.tut, runs >= max ? 1 : { runs });
+      return runs;
+    },
     markTutorial(store) { store.set(this.KEYS.tut, 1); },
   };
 

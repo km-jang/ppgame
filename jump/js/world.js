@@ -53,8 +53,13 @@
   }
   // 높이(점)에 따른 어려움 0 ~ 1: 몸풀기(warm)까지 0, full에서 1, 그 사이는 곧게 이어진다
   const diffAt = (y, L) => { L = L || D.DIFFICULTY.normal; return clamp01((y / D.METER - L.warm) / Math.max(1, L.full - L.warm)); };
-  // 몸풀기가 얼마나 끝났는지 0 ~ 1 (몸풀기 간격·폭에서 본 값으로 부드럽게 넘어간다)
-  const warmAt = (y, L) => (L.warm > 0 ? clamp01(y / D.METER / L.warm) : 1);
+  // 몸풀기가 얼마나 끝났는지 0 ~ 1 (몸풀기 간격·폭에서 본 값으로 부드럽게 넘어간다).
+  // base: 출발 높이(점). 높은 곳에서 출발해도 처음 몇 m는 몸풀기 (출발 장소 고르기)
+  const warmAt = (y, L, base) => (L.warm > 0 ? clamp01((y - (base || 0)) / D.METER / L.warm) : 1);
+  // 출발 장소 (D.STARTS): id나 높이(m)로 찾는다. 모르면 땅
+  function startOf(v) {
+    return D.STARTS.find(s => s.id === v || (typeof v === 'number' && s.at === v)) || D.STARTS[0];
+  }
   // 높이(m)에 있는 구역 번호 (D.ZONES)
   function zoneAt(m) {
     let z = 0;
@@ -129,7 +134,7 @@
 
   // 한 줄: 길을 이루는 발판 하나 + 가끔 곁 발판·별·아이템·가시 폭탄
   function row(W) {
-    const rand = W.rand, L = W.L, d = diffAt(W.genY, L), k = warmAt(W.genY, L), warm = k < 1;
+    const rand = W.rand, L = W.L, d = diffAt(W.genY, L), k = warmAt(W.genY, L, W.y0), warm = k < 1;
     const zi = zoneAt(W.genY / D.METER), Z = D.ZONES[zi], mix = W.mixes[zi];
     const G = L.gap;
     const gMin = lerp(L.warmGap[0], lerp(G[0], G[2], d), k), gMax = lerp(L.warmGap[1], lerp(G[1], G[3], d), k);
@@ -342,7 +347,8 @@
   // opts: {diff: 'easy'|'normal'|'hard', easy (예전 방식), viewH, tutorial,
   //        upgrades: {speed, rocket, cloud} (상점 강화), loadout: {rocket, shield} (시작 아이템),
   //        char: 캐릭터 id (D.CHARS, 없으면 통통 로봇)}
-  //        adapt: 알아서 맞춰 주는 난이도 배율 (common/hub.js adaptMul, 없으면 1)}
+  //        adapt: 알아서 맞춰 주는 난이도 배율 (common/hub.js adaptMul, 없으면 1),
+  //        start: 출발 장소 id 또는 높이 m (D.STARTS, 없으면 땅)}
   function create(seed, opts) {
     opts = opts || {};
     const s0 = seed == null ? (Date.now() ^ 0x5bd1e995) : seed;
@@ -355,7 +361,12 @@
     const viewH = opts.viewH || 600;
     const ch = charOf(opts.char);
     const UP = applyUpgrades(L, opts.upgrades, ch.id);
+    const ST = startOf(opts.start), y0 = ST.at * D.METER;
     const W = {
+      // 출발 장소: start = 출발 높이(m), y0 = 그 높이(점). 기록·코인·메달은 여기서부터 오른 거리를 따로 본다
+      start: ST.at, startId: ST.id, y0,
+      // 한 번 더! (D.CONTINUE): 이어 했는지 · 지켜 주는 남은 시간
+      continued: false, safeT: 0,
       rand, mrand: JP.rng((s0 ^ 0x2c1b3c6d) + 7), hrand: JP.rng((s0 ^ 0x51ed2701) + 3), grand: JP.rng((s0 ^ 0x6a09e667) + 11), A, adapt: A.mul,
       // 깜짝 선물 (D.GIFT): 놓인 상자 · 다음 선물 시각(오른 시간 초) · 이번 판 선물 코인 · 다음 판 시작 아이템
       gifts: [], giftAt: 0, giftCoins: 0, giftItems: [], giftsGot: 0,
@@ -365,23 +376,24 @@
       doors: [], nextDoor: 0, room: null, rooms: 0,
       // 블랙홀 구간 (D.BLACKHOLE): 목록 · 처음 나올 수 있는 높이 · 끄는 힘 · 지금 들어 있는 구간
       holeList: [], holeFirst: D.BLACKHOLE.first[L.id] || 300, pull: D.BLACKHOLE.pull[L.id] || 0, hole: null, holes: 0,
-      planet: 0,   /* 지나온 가장 먼 행성 (1 수성 … 9 명왕성, 10 ~ 17 외계 행성) */
-      leg: 0,      /* 지나온 여정 배너 수 (D.SKY.legs) */
+      planet: planetAt(ST.at),   /* 지나온 가장 먼 행성 (1 수성 … 9 명왕성, 10 ~ 17 외계 행성). 출발 장소 것은 처음부터 */
+      planet0: planetAt(ST.at),  /* 출발할 때 이미 지나 있던 행성 수 */
+      leg: legAt(ST.at),         /* 지나온 여정 배너 수 (D.SKY.legs) */
       easy, diff: L.id, L, ctl: UP.ctl, char: ch.id, phys: physOf(ch.id), rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
-      p: { x: WW / 2, y: P0.r, vx: 0, vy: 0, px: WW / 2, py: P0.r, face: 1, land: -9 },
+      p: { x: WW / 2, y: y0 + P0.r, vx: 0, vy: 0, px: WW / 2, py: y0 + P0.r, face: 1, land: -9 },
       input: { dir: 0 },          // -1 왼쪽 · 0 · 1 오른쪽 (main.js·봇이 채운다)
-      cam: -viewH * D.CAM.start, pcam: 0,
+      cam: y0 - viewH * D.CAM.start, pcam: 0,
       plats: [], stars: [], items: [], mines: [], monsters: [],
       // 구역별 발판 섞임 (구역 배율 × 맞춤 배율: 움직이는·부서지는·구름 발판)
       mixes: D.ZONES.map(Z => { const m = Object.assign({}, Z.mix); for (const k of ['moving', 'crumble', 'cloud']) m[k] = (m[k] || 1) * A.mix; return m; }),
       // 쫓아오는 먹구름 (보통·어려움): y = 구름 윗면 높이, rest = 쉬는 시간, seen = 처음 화면에 보인 때
       storm: L.storm ? { on: false, y: -1e9, py: -1e9, rest: 0, seen: -1, speed: 0 } : null,
-      genY: 0, prevXs: [WW / 2], recent: [{ y: 0, xs: [] }], nextItem: D.ITEM.first * D.METER,
+      genY: y0, prevXs: [WW / 2], recent: [{ y: y0, xs: [] }], nextItem: y0 + D.ITEM.first * D.METER,
       phase: 'play',              // play | over
       cause: null,                // fall | mine
       t: 0, acc: 0, alpha: 0, ticks: 0,
-      maxY: 0, height: 0, score: 0, starPts: 0,
-      zone: 0, mile: 0,           // 지금 구역 번호 · 지나간 100m 눈금 수
+      maxY: y0, height: ST.at, score: 0, starPts: 0,
+      zone: zoneAt(ST.at), mile: Math.floor(ST.at / D.MILE.big),   // 지금 구역 번호 · 지나간 100m 눈금 수
       // 처음 해 보는 판: 왼쪽·오른쪽을 한 번씩 눌러 볼 때까지 큰 안내 (main.js가 기억한다)
       tut: opts.tutorial ? { left: false, right: false, done: false, at: 0 } : null,
       rescues: UP.rescues, rescued: 0,
@@ -395,14 +407,17 @@
     W.pcam = W.cam;
     { const G = D.GIFT.every, RE = D.ROOM.every;
       W.giftAt = G[0] + W.grand() * (G[1] - G[0]);
-      W.nextDoor = (D.ROOM.first + W.grand() * (RE[1] - RE[0]) * 0.5) * D.METER; }
-    // 바닥: 기둥 가로 전체를 덮는 첫 발판
-    addPlat(W, 'ground', WW / 2, 0, WW);
+      W.nextDoor = y0 + (D.ROOM.first + W.grand() * (RE[1] - RE[0]) * 0.5) * D.METER; }
+    // 바닥: 기둥 가로 전체를 덮는 첫 발판 (높은 곳에서 출발하면 발사대)
+    const ground = addPlat(W, 'ground', WW / 2, y0, WW);
+    if (y0 > 0) ground.pad = true;
     generate(W);
+    // 높은 곳에서 출발: 발사대에서 짧게 로켓 (로켓 횟수·메달에는 세지 않는다)
+    if (y0 > 0) { W.rocket = D.WARP.rocket; W.events.push('warp'); W.fx.push({ kind: 'warp', id: ST.id, x: W.p.x, y: W.p.y }); }
     // 시작 아이템: 로켓 출발 · 방패 방울
     const lo = opts.loadout || {};
     if (lo.shield) { W.shield = true; W.events.push('shield'); }
-    if (lo.rocket) { W.rocket = W.rocketTime; W.rockets++; W.events.push('rocket'); }
+    if (lo.rocket) { W.rocket = Math.max(W.rocket, W.rocketTime); W.rockets++; W.events.push('rocket'); }
     return W;
   }
 
@@ -424,6 +439,22 @@
     // 먹구름도 물러나 잠깐 쉰다 (던져 올린 곳에서 곧바로 다시 잡히지 않게)
     const S = W.storm;
     if (S && S.on) { S.y = Math.min(S.y, W.cam - W.viewH * D.STORM.back); S.py = S.y; S.rest = D.STORM.rest; }
+  }
+
+  // ─── 한 번 더! (D.CONTINUE) ────────────────────────────────
+  // 한 판에 한 번, 끝난 판을 이어 한다 (보통·어려움. 쉬움은 구조 구름을 다 쓴 뒤라야 끝나므로 늘 그 뒤). 공짜
+  const canContinue = W => W.phase === 'over' && !W.continued;
+  // 이어 하기: 구조 구름이 주인공 아래에서 받아 던져 올리고, safe초 동안 지켜 준다 (먹구름은 멀리 물러나 쉰다)
+  function revive(W) {
+    if (!canContinue(W)) return false;
+    const C = D.CONTINUE;
+    W.phase = 'play'; W.cause = null; W.continued = true; W.safeT = C.safe; W.acc = 0;
+    W.p.vx = 0;
+    throwUp(W, 'rescue');
+    const S = W.storm;
+    if (S && S.on) { S.y = Math.min(S.y, W.cam - W.viewH * C.back); S.py = S.y; S.rest = Math.max(S.rest, C.safe); }
+    W.events.push('revive'); W.fx.push({ kind: 'revive', x: W.p.x, y: W.p.y });
+    return true;
   }
 
   // 몬스터를 위에서 밟았다: 꾹 눌리고 크게 튀어 오른다 (점수는 콤보 배율)
@@ -544,8 +575,9 @@
     W.t += H;
     P.px = P.x; P.py = P.y; W.pcam = W.cam;
     const room = W.room;
-    // 피버 시간
+    // 피버 시간 · 한 번 더 뒤 지켜 주는 시간
     if (W.feverT > 0 && (W.feverT -= H) <= 0) { W.feverT = 0; W.events.push('feverEnd'); }
+    if (W.safeT > 0 && (W.safeT -= H) <= 0) W.safeT = 0;
 
     // 발판 움직이기
     for (const p of W.plats) {
@@ -655,7 +687,7 @@
       if (m.seen < 0 && m.y < W.cam + W.viewH) m.seen = W.t;
       const dx = wrapDelta(P.x, m.x), dy = m.y - P.y;
       if (dx * dx + dy * dy >= mr) continue;
-      if (W.rocket > 0) { m.gone = true; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
+      if (W.rocket > 0 || W.safeT > 0) { m.gone = true; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
       if (W.shield) {
         W.shield = false; W.saves++; m.gone = true;
         P.vy = Math.max(P.vy, jumpV(W.phys.jump));
@@ -675,6 +707,7 @@
       if (d2 >= gr) continue;
       if (W.rocket > 0) { m.gone = true; m.hit = W.t; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
       if (P.vy <= 0 && dy > MO.r * MO.top) { stomp(W, m); continue; }
+      if (W.safeT > 0) { m.gone = true; m.hit = W.t; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
       if (m.cool > 0 || d2 >= hr2) continue;
       if (W.easy) {
         // 쉬움: "앗" 하고 옆으로 살짝 밀려난다. 잠깐 동안은 다시 부딪히지 않는다
@@ -762,7 +795,8 @@
 
     // 화면 아래로 떨어짐(또는 먹구름에 잡힘): 방패 → 구조 구름(쉬움) → 끝
     if (caught || P.y < W.cam - r * 1.5) {
-      if (W.shield) { W.shield = false; W.saves++; W.events.push('save'); throwUp(W, 'save'); }
+      if (W.safeT > 0) { W.events.push('rescue'); throwUp(W, 'rescue'); }   // 한 번 더 뒤 지켜 주는 동안: 공짜로 다시
+      else if (W.shield) { W.shield = false; W.saves++; W.events.push('save'); throwUp(W, 'save'); }
       else if (W.rescues > 0) { W.rescues--; W.rescued++; W.events.push('rescue'); throwUp(W, 'rescue'); }
       else { die(W, caught ? 'storm' : 'fall'); return; }
     }
@@ -918,11 +952,13 @@
       rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo, rescued: W.rescued, bounces: W.bounces, time: W.t,
       zone: W.zone, crumbles: W.crumbles, char: W.char, stomps: W.stomps, bumps: W.bumps, adapt: W.adapt, planet: W.planet, holes: W.holes,
       gifts: W.giftsGot, giftCoins: W.giftCoins, giftItems: W.giftItems.slice(), fevers: W.fevers, rooms: W.rooms,
+      // 출발 장소: 출발 높이(m) · 이번 판에 오른 거리(m) · 출발할 때 이미 지나 있던 행성 수 · 한 번 더 했는지
+      start: W.start || 0, climb: Math.max(0, W.height - (W.start || 0)), planet0: W.planet0 || 0, continued: !!W.continued,
     };
   }
 
   // 테스트·봇용: W에서 높이 y에 내려와 닿기까지 시간
   const timeTo = (W, y) => fallTime(W.p.y, W.p.vy, y, W.phys);
 
-  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, legAt, holeAt, holesUpTo, feverAdd, placeGift, openGift, enterRoom, leaveRoom };
+  JP.World = { create, startOf, canContinue, revive, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, legAt, holeAt, holesUpTo, feverAdd, placeGift, openGift, enterRoom, leaveRoom };
 })(JP);

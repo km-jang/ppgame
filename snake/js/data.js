@@ -46,21 +46,52 @@
     },
 
     // 스테이지: 레벨마다 벽 모양·포털 수·목표 구슬·속도가 다르다. 12를 넘으면 모양을 다시 돌며 더 빠르게
+    // par: 별 두 개 기준 시간(초, 쉬움 기준. 보통·어려움은 STARS.parMul을 곱한다). 쉬움 아이 흉내 봇 중간값의 약 2배 (tests/snake.test.js)
+    // boss: 대왕 뱀 단계 (구슬 목표 대신 대왕 뱀을 물어 줄이면 성공, BOSS)
     LEVELS: [
-      { name: '첫 걸음',     goal: 8,  speed: 7,    walls: 'none' },
-      { name: '기둥 숲',     goal: 10, speed: 7.5,  walls: 'pillars' },
-      { name: '가운데 벽',   goal: 10, speed: 8,    walls: 'bar', items: true },
-      { name: '순간 이동',   goal: 12, speed: 8,    walls: 'none', portals: 1, items: true },
-      { name: '십자로',      goal: 12, speed: 8.5,  walls: 'cross', items: true },
-      { name: '네 개의 방',  goal: 14, speed: 9,    walls: 'rooms', items: true },
-      { name: '줄무늬',      goal: 14, speed: 9,    walls: 'stripes', portals: 1, items: true },
-      { name: '상자 속',     goal: 15, speed: 9.5,  walls: 'box', items: true },
-      { name: '포털 미로',   goal: 16, speed: 10,   walls: 'pillars', portals: 2, items: true },
-      { name: '나선',        goal: 16, speed: 10,   walls: 'spiral', items: true },
-      { name: '요새',        goal: 18, speed: 10.5, walls: 'fort', portals: 1, items: true },
-      { name: '마지막 관문', goal: 20, speed: 11,   walls: 'rooms', portals: 2, items: true },
+      { name: '첫 걸음',     goal: 8,  speed: 7,    walls: 'none', par: 40 },
+      { name: '기둥 숲',     goal: 10, speed: 7.5,  walls: 'pillars', par: 50 },
+      { name: '가운데 벽',   goal: 10, speed: 8,    walls: 'bar', items: true, par: 50 },
+      { name: '대왕 뱀 등장', goal: 12, speed: 8,    walls: 'none', portals: 1, items: true, boss: true, par: 70 },
+      { name: '십자로',      goal: 12, speed: 8.5,  walls: 'cross', items: true, par: 60 },
+      { name: '네 개의 방',  goal: 14, speed: 9,    walls: 'rooms', items: true, par: 70 },
+      { name: '줄무늬',      goal: 14, speed: 9,    walls: 'stripes', portals: 1, items: true, par: 70 },
+      { name: '상자 속 대왕 뱀', goal: 15, speed: 9.5,  walls: 'box', items: true, boss: true, par: 80 },
+      { name: '포털 미로',   goal: 16, speed: 10,   walls: 'pillars', portals: 2, items: true, par: 80 },
+      { name: '나선',        goal: 16, speed: 10,   walls: 'spiral', items: true, par: 80 },
+      { name: '요새',        goal: 18, speed: 10.5, walls: 'fort', portals: 1, items: true, par: 90 },
+      { name: '마지막 대왕 뱀', goal: 20, speed: 11,   walls: 'rooms', portals: 2, items: true, boss: true, par: 90 },
     ],
+    // 두 번째 바퀴(13~24단계, 외계 행성 하늘) 이름. 모양은 1~12단계를 다시 돈다. 그다음 바퀴는 이름 뒤에 바퀴 수
+    LEVEL_NAMES2: ['얼음 첫 걸음', '용암 기둥 숲', '바다 가운데 벽', '유리비 대왕 뱀', '보석 십자로', '사막 네 개의 방',
+      '버섯 줄무늬', '떠돌이 대왕 뱀', '다시 포털 미로', '다시 나선', '다시 요새', '진짜 마지막 대왕 뱀'],
     STAGE: { loopSpeed: 0.8, clearBonus: 50, clearTime: 1.6 },
+
+    // 단계 별 (2026-09-27): 하나 = 깸 · 둘 = par 시간 안에 깸 · 셋 = 게다가 그 단계에서 황금 구슬을 하나 이상 먹음.
+    // 단계마다 가장 많이 받은 별을 이 기기에 기억한다 (main.js rec.stage.stars)
+    STARS: { parMul: { easy: 1, normal: 0.85, hard: 0.75 }, max: 3 },
+
+    // 대왕 뱀 (2026-09-27, 4·8·12단계와 두 번째 바퀴 16·20·24단계): 라이벌 뱀 규칙을 그대로 쓰는 큰 뱀.
+    // 나를 끝내는 일은 없다 (라이벌과 같다). 몸을 물면 그 칸부터 꼬리까지 먹고, 길이가 finish칸 이하일 때 머리 쪽(앞 minLen칸)을 물면 쓰러진다.
+    // 길이가 finish보다 길 때 머리 쪽을 물면 minLen칸만 남는다. 쉬는 동안 regrow초마다 한 칸씩 다시 자란다 (len까지).
+    // 처음엔 짧게(start칸) 나와서 금방 len까지 자란다. len: 단계 차례(몇 번째 대왕 뱀)마다 lenPer씩 길다
+    // levels: 난이도별 속도 등 (라이벌 levels와 같은 뜻). cellMul: 그릴 때 마디 크기 배율 (규칙은 한 칸)
+    BOSS: {
+      name: '대왕 뱀', intro: 1.5, start: 5, len: 12, lenPer: 2, maxLen: 20, minLen: 3, finish: 6,
+      regrow: 2.4, biteStun: 1.2, cellMul: 1.35, bonus: 100,
+      levels: {
+        easy:   { speed: 3.2, react: 1.4, smart: 0.5, wander: 0.15, clumsy: 0.2, keepAway: 2, flee: 0.05, fleeDist: 2 },
+        normal: { speed: 4.6, react: 0.8, smart: 0.7, wander: 0.08, clumsy: 0.1, keepAway: 2, flee: 0.25, fleeDist: 2 },
+        hard:   { speed: 5.8, react: 0.5, smart: 0.85, wander: 0.04, clumsy: 0.05, keepAway: 2, flee: 0.45, fleeDist: 3 },
+      },
+    },
+
+    // 한 번 더! (2026-09-27): 한 판에 한 번, 끝났을 때 큰 "한 번 더!" 단추 (time초 안에 누르면). 길이 그대로 되살아나고
+    // ghost초 동안 유령 (벽·몸 통과), 벽을 보지 않는 안전한 방향으로. 쉬움은 밀면 출발, 보통·어려움은 wait초 뒤 출발.
+    // tapGuard: 결과·한 번 더 화면이 뜬 뒤 이 시간(초) 동안은 누름을 무시한다 (실수로 누르지 않게)
+    CONTINUE: { time: 5, ghost: 3, wait: 1.2, tapGuard: 0.6 },
+    // 유령이 끝나기 이 시간(초) 전부터 앞길 위험 경고를 다시 켠다. 유령이 끝날 때 머리가 벽·몸 안이면 나올 때까지 유령이 이어진다
+    GHOST_WARN: 1.2,
 
     // 메달. check(run, rec): run = 이번 판 기록, rec = 평생 기록 (main.js가 판이 끝날 때·레벨을 깰 때 확인)
     // tier: 1 동 · 2 은 · 3 금
@@ -69,11 +100,11 @@
       { id: 'len20',    tier: 1, name: '쭉쭉 20',       desc: '한 판에 길이 20',                check: r => r.maxLen >= 20 },
       { id: 'len40',    tier: 2, name: '길쭉 40',       desc: '한 판에 길이 40',                check: r => r.maxLen >= 40 },
       { id: 'len80',    tier: 3, name: '거대 뱀 80',    desc: '한 판에 길이 80',                check: r => r.maxLen >= 80 },
-      { id: 'combo5',   tier: 1, name: '연속 5',        desc: '콤보 5 이어 가기',               check: r => r.maxCombo >= 5 },
-      { id: 'combo10',  tier: 2, name: '연속 10',       desc: '콤보 10 이어 가기',              check: r => r.maxCombo >= 10 },
-      { id: 'lvl3',     tier: 1, name: '입문',          desc: '스테이지 레벨 3 깨기',           check: (r, R) => R.stage.max >= 3 },
-      { id: 'lvl6',     tier: 2, name: '숙련',          desc: '스테이지 레벨 6 깨기',           check: (r, R) => R.stage.max >= 6 },
-      { id: 'lvl12',    tier: 3, name: '정복자',        desc: '스테이지 레벨 12 깨기',          check: (r, R) => R.stage.max >= 12 },
+      { id: 'combo5',   tier: 1, name: '연속 5',        desc: '콤보 5번 이어 먹기',               check: r => r.maxCombo >= 5 },
+      { id: 'combo10',  tier: 2, name: '연속 10',       desc: '콤보 10번 이어 먹기',              check: r => r.maxCombo >= 10 },
+      { id: 'lvl3',     tier: 1, name: '입문',          desc: '스테이지 3단계 깨기',           check: (r, R) => R.stage.max >= 3 },
+      { id: 'lvl6',     tier: 2, name: '숙련',          desc: '스테이지 6단계 깨기',           check: (r, R) => R.stage.max >= 6 },
+      { id: 'lvl12',    tier: 3, name: '정복자',        desc: '스테이지 12단계 깨기',          check: (r, R) => R.stage.max >= 12 },
       { id: 'power4',   tier: 2, name: '아이템 수집가', desc: '한 판에 아이템 네 가지 모두',   check: r => r.powerKinds >= 4 },
       { id: 'portal10', tier: 1, name: '포털 여행자',   desc: '한 판에 포털 10번',              check: r => r.portals >= 10 },
       { id: 'ghost3',   tier: 2, name: '벽 너머',       desc: '유령일 때 벽을 3번 통과',        check: r => r.wraps >= 3 },
@@ -84,6 +115,9 @@
       { id: 'hard20',   tier: 2, name: '어려움 길이 20', desc: '어려움으로 한 판에 길이 20',    check: r => r.diff === 'hard' && r.maxLen >= 20 },
       { id: 'rivalAll', tier: 2, name: '라이벌 통째로', desc: '라이벌을 통째로 냠냠',             check: r => r.rivalWholes >= 1 },
       { id: 'hard30',   tier: 3, name: '어려움 길이 30', desc: '어려움으로 한 판에 길이 30',    check: r => r.diff === 'hard' && r.maxLen >= 30 },
+      { id: 'boss1',    tier: 2, name: '대왕 뱀 냠냠',  desc: '대왕 뱀 쓰러뜨리기',             check: r => r.bossWins >= 1 },
+      { id: 'star3',    tier: 1, name: '별 셋',         desc: '한 단계에서 별 3개',             check: (r, R) => Object.values(R.stage.stars || {}).some(n => n >= 3) },
+      { id: 'stars30',  tier: 3, name: '별 부자',       desc: '스테이지 별 모두 30개',          check: (r, R) => Object.values(R.stage.stars || {}).reduce((a, n) => a + n, 0) >= 30 },
     ],
 
     // ─── 코인 · 상점 · 미션 (2026-09-27, shop.js) ─────────────────
@@ -100,15 +134,15 @@
     // price 0 = 처음부터 가짐. color: 이름·카드 색
     CHARS: [
       { id: 'neon',   name: '네온 뱀',       price: 0,    color: '#5ee7ff', look: '반짝이는 청록 몸에 노란 코',
-        trait: '느긋해요: 속도 6% 천천히',           traits: { speedMul: 0.94 } },
+        trait: '느긋해요: 조금 천천히 가요',           traits: { speedMul: 0.94 } },
       { id: 'robot',  name: '로봇 뱀',       price: 300,  color: '#c9d6e3', look: '쇠 마디와 빛나는 눈 가리개',
-        trait: '아이템이 25% 더 자주 나와요',         traits: { itemMul: 0.75 } },
+        trait: '아이템이 더 자주 나와요',         traits: { itemMul: 0.75 } },
       { id: 'dragon', name: '꼬마 용',       price: 500,  color: '#ff9f43', look: '작은 뿔과 날개, 꼬리에 불꽃',
-        trait: '콤보가 1.2초 더 이어져요',            traits: { comboPlus: 1.2 } },
+        trait: '콤보가 더 오래 이어져요',            traits: { comboPlus: 1.2 } },
       { id: 'bug',    name: '무지개 애벌레', price: 800,  color: '#ff7ad9', look: '동글동글 무지개 마디와 더듬이',
-        trait: '황금 구슬이 3초 더 오래 남아요',       traits: { goldPlus: 3 } },
+        trait: '황금 구슬이 더 오래 남아요',       traits: { goldPlus: 3 } },
       { id: 'galaxy', name: '은하 해룡',     price: 1200, color: '#c7a6ff', look: '별이 비치는 몸에 금빛 왕관',
-        trait: '출발 3초 유령 · 유령 아이템 1.6배',    traits: { startGhost: 3, ghostMul: 1.6 } },
+        trait: '출발할 때 유령 · 유령이 더 오래',    traits: { startGhost: 3, ghostMul: 1.6 } },
     ],
     // 예전 꾸미기(색만 바꾸던 것)를 가진 저장본: 비슷한 캐릭터로 바꿔 주고, 맞는 것이 없으면 값을 한 번 돌려준다
     OLD_SKINS: {
@@ -118,10 +152,10 @@
 
     // 강화: 한 번 사면 모든 판에 계속 (5단계). per: 한 단계마다 늘어나는 양. world.js create()의 opts.up으로 들어간다
     UPGRADES: [
-      { id: 'goldTime',  icon: '★',  name: '황금 시간',     desc: '황금 구슬이 1초 더 오래 남아요',       per: 1,    prices: [60, 120, 200, 320, 480] },
-      { id: 'itemFreq',  icon: '◷',  name: '아이템 자주',   desc: '아이템이 8% 더 자주 나와요',           per: 0.08, prices: [80, 160, 260, 400, 600] },
-      { id: 'comboTime', icon: '×',  name: '콤보 시간',     desc: '콤보가 0.4초 더 이어져요',             per: 0.4,  prices: [80, 160, 260, 400, 600] },
-      { id: 'coin',      icon: '+',  name: '코인 보너스',   desc: '판마다 받는 코인 +10%',               per: 0.1,  prices: [100, 200, 350, 550, 800] },
+      { id: 'goldTime',  icon: '★',  name: '황금 시간',     desc: '황금 구슬이 조금 더 오래 남아요',       per: 1,    prices: [60, 120, 200, 320, 480] },
+      { id: 'itemFreq',  icon: '◷',  name: '아이템 자주',   desc: '아이템이 조금 더 자주 나와요',           per: 0.08, prices: [80, 160, 260, 400, 600] },
+      { id: 'comboTime', icon: '×',  name: '콤보 시간',     desc: '콤보가 조금 더 오래 이어져요',             per: 0.4,  prices: [80, 160, 260, 400, 600] },
+      { id: 'coin',      icon: '+',  name: '코인 보너스',   desc: '판마다 코인을 조금 더 받아요',               per: 0.1,  prices: [100, 200, 350, 550, 800] },
     ],
     UPGRADE_MAX: 5,
 
@@ -140,14 +174,14 @@
       { id: 'games5',   kind: 'life', stat: 'games',         goal: 5,    reward: 60,  text: '5판 놀기 (누적)' },
       { id: 'power10',  kind: 'life', stat: 'powers',        goal: 10,   reward: 80,  text: '아이템 10개 먹기 (누적)' },
       { id: 'portal5',  kind: 'life', stat: 'portals',       goal: 5,    reward: 60,  text: '포털 5번 지나가기 (누적)' },
-      { id: 'lvl6',     kind: 'life', stat: 'levelsCleared', goal: 6,    reward: 100, text: '스테이지 레벨 6번 깨기 (누적)' },
+      { id: 'lvl6',     kind: 'life', stat: 'levelsCleared', goal: 6,    reward: 100, text: '스테이지 단계 6번 깨기 (누적)' },
       { id: 'len25',    kind: 'run',  stat: 'maxLen',        goal: 25,   reward: 80,  text: '한 판에 길이 25' },
       { id: 'len40',    kind: 'run',  stat: 'maxLen',        goal: 40,   reward: 150, text: '한 판에 길이 40' },
       { id: 'combo8',   kind: 'run',  stat: 'maxCombo',      goal: 8,    reward: 100, text: '한 판에 콤보 8' },
       { id: 's1000',    kind: 'run',  stat: 'score',         goal: 1000, reward: 120, text: '한 판에 1,000점' },
       { id: 'item3',    kind: 'run',  stat: 'powers',        goal: 3,    reward: 80,  text: '한 판에 아이템 3개' },
       { id: 'gold3',    kind: 'run',  stat: 'golds',         goal: 3,    reward: 80,  text: '한 판에 황금 구슬 3개' },
-      { id: 'stage4',   kind: 'run',  stat: 'lvlTop',        goal: 4,    reward: 120, text: '스테이지 레벨 4 깨기' },
+      { id: 'stage4',   kind: 'run',  stat: 'lvlTop',        goal: 4,    reward: 120, text: '스테이지 4단계 깨기' },
       { id: 'normal15', kind: 'run',  stat: 'normalLen',     goal: 15,   reward: 120, text: '보통으로 한 판에 길이 15' },
       { id: 't120',     kind: 'run',  stat: 'time',          goal: 120,  reward: 100, text: '한 판에 2분 버티기' },
       { id: 'ghost2',   kind: 'run',  stat: 'wraps',         goal: 2,    reward: 80,  text: '유령으로 벽 2번 통과' },
@@ -164,29 +198,35 @@
     // 행성 대신 블랙홀 하늘이 한 번 끼어든다 (행성 차례는 밀리지 않는다). 스테이지: 레벨마다 정해진 하늘 (stage, 20개를 돈다)
     SPACE: {
       perOrbs: 12, holeFrom: 2, holeChance: 0.22, bannerTime: 2.8,
+      // fact: 도착할 때 띄우는 재미 한 줄 (배우는 사실이 아니다, 소유자 결정: 학습 요소 없음). 공통 도감 WORLDS.SOLAR_WEATHER의 line,
+      // 도감이 없으면 여기 적은 느낌 한 줄
       planets: [
-        { id: 'mercury', name: '수성',   fact: '태양과 가장 가까운 행성',     color: '#c9c3bb' },
-        { id: 'venus',   name: '금성',   fact: '노란 구름이 빙글빙글',         color: '#ffcf6b' },
-        { id: 'earth',   name: '지구',   fact: '우리 집! 파란 바다 행성',      color: '#6fc3ff' },
-        { id: 'mars',    name: '화성',   fact: '빨간 모래 행성',               color: '#ff7a4d' },
-        { id: 'jupiter', name: '목성',   fact: '가장 큰 행성, 커다란 빨간 점', color: '#f0b98a' },
-        { id: 'saturn',  name: '토성',   fact: '멋진 고리를 두른 행성',        color: '#f3d58c' },
-        { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성',   color: '#9ef0f0' },
-        { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',     color: '#5b8cff' },
-        { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',          color: '#e8d2b8' },
+        { id: 'mercury', name: '수성',   fact: '뜨거운 불씨가 날려요',     color: '#c9c3bb' },
+        { id: 'venus',   name: '금성',   fact: '노란 안개가 뭉게뭉게',     color: '#ffcf6b' },
+        { id: 'earth',   name: '지구',   fact: '우리 집! 시원한 빗방울',   color: '#6fc3ff' },
+        { id: 'mars',    name: '화성',   fact: '빨간 모래바람이 쌩쌩',     color: '#ff7a4d' },
+        { id: 'jupiter', name: '목성',   fact: '번쩍번쩍 큰 폭풍',         color: '#f0b98a' },
+        { id: 'saturn',  name: '토성',   fact: '반짝이 고리가 빙글빙글',   color: '#f3d58c' },
+        { id: 'uranus',  name: '천왕성', fact: '데굴데굴 얼음 행성',       color: '#9ef0f0' },
+        { id: 'neptune', name: '해왕성', fact: '쌩쌩 눈보라',              color: '#5b8cff' },
+        { id: 'pluto',   name: '명왕성', fact: '소복소복 하트 눈 행성',    color: '#e8d2b8' },
         // 명왕성 다음은 외계 행성 여덟 (2026-09-27, 소유자 "다른 행성 배경도 다양하게"). 이름·한 줄·색은 공통 도감
         // common/worlds.js(WORLDS.EXO)에서 가져온다. 차례는 여기 고정 (도감이 없어도 규칙은 같다)
         ...['frost', 'lava', 'ocean', 'glass', 'gem', 'twin', 'shroom', 'rogue'].map(id => {
           const e = typeof WORLDS !== 'undefined' && WORLDS && WORLDS.exo ? WORLDS.exo(id) : null;
           return { id, name: e ? e.name : '외계 행성', fact: e ? e.line : '', color: e ? e.color : '#bfe0ff', exo: true };
         }),
-      ],
+      ].map(p => {
+        // 태양계 아홉: 공통 도감의 재미 한 줄이 있으면 그것으로
+        const sw = !p.exo && typeof WORLDS !== 'undefined' && WORLDS && WORLDS.SOLAR_WEATHER ? WORLDS.SOLAR_WEATHER[p.id] : null;
+        return sw && sw.line ? Object.assign({}, p, { fact: sw.line }) : p;
+      }),
       solar: 9,   // 앞의 아홉이 태양계 (블랙홀·은하 하늘은 스테이지 기록에서 명왕성(9)으로 센다)
       // 행성이 아닌 하늘
       others: {
-        hole:   { name: '블랙홀',    fact: '빛도 빨려 드는 곳, 구경만 해요', color: '#c9a0ff' },
-        galaxy: { name: '은하수',    fact: '별이 아주아주 많이 모인 곳',     color: '#b8c8ff' },
-        core:   { name: '은하 중심', fact: '은하 한가운데 커다란 블랙홀',    color: '#ffc27a' },
+        hole:   { name: '블랙홀',    fact: '빙글빙글 소용돌이, 구경만 해요', color: '#c9a0ff' },
+        galaxy: { name: '은하수',    fact: '별이 반짝반짝 가득',             color: '#b8c8ff' },
+        core:   { name: '은하 중심', fact: '반짝 소용돌이 한가운데',         color: '#ffc27a' },
       },
       // 스테이지 1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심, 13~20 외계 행성 여덟 (12레벨을 깨고 이어 가는 두 번째 바퀴), 그다음은 다시
       stage: ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core',
@@ -265,7 +305,13 @@
     FX: { eatSparks: 12, goldSparks: 26, deathSparks: 36, maxParticles: 200, shake: 16, flash: 0.35 },
 
     // 밀기 판정: 짧은 변 길이의 3% 또는 18px 중 큰 값 이상 움직이면 방향 전환
-    SWIPE: { min: 18, ratio: 0.03 },
+    // palm: 닿은 면적이 이보다 크면(px) 손바닥으로 보고 무시 · restMul: 다른 손가락이 화면에 놓여 있을 때
+    // 오래(restAfter초) 가만히 누른 손가락은 기준 거리를 이만큼 곱한다 (쥔 손가락이 조금 밀려도 꺾이지 않게)
+    SWIPE: { min: 18, ratio: 0.03, palm: 70, restMul: 1.6, restAfter: 0.5 },
+
+    // 그리기 속도: 120Hz 화면에서도 1초에 60번 정도만 그린다 (minGap초보다 짧은 프레임은 건너뜀).
+    // 느리면(최근 slowWindow초 평균 프레임이 slowFrame초보다 길면) 절약 모드: 날씨·연출 입자 절반
+    DRAW: { minGap: 0.010, slowFrame: 1 / 40, slowWindow: 2 },
 
     // 처음 몇 초 조작 안내를 보여 준다
     HINT_TIME: 4,

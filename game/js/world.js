@@ -4,7 +4,21 @@
 (function (NG) {
   const D = NG.DATA;
   const TAU = Math.PI * 2;
-  const MAX_PARTICLES = 700;
+  // 파편·불꽃 최대 수 (data.js VIEW.particles). 가득 차면 가장 오래된 자리부터 돌아가며 덮어쓴다 (예전 shift()는 매번 배열 전체를 옮겼다)
+  const MAX_PARTICLES = (D.VIEW && D.VIEW.particles) || 700;
+  function addFx(W, q) {
+    const P = W.particles;
+    if (P.length < MAX_PARTICLES) { P.push(q); return; }
+    W.pRing = ((W.pRing || 0) + 1) % P.length;
+    P[W.pRing] = q;
+  }
+  // 배열을 새로 만들지 않고 그 자리에서 남길 것만 남긴다 (매 프레임 filter()가 만들던 쓰레기를 줄인다)
+  function keep(arr, pred) {
+    let j = 0;
+    for (let i = 0; i < arr.length; i++) { const v = arr[i]; if (pred(v)) arr[j++] = v; }
+    arr.length = j;
+    return arr;
+  }
 
   // opts: {ship, upgrades:{hp,dmg,ultStart,magnet 단계}, loadout:{shield,barrel,fullult}} (생략하면 예전 기본 기체)
   function makePlayer(x, y, diff, opts) {
@@ -93,6 +107,8 @@
       fun: NG.rng(((sd >>> 0) ^ 0x5bd1e995) + 7),
       phase: 'play', // play | cards | over
       wave: 0, banner: 0, bossWave: false, bossKills: 0,
+      // 한 번 더! (REVIVE): revives 이번 판에 되살아난 수, canRevive 지금(phase over) 되살아날 수 있나
+      revives: 0, canRevive: false,
       spawnQueue: [], spawnTimer: 0, clearT: -1,
       player: makePlayer(w / 2, h / 2, df, opts),
       enemies: [], bullets: [], eBullets: [], lasers: [], particles: [], drops: [], texts: [],
@@ -114,7 +130,8 @@
         dashes: 0, hurts: 0, cleanWaves: 0, cleanBoss: 0, bestCombo: 0, ultBoss: 0, ultBest: 0,
         coinPicks: 0, coins: 0, items: 0, blocks: 0, bombKills: 0, // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
         planet: 0, holesCleared: 0,
-        gifts: 0, giftCoins: 0, giftItems: [], fevers: 0, wingmen: 0 }, // 연 선물 상자 · 선물 코인 · 다음 판 시작 아이템 선물 · 피버 횟수 · 구한 동료 // 스티커: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10 …) · 깬 블랙홀 웨이브 수 // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
+        gifts: 0, giftCoins: 0, giftItems: [], fevers: 0, wingmen: 0,
+        revives: 0, bossTypes: [] }, // 한 번 더! 쓴 수 · 이번 판에 이긴 보스 종류(BOSSES id, 이긴 차례대로, 겹치지 않게) // 연 선물 상자 · 선물 코인 · 다음 판 시작 아이템 선물 · 피버 횟수 · 구한 동료 // 스티커: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10 …) · 깬 블랙홀 웨이브 수 // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
     };
     W.giftT = between(W.fun, D.GIFT.first);
     W.capNext = D.WINGMAN.firstWave;
@@ -134,6 +151,15 @@
       e.x = NG.clamp(e.x, e.r, w - e.r);
       e.y = NG.clamp(e.y, e.r, h - e.r);
     }
+    // 떨어진 아이템 · 동료 캡슐 · 금성 안개 · 운석 예고도 새 화면 안으로 (예전엔 화면을 돌리면 밖에 남아 못 주웠다)
+    const R = D.DROP.pickR;
+    for (const d of W.drops) { d.x = NG.clamp(d.x, R, w - R); d.y = NG.clamp(d.y, R, h - R); }
+    if (W.capsule) { const c = W.capsule; c.x = NG.clamp(c.x, c.r, w - c.r); c.y = NG.clamp(c.y, c.r, h - c.r); }
+    // 선물 상자는 옆으로 화면을 가로지르니 높이만 (가로는 들어오고 나가는 길이라 그대로)
+    if (W.gift) { const g = W.gift; g.baseY = NG.clamp(g.baseY, g.r + D.GIFT.bob, h - g.r - D.GIFT.bob); g.y = NG.clamp(g.y, g.r, h - g.r); }
+    for (const m of W.mists) { m.x = NG.clamp(m.x, 0, w); m.y = NG.clamp(m.y, 0, h); }
+    for (const m of W.meteors) { m.x = NG.clamp(m.x, 0, w); m.y = NG.clamp(m.y, 0, h); }
+    if (W.wing) { W.wing.x = NG.clamp(W.wing.x, 0, w); W.wing.y = NG.clamp(W.wing.y, 0, h); }
   }
 
   // ─── 웨이브 ────────────────────────────────────────────────
@@ -331,6 +357,7 @@
   function openCards(W) {
     W.phase = 'cards';
     W.cards = drawCards(W, 3);
+    W.recommend = recommendCard(W);
     W.eBullets.length = 0; W.lasers.length = 0; W.meteors.length = 0; W.mists.length = 0;
     W.pendDash = W.pendUlt = false;
     // 캡슐이 나오기 전에 웨이브가 끝났으면 다음 웨이브에 다시
@@ -371,14 +398,68 @@
     return true;
   }
 
+  // 쉬움에서 "추천" 표시할 카드 차례 (RECOMMEND). 체력이 절반 이하면 체력 카드부터. 없으면 -1
+  function recommendCard(W) {
+    const cards = W.cards;
+    if (!cards || !cards.length || !D.RECOMMEND) return -1;
+    const p = W.player, R = D.RECOMMEND;
+    const list = p.hp <= p.maxHp / 2 ? R.hurt.concat(R.order) : R.order;
+    for (const id of list) { const i = cards.findIndex(c => c.id === id); if (i >= 0) return i; }
+    return 0;
+  }
+
+  // 카드에 보여 줄 글: 큰 그림 · 아이 말 · 작은 수치 (data.js pic·kid·desc). 없으면 예전 아이콘·이름으로
+  function cardText(c) {
+    return { pic: c.pic || c.icon, words: c.kid || c.name, small: c.desc || '' };
+  }
+
+  // ─── 한 번 더! (2026-09-27) ────────────────────────────────
+  // 지고 난 뒤(phase over, canRevive) 그 자리에서 되살아난다: 체력 절반, 잠깐 무적, 둘레의 적 탄·레이저·운석 예고를 지우고
+  // 가까운 적은 조금 밀어낸다. 한 판에 REVIVE.count번. 되살아났으면 true
+  function revive(W) {
+    const R = D.REVIVE;
+    if (!R || W.phase !== 'over' || !W.canRevive) return false;
+    const p = W.player;
+    W.revives += 1;
+    W.stats.revives = W.revives;
+    W.canRevive = false;
+    W.phase = 'play';
+    p.hp = Math.min(p.maxHp, Math.max(R.hpMin, Math.ceil(p.maxHp * R.hpShare)));
+    p.iframe = R.iframe;
+    p.dashT = 0;
+    p.reviveT = R.iframe;
+    const c2 = R.clearR * R.clearR;
+    keep(W.eBullets, b => NG.dist2(b.x, b.y, p.x, p.y) > c2);
+    W.lasers.length = 0;
+    keep(W.meteors, m => NG.dist2(m.x, m.y, p.x, p.y) > c2);
+    for (const e of W.enemies) {
+      if (e.dead || e.type === 'boss') continue;
+      const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy);
+      if (d >= R.pushR) continue;
+      const a = d > 0.01 ? Math.atan2(dy, dx) : W.rand() * TAU;
+      e.x = NG.clamp(p.x + Math.cos(a) * R.pushR, e.r, W.w - e.r);
+      e.y = NG.clamp(p.y + Math.sin(a) * R.pushR, e.r, W.h - e.r);
+      e.vx = Math.cos(a) * 120; e.vy = Math.sin(a) * 120;
+    }
+    W.combo = 0; W.comboT = 0;
+    W.hitstop = 0; W.slow = 0; W.flash = 0;
+    W.pendDash = W.pendUlt = false;
+    addFx(W, { ring: true, x: p.x, y: p.y, r: R.clearR * 0.6, life: 0.6, max: 0.6, color: '#ffe66d' });
+    addFx(W, { pop: true, x: p.x, y: p.y, r: 40, life: 0.2, max: 0.2, color: '#ffffff' });
+    W.texts.push({ x: p.x, y: p.y - 30, txt: '한 번 더!', life: 1.2, col: '#ffe66d' });
+    W.events.push('revive');
+    return true;
+  }
+  // 한 번 더!를 안 쓰기로 함 (그만하기·시간 끝). 이 판은 그대로 끝
+  function giveUp(W) { W.canRevive = false; }
+
   // ─── 전투 공통 ─────────────────────────────────────────────
   function burst(W, x, y, color, n, speed, size) {
     for (let i = 0; i < n; i++) {
-      if (W.particles.length >= MAX_PARTICLES) W.particles.shift();
       const a = W.rand() * TAU;
       const s = speed * (0.3 + W.rand() * 0.9);
       const life = 0.3 + W.rand() * 0.45;
-      W.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life, max: life, color, size: size * (0.6 + W.rand() * 0.8) });
+      addFx(W, { x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life, max: life, color, size: size * (0.6 + W.rand() * 0.8) });
     }
   }
 
@@ -397,19 +478,18 @@
     const dl = Math.hypot(dx, dy) || 1;
     const bx = dx / dl, by = dy / dl;
     for (let i = 0; i < n; i++) {
-      if (W.particles.length >= MAX_PARTICLES) W.particles.shift();
       const a = W.rand() * TAU;
       const s = 90 + W.rand() * 260;
       const life = 0.45 + W.rand() * 0.45;
-      W.particles.push({
+      addFx(W, {
         shard: true, x: e.x + Math.cos(a) * e.r * 0.4, y: e.y + Math.sin(a) * e.r * 0.4,
         vx: Math.cos(a) * s + bx * 180, vy: Math.sin(a) * s + by * 180,
         rot: W.rand() * TAU, vr: (W.rand() - 0.5) * 18,
         size: e.r * (0.35 + W.rand() * 0.35), life, max: life, color: colorOf(e),
       });
     }
-    W.particles.push({ pop: true, x: e.x, y: e.y, r: e.r * 1.3, life: 0.12, max: 0.12, color: '#ffffff' });
-    W.particles.push({ ring: true, x: e.x, y: e.y, r: e.r * (big ? 3.2 : 2.4), life: big ? 0.4 : 0.3, max: big ? 0.4 : 0.3, color: colorOf(e) });
+    addFx(W, { pop: true, x: e.x, y: e.y, r: e.r * 1.3, life: 0.12, max: 0.12, color: '#ffffff' });
+    addFx(W, { ring: true, x: e.x, y: e.y, r: e.r * (big ? 3.2 : 2.4), life: big ? 0.4 : 0.3, max: big ? 0.4 : 0.3, color: colorOf(e) });
     if (big) W.pulse = Math.max(W.pulse, 0.5);
   }
 
@@ -452,9 +532,12 @@
         m.vx = Math.cos(a) * 200; m.vy = Math.sin(a) * 200;
       }
     }
-    if (e.type === 'ice') { W.events.push('crack'); W.particles.push({ ring: true, x: e.x, y: e.y, r: e.r * 3, life: 0.35, max: 0.35, color: '#e6fbff' }); }
+    if (e.type === 'ice') { W.events.push('crack'); addFx(W, { ring: true, x: e.x, y: e.y, r: e.r * 3, life: 0.35, max: 0.35, color: '#e6fbff' }); }
     if (e.type === 'boss') {
       W.bossKills += 1;
+      // 보스 스티커: 이번 판에 이긴 보스 종류 (main.js가 처음 이긴 종류면 축하 창을 띄우고 기록에 넣는다)
+      if (e.look && W.stats.bossTypes.indexOf(e.look.id) < 0) W.stats.bossTypes.push(e.look.id);
+      W.lastBoss = e.look ? e.look.id : null;
       W.shake = Math.max(W.shake, 22);
       W.whiteFlash = 0.5;
       W.pulse = 1;
@@ -596,8 +679,8 @@
       damageEnemy(W, e, e.type === 'boss' ? Math.min(dmg, e.maxHp * B.bossCap) : dmg, false, e.x - x, e.y - y, 'ult');
       if (e.dead) W.stats.bombKills += 1;
     }
-    W.particles.push({ pop: true, x, y, r: 60, life: 0.16, max: 0.16, color: '#ffffff' });
-    W.particles.push({ ring: true, x, y, r: B.radius, life: 0.5, max: 0.5, color: B.color });
+    addFx(W, { pop: true, x, y, r: 60, life: 0.16, max: 0.16, color: '#ffffff' });
+    addFx(W, { ring: true, x, y, r: B.radius, life: 0.5, max: 0.5, color: B.color });
     W.shake = Math.max(W.shake, 16);
     W.pulse = Math.max(W.pulse, 0.8);
     W.events.push('bomb');
@@ -642,7 +725,7 @@
       p.iframe = D.PLAYER.iframe;
       W.stats.blocks += 1;
       W.shake = Math.max(W.shake, 6);
-      W.particles.push({ ring: true, x: p.x, y: p.y, r: 46, life: 0.4, max: 0.4, color: '#5ee7ff' });
+      addFx(W, { ring: true, x: p.x, y: p.y, r: 46, life: 0.4, max: 0.4, color: '#5ee7ff' });
       W.eBullets = W.eBullets.filter(b => NG.dist2(b.x, b.y, p.x, p.y) > 140 * 140);
       W.events.push('block');
       return;
@@ -661,6 +744,8 @@
     if (p.hp <= 0) {
       p.hp = 0;
       W.phase = 'over';
+      // 한 번 더!: 한 판에 REVIVE.count번까지 (main.js가 버튼을 띄우고 revive를 부른다. 안 부르면 그대로 게임 오버)
+      W.canRevive = W.revives < ((D.REVIVE && D.REVIVE.count) || 0);
       W.events.push('over');
     } else {
       W.events.push('hurt');
@@ -800,7 +885,7 @@
         damageEnemy(W, e, p.gun.dmg * N.dmgMul * p.nova, false, e.x - p.x, e.y - p.y);
       }
     }
-    W.particles.push({ ring: true, x: p.x, y: p.y, r: radius, life: 0.3, max: 0.3, color: '#5ee7ff' });
+    addFx(W, { ring: true, x: p.x, y: p.y, r: radius, life: 0.3, max: 0.3, color: '#5ee7ff' });
     W.shake = Math.max(W.shake, 6);
     W.events.push('nova');
   }
@@ -1060,7 +1145,7 @@
         const rr = def.popR + p.r * 0.4;
         if (NG.dist2(e.x, e.y, p.x, p.y) < rr * rr) hurtPlayer(W, 1);
         e.wm = 'up'; e.wmT = def.upTime; e.hide = false;
-        W.particles.push({ ring: true, x: e.x, y: e.y, r: def.popR * 1.2, life: 0.35, max: 0.35, color: '#e0824f' });
+        addFx(W, { ring: true, x: e.x, y: e.y, r: def.popR * 1.2, life: 0.35, max: 0.35, color: '#e0824f' });
         burst(W, e.x, e.y, '#c98a5a', 12, 220, 3.5);
         W.shake = Math.max(W.shake, 5);
         W.events.push('wormPop');
@@ -1140,6 +1225,9 @@
     },
   };
 
+  // 보스는 화면 맨 위 HUD(점수·체력바) 밑으로 너무 들어가지 않는다 (VIEW.hudSafe의 절반, 작은 화면은 높이의 10%까지)
+  function bossTop(W, e) { return e.r + Math.min(((D.VIEW && D.VIEW.hudSafe) || 0) * 0.5, W.h * 0.1); }
+
   function updateEnemies(W, dt) {
     const p = W.player;
     for (const e of W.enemies) {
@@ -1199,7 +1287,7 @@
           // 돌진·튕기기: 조향 없이 제 속도로 날아가고 벽에서 튕긴다
           e.x += e.vx * dt; e.y += e.vy * dt;
           if (e.x < e.r || e.x > W.w - e.r) { e.vx = -e.vx; e.x = NG.clamp(e.x, e.r, W.w - e.r); if (e.look.id === 'star') W.shake = Math.max(W.shake, 8); }
-          if (e.y < e.r || e.y > W.h - e.r) { e.vy = -e.vy; e.y = NG.clamp(e.y, e.r, W.h - e.r); if (e.look.id === 'star') W.shake = Math.max(W.shake, 8); }
+          if (e.y < bossTop(W, e) || e.y > W.h - e.r) { e.vy = -e.vy; e.y = NG.clamp(e.y, bossTop(W, e), W.h - e.r); if (e.look.id === 'star') W.shake = Math.max(W.shake, 8); }
           e.ang += dt * 2;
           if (dist < e.r + p.r - 2 && p.iframe <= 0 && p.dashT <= 0) hurtPlayer(W, 1);
           continue;
@@ -1211,7 +1299,7 @@
       e.vx += (tx * e.speed - e.vx) * k;
       e.vy += (ty * e.speed - e.vy) * k;
       e.x = NG.clamp(e.x + e.vx * dt, e.r, W.w - e.r);
-      e.y = NG.clamp(e.y + e.vy * dt, e.r, W.h - e.r);
+      e.y = NG.clamp(e.y + e.vy * dt, e.type === 'boss' ? bossTop(W, e) : e.r, W.h - e.r);
       e.ang += dt * (e.type === 'tank' ? 0.8 : 2);
 
       // 몸통 박치기 (땅속·흐린 행성 적은 안 아프다)
@@ -1288,7 +1376,7 @@
         else { b.life = 0; break; }
       }
     }
-    W.bullets = W.bullets.filter(b => b.life > 0);
+    keep(W.bullets, b => b.life > 0);
 
     for (const b of W.eBullets) {
       if (b.curve) {
@@ -1318,7 +1406,7 @@
         if (p.iframe <= 0 && p.dashT <= 0) { hurtPlayer(W, 1); b.life = 0; }
       }
     }
-    W.eBullets = W.eBullets.filter(b => b.life > 0);
+    keep(W.eBullets, b => b.life > 0);
   }
 
   // ─── 깜짝 선물 상자 · 피버 타임 · 동료 우주선 (2026-09-27) ───────
@@ -1364,8 +1452,8 @@
     const G = D.GIFT, p = W.player, rw = reward || giftReward(W);
     const per = Math.ceil(G.confetti / CONFETTI.length);
     for (const c of CONFETTI) burst(W, g.x, g.y, c, per, 360, 7);
-    W.particles.push({ pop: true, x: g.x, y: g.y, r: 34, life: 0.16, max: 0.16, color: '#ffffff' });
-    W.particles.push({ ring: true, x: g.x, y: g.y, r: 110, life: 0.5, max: 0.5, color: '#ffd23f' });
+    addFx(W, { pop: true, x: g.x, y: g.y, r: 34, life: 0.16, max: 0.16, color: '#ffffff' });
+    addFx(W, { ring: true, x: g.x, y: g.y, r: 110, life: 0.5, max: 0.5, color: '#ffd23f' });
     W.stats.gifts += 1;
     let txt = '', col = '#ffd23f';
     if (rw.id === 'coins') {
@@ -1412,7 +1500,7 @@
     const WM = D.WINGMAN;
     burst(W, c.x, c.y, '#9fe8ff', 14, 220, 3);
     burst(W, c.x, c.y, c.look.color, 10, 180, 3);
-    W.particles.push({ ring: true, x: c.x, y: c.y, r: 70, life: 0.4, max: 0.4, color: c.look.color });
+    addFx(W, { ring: true, x: c.x, y: c.y, r: 70, life: 0.4, max: 0.4, color: c.look.color });
     W.wing = { x: c.x, y: c.y, look: c.look, t: WM.time, bye: 0, cd: 0.4, aim: -Math.PI / 2, shots: 0, wave: 0 };
     W.stats.wingmen += 1;
     W.texts.push({ x: c.x, y: c.y - 24, txt: '도와줄게!', life: 1.2, col: c.look.color });
@@ -1592,8 +1680,8 @@
         const er = m.r + e.r * 0.5;
         if (NG.dist2(m.x, m.y, e.x, e.y) < er * er) damageEnemy(W, e, dmg, false, e.x - m.x, e.y - m.y, 'ult');
       }
-      W.particles.push({ pop: true, x: m.x, y: m.y, r: m.r * 0.7, life: 0.14, max: 0.14, color: '#fff1c9' });
-      W.particles.push({ ring: true, x: m.x, y: m.y, r: m.r * 1.25, life: 0.4, max: 0.4, color: '#ff9a3c' });
+      addFx(W, { pop: true, x: m.x, y: m.y, r: m.r * 0.7, life: 0.14, max: 0.14, color: '#fff1c9' });
+      addFx(W, { ring: true, x: m.x, y: m.y, r: m.r * 1.25, life: 0.4, max: 0.4, color: '#ff9a3c' });
       burst(W, m.x, m.y, '#ffb46b', 10, 240, 3.5);
       burst(W, m.x, m.y, '#8a6a52', 8, 180, 4);
       W.shake = Math.max(W.shake, 7);
@@ -1625,8 +1713,8 @@
       for (const b of W.booms) {
         b.delay -= dt;
         if (b.delay <= 0) {
-          W.particles.push({ pop: true, x: b.x, y: b.y, r: 34, life: 0.14, max: 0.14, color: '#ffffff' });
-          W.particles.push({ ring: true, x: b.x, y: b.y, r: 120, life: 0.45, max: 0.45, color: b.color });
+          addFx(W, { pop: true, x: b.x, y: b.y, r: 34, life: 0.14, max: 0.14, color: '#ffffff' });
+          addFx(W, { ring: true, x: b.x, y: b.y, r: 120, life: 0.45, max: 0.45, color: b.color });
           burst(W, b.x, b.y, b.color, 18, 320, 4);
           W.shake = Math.max(W.shake, 14);
           W.pulse = Math.max(W.pulse, 0.7);
@@ -1635,7 +1723,7 @@
       }
       W.booms = W.booms.filter(b => b.delay > 0);
     }
-    W.particles = W.particles.filter(q => q.life > 0);
+    keep(W.particles, q => q.life > 0);
     for (const t of W.texts) { t.life -= dt; t.y -= 30 * dt; }
     // 처음 만난 행성 적 이름표: 그 적을 따라다닌다
     if (W.tags.length) {
@@ -1646,9 +1734,9 @@
       }
       W.tags = W.tags.filter(g => g.life > 0);
     }
-    W.texts = W.texts.filter(t => t.life > 0);
+    keep(W.texts, t => t.life > 0);
     for (const d of W.drops) d.life -= dt;
-    W.drops = W.drops.filter(d => d.life > 0);
+    keep(W.drops, d => d.life > 0);
     W.shake = Math.max(0, W.shake - dt * 40);
     W.flash = Math.max(0, W.flash - dt);
     W.whiteFlash = Math.max(0, W.whiteFlash - dt);
@@ -1697,12 +1785,13 @@
     updateMists(W, dt);
     updateShocks(W, dt);
     updateFun(W, dt);
-    W.enemies = W.enemies.filter(e => !e.dead);
+    keep(W.enemies, e => !e.dead);
     updateSpawns(W, dt);
     updateFx(W, dt);
   }
 
   NG.World = { makePlayer, addDrop, bossLook, createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage, placeOf, holePull, meteorGap,
     foeOf, adaptDiff, perfOf, inMist, spawnEnemy,
-    giftBlocked, spawnGift, giftReward, openGift, spawnCapsule, freeCapsule, wingTarget, startFever, killEnemy };
+    giftBlocked, spawnGift, giftReward, openGift, spawnCapsule, freeCapsule, wingTarget, startFever, killEnemy,
+    revive, giveUp, recommendCard, cardText, bossTop };
 })(NG);
