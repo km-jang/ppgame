@@ -14,40 +14,42 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
 (function (H) {
   const KEY = 'play.hub1';
 
-  // 게임 목록 (게임 고르기 화면·기록실 순서)
+  // 게임 목록 (게임 고르기 화면·기록실 순서). path는 index.html까지 적는다: 파일을 바로 열 때(file://)는 폴더 주소가 안 열린다
   const GAMES = [
-    { id: 'ngun', name: '뿅뿅 우주선', path: 'game/', color: '#5ee7ff' },
-    { id: 'snake', name: '냠냠 뱀', path: 'snake/', color: '#ff5fa8' },
-    { id: 'jump', name: '통통 점프', path: 'jump/', color: '#7dff6a' },
-    { id: 'runner', name: '슝슝 우주 달리기', path: 'runner/', color: '#ffb13d' },
+    { id: 'ngun', name: '뿅뿅 우주선', path: 'game/index.html', color: '#5ee7ff' },
+    { id: 'snake', name: '냠냠 뱀', path: 'snake/index.html', color: '#ff5fa8' },
+    { id: 'jump', name: '통통 점프', path: 'jump/index.html', color: '#7dff6a' },
+    { id: 'runner', name: '슝슝 우주 달리기', path: 'runner/index.html', color: '#ffb13d' },
   ];
 
   // 오늘의 미션 후보. 게임이 판이 끝날 때 reportRun(게임, {stat: 값})으로 알려 준다.
-  // sum: true면 하루 동안 더해 가고, 아니면 한 판 최고값으로 잰다
+  // sum: true면 하루 동안 더해 가고, 아니면 한 판 최고값으로 잰다.
+  // text에는 게임 이름을 넣지 않는다 (게임 고르기 화면은 위에 게임 이름을 따로 쓰고, 게임 안 알림은 그 게임 안이라서).
+  // 5~8살이 읽고 바로 알게: '무엇을 몇 번 하기' 꼴로 짧게
   const DAILY = {
     ngun: [
-      { stat: 'wave', goal: 5, text: '뿅뿅 우주선 웨이브 5 가기', reward: 60 },
-      { stat: 'bosses', goal: 1, text: '뿅뿅 우주선 보스 1마리 잡기', reward: 80 },
-      { stat: 'kills', goal: 150, sum: true, text: '뿅뿅 우주선 적 150마리', reward: 70 },
-      { stat: 'games', goal: 3, sum: true, text: '뿅뿅 우주선 3판 하기', reward: 50 },
+      { stat: 'wave', goal: 5, text: '웨이브 5까지 가기', reward: 60 },
+      { stat: 'bosses', goal: 1, text: '보스 1마리 물리치기', reward: 80 },
+      { stat: 'kills', goal: 150, sum: true, text: '적 150마리 물리치기', reward: 70 },
+      { stat: 'games', goal: 3, sum: true, text: '3판 놀기', reward: 50 },
     ],
     snake: [
-      { stat: 'len', goal: 20, text: '냠냠 뱀 길이 20 만들기', reward: 60 },
-      { stat: 'golds', goal: 3, sum: true, text: '냠냠 뱀 황금 구슬 3개', reward: 60 },
-      { stat: 'orbs', goal: 60, sum: true, text: '냠냠 뱀 구슬 60개 먹기', reward: 70 },
-      { stat: 'games', goal: 3, sum: true, text: '냠냠 뱀 3판 하기', reward: 50 },
+      { stat: 'len', goal: 20, text: '뱀 길이 20까지 늘리기', reward: 60 },
+      { stat: 'golds', goal: 3, sum: true, text: '황금 구슬 3개 먹기', reward: 60 },
+      { stat: 'orbs', goal: 60, sum: true, text: '구슬 60개 먹기', reward: 70 },
+      { stat: 'games', goal: 3, sum: true, text: '3판 놀기', reward: 50 },
     ],
     jump: [
-      { stat: 'height', goal: 100, text: '통통 점프 100m 오르기', reward: 60 },
-      { stat: 'stars', goal: 40, sum: true, text: '통통 점프 별 40개', reward: 60 },
-      { stat: 'springs', goal: 5, sum: true, text: '통통 점프 스프링 5번', reward: 50 },
-      { stat: 'games', goal: 3, sum: true, text: '통통 점프 3판 하기', reward: 50 },
+      { stat: 'height', goal: 100, text: '100m 높이까지 오르기', reward: 60 },
+      { stat: 'stars', goal: 40, sum: true, text: '별 40개 모으기', reward: 60 },
+      { stat: 'springs', goal: 5, sum: true, text: '스프링 5번 밟기', reward: 50 },
+      { stat: 'games', goal: 3, sum: true, text: '3판 놀기', reward: 50 },
     ],
     runner: [
-      { stat: 'dist', goal: 800, text: '슝슝 달리기 800m 달리기', reward: 60 },
-      { stat: 'stars', goal: 60, sum: true, text: '슝슝 달리기 별 60개', reward: 60 },
-      { stat: 'jumps', goal: 10, sum: true, text: '슝슝 달리기 레이저 문 10번 넘기', reward: 60 },
-      { stat: 'games', goal: 3, sum: true, text: '슝슝 달리기 3판 하기', reward: 50 },
+      { stat: 'dist', goal: 800, text: '800m 달리기', reward: 60 },
+      { stat: 'stars', goal: 60, sum: true, text: '별 60개 모으기', reward: 60 },
+      { stat: 'jumps', goal: 10, sum: true, text: '레이저 문 10번 뛰어넘기', reward: 60 },
+      { stat: 'games', goal: 3, sum: true, text: '3판 놀기', reward: 50 },
     ],
   };
   // 스티커북: 네 게임에서 특별한 일을 하면 한 장씩. 판이 끝날 때 reportRun의 stats로 확인한다
@@ -77,11 +79,21 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
     { id: 'rn_pirate', game: 'runner', name: '해적선 따돌리기', desc: '우주 해적선에게서 도망치기', icon: '🏴', check: s => s.pirates >= 1 },
     { id: 'rn_slide', game: 'runner', name: '미끄럼 달인', desc: '한 판에 미끄러지기 10번', icon: '⬇️', check: s => s.slides >= 10 },
     { id: 'rn_stars', game: 'runner', name: '별 부자', desc: '한 판에 별 150개', icon: '💫', check: s => s.stars >= 150 },
+    // 2026-09-27 추가 (id는 한 번 정하면 바꾸지 않는다: 저장본이 id로 기억한다)
+    { id: 'ng_boss3', game: 'ngun', name: '보스 도감', desc: '다른 보스 3마리 잡기', icon: '🐲', check: s => s.bossKinds >= 3 },
+    { id: 'ng_exo', game: 'ngun', name: '외계 행성 탐험', desc: '외계 행성까지 가기', icon: '🛸', check: s => s.planet >= 10 },
+    { id: 'sn_stars', game: 'snake', name: '별 모으기 대장', desc: '스테이지 별 15개 모으기', icon: '🌟', check: s => s.stageStars >= 15 },
+    { id: 'jp_exo', game: 'jump', name: '외계 행성 도착', desc: '700m 오르기', icon: '👽', check: s => s.height >= 700 },
+    { id: 'rn_exo', game: 'runner', name: '태양계 밖으로', desc: '3,375m 달리기', icon: '🌠', check: s => s.dist >= 3375 },
   ];
 
   // 알아서 맞춰 주는 난이도: 판 결과(perf, 1 = 그 난이도에서 보통 잘함, 0.3 = 금방 짐, 2 = 아주 잘함)의 이동 평균으로
   // 다음 판을 살짝 쉽게(0.85배) 또는 살짝 어렵게(1.12배). 쉬움·보통·어려움 안에서만 움직인다
   const ADAPT = { alpha: 0.35, gain: 0.3, min: 0.85, max: 1.12, warm: 2 };
+
+  // 게임마다 메달 수 (기록실 '모은 메달 5 / 77'용). 아직 한 번도 안 연 게임도 0이 아니게.
+  // 게임이 report로 더 큰 medalMax를 알려 주면 그쪽을 쓴다 (메달이 늘어도 여기를 꼭 안 고쳐도 됨)
+  const MEDAL_MAX = { ngun: 19, snake: 19, jump: 19, runner: 20 };
 
   const DAILY_COUNT = 3;       // 하루 미션 수 (서로 다른 게임에서 하나씩)
   const DAILY_BONUS = 150;     // 셋 다 받으면 보너스 상자
@@ -294,11 +306,12 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
     let medals = 0, medalMax = 0, games = 0;
     const rows = GAMES.map(g => {
       const r = s.games[g.id] || { best: 0, bestText: '', medals: 0, medalMax: 0, games: 0, sec: 0, last: '' };
-      medals += r.medals; medalMax += r.medalMax; games += r.games;
-      return Object.assign({ id: g.id, name: g.name, color: g.color }, r);
+      const mx = Math.max(r.medalMax, MEDAL_MAX[g.id] || 0);
+      medals += r.medals; medalMax += mx; games += r.games;
+      return Object.assign({ id: g.id, name: g.name, color: g.color, path: g.path }, r, { medalMax: mx });
     });
     return { coins: s.coins, earned: s.earned, spent: s.spent, medals, medalMax, games, todaySec: s.play.sec, rows };
   }
 
-  Object.assign(H, { KEY, GAMES, DAILY, DAILY_COUNT, DAILY_BONUS, STICKERS, ADAPT, adaptMul, adaptRun, stickers, seeStickers, dayKey, blank, clean, load, save, coins, addCoins, spend, setCoins, moveIn, report, pickDaily, daily, reportRun, claimDaily, summary });
+  Object.assign(H, { KEY, GAMES, DAILY, MEDAL_MAX, DAILY_COUNT, DAILY_BONUS, STICKERS, ADAPT, adaptMul, adaptRun, stickers, seeStickers, dayKey, blank, clean, load, save, coins, addCoins, spend, setCoins, moveIn, report, pickDaily, daily, reportRun, claimDaily, summary });
 })(HUB);

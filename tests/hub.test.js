@@ -107,7 +107,7 @@ test('기록실: 게임별 최고·메달·판 수, 합계, 오늘 논 시간', 
   const s = H.summary(day);
   const sn = s.rows.find(r => r.id === 'snake');
   assert(sn.bestText === '최고 500점' && sn.best === 500 && sn.medals === 5 && sn.games === 8, JSON.stringify(sn));
-  assert(s.medals === 7 && s.medalMax === 34 && s.games === 11, 'totals ' + JSON.stringify([s.medals, s.medalMax, s.games]));
+  assert(s.medals === 7 && s.medalMax === H.GAMES.reduce((t, g) => t + H.MEDAL_MAX[g.id], 0) && s.games === 11, 'totals ' + JSON.stringify([s.medals, s.medalMax, s.games]));
   assert(s.todaySec === 120 && sn.sec === 90, 'time ' + s.todaySec);
   assert(s.rows.length === 4 && s.rows.map(r => r.id).join() === 'ngun,snake,jump,runner', 'order');
 });
@@ -156,6 +156,62 @@ test('스티커북: 판 결과로 붙고, 한 번만, 다른 게임 값으로는
   H.reportRun('jump', { height: 300 }, 30, day);
   b = H.stickers();
   assert(got('jp_space') && b.filter(t => t.fresh).length === 1 && got('jp_first') === day, 'new one only');
+});
+
+test('기록실 메달 합계: 아직 안 연 게임도 메달 수를 세고, 게임이 더 큰 수를 알려 주면 그쪽', () => {
+  const { H } = fresh();
+  const base = H.GAMES.reduce((t, g) => t + H.MEDAL_MAX[g.id], 0);
+  assert(H.GAMES.every(g => H.MEDAL_MAX[g.id] > 0), 'every game has a default');
+  assert(H.summary().medalMax === base, 'empty book ' + H.summary().medalMax);
+  H.report('snake', { medals: 3, medalMax: 5 });            // 옛 게임이 작은 수를 알려도 기본값 아래로 안 내려간다
+  assert(H.summary().medalMax === base, 'smaller report ignored');
+  H.report('jump', { medals: 2, medalMax: H.MEDAL_MAX.jump + 4 });   // 메달이 늘었으면 그쪽
+  const s = H.summary();
+  assert(s.medalMax === base + 4 && s.medals === 5, 'bigger report ' + s.medalMax);
+  assert(s.rows.find(r => r.id === 'runner').medalMax === H.MEDAL_MAX.runner, 'row max for unopened game');
+});
+
+test('게임 주소는 index.html까지 (파일로 바로 열어도 열리게)', () => {
+  const { H } = fresh();
+  assert(H.GAMES.map(g => g.path).join() === 'game/index.html,snake/index.html,jump/index.html,runner/index.html', H.GAMES.map(g => g.path).join());
+});
+
+test('오늘의 미션 글: 게임 이름을 되풀이하지 않고 짧게', () => {
+  const { H } = fresh();
+  const names = ['뿅뿅', '냠냠', '통통', '슝슝', '우주선', '달리기 '];
+  for (const g of Object.keys(H.DAILY)) for (const m of H.DAILY[g]) {
+    assert(!names.some(n => m.text.startsWith(n) || m.text.includes(n + ' ')), 'game name in ' + m.text);
+    assert(m.text.length <= 16, 'too long ' + m.text);
+  }
+  // 예전 글로 저장된 오늘의 미션도 새 글로 읽힌다 (stat으로 찾아 맞춘다)
+  const { H: H2, mem } = fresh();
+  mem['play.hub1'] = JSON.stringify({ daily: { day: '2026-09-27', list: [{ game: 'runner', stat: 'jumps', text: '슝슝 달리기 레이저 문 10번 넘기' }, { game: 'jump', stat: 'height' }, { game: 'ngun', stat: 'wave' }], prog: [3, 0, 0], claimed: [false, false, false] } });
+  const d = H2.daily('2026-09-27');
+  assert(d[0].text === '레이저 문 10번 뛰어넘기' && d[0].prog === 3, JSON.stringify(d[0]));
+});
+
+test('새 스티커: 보스 도감·외계 행성·별 모으기 대장·태양계 밖으로', () => {
+  const { H } = fresh();
+  const day = '2026-09-27';
+  const got = id => H.stickers().find(t => t.id === id).got;
+  assert(H.STICKERS.length >= 29, 'count ' + H.STICKERS.length);
+  H.reportRun('ngun', { bossKinds: 2, planet: 9 }, 10, day);
+  assert(!got('ng_boss3') && !got('ng_exo'), 'not yet');
+  H.reportRun('ngun', { bossKinds: 3, planet: 10 }, 10, day);
+  assert(got('ng_boss3') && got('ng_exo'), 'ngun new');
+  H.reportRun('snake', { stageStars: 14 }, 10, day);
+  assert(!got('sn_stars'), 'snake not yet');
+  H.reportRun('snake', { stageStars: 15 }, 10, day);
+  assert(got('sn_stars'), 'snake stars');
+  H.reportRun('jump', { height: 699 }, 10, day);
+  assert(!got('jp_exo') && got('jp_stars'), 'jump 699');
+  H.reportRun('jump', { height: 700 }, 10, day);
+  assert(got('jp_exo'), 'jump 700');
+  H.reportRun('runner', { dist: 3374 }, 10, day);
+  assert(!got('rn_exo'), 'runner 3374');
+  H.reportRun('runner', { dist: 3375 }, 10, day);
+  assert(got('rn_exo'), 'runner 3375');
+  H.reportRun('ngun', { continues: 2 }, 10, day);   // 모르는 값은 그냥 무시
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
