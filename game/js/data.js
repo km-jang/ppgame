@@ -32,7 +32,7 @@
     ember:    { name: '태양 불씨', r: 8,  hp: 1,  speed: 175, score: 8,  color: '#ffb347', shape: 'ember', turn: 0.9 },
     // 금성 산성 구름: 느린 구름. mistCd초마다 제자리에 안개 웅덩이를 남긴다 (mistForm초 동안 점선으로 생기고, mistLife초 동안
     // 그 안에선 내 속도가 slow배). 아프지는 않다
-    acid:     { name: '산성 구름', r: 19, hp: 6,  speed: 38,  score: 25, color: '#c8f04a', shape: 'acid',
+    acid:     { name: '산성 구름', r: 22, hp: 6,  speed: 38,  score: 25, color: '#c8f04a', shape: 'acid',
                 mistCd: 3.2, mistR: 58, mistForm: 0.6, mistLife: 4.5, slow: 0.55, mistMax: 6 },
     // 지구 인공위성: 나를 가운데 두고 orbit px 거리에서 빙 돈다. beamCd초마다 멈춰서 점선 예고(beamWarn, 방향은 예고 시작 때 굳음)
     // 뒤 짧은 빛줄기(길이 beamLen)를 beamOn초 쏜다
@@ -43,7 +43,7 @@
     worm:     { name: '모래 벌레', r: 17, hp: 7,  speed: 45,  score: 35, color: '#e0824f', shape: 'worm',
                 digSpeed: 100, digMax: 5, popR: 50, popWarn: 0.9, upTime: 2.6 },
     // 목성 번개 구름: 거리를 두고 떠 있다가 번개를 모은다(zapWarn초, 불꽃 + 내가 있던 자리까지 점선). 그 자리까지 짧은 번개
-    zap:      { name: '번개 구름', r: 18, hp: 7,  speed: 50,  score: 35, color: '#c9b6ff', shape: 'zap',
+    zap:      { name: '번개 구름', r: 21, hp: 7,  speed: 50,  score: 35, color: '#c9b6ff', shape: 'zap',
                 keep: 270, zapCd: 3.8, zapWarn: 1.0, zapOn: 0.18, zapW: 18, zapReach: 520 },
     // 토성 고리 조각: 화면 왼쪽·오른쪽 끝에서 내 높이로 줄을 맞추고(aim초) 가로 띠 예고(warn초) 뒤 반대쪽 끝까지 휙 (sweep px/초)
     shard:    { name: '고리 조각', r: 14, hp: 5,  speed: 150, score: 25, color: '#f3d58c', shape: 'shard',
@@ -55,7 +55,7 @@
     storm:    { name: '폭풍 드론', r: 15, hp: 6,  speed: 90,  score: 30, color: '#6fa8ff', shape: 'storm',
                 near: 150, far: 290, windR: 95, windTurn: 3.0 },
     // 명왕성 하트 유령: 보였다(on초) 흐려졌다(off초) 한다 (fade초에 걸쳐). 흐릴 땐 못 맞히고 닿아도 안 아프며, 나에게서 keepOff px 떨어져 있다
-    ghost:    { name: '하트 유령', r: 15, hp: 5,  speed: 75,  score: 30, color: '#ffb3d9', shape: 'ghost',
+    ghost:    { name: '하트 유령', r: 17, hp: 5,  speed: 75,  score: 30, color: '#ffb3d9', shape: 'ghost',
                 on: 2.4, off: 1.8, fade: 0.45, keepOff: 140 },
     boss:     { name: '보스',   r: 58, hp: 320, speed: 42,  score: 1000, color: '#ff2e88', shape: 'octa',
                 ringCd: 3.0, ringCount: 14, ringSpeed: 170,
@@ -135,7 +135,7 @@
   // 압박 손잡이에 살짝 곱한다: 손잡이 = 1 + (m - 1) × 무게. count 적 수 · gap 적이 나오는 간격(나눔) · meteor 운석 간격(나눔) · fire 적 연사
   // 판이 끝나면 perf = 버틴 시간 ÷ target[난이도] (최대 3)를 HUB.adaptRun으로 알린다. 1이면 "그 난이도에서 보통 잘한 판"
   // target은 원 그리기 봇(피하지 않고 돌기만, 아이 흉내)의 버틴 시간 중앙값 근처 (PLAN.md 5.6)
-  const ADAPT = { count: 1, gap: 1, meteor: 1, fire: 0.6, min: 0.8, max: 1.2, target: { easy: 180, normal: 110, hard: 90 }, maxPerf: 3 };
+  const ADAPT = { count: 1, gap: 1, meteor: 1, fire: 0.6, min: 0.8, max: 1.2, target: { easy: 240, normal: 120, hard: 100 }, maxPerf: 3 };
 
   // 블랙홀 웨이브: from 웨이브부터, 보스 웨이브가 아니고 바로 앞 웨이브가 블랙홀이 아니면 chance 확률로
   // 블랙홀은 화면 안쪽(place 비율 사이)에, 내 자리에서 minFromPlayer px 이상 떨어져 생긴다.

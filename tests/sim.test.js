@@ -1142,6 +1142,18 @@ function dodgeBot(W) {
     if (d < m.r + p.r + 30) { fx += (d < 2 ? 1 : dx / d) * 6; fy += (d < 2 ? 0 : dy / d) * 6; }
   }
   if (W.hole) { const dx = p.x - W.hole.x, dy = p.y - W.hole.y, d = Math.hypot(dx, dy) || 1; if (d < 260) { fx += dx / d * 1.2; fy += dy / d * 1.2; } }
+  // 행성 적 예고 (2026-09-27): 빛줄기·번개·보스 레이저 예고선에서 옆으로, 모래 벌레 예고 원 밖으로, 고리 조각 띠에서 위아래로, 안개 웅덩이 피하기
+  for (const L of W.lasers || []) {
+    if (L.x == null || L.t >= L.warn) continue;
+    const a = L.ang != null ? L.ang : L.a, c = Math.cos(a), s = Math.sin(a), dx = p.x - L.x, dy = p.y - L.y;
+    const along = dx * c + dy * s, side = -dx * s + dy * c;
+    if (along > -20 && (!L.len || along < L.len + 30) && Math.abs(side) < L.w + 40) { const k = side >= 0 ? 1 : -1; fx += -s * k * 4; fy += c * k * 4; }
+  }
+  for (const e of W.enemies) {
+    if (e.wm === 'warn') { const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1; if (d < e.def.popR + 30) { fx += (d < 2 ? 1 : dx / d) * 6; fy += (d < 2 ? 0 : dy / d) * 6; } }
+    if (e.type === 'shard' && e.sw !== 'line') { const dy = p.y - e.swY; if (Math.abs(dy) < e.r + 50) fy += (dy >= 0 ? 1 : -1) * 5; }
+  }
+  for (const m of W.mists || []) { const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy) || 1; if (d < m.r + 30) { fx += dx / d * 1.5; fy += dy / d * 1.5; } }
   const m = 110;
   if (p.x < m) fx += (m - p.x) / m * 3; if (p.x > W.w - m) fx -= (p.x - W.w + m) / m * 3;
   if (p.y < m) fy += (m - p.y) / m * 3; if (p.y > W.h - m) fy -= (p.y - W.h + m) / m * 3;
@@ -1175,6 +1187,342 @@ test('난이도: 쉬움부터 가만히 있으면 금방 지고, 피해 다니�
   assert(r.easy.idle > r.normal.idle && r.normal.idle > r.hard.idle, 'idle ordering');
   for (const d of ['easy', 'normal', 'hard']) assert(r[d].dodge > r[d].idle * 3, d + ' dodge ' + r[d].dodge.toFixed(0) + ' vs idle ' + r[d].idle.toFixed(0));
   assert(r.easy.dodge >= r.hard.dodge, 'dodge easy >= hard');
+});
+
+// ─── 행성마다 다른 적 (2026-09-27) ───────────────────────────
+// 적 하나만 둔 빈 판. 내 총은 멈춰 두고(쏘지 않음) 적 체력은 크게
+function foeWorld(seed, type, x, y, d) {
+  const W = createWorld(1280, 800, seed, d);
+  clearArena(W);
+  const p = W.player; p.fireCd = 1e9; p.gun.rate = 1e-9; p.x = 640; p.y = 400; p.vx = p.vy = 0;
+  const e = NG.World.spawnEnemy(W, type);
+  e.x = x; e.y = y; e.spawnT = 0; e.hp = e.maxHp = 1e9;
+  if (type === 'ember') e.emA = Math.atan2(p.y - y, p.x - x);
+  if (type === 'shard') { e.dir = x < 640 ? 1 : -1; e.swY = y; }
+  W.events.length = 0; W.tags.length = 0;
+  return { W, p, e };
+}
+// sec초 동안 input으로 돌리며 맞은 횟수·경고가 먼저 떴는지 센다. input은 함수(W)여도 된다. 체력은 계속 채운다
+function foeRun(W, sec, input, onFrame) {
+  let hurt = 0, firstHurtAt = -1;
+  for (let i = 0; i < sec * 60; i++) {
+    const inp = typeof input === 'function' ? input(W) : input;
+    step(W, inp, DT);
+    const h = W.events.filter(x => x === 'hurt' || x === 'over').length;
+    if (h && firstHurtAt < 0) firstHurtAt = W.t;
+    hurt += h;
+    if (onFrame) onFrame(W);
+    W.events.length = 0;
+    W.player.hp = W.player.maxHp;
+  }
+  return { hurt, firstHurtAt };
+}
+const STILL = { moveX: 0, moveY: 0, aimAngle: 0, dash: false };
+
+test('행성 적: 행성마다 하나씩 9종, 이름·색·모양이 모두 다르고 그 행성 웨이브에만 섞여 나온다', () => {
+  const foes = DA.PLANETS.map(p => p.foe);
+  assert(foes.length === 9 && new Set(foes).size === 9, '9 distinct');
+  for (const f of foes) assert(DA.ENEMIES[f] && DA.ENEMIES[f].name && DA.ENEMIES[f].color, f);
+  assert(new Set(foes.map(f => DA.ENEMIES[f].color)).size === 9 && new Set(foes.map(f => DA.ENEMIES[f].shape)).size === 9, 'looks differ');
+  const rand = NG.rng(5);
+  for (let n = 1; n <= 36; n++) {
+    const q = buildWave(n, rand, DA.DIFFICULTY.normal), foe = NG.World.foeOf(n);
+    assert(foe === DA.PLANETS[Math.floor((n - 1) / 2) % 9].foe, 'foe of ' + n);
+    const k = q.filter(t => t === foe).length;
+    if (n % 5 === 0) assert(q[0] === 'boss' && k === DA.PLANET_FOE.boss, 'boss wave ' + n + ' k ' + k);
+    else assert(k >= DA.PLANET_FOE.min && k >= Math.round((q.length) * DA.PLANET_FOE.share) - 1, 'share ' + n + ' k ' + k + '/' + q.length);
+    for (const other of foes) if (other !== foe) assert(!q.includes(other), 'no other foe ' + other + ' at ' + n);
+  }
+});
+
+test('행성 적: 처음 만나면 그 적 위에 "행성 이름 + 적 이름!" 이름표 (한 판에 한 번)', () => {
+  const W = createWorld(1280, 800, 71);
+  clearArena(W);
+  NG.World.spawnEnemy(W, 'worm');
+  assert(W.tags.length === 1 && W.tags[0].txt === '화성 모래 벌레!' && W.events.includes('foe'), 'tag ' + (W.tags[0] && W.tags[0].txt));
+  NG.World.spawnEnemy(W, 'worm');
+  assert(W.tags.length === 1, 'only first time');
+  NG.World.spawnEnemy(W, 'grunt');
+  assert(W.tags.length === 1, 'plain enemies have no tag');
+  for (let i = 0; i < 60 * 3; i++) { step(W, STILL, DT); W.player.hp = W.player.maxHp; }
+  assert(W.tags.length === 0, 'tag fades');
+});
+
+test('수성 태양 불씨: 해가 있는 위·왼쪽에서 나오고, 가만히 있으면 맞고(불씨는 꺼짐), 옆으로 비키면 스쳐 간다', () => {
+  const W0 = createWorld(1280, 800, 72); clearArena(W0);
+  for (let i = 0; i < 40; i++) { const e = NG.World.spawnEnemy(W0, 'ember'); assert(e.x <= 20 || e.y <= 20, 'sun side ' + e.x.toFixed(0) + ',' + e.y.toFixed(0)); }
+  for (const move of [false, true]) {
+    const { W, e } = foeWorld(73, 'ember', 640, 60);
+    const r = foeRun(W, 3, move ? { moveX: 1, moveY: 0, aimAngle: 0, dash: false } : STILL);
+    if (move) assert(r.hurt === 0, 'sidestep safe ' + r.hurt);
+    else assert(r.hurt === 1 && e.dead, 'idle hit and ember burns out');
+  }
+});
+
+test('금성 산성 구름: 안개 웅덩이를 남기고(점선으로 생기는 동안은 괜찮음) 그 안에선 느려진다, 아프지는 않다', () => {
+  const A = DA.ENEMIES.acid;
+  const { W, p, e } = foeWorld(74, 'acid', 300, 400);
+  e.cd = 0.01; e.speed = 0;
+  step(W, STILL, DT);
+  assert(W.mists.length === 1 && W.events.includes('mist'), 'mist dropped');
+  const m = W.mists[0];
+  assert(!NG.World.inMist(W, m.x, m.y), 'not active while forming');
+  W.enemies.length = 0; // 구름은 치우고 웅덩이만
+  for (let i = 0; i < Math.ceil(m.form * 60) + 12; i++) step(W, STILL, DT);
+  assert(NG.World.inMist(W, m.x, m.y), 'active after forming');
+  // 웅덩이 안과 밖에서 1초 동안 간 거리
+  const go = (x) => { p.x = x; p.y = 400; p.vx = p.vy = 0; const x0 = p.x; for (let i = 0; i < 30; i++) step(W, { moveX: 1, moveY: 0, aimAngle: 0, dash: false }, DT); return p.x - x0; };
+  const slow = go(m.x - 20), fast = go(100);
+  assert(slow < fast * 0.7 && slow > fast * A.slow * 0.8, 'slowed ' + slow.toFixed(1) + ' vs ' + fast.toFixed(1));
+  assert(W.stats.hurts === 0, 'no damage');
+  for (let i = 0; i < 60 * (A.mistLife + 1); i++) step(W, STILL, DT);
+  assert(W.mists.length === 0, 'mist fades');
+});
+
+test('지구 인공위성: 나를 둘레로 돌고, 멈춰서 점선 예고 뒤 짧은 빛줄기. 가만히 있으면 맞고 비키면 안 맞는다, 길이 밖은 안전', () => {
+  const S = DA.ENEMIES.sat;
+  { // 돌기: 거리가 orbit 쪽으로 가고, 각도가 돈다
+    const { W, p, e } = foeWorld(75, 'sat', 640, 100);
+    e.cd = 1e9;
+    const a0 = Math.atan2(e.y - p.y, e.x - p.x);
+    foeRun(W, 4, STILL);
+    const d = Math.hypot(e.x - p.x, e.y - p.y), a1 = Math.atan2(e.y - p.y, e.x - p.x);
+    assert(Math.abs(d - S.orbit) < 50, 'orbit dist ' + d.toFixed(0));
+    assert(Math.abs(a1 - a0) > 0.3, 'moved around');
+  }
+  for (const move of [false, true]) {
+    const { W, e } = foeWorld(76, 'sat', 640, 160);
+    e.cd = 0.01;
+    let warnedBeforeHit = false;
+    const r = foeRun(W, 2, w => (move && w.lasers.length ? { moveX: 1, moveY: 0, aimAngle: 0, dash: false } : STILL),
+      w => { if (w.lasers.length && w.lasers[0].t < w.lasers[0].warn && w.stats.hurts === 0) warnedBeforeHit = true; });
+    assert(warnedBeforeHit, 'warning first');
+    if (move) assert(r.hurt === 0, 'sidestep safe ' + r.hurt);
+    else assert(r.hurt === 1 && r.firstHurtAt >= S.beamWarn * 0.95, 'idle hit after warn ' + r.firstHurtAt.toFixed(2));
+  }
+  { // 빛줄기 길이 밖
+    const { W, e } = foeWorld(77, 'sat', 640 - S.beamLen - 80, 400);
+    e.cd = 0.01; e.speed = 0;
+    // 사거리 밖이면 쏘지 않는다
+    foeRun(W, 0.5, STILL);
+    assert(W.lasers.length === 0, 'no beam out of range');
+  }
+});
+
+test('화성 모래 벌레: 땅속에선 못 맞히고 안 아프다, 내 밑에서 둥근 예고 뒤 튀어나온다. 가만히 있으면 맞고 비키면 안 맞는다, 나오면 맞힐 수 있다', () => {
+  const Wm = DA.ENEMIES.worm;
+  for (const move of [false, true]) {
+    const { W, p, e } = foeWorld(78, 'worm', 640, 200);
+    e.hp = e.maxHp = 1e9;
+    // 땅속: 내 총알이 그냥 지나간다
+    W.bullets.push({ x: e.x - 30, y: e.y, vx: 500, vy: 0, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+    let hitWhileHidden = false, warned = false, warnAt = -1;
+    const r = foeRun(W, 3, w => (move && e.wm === 'warn' ? { moveX: 1, moveY: 0, aimAngle: 0, dash: false } : STILL), w => {
+      if (e.hide && e.hp < e.maxHp) hitWhileHidden = true;
+      if (e.wm === 'warn' && !warned) { warned = true; warnAt = w.t; }
+    });
+    assert(!hitWhileHidden, 'bullets pass while hidden');
+    assert(warned, 'warned');
+    if (move) assert(r.hurt === 0, 'sidestep safe ' + r.hurt);
+    else assert(r.hurt === 1 && r.firstHurtAt - warnAt >= Wm.popWarn * 0.95, 'idle hit after warn');
+    assert(e.wm === 'up' && !e.hide, 'surfaced');
+    W.bullets.push({ x: e.x - 30, y: e.y, vx: 500, vy: 0, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+    const hp0 = e.hp; step(W, STILL, DT); step(W, STILL, DT); step(W, STILL, DT);
+    assert(e.hp < hp0, 'hittable when up');
+  }
+});
+
+test('목성 번개 구름: 불꽃을 모으며 내가 있던 자리까지 점선 예고, 그다음 짧은 번개. 가만히 있으면 맞고 비키면 안 맞는다', () => {
+  const Z = DA.ENEMIES.zap;
+  for (const move of [false, true]) {
+    const { W, p, e } = foeWorld(79, 'zap', 380, 400);
+    e.cd = 0.01;
+    let bolt = null;
+    const r = foeRun(W, 2, w => (move && w.lasers.length ? { moveX: 0, moveY: 1, aimAngle: 0, dash: false } : STILL), w => { if (!bolt && w.lasers.length) bolt = Object.assign({}, w.lasers[0]); });
+    assert(bolt && bolt.kind === 'bolt' && bolt.warn >= Z.zapWarn * 0.99, 'bolt warn');
+    assert(bolt.len <= Z.zapReach && Math.abs(bolt.len - (260 + 30)) < 5, 'reaches just past where I was ' + bolt.len);
+    if (move) assert(r.hurt === 0, 'sidestep safe ' + r.hurt);
+    else assert(r.hurt === 1 && r.firstHurtAt >= Z.zapWarn * 0.95, 'idle hit after warn');
+  }
+  { // 번개 끝보다 멀리 있으면 안 맞는다 (짧은 번개)
+    const { W, p, e } = foeWorld(80, 'zap', 380, 400);
+    e.cd = 0.01;
+    step(W, STILL, DT);
+    const L = W.lasers[0];
+    p.x = e.x + (L.len + 60); // 번개 방향(오른쪽)으로 끝보다 더 멀리
+    const r = foeRun(W, 1.5, STILL);
+    assert(r.hurt === 0, 'beyond bolt safe');
+  }
+});
+
+test('토성 고리 조각: 끝에서 내 높이로 줄을 맞추고, 가로 띠 예고 뒤 휙 지나간다. 가만히 있으면 맞고 위아래로 비키면 안 맞는다', () => {
+  const SD = DA.ENEMIES.shard;
+  const W0 = createWorld(1280, 800, 81); clearArena(W0);
+  for (let i = 0; i < 30; i++) { const e = NG.World.spawnEnemy(W0, 'shard'); assert(e.x <= 30 || e.x >= 1250, 'side edges'); }
+  for (const move of [false, true]) {
+    const { W, p, e } = foeWorld(82, 'shard', 30, 250);
+    e.swT = SD.aim;
+    let lined = false, band = -1;
+    const r = foeRun(W, 5, w => (move && e.sw !== 'line' ? { moveX: 0, moveY: -1, aimAngle: 0, dash: false } : STILL), w => {
+      if (e.sw === 'warn' && band < 0) { band = w.t; lined = Math.abs(e.swY - 400) < 5; }
+    });
+    assert(band > 0 && lined, 'lined up with me then band');
+    if (move) assert(r.hurt === 0, 'dodge vertically ' + r.hurt);
+    else assert(r.hurt >= 1 && r.firstHurtAt - band >= SD.warn * 0.95, 'idle hit after band');
+  }
+});
+
+test('천왕성 얼음 결정: 부수면 작은 얼음 조각 3개로 쪼개진다', () => {
+  const { W, e } = foeWorld(83, 'ice', 300, 300);
+  e.hp = 0.5;
+  W.bullets.push({ x: 300, y: 300, vx: 500, vy: 0, r: 4, dmg: 5, life: 1, pierce: 0, bounce: 0, hits: [] });
+  step(W, STILL, DT);
+  const bits = W.enemies.filter(x => x.type === 'iceBit');
+  assert(e.dead && bits.length === DA.ENEMIES.ice.splitN && W.events.includes('crack'), 'split into ' + bits.length);
+  const angs = bits.map(b => Math.atan2(b.vy, b.vx));
+  assert(Math.max(...angs) - Math.min(...angs) > 2, 'fly apart');
+});
+
+test('해왕성 폭풍 드론: 나를 둘러싸고 소용돌이치며 돌고, 둘레 바람이 내 총알을 휘게 한다', () => {
+  const ST = DA.ENEMIES.storm;
+  const { W, p, e } = foeWorld(84, 'storm', 640, 150);
+  const ds = [];
+  foeRun(W, 8, STILL, w => ds.push(Math.hypot(e.x - p.x, e.y - p.y)));
+  const late = ds.slice(120);
+  assert(Math.min(...late) > ST.near - 60 && Math.max(...late) < ST.far + 80, 'stays in swirl band ' + Math.min(...late).toFixed(0) + '~' + Math.max(...late).toFixed(0));
+  assert(Math.max(...late) - Math.min(...late) > 60, 'swirls in and out');
+  // 바람: 드론 옆을 지나는 총알이 휜다 (드론을 멀리 치우면 곧게 간다)
+  const bend = (near) => {
+    const B = foeWorld(85, 'storm', 640, 300);
+    B.e.speed = 0; if (!near) { B.e.x = 100; B.e.y = 700; }
+    B.W.bullets.push({ x: 560, y: 300 - 40, vx: 500, vy: 0, r: 4, dmg: 0, life: 1, pierce: 99, bounce: 0, hits: [] });
+    const b = B.W.bullets[0];
+    for (let i = 0; i < 20; i++) step(B.W, STILL, DT);
+    return Math.abs(Math.atan2(b.vy, b.vx));
+  };
+  assert(bend(true) > 0.1 && bend(false) < 1e-6, 'bullets bend near storm ' + bend(true).toFixed(3));
+});
+
+test('명왕성 하트 유령: 보였다 흐려졌다 하고, 흐릴 땐 못 맞히고 닿아도 안 아프며 나와 거리를 둔다', () => {
+  const G = DA.ENEMIES.ghost;
+  const { W, p, e } = foeWorld(86, 'ghost', 700, 400);
+  let sawHidden = false, sawVisible = false, hurtHidden = 0, hitHidden = false, minAppearDist = 1e9;
+  const hp0 = e.hp;
+  for (let i = 0; i < 60 * 12; i++) {
+    const hid = e.hide;
+    if (hid) {
+      sawHidden = true;
+      // 흐릴 때 총알을 몸에 대 본다
+      W.bullets.push({ x: e.x, y: e.y, vx: 1, vy: 0, r: 4, dmg: 1, life: 0.05, pierce: 0, bounce: 0, hits: [] });
+    } else sawVisible = true;
+    const hpBefore = e.hp;
+    step(W, STILL, DT);
+    if (hid && e.hide && e.hp < hpBefore) hitHidden = true;
+    if (hid && !e.hide) minAppearDist = Math.min(minAppearDist, Math.hypot(e.x - p.x, e.y - p.y)); // 다시 나타나는 순간 거리
+    if (hid) hurtHidden += W.events.filter(x => x === 'hurt').length;
+    W.events.length = 0; p.hp = p.maxHp;
+  }
+  assert(sawHidden && sawVisible, 'cycles');
+  assert(!hitHidden, 'cannot hit while faded');
+  assert(hurtHidden === 0, 'harmless while faded');
+  assert(minAppearDist > G.keepOff * 0.6, 'reappears away from me ' + minAppearDist.toFixed(0));
+  // 보일 때는 맞는다
+  e.ghT = 0; e.hide = false; e.vis = 1;
+  W.bullets.push({ x: e.x - 20, y: e.y, vx: 500, vy: 0, r: 4, dmg: 1, life: 1, pierce: 0, bounce: 0, hits: [] });
+  const h1 = e.hp; step(W, STILL, DT); step(W, STILL, DT);
+  assert(e.hp < h1, 'hittable when visible');
+});
+
+test('행성 적: 아홉 행성을 모두 지나는 긴 판도 값이 망가지지 않고 모든 웨이브를 깬다', () => {
+  const W = createWorld(1280, 800, 87, 'easy');
+  const seen = new Set();
+  for (let i = 0; i < 60 * 60 * 12 && W.wave < 19; i++) {
+    if (W.phase === 'cards') pickCard(W, 0);
+    W.player.hp = W.player.maxHp;
+    W.player.gun.dmg = Math.max(W.player.gun.dmg, 3 + W.wave);
+    step(W, dodgeBot(W), DT);
+    for (const e of W.enemies) seen.add(e.type);
+    W.events.length = 0;
+    if (!finite(W)) throw new Error('NaN at ' + i);
+  }
+  assert(W.wave >= 19, 'reached lap 2: wave ' + W.wave);
+  for (const f of DA.PLANETS.map(p => p.foe)) assert(seen.has(f), 'met ' + f);
+  assert(seen.has('iceBit'), 'ice split in play');
+});
+
+// ─── 알아서 맞춰 주는 난이도 ─────────────────────────────────
+test('알아서 맞춰 주는 난이도: 배율이 적 수·적이 나오는 간격·운석 간격·적 연사를 살짝 바꾸고, 1이면 그대로', () => {
+  const A = DA.ADAPT;
+  const base = createWorld(1280, 800, 90, 'normal'), one = createWorld(1280, 800, 90, 'normal', { adapt: 1 });
+  assert(one.diff === DA.DIFFICULTY.normal && one.gapMul === 1, 'mul 1 keeps diff');
+  const easy = createWorld(1280, 800, 90, 'normal', { adapt: 0.85 }), hard = createWorld(1280, 800, 90, 'normal', { adapt: 1.12 });
+  assert(easy.diff.count < base.diff.count && base.diff.count < hard.diff.count, 'count');
+  assert(easy.spawnQueue.length <= base.spawnQueue.length && base.spawnQueue.length <= hard.spawnQueue.length, 'queue');
+  assert(easy.gapMul > 1 && hard.gapMul < 1, 'spawn gap');
+  assert(easy.diff.meteorEvery > base.diff.meteorEvery && hard.diff.meteorEvery < base.diff.meteorEvery, 'meteor');
+  assert(easy.diff.fireRate < base.diff.fireRate && hard.diff.fireRate > base.diff.fireRate, 'fire');
+  assert(Math.abs(hard.diff.count / base.diff.count - 1.12) < 1e-9, 'count x1.12');
+  assert(hard.diff.id === 'normal' && hard.diff.name === '보통' && hard.diff.hp === base.diff.hp, 'keeps id·name·hp');
+  assert(DA.DIFFICULTY.normal.count === base.diff.count, 'original untouched');
+  assert(createWorld(1280, 800, 90, 'normal', { adapt: 5 }).adapt === A.max && createWorld(1280, 800, 90, 'normal', { adapt: 'x' }).adapt === 1, 'clamped');
+  // 간격 배율은 실제 생성에 쓰인다: 쉬운 판이 20초 동안 적을 덜 내보낸다
+  const spawned = W => { W.meteorT = 1e9; W.player.gun.dmg = 0; let n = 0; for (let i = 0; i < 60 * 20; i++) { W.player.hp = W.player.maxHp; step(W, STILL, DT); W.events.length = 0; } return W.enemies.length; };
+  assert(spawned(createWorld(1280, 800, 91, 'hard', { adapt: 0.85 })) < spawned(createWorld(1280, 800, 91, 'hard', { adapt: 1.12 })), 'fewer enemies when easier');
+});
+
+test('알아서 맞춰 주는 난이도: 판 성적 perf는 버틴 시간 ÷ 난이도 목표, 목표에서 1, 최대 3', () => {
+  const A = DA.ADAPT;
+  const W = createWorld(1280, 800, 92, 'easy');
+  const at = (d, t) => { W.diff = DA.DIFFICULTY[d]; W.stats.time = t; return NG.World.perfOf(W); };
+  assert(at('easy', 0) === 0 && Math.abs(at('easy', A.target.easy) - 1) < 1e-9 && at('easy', 1e6) === A.maxPerf, 'range');
+  assert(at('easy', 60) < at('easy', 120), 'monotonic');
+  assert(A.target.easy > A.target.normal && A.target.normal >= A.target.hard, 'targets by difficulty');
+  // 가만히 봇(금방 짐)은 1 아래, 피하는 봇은 1 위 (쉬움, 시드 3개)
+  for (let s = 1; s <= 3; s++) {
+    const run = bot => { const V = createWorld(1280, 800, 930 + s, 'easy'); while (V.phase !== 'over' && V.stats.time < 400) { if (V.phase === 'cards') pickCard(V, 0); step(V, bot(V), DT); V.events.length = 0; } return NG.World.perfOf(V); };
+    const idle = run(() => IDLE), dodge = run(dodgeBot);
+    assert(idle < 0.6 && dodge > 1.2, 'perf idle ' + idle.toFixed(2) + ' dodge ' + dodge.toFixed(2));
+  }
+});
+
+// ─── 스티커북 통계 ────────────────────────────────────────────
+test('스티커 통계: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10)과 깬 블랙홀 웨이브 수', () => {
+  const W = createWorld(1280, 800, 94);
+  assert(W.stats.planet === 1 && W.stats.holesCleared === 0, 'start at mercury');
+  while (W.wave < 7) nextWave(W);
+  assert(W.stats.planet === 4, 'mars at wave 7: ' + W.stats.planet);
+  while (W.wave < 17) nextWave(W);
+  assert(W.stats.planet === 9, 'pluto ' + W.stats.planet);
+  while (W.wave < 19) nextWave(W);
+  assert(W.stats.planet === 10, 'lap 2 mercury ' + W.stats.planet);
+  // 블랙홀 웨이브를 깨면 하나 는다 (카드 화면이 열릴 때)
+  clearArena(W);
+  W.hole = { fx: 0.5, fy: 0.5, x: 640, y: 400 };
+  W.spawnQueue.length = 0;
+  for (let i = 0; i < 120 && W.phase === 'play'; i++) step(W, STILL, DT);
+  assert(W.phase === 'cards' && W.stats.holesCleared === 1, 'hole cleared ' + W.stats.holesCleared);
+});
+
+test('스티커 통계: 놀이 본부가 행성·블랙홀 스티커를 붙이고, 판 성적으로 난이도 배율이 움직인다 (common/hub.js)', () => {
+  const mem = {};
+  const hctx = vm.createContext({ console, Math, Date, JSON, Number, String, Object, Array, Set });
+  hctx.HUB = { store: { get: (k, f) => (k in mem ? JSON.parse(mem[k]) : f), set: (k, v) => { mem[k] = JSON.stringify(v); } } };
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'hub.js'), 'utf8'), hctx, { filename: 'hub.js' });
+  const H = vm.runInContext('HUB', hctx);
+  const W = createWorld(1280, 800, 95);
+  while (W.wave < 17) nextWave(W);
+  W.stats.holesCleared = 1;
+  H.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills, planet: W.stats.planet, blackholes: W.stats.holesCleared }, 100);
+  const got = H.stickers().filter(s => s.game === 'ngun' && s.got).map(s => s.id);
+  for (const id of ['ng_mars', 'ng_saturn', 'ng_pluto', 'ng_hole']) assert(got.includes(id), 'sticker ' + id + ' ' + got.join(','));
+  // 금방 지는 판이 이어지면 배율이 1 아래로, 아주 잘하면 1 위로
+  assert(H.adaptMul('ngun', 'easy') === 1, 'starts at 1');
+  for (let i = 0; i < 4; i++) H.adaptRun('ngun', 'easy', NG.World.perfOf({ diff: DA.DIFFICULTY.easy, stats: { time: 30 } }));
+  const low = H.adaptMul('ngun', 'easy');
+  for (let i = 0; i < 4; i++) H.adaptRun('ngun', 'hard', NG.World.perfOf({ diff: DA.DIFFICULTY.hard, stats: { time: 400 } }));
+  const high = H.adaptMul('ngun', 'hard');
+  assert(low < 1 && high > 1, 'mul ' + low.toFixed(3) + ' ' + high.toFixed(3));
+  assert(createWorld(1280, 800, 96, 'easy', { adapt: low }).diff.count < DA.DIFFICULTY.easy.count, 'applied to world');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

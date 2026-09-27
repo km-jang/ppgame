@@ -50,7 +50,7 @@
         extra: { normal: [70, 35], cloud: [18, 38], crumble: [12, 27] },
         moveSpeed: [35, 85],
         mine: null,
-        monster: { from: 35, chance: [0.1, 0.24], kinds: { slime: [5, 3], balloon: [3, 3], bird: [0, 2] }, walk: [0.3, 0.6] },
+        monster: { from: 35, chance: [0.22, 0.4], kinds: { slime: [5, 3], balloon: [3, 3], bird: [0, 2] }, walk: [0.3, 0.6] },
         storm: null,
         rescues: 3, itemGap: [40, 70],
         ctl: { maxVx: 400, accel: 2900, decel: 3000 },
@@ -64,7 +64,7 @@
         extra: { normal: [60, 20], cloud: [25, 50], crumble: [15, 30] },
         moveSpeed: [50, 145],
         mine: { from: 45, chance: [0.06, 0.34] },
-        monster: { from: 20, chance: [0.1, 0.26], kinds: { slime: [5, 3], balloon: [3, 3], bird: [1, 3] }, walk: [0.4, 0.8] },
+        monster: { from: 20, chance: [0.24, 0.44], kinds: { slime: [5, 3], balloon: [3, 3], bird: [1, 3] }, walk: [0.4, 0.8] },
         storm: { from: 12, speed: [1.5, 3.2], ramp: 400 },
         rescues: 0, itemGap: [55, 95],
         ctl: { maxVx: 430, accel: 3400, decel: 2800 },
@@ -78,7 +78,7 @@
         extra: { normal: [45, 15], cloud: [30, 50], crumble: [25, 35] },
         moveSpeed: [85, 175],
         mine: { from: 15, chance: [0.14, 0.42] },
-        monster: { from: 10, chance: [0.12, 0.3], kinds: { slime: [4, 3], balloon: [3, 3], bird: [2, 4] }, walk: [0.5, 0.9] },
+        monster: { from: 10, chance: [0.26, 0.46], kinds: { slime: [4, 3], balloon: [3, 3], bird: [2, 4] }, walk: [0.5, 0.9] },
         storm: { from: 6, speed: [1.9, 3.4], ramp: 250 },
         rescues: 0, itemGap: [70, 120],
         ctl: { maxVx: 470, accel: 3700, decel: 3100 },
@@ -105,15 +105,17 @@
     // 밟는 몬스터 (2026-09-27): 위에서 내려와 밟으면 꾹 눌리고 크게 튀어 오른다 (한 번 튀는 높이 × stomp).
     //   옆이나 아래에서 닿으면: 쉬움은 살짝 밀려나고(push 점/초, "앗") 다치지 않는다, 보통·어려움은 가시 폭탄처럼 끝 (방패·로켓이면 괜찮다).
     //   r: 몸 반지름 · points: 밟으면 받는 점수(콤보 배율) · pad: 몬스터가 발판 위 튀는 길에서 떨어져 있는 거리
-    //     (발판 반폭 + pad, 주인공 몸 + 몬스터 몸 + 여유) · top: 주인공 가운데가 몬스터 가운데보다 이만큼(몸 반지름 배율) 위면 "밟기"
+    //     (길 발판 가운데에서 가로로 pad, 주인공 몸 + 몬스터 몸 + 여유) · top: 주인공 가운데가 몬스터 가운데보다 이만큼(몸 반지름 배율) 위면 "밟기"
+    //   seat: 앉을 곁 발판이 있을 때 슬라임이 나올 확률 · perch: 앉을 곁 발판이 없을 때 두 줄 사이에 놓는 작은 받침 발판 폭
+    //   hurt: 옆·아래로 부딪혔다고 치는 몬스터 몸 배율 (밟기는 몸 전체, 부딪힘은 조금 안쪽만: 아이에게 너그럽게)
     //   kinds: slime 발판 위에 앉는 슬라임(가끔 걸어 다님) · balloon 발판 사이에 둥둥 뜬 풍선 괴물 · bird 옆으로 오가는 작은 로봇 새
     //     (range: 오가는 거리 점, speed: 점/초, float: 위아래 둥실 점)
     MONSTER: {
-      r: 17, stomp: 1.5, points: 15, push: 260, cool: 0.6, pad: 54, top: 0.15,
+      r: 17, stomp: 1.5, points: 15, push: 260, cool: 0.6, pad: 54, top: 0.15, hurt: 0.7, seat: 0.7, perch: 64,
       kinds: {
         slime:   { name: '통통 슬라임', color: '#7dff6a', top: '#eaffc2', speed: 40 },
         balloon: { name: '풍선 괴물',   color: '#ff7ad9', top: '#ffd6f4', range: 26, speed: 22, float: 6 },
-        bird:    { name: '로봇 새',     color: '#ffb13d', top: '#fff0c2', range: 70, speed: 70, float: 4 },
+        bird:    { name: '로봇 새',     color: '#ffb13d', top: '#fff0c2', range: 50, speed: 60, float: 4 },
       },
     },
 
@@ -129,7 +131,7 @@
     //   ramp: 가장 어려운 높이 full을 mul^ramp로 나눔 (어려워지는 빠르기. 간격의 끝값은 그대로라 "닿지 못하는 틈이 없다"는 늘 성립)
     //   mix: 움직이는·부서지는·구름 발판 가중치 · monster: 몬스터 나올 확률 · storm: 먹구름 빠르기
     //   target: 판이 끝날 때 adaptRun에 주는 perf = 오른 높이 ÷ target (1 = 잘하는 아이의 보통 판. 아이 흉내 봇으로 정함)
-    ADAPT: { ramp: 1, mix: 1.5, monster: 1.5, storm: 1, target: { easy: 350, normal: 150, hard: 70 } },
+    ADAPT: { ramp: 1, mix: 1.5, monster: 1.5, storm: 1, target: { easy: 500, normal: 120, hard: 60 } },
 
     // 구조 구름·방패 방울이 던져 올리는 높이 (화면 높이 배율, 상한 520점)
     RESCUE: { jump: 0.75, max: 520 },

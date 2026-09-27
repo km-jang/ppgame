@@ -150,6 +150,8 @@
   // ─── 그리기 상태 (꾸밈 전용) ───────────────────────────────
   const R = { bgKey: '', backdrop: null, stars: null, boardKey: '', board: null, parts: [], texts: [], shake: 0, flash: 0, world: null };
   const ITEM = D.ITEM.kinds;
+  // 라이벌 뱀 색: 주황·보라 줄무늬 (어느 캐릭터와도 헷갈리지 않게) + 보라 가면
+  const RIVAL_ORANGE = '#ff8a1f', RIVAL_PURPLE = '#8b4dff';
   // 떠오르는 글자 (+30 ×3, 아이템 이름)
   function text(x, y, txt, color, size) {
     if (R.texts.length > 12) R.texts.shift();
@@ -199,6 +201,28 @@
         ring(p.x, p.y, c * 1.6, '#ffe66d', 0.45);
         ring(p.x, p.y, c * 2.6, '#fff4c2', 0.6);
         burst(p.x, p.y, D.FX.goldSparks, ['#ffe66d', '#fff4c2', '#ffcf3a'], c * 10, c * 0.2);
+      } else if (f.kind === 'rivalIn') {
+        ring(p.x, p.y, c * 2.4, RIVAL_ORANGE, 0.6);
+        ring(p.x, p.y, c * 3.4, RIVAL_PURPLE, 0.8);
+      } else if (f.kind === 'rivalOut') {
+        ring(p.x, p.y, c * 1.8, RIVAL_PURPLE, 0.45);
+        burst(p.x, p.y, 14, [RIVAL_ORANGE, RIVAL_PURPLE, '#ffffff'], c * 7, c * 0.16);
+        text(p.x, p.y - c, '뿅! 다시 올게', '#ffcf9a', c * 0.62);
+      } else if (f.kind === 'rivalEat') {
+        ring(p.x, p.y, c * 1.2, RIVAL_ORANGE, 0.35);
+        burst(p.x, p.y, 8, [RIVAL_ORANGE, RIVAL_PURPLE], c * 5, c * 0.14);
+        text(p.x, p.y - c * 0.8, f.gold ? '라이벌 황금 냠!' : '라이벌 냠!', '#ffb35c', c * 0.56);
+      } else if (f.kind === 'bump') {
+        // 라이벌 머리가 내 몸에 쿵: 라이벌만 어질어질 (내가 이긴 것)
+        const q = toPx(v, f.hx, f.hy), bx = (p.x + q.x) / 2, by = (p.y + q.y) / 2;
+        ring(bx, by, c * 1.8, '#ffe66d', 0.45);
+        burst(bx, by, 16, ['#ffe66d', '#ffffff', RIVAL_ORANGE], c * 8, c * 0.18);
+        text(bx, by - c, '쿵! 라이벌 멈칫', '#ffe66d', c * 0.7);
+      } else if (f.kind === 'pass') {
+        // 쉬움: 라이벌 몸을 슝 지나감 (아무 일 없음)
+        ring(p.x, p.y, c * 1.6, '#8ff6ff', 0.4);
+        burst(p.x, p.y, 10, ['#8ff6ff', '#ffffff'], c * 6, c * 0.14);
+        text(p.x, p.y - c, '슝 통과!', '#8ff6ff', c * 0.66);
       } else if (f.kind === 'die') {
         // 벽에 부딪혔으면 부딪힌 자리(머리 앞 테두리)에서 튄다
         const hx = p.x + f.dx * c * 0.5, hy = p.y + f.dy * c * 0.5;
@@ -360,7 +384,7 @@
   }
 
   // ─── 위험 경고: 머리 앞 3칸 안에 부딪힐 것(벽·판 끝·내 몸)이 있으면 그 칸에 빨간 X와 "위험!" ───
-  const WARN_TXT = { wall: '위험! 벽', edge: '위험! 끝', self: '위험! 내 몸' };
+  const WARN_TXT = { wall: '위험! 벽', edge: '위험! 끝', self: '위험! 내 몸', rival: '위험! 라이벌' };
   function drawDanger(ctx, W, v) {
     const d = v.danger;
     if (!d || W.phase !== 'play' || W.wait > 0) return;
@@ -863,6 +887,85 @@
     ctx.globalAlpha = 1;
   }
 
+  // ─── 라이벌 뱀 ─────────────────────────────────────────────
+  const RIVAL_LOOK = { body: 'tube', glow: 'rgba(255,138,31,0.4)', headGlow: 'rgba(255,150,60,0.7)', gloss: 0.2,
+    col: (t, i) => (i % 2 ? [255, 138, 31] : [139, 77, 255]) };
+  // 머리: 주황 공에 보라 가면(눈구멍 둘), 이마에 작은 보라 뿔 둘. 멈칫하면 머리 위로 별이 돈다
+  function paintRivalHead(ctx, h, d, c, tm, dizzy) {
+    glow(ctx, RIVAL_LOOK.headGlow, h.x, h.y, c * 1.5, 0.9);
+    ctx.save();
+    faceTo(ctx, h, d);
+    ctx.scale(c, c);
+    ctx.fillStyle = '#6a2fd6';
+    for (const s of [1, -1]) {
+      ctx.beginPath(); ctx.moveTo(-0.1, s * 0.3); ctx.lineTo(-0.42, s * 0.62); ctx.lineTo(-0.3, s * 0.22); ctx.closePath(); ctx.fill();
+    }
+    const g = ctx.createRadialGradient(-0.12, -0.14, 0.05, 0, 0, 0.55);
+    g.addColorStop(0, '#ffd08a'); g.addColorStop(0.55, RIVAL_ORANGE); g.addColorStop(1, '#b8500a');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, 0.5, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#5a2400'; ctx.lineWidth = 0.05; ctx.stroke();
+    // 가면 띠
+    ctx.fillStyle = '#4a1fa8';
+    rrect(ctx, 0.02, -0.44, 0.3, 0.88, 0.12); ctx.fill();
+    for (const s of [1, -1]) {
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(0.18, s * 0.2, 0.1, 0.085, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#1a0630';
+      if (dizzy) { ctx.strokeStyle = '#1a0630'; ctx.lineWidth = 0.035; ctx.beginPath(); ctx.moveTo(0.12, s * 0.2 - 0.05); ctx.lineTo(0.24, s * 0.2 + 0.05); ctx.moveTo(0.24, s * 0.2 - 0.05); ctx.lineTo(0.12, s * 0.2 + 0.05); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.arc(0.22, s * 0.2, 0.045, 0, TAU); ctx.fill(); }
+    }
+    ctx.restore();
+    if (dizzy) {
+      // 어질어질 별 셋 (움직임 줄이기면 멈춘 채로)
+      const r = c * 0.5, a0 = tm * 5;
+      ctx.fillStyle = '#ffe66d';
+      ctx.beginPath();
+      for (let k = 0; k < 3; k++) { const a = a0 + k * TAU / 3; sparkle(ctx, h.x + Math.cos(a) * r, h.y - c * 0.62 + Math.sin(a) * r * 0.35, c * 0.16); }
+      ctx.fill();
+    }
+  }
+  function drawRival(ctx, W, v) {
+    const V = W.rival;
+    if (!V || !(V.phase === 'warn' || V.phase === 'play') || !V.body.length) return;
+    const B = V.body, P = V.prev, n = B.length, c = v.cell;
+    const a = W.phase === 'play' && V.phase === 'play' ? V.alpha : 0;
+    const pts = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const s = B[i];
+      let q = P[i] || s;
+      if (Math.abs(q.x - s.x) + Math.abs(q.y - s.y) > 1) q = s;
+      pts[i] = { x: v.bx + (q.x + (s.x - q.x) * a + 0.5) * c, y: v.by + (q.y + (s.y - q.y) * a + 0.5) * c };
+    }
+    const tm = v.calm ? 0 : W.t, dizzy = V.stun > 0 && V.phase === 'play';
+    // 나오기 전 예고: 깜빡이는 반투명 (부딪혀도 괜찮은 때)
+    if (V.phase === 'warn') ctx.globalAlpha = v.calm ? 0.4 : 0.25 + 0.3 * (0.5 + 0.5 * Math.sin(W.t * 14));
+    else if (dizzy) ctx.globalAlpha = 0.8;
+    const far = i => Math.abs(B[i].x - B[i - 1].x) + Math.abs(B[i].y - B[i - 1].y) > 1;
+    const d = SN.World.DIRS[V.dir];
+    paintBody(ctx, pts, far, c, RIVAL_LOOK, tm, false, d, v.calm);
+    paintRivalHead(ctx, pts[0], d, c, tm, dizzy);
+    ctx.globalAlpha = 1;
+    R.rivalHead = pts[0];
+  }
+  // 이름표: 예고 중과 나온 뒤 몇 초, 멈칫할 때 (내 뱀 위에 그려 가려지지 않게)
+  function drawRivalTag(ctx, W, v) {
+    const V = W.rival;
+    if (!V || !(V.phase === 'warn' || V.phase === 'play') || !V.body.length || !R.rivalHead) return;
+    const c = v.cell, dizzy = V.stun > 0 && V.phase === 'play', pts = [R.rivalHead];
+    if (V.phase === 'warn' || dizzy || W.time - (V.shownAt || 0) < 3) {
+      const fs = Math.round(Math.max(13, Math.min(22, c * 0.52)));
+      ctx.font = fs + 'px ' + DISP;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const txt = V.phase === 'warn' ? '라이벌 등장!' : dizzy ? '멈칫!' : '라이벌';
+      const tx = Math.max(v.bx + fs * 2.5, Math.min(v.bx + v.bw - fs * 2.5, pts[0].x));
+      let ty = pts[0].y - c * (dizzy ? 1.35 : 1.05);
+      if (ty - fs < v.by) ty = pts[0].y + c * 1.1;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.9)'; ctx.strokeText(txt, tx, ty);
+      ctx.fillStyle = '#ffb35c'; ctx.fillText(txt, tx, ty);
+      ctx.textBaseline = 'alphabetic';
+    }
+  }
+
   // 캐릭터 미리보기: 작은 캔버스에 짧은 뱀 (칸 7×3, 머리가 오른쪽). 상점 카드·시작 화면 카드
   const PREVIEW = [[5, 0], [4, 0], [3, 0], [3, 1], [2, 1], [1, 1], [0, 1]];
   function drawCharPreview(cv, id, tm) {
@@ -904,13 +1007,17 @@
     ctx.font = '700 ' + Math.round(14 * s) + 'px ' + NUM;
     const ch = 22 * s, cy = mid - ch / 2;
     const items = [];
+    // 라이벌과 겨루기: 나 : 라이벌 먹은 구슬 (라이벌이 나온 뒤부터)
+    if (W.rival && W.rival.met) items.push(['나 ' + W.eaten + ' : ' + W.rival.eaten + ' 라이벌', W.eaten >= W.rival.eaten ? '#8ff6ff' : '#ffb35c', Math.round(15 * s) + 'px ' + DISP]);
     if (W.mode === 'stage') items.push(['LV ' + W.level + '  ' + Math.min(W.got, W.goal) + '/' + W.goal, '#5ee7ff']);
     if (W.fun && W.mult > 1 && W.time - W.lastEat <= (W.comboWindow || D.COMBO.window)) items.push(['COMBO ×' + W.mult, W.mult >= 3 ? '#ff9f43' : '#ffd6e8']);
     if (W.eff) for (const k of ['double', 'slow', 'ghost']) if (W.eff[k] > 0) items.push([ITEM[k].glyph + ' ' + Math.ceil(W.eff[k]), ITEM[k].color]);
     items.push(['LEN ' + W.snake.length, '#ffe66d'], ['BEST ' + Math.max(v.best || 0, W.score).toLocaleString(), '#bcd3e2']);
     if (v.w >= 560 && W.mode !== 'stage') items.push([SN.fmtTime(W.time), '#8aa4b8']);
-    for (const [txt, col] of items) {
+    const numFont = ctx.font;
+    for (const [txt, col, font] of items) {
       if (x - 90 * s < v.hudLeft) break; // 버튼 묶음과 겹치면 생략
+      ctx.font = font || numFont;
       x -= chip(ctx, x, cy, ch, txt, col, s) + 6 * s;
     }
     ctx.textBaseline = 'alphabetic';
@@ -1000,7 +1107,9 @@
     drawPortals(ctx, W, v);
     drawFood(ctx, W, v);
     drawItem(ctx, W, v);
+    drawRival(ctx, W, v);
     drawSnake(ctx, W, v);
+    drawRivalTag(ctx, W, v);
     if (v.hud !== false) drawDanger(ctx, W, v);
     drawFx(ctx);
     ctx.restore();

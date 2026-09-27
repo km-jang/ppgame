@@ -319,11 +319,19 @@
       HUB.report('jump', { best, bestText: best ? '최고 ' + best.toLocaleString() + 'm' : '', medals: Object.keys(rec.medals).length, medalMax: D.MEDALS.length, games: rec.total.games });
     } catch (e) { /* 무시 */ }
   }
+  // 알아서 맞춰 주는 난이도 (common/hub.js): 판을 시작할 때 배율, 끝날 때 얼마나 잘했나(오른 높이 ÷ 기준 높이)
+  function adaptMul(d) {
+    try { return typeof HUB !== 'undefined' && HUB.adaptMul ? HUB.adaptMul('jump', d) : 1; } catch (e) { return 1; }
+  }
+  function adaptRun() {
+    try { if (typeof HUB !== 'undefined' && HUB.adaptRun) HUB.adaptRun('jump', W.diff, W.height / (D.ADAPT.target[W.diff] || 100)); } catch (e) { /* 무시 */ }
+  }
   function reportHub() {
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
-      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, games: 1 }, W.t);
+      // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터 (이번 판)
+      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, stomps: W.stomps, games: 1 }, W.t);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -341,7 +349,7 @@
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다. 강화는 계속
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
-    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial }, SH.worldOpts(shop, lo)));
+    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial, adapt: opts.adapt != null ? opts.adapt : adaptMul(diff) }, SH.worldOpts(shop, lo)));
     view.bestH = rec.byDiff[diff].height;
     medalCheckT = 0;
     input.reset();
@@ -387,14 +395,15 @@
     lastEarn = SH.finishRun(shop, SH.runOf(W));
     SH.save(shop);
     reportHub();
+    if (!auto) adaptRun();
     renderEarn();
-    $('over-records').innerHTML = chips.map(x => '<span>신기록 · ' + x + '</span>').join('');
+    $('over-records').innerHTML = chips.map(x => '<span>신기록 · ' + x + '</span>').join('') + (W.stomps ? '<span>꾹 밟은 몬스터 ' + W.stomps + '</span>' : '');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     if (fresh.length) setTimeout(() => { if (mode === 'over') JP.Audio.play('medal'); }, 900);
     // 쉬움은 부드럽게 끝난다 (칭찬하는 말, 빨간색 없음)
     const soft = W.easy;
     $('scr-over').classList.toggle('soft', soft);
-    $('over-title').textContent = soft ? (W.height >= 30 ? '높이 날았어요!' : '잘했어요!') : W.cause === 'mine' ? '가시 폭탄에 닿았다' : '아래로 떨어졌다';
+    $('over-title').textContent = soft ? (W.height >= 30 ? '높이 날았어요!' : '잘했어요!') : ({ mine: '가시 폭탄에 닿았다', monster: '몬스터에 부딪혔다', storm: '먹구름에 잡혔다' }[W.cause] || '아래로 떨어졌다');
     $('over-sub').textContent = soft ? '구름이 다 쉬러 갔어요. 한 번 더 해 볼까요?' : '';
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
@@ -418,12 +427,15 @@
       if (ev === 'mile' && zoneNow) continue;   // 구역 축하와 겹치면 구역 소리만
       if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo });
       else if (ev === 'over') {
-        JP.Audio.play(world.cause === 'fall' && !world.easy ? 'fall' : 'over', { soft: world.easy });
+        JP.Audio.play((world.cause === 'fall' || world.cause === 'storm') && !world.easy ? 'fall' : 'over', { soft: world.easy });
         vibrate(world.easy ? 60 : 220);
       } else JP.Audio.play(ev);
       if (ev === 'spring' || ev === 'rescue') vibrate([15, 30, 25]);
       else if (ev === 'star') vibrate(8);
       else if (ev === 'crumble' || ev === 'save') vibrate(30);
+      else if (ev === 'stomp') vibrate([12, 20, 18]);
+      else if (ev === 'bump') vibrate(15);
+      else if (ev === 'storm') vibrate([40, 60, 40]);
       else if (ev === 'rocket' || ev === 'shield') vibrate(20);
       else if (ev === 'zone') vibrate([20, 40, 20, 40, 30]);
     }
@@ -588,7 +600,7 @@
     giveCoins(n) { shop.coins += n; SH.save(shop); renderTitleShop(); if (mode === 'shop') renderShop(); return shop.coins; },
     openShop, closeShop, claim: i => claimMission(i), buy: id => buyThing(id), selectChar: id => useChar(id), selectSkin: id => useChar(id),
     reload() { rec = RC.load(JP.store); shop = SH.load(); renderBest(); renderTitleShop(); }, resetTutorial() { tutNeed = true; JP.store.set(RC.TUT_KEY, false); },
-    newGame, pause, resume, toTitle, openMedals,
+    newGame, pause, resume, toTitle, openMedals, adaptMul,
     autopilot(on) { auto = on !== false; return auto; },
     get pad() { return input; }, get view() { return view; },
   };

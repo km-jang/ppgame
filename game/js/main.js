@@ -194,11 +194,22 @@
       HUB.report('ngun', { best, bestText: best ? '최고 ' + best.toLocaleString() + '점' : '', medals: REC.count(rec), medalMax: NG.DATA.MEDALS.length, games: rec.life.games });
     } catch (e) { /* 무시 */ }
   }
+  // 알아서 맞춰 주는 난이도 (common/hub.js). 본부가 없거나 실패하면 1 (원래 난이도)
+  function adaptMul() {
+    if (typeof HUB === 'undefined' || !HUB.adaptMul) return 1;
+    try { const m = Number(HUB.adaptMul('ngun', diff)); return Number.isFinite(m) && m > 0 ? m : 1; } catch (e) { return 1; }
+  }
+  // 판이 끝났을 때(게임 오버) 이번 판 성적을 알린다. 1 = 그 난이도에서 보통 잘한 판 (world.js perfOf)
+  function adaptReport() {
+    if (typeof HUB === 'undefined' || !HUB.adaptRun || !W) return;
+    try { HUB.adaptRun('ngun', W.diff.id, NG.World.perfOf(W)); } catch (e) { /* 무시 */ }
+  }
   function reportHub(run) {
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
-      const fresh = HUB.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills }, W.stats.time);
+      // planet: 가 본 가장 먼 행성 (1 수성 … 9 명왕성, 2바퀴는 10부터) · blackholes: 깬 블랙홀 웨이브 수 (스티커북)
+      const fresh = HUB.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills, planet: W.stats.planet, blackholes: W.stats.holesCleared }, W.stats.time);
       if (fresh.length) toast('오늘의 미션 완료: ' + fresh[0]);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -437,7 +448,10 @@
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
-    W = NG.World.createWorld(w, h, undefined, diff, SH.worldOpts(shop, lo));
+    // 알아서 맞춰 주는 난이도: 놀이 본부가 최근 판들을 보고 준 배율 (처음 두 판은 1, 없으면 1)
+    const opts = SH.worldOpts(shop, lo);
+    opts.adapt = adaptMul();
+    W = NG.World.createWorld(w, h, undefined, diff, opts);
     lastEarn = null;
     const used = NG.DATA.START_ITEMS.filter(it => lo[it.id]).map(it => it.name);
     if (used.length) setTimeout(() => { if (mode === 'play') toast('시작 아이템: ' + used.join(' · ')); }, 300);
@@ -526,6 +540,7 @@
   function gameOver() {
     mode = 'over';
     const broken = saveRun(true);
+    adaptReport();
     clearMedalToasts(); // 이번 판 메달은 결과 화면에 모아 보여 준다
     NG.Audio.music('off');
     $('over-diff').textContent = W.diff.name;

@@ -26,7 +26,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg || 'assert failed');
 // 빈 하늘: 발판·별·아이템·폭탄을 모두 치우고 새로 만들지도 않게 한다
 function empty(opts) {
   const W = create(1, Object.assign({ viewH: 600 }, opts));
-  W.plats = []; W.stars = []; W.items = []; W.mines = [];
+  W.plats = []; W.stars = []; W.items = []; W.mines = []; W.monsters = [];
   W.genY = 1e9;
   return W;
 }
@@ -361,8 +361,8 @@ test('같은 시드면 같은 판 (결정적)', () => {
 });
 
 // 로켓으로 아주 높은 곳까지 날아가며 만들어진 길(줄)을 모두 모은다
-function rowsOf(diff, seed, n, char) {
-  const W = create(seed, { diff, viewH: 600, char });
+function rowsOf(diff, seed, n, char, adapt) {
+  const W = create(seed, { diff, viewH: 600, char, adapt });
   const rows = new Map();
   for (let i = 0; i < (n || 400); i++) {
     W.rocket = 10; W.cam += 150; W.p.y = W.cam + 300; tick(W);
@@ -713,6 +713,259 @@ test('기록 장부: 난이도별로 적고, 옛 기록은 쉬움 칸으로 옮�
   const s = memStore();
   RC.save(r, s);
   assert(JSON.stringify(RC.load(s)) === JSON.stringify(r), 'round trip');
+});
+
+// ─── 밟는 몬스터 · 쫓아오는 먹구름 · 알아서 맞춰 주는 난이도 ─────────────
+const MO = D.MONSTER;
+function mon(W, kind, x, y, range) {
+  const m = { id: ++W.ids, kind, x, px: x, x0: x, y, y0: y, off: 0, range: range || 0, vx: range ? 40 : 0, float: 0, host: 0, perch: false, gone: false, cool: 0, seen: -1, hit: -9 };
+  W.monsters.push(m);
+  return m;
+}
+
+test('몬스터를 위에서 밟으면 꾹 눌리고 크게 튀어 오른다 (점수·횟수)', () => {
+  for (const diff of LEVELS) {
+    const W = empty({ diff });
+    const m = mon(W, 'slime', 200, 300);
+    put(W, 205, 300 + R + MO.r - 2, -300);
+    clear(W); ticks(W, 1);
+    assert(W.phase === 'play' && m.gone && W.stomps === 1, diff + ' stomped');
+    assert(W.events.includes('stomp') && W.fx.some(f => f.kind === 'stomp' && f.pts === MO.points), diff + ' stomp event');
+    assert(Math.abs(W.p.vy - jumpV(D.PLAYER.jump * MO.stomp)) < 1 && W.starPts === MO.points, diff + ' big bounce ' + W.p.vy);
+    const top = apexFrom(W, 200);
+    assert(top > 300 + D.PLAYER.jump * 1.35, diff + ' higher than a normal bounce ' + (top - 300).toFixed(0));
+    assert(runStats(W).stomps === 1, 'run stats');
+  }
+});
+
+test('옆·아래에서 닿으면: 쉬움은 "앗" 하고 밀려날 뿐, 보통·어려움은 끝 (방패·로켓이면 괜찮다)', () => {
+  const E = empty({ diff: 'easy' });
+  const a = mon(E, 'balloon', 200, 300);
+  put(E, 200 - 24, 300, 0); E.p.vx = 200;
+  clear(E); ticks(E, 1);
+  assert(E.phase === 'play' && E.bumps === 1 && !a.gone && E.events.includes('bump'), 'easy bump');
+  assert(E.p.vx < 0, 'pushed away ' + E.p.vx);
+  ticks(E, 5);
+  assert(E.bumps === 1, 'no double bump while cooling');
+  const Eb = empty({ diff: 'easy' });
+  mon(Eb, 'bird', 200, 300);
+  put(Eb, 200, 300 - 30, 600);
+  ticks(Eb, 10);
+  assert(Eb.phase === 'play' && Eb.bumps === 1, 'easy from below is harmless');
+  for (const diff of ['normal', 'hard']) {
+    const N = empty({ diff });
+    mon(N, 'slime', 200, 300);
+    put(N, 200 - 24, 300, 0);
+    ticks(N, 1);
+    assert(N.phase === 'over' && N.cause === 'monster', diff + ' side hit ends');
+    const B = empty({ diff });
+    mon(B, 'balloon', 200, 300);
+    put(B, 200, 300 - 30, 600);
+    ticks(B, 2);
+    assert(B.phase === 'over' && B.cause === 'monster', diff + ' hit from below ends');
+    const S = empty({ diff });
+    const s = mon(S, 'balloon', 200, 300);
+    S.shield = true; put(S, 200 - 24, 300, 0);
+    ticks(S, 1);
+    assert(S.phase === 'play' && !S.shield && s.gone && S.saves === 1, diff + ' shield saves');
+    const K = empty({ diff });
+    const k = mon(K, 'bird', 200, 300);
+    K.rocket = 1; put(K, 200 - 20, 300, 0);
+    ticks(K, 1);
+    assert(K.phase === 'play' && k.gone && K.stomps === 0, diff + ' rocket pops');
+  }
+  // 몬스터 몸 가장자리를 스치기만 하면 봐준다 (부딪힘은 몸 안쪽 hurt만)
+  const G = empty({ diff: 'normal' });
+  mon(G, 'slime', 200, 300);
+  put(G, 200 - (R + MO.r * MO.hurt) - 3, 300, 0);
+  ticks(G, 1);
+  assert(G.phase === 'play', 'graze is forgiven');
+});
+
+test('몬스터는 오가고 둥실거리지만 제자리 범위를 벗어나지 않는다', () => {
+  const W = empty({ diff: 'normal' });
+  const m = mon(W, 'bird', 20, 300, 50);
+  m.float = 4;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 600; i++) { idle(W, 1); const o = m.off; lo = Math.min(lo, o); hi = Math.max(hi, o); assert(m.x >= 0 && m.x < WW, 'x wraps ' + m.x); assert(Math.abs(m.y - 300) <= 4 + 1e-9, 'float'); }
+  assert(lo <= -49 && hi >= 49, 'moves across the range ' + lo + ' ' + hi);
+});
+
+// 몬스터가 길을 막지 않는다: 길 발판에서 곧게 튀어 오르는 길(가운데에서 pad) 안에 몬스터 범위가 없고, 움직이는 길 발판 위쪽에는 없다
+function checkMonsters(diff, seed, n, char, adapt) {
+  const W = create(seed, { diff, viewH: 600, char, adapt });
+  const plats = new Map(), mons = new Map();
+  for (let i = 0; i < n; i++) {
+    W.rocket = 10; W.cam += 150; W.p.y = W.cam + 300; tick(W);
+    for (const p of W.plats) plats.set(p.id, p);
+    for (const m of W.monsters) mons.set(m.id, m);
+  }
+  const below = W.phys.jump + R * 2 + MO.r + 10, above = MO.r + 4;
+  for (const m of mons.values()) {
+    const host = m.host ? plats.get(m.host) : null;
+    assert(!host || !host.main, 'never sits on a path platform');
+    assert(!host || host.kind === 'normal', 'host is a normal platform');
+    for (const p of plats.values()) {
+      if (!p.main || p.y < m.y0 - below || p.y > m.y0 + above) continue;
+      assert(p.kind !== 'moving', diff + ' monster above a moving path platform');
+      const dx = Math.abs(wrapDelta(m.x0, p.x)) - m.range;
+      assert(dx >= MO.pad - 1e-6, diff + ' ' + char + ' monster blocks the bounce path ' + dx.toFixed(1));
+    }
+  }
+  return { W, n: mons.size };
+}
+test('몬스터는 길을 막지 않는다: 세 난이도 · 다섯 캐릭터 · 맞춤 배율 가장 어렵게(1.12)', () => {
+  const count = {};
+  for (const diff of LEVELS) for (const ch of CHAR_IDS) for (let seed = 1; seed <= 2; seed++) {
+    const r = checkMonsters(diff, seed, 250, ch, 1.12);
+    count[diff] = (count[diff] || 0) + r.n;
+  }
+  console.log('       몬스터 수 (캐릭터 5 × 시드 2, 약 750m씩): ' + LEVELS.map(d => d + ' ' + count[d]).join(' · '));
+  for (const d of LEVELS) assert(count[d] > 100, d + ' monsters appear ' + count[d]);
+});
+
+test('닿지 못하는 틈이 없다: 맞춤 배율 가장 쉽게·어렵게(0.85 · 1.12), 세 난이도, 다섯 캐릭터', () => {
+  for (const adapt of [0.85, 1.12]) for (const ch of CHAR_IDS) for (const diff of LEVELS) {
+    let worst = 0, maxGap = 0;
+    for (let seed = 1; seed <= 2; seed++) {
+      const { W, rows } = rowsOf(diff, seed, 250, ch, adapt);
+      const F = W.phys, top = F.jump;
+      for (let i = 1; i < rows.length; i++) {
+        const a = rows[i - 1], b = rows[i], gap = b.y - a.y;
+        maxGap = Math.max(maxGap, gap / top);
+        if (!a.kind || b.kind === 'moving' || a.kind === 'moving') continue;
+        const t = Math.sqrt(2 * top / F.gUp) + Math.sqrt(2 * Math.max(0, top - gap) / F.gDown);
+        const need = Math.abs(wrapDelta(a.xs[0], b.xs[0])) - b.w / 2;
+        worst = Math.max(worst, need / (W.ctl.maxVx * t * 0.8));
+      }
+    }
+    assert(maxGap < 0.9, adapt + ' ' + ch + ' ' + diff + ' gap ' + maxGap);
+    assert(worst < 1, adapt + ' ' + ch + ' ' + diff + ' sideways ' + worst);
+  }
+});
+
+test('자동 운전 봇: 몬스터를 위에서 밟으러 가고 쉬움에서는 부딪혀도 괜찮다', () => {
+  let stomps = 0;
+  for (let seed = 1; seed <= 4; seed++) {
+    const W = create(seed, { diff: 'easy', viewH: 600 });
+    for (let i = 0; i < 60 * 90 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+    assert(W.phase === 'play' || W.cause === 'fall', 'easy never ends by a monster');
+    stomps += W.stomps;
+  }
+  assert(stomps >= 8, 'bot stomps monsters on easy ' + stomps);
+});
+
+test('쫓아오는 먹구름: 쉬움에는 없다', () => {
+  const E = create(3, { diff: 'easy', viewH: 600 });
+  assert(E.storm === null && JP.World.stormSpeed(E) === 0, 'no storm');
+  for (let i = 0; i < 60 * 40 && E.phase === 'play'; i++) { E.input.dir = botDir(E); step(E, 1 / 60); clear(E); }
+  assert(E.cause !== 'storm', 'never caught');
+  assert(D.DIFFICULTY.easy.storm === null && D.DIFFICULTY.normal.storm && D.DIFFICULTY.hard.storm, 'data');
+});
+
+// 넓은 발판 하나에서 제자리 통통 (멈춘 아이)
+function stalled(diff, at) {
+  const W = empty({ diff });
+  const p = plat(W, 'normal', 200, at * D.METER, 400);
+  put(W, 200, p.y + R + 1, -50);
+  W.maxY = p.y + 250; W.height = Math.floor(W.maxY / D.METER);
+  W.cam = p.y - 50; W.pcam = W.cam;
+  return W;
+}
+test('쫓아오는 먹구름: 보통·어려움에서 제자리에 멈춰 있으면 올라와 잡는다 (떨어진 것과 같다)', () => {
+  for (const diff of ['normal', 'hard']) {
+    const W = stalled(diff, 40);
+    let n = 0;
+    while (W.phase === 'play' && n++ < 120 * 60) tick(W);
+    assert(W.phase === 'over' && W.cause === 'storm', diff + ' caught ' + W.cause);
+    const sec = n / 120;
+    assert(sec > 2 && sec < 12, diff + ' takes a few seconds ' + sec.toFixed(1));
+    console.log('       ' + diff + ': 제자리 통통이면 ' + sec.toFixed(1) + '초 뒤 먹구름에 잡힘');
+    // 방패 방울이 한 번 막아 주면 먹구름이 물러나 쉰다
+    const S = stalled(diff, 40);
+    S.shield = true;
+    let k = 0;
+    while (S.saves === 0 && k++ < 120 * 60) tick(S);
+    assert(S.phase === 'play' && S.saves === 1 && S.storm.rest > 0 && S.storm.y < S.cam, diff + ' shield pushes the storm back');
+  }
+});
+
+test('쫓아오는 먹구름: 로켓 뒤에는 잠깐 쉬고, 화면 아래 멀리 처지지 않는다', () => {
+  const W = stalled('normal', 40);
+  ticks(W, 2);
+  assert(W.storm.on && W.storm.y >= W.cam - W.viewH * D.STORM.lag - 1e-6, 'lurks just below');
+  W.rocket = 0.5; ticks(W, 2);
+  assert(W.storm.rest > 0, 'rests during and after a rocket');
+  const y0 = W.storm.y; W.rocket = 0; W.storm.rest = 1;
+  W.cam = W.cam; ticks(W, 60);
+  assert(W.storm.y <= Math.max(y0, W.cam - W.viewH * D.STORM.lag) + 1e-6, 'does not rise while resting');
+  const Hm = empty({ diff: 'normal' });
+  put(Hm, 200, 5000, 0); Hm.maxY = 5000; ticks(Hm, 1);
+  assert(Hm.storm.on && Hm.storm.y >= Hm.cam - Hm.viewH * D.STORM.lag - 1e-6, 'pulled up with the camera');
+});
+
+test('쫓아오는 먹구름은 늘 사람 닮은 봇이 오르는 평균보다 느리다 (맞춤 배율 가장 어렵게여도)', () => {
+  const out = [];
+  for (const diff of ['normal', 'hard']) {
+    let h = 0, t = 0, caught = 0;
+    const n = 16;
+    for (let seed = 1; seed <= n; seed++) {
+      const W = create(seed, { diff, viewH: 600, adapt: 1.12 });
+      const bot = makeHuman(seed, HUMAN);
+      for (let i = 0; i < 60 * 180 && W.phase === 'play'; i++) { W.input.dir = bot(W, 1 / 60); step(W, 1 / 60); clear(W); }
+      h += W.height; t += W.t;
+      if (W.cause === 'storm') caught++;
+    }
+    const climb = h / t;
+    const probe = create(1, { diff, adapt: 1.12 });
+    const fastest = JP.World.stormSpeed(probe, 1e6);
+    out.push(diff + ' 봇 평균 ' + climb.toFixed(2) + 'm/초 · 먹구름 가장 빠를 때 ' + fastest.toFixed(2) + 'm/초 · 잡힌 판 ' + caught + '/' + n);
+    assert(fastest < climb * 0.85, diff + ' storm slower than the bot ' + fastest + ' vs ' + climb);
+    assert(caught <= 3, diff + ' storm rarely catches the bot ' + caught);
+  }
+  console.log('       ' + out.join(' / '));
+});
+
+test('알아서 맞춰 주는 난이도: 배율이 어려워지는 빠르기·특별한 발판·몬스터·먹구름에 살짝 걸린다', () => {
+  const A1 = JP.World.adaptOf(1), Ahi = JP.World.adaptOf(1.12), Alo = JP.World.adaptOf(0.85);
+  for (const k of ['mul', 'ramp', 'mix', 'monster', 'storm']) assert(A1[k] === 1 && Ahi[k] > 1 && Alo[k] < 1, 'factor ' + k);
+  assert(JP.World.adaptOf('x').mul === 1 && JP.World.adaptOf(-1).mul === 1 && JP.World.adaptOf(99).mul <= 1.2, 'bad values are safe');
+  const full0 = D.DIFFICULTY.normal.full;
+  const hi = create(1, { diff: 'normal', adapt: 1.12 }), lo = create(1, { diff: 'normal', adapt: 0.85 }), mid = create(1, { diff: 'normal' });
+  assert(hi.L.full < mid.L.full && mid.L.full < lo.L.full && mid.L.full === full0 && D.DIFFICULTY.normal.full === full0, 'ramp ' + hi.L.full + ' ' + lo.L.full);
+  assert(hi.L.gap.join() === mid.L.gap.join() && hi.L.w.join() === mid.L.w.join(), 'gap ends unchanged');
+  assert(JP.World.stormSpeed(hi, 100) > JP.World.stormSpeed(mid, 100) && JP.World.stormSpeed(lo, 100) < JP.World.stormSpeed(mid, 100), 'storm speed');
+  assert(hi.mixes[0].moving > 1 && lo.mixes[0].crumble < 1 && mid.mixes[0].cloud === 1, 'special platform mix');
+  // 배율 1이면 예전과 같은 판
+  const same = o => JSON.stringify(create(9, Object.assign({ viewH: 600 }, o)).plats.map(p => [p.kind, p.x, p.y]));
+  assert(same({ adapt: 1 }) === same({}), 'mul 1 keeps the same board');
+  // 몬스터·특별한 발판 수가 배율을 따라간다
+  const tally = adapt => {
+    let m = 0, sp = 0;
+    for (const diff of LEVELS) for (let seed = 1; seed <= 4; seed++) {
+      const { W, rows } = rowsOf(diff, seed, 200, 'robot', adapt);
+      sp += rows.filter(r => r.kind === 'moving' || r.kind === 'crumble').length;
+      m += checkMonsters(diff, seed, 200, 'robot', adapt).n;
+    }
+    return { m, sp };
+  };
+  const a = tally(0.85), b = tally(1.12);
+  console.log('       맞춤 0.85 → 1.12: 몬스터 ' + a.m + ' → ' + b.m + ', 움직이는·부서지는 길 발판 ' + a.sp + ' → ' + b.sp);
+  assert(b.m > a.m * 1.1 && b.sp > a.sp, 'more monsters and specials when harder');
+});
+
+test('판 기록: 밟은 몬스터 수 · 맞춤 배율, 메달 꾹꾹 20 (모두 합쳐)', () => {
+  const W = create(1, { diff: 'normal', adapt: 1.05 });
+  const s = runStats(W);
+  assert(s.stomps === 0 && s.bumps === 0 && s.adapt === 1.05, 'run stats');
+  const M = D.MEDALS.find(m => m.id === 'stomp20');
+  assert(M && !M.check({}, { total: { stomps: 19 } }) && M.check({}, { total: { stomps: 20 } }) && !M.check({}, { total: {} }), 'medal');
+  const rec = RC.blank();
+  RC.finish(rec, { diff: 'easy', height: 10, score: 10, stars: 0, stomps: 7 });
+  RC.finish(rec, { diff: 'easy', height: 10, score: 10, stars: 0 });
+  assert(rec.total.stomps === 7, 'total stomps ' + rec.total.stomps);
+  assert(RC.clean({ total: { stomps: -3 } }).total.stomps === 0 && RC.clean({ total: { stomps: 12 } }).total.stomps === 12, 'clean');
+  for (const id of ['stomp15', 'stomp5']) assert(D.MISSIONS.find(m => m.id === id && m.stat === 'stomps'), 'mission ' + id);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

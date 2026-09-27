@@ -777,6 +777,448 @@
     ctx.globalAlpha = 1;
   }
 
+  // ─── 행성 적 그림 (2026-09-27) ─────────────────────────────
+  // 몸은 처음 한 번만 캔버스에 그려 두고(발광·광택 포함, shadowBlur 없음) 매 프레임 찍기만 한다.
+  // 맞았을 때 번쩍임은 흰 실루엣 그림을 따로 만들어 둔다. 선명하게 2배 크기로 그린다
+  const FOE_SC = 2;
+  const foeCache = {};
+  function foeSprite(key, size, paint) {
+    let c = foeCache[key];
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = c.height = Math.ceil(size * FOE_SC);
+    const g = c.getContext('2d');
+    g.scale(FOE_SC, FOE_SC);
+    g.translate(size / 2, size / 2);
+    paint(g);
+    c.size = size;
+    foeCache[key] = c;
+    return c;
+  }
+  function whiteOf(key, src) {
+    let c = foeCache[key + ':w'];
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height; c.size = src.size;
+    const g = c.getContext('2d');
+    g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, c.width, c.height);
+    foeCache[key + ':w'] = c;
+    return c;
+  }
+  function softGlow(g, r, rgb, a) {
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, r);
+    gr.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+    gr.addColorStop(1, 'rgba(' + rgb + ',0)');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+  }
+  function radial(g, r, stops, ox, oy) {
+    const gr = g.createRadialGradient((ox || 0) * r, (oy || 0) * r, r * 0.05, 0, 0, r);
+    stops.forEach((s, i) => gr.addColorStop(i / (stops.length - 1), s));
+    return gr;
+  }
+
+  // 종류별 몸 그림. r: 적 반지름. 돌려주는 값: [그림 크기(px), 그리기 함수]
+  const FOE_ART = {
+    // 태양 불씨: 흰 속 + 노랑·주황 불덩이, 뒤로 끌리는 불꼬리 (오른쪽이 앞)
+    ember: r => [r * 7, g => {
+      softGlow(g, r * 3.2, '255,150,50', 0.5);
+      const tail = g.createLinearGradient(r, 0, -r * 3.2, 0);
+      tail.addColorStop(0, 'rgba(255,220,120,0.95)'); tail.addColorStop(0.5, 'rgba(255,120,40,0.6)'); tail.addColorStop(1, 'rgba(255,60,20,0)');
+      g.fillStyle = tail;
+      g.beginPath(); g.moveTo(0, -r); g.quadraticCurveTo(-r * 1.6, -r * 0.7, -r * 3.2, 0); g.quadraticCurveTo(-r * 1.6, r * 0.7, 0, r); g.closePath(); g.fill();
+      g.fillStyle = radial(g, r, ['#ffffff', '#ffe27a', '#ff9a2e', '#e8551a'], 0.25, -0.2);
+      g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+    }],
+    // 산성 구름: 연두 뭉게구름 + 떨어지는 방울 + 찡그린 눈
+    acid: r => [r * 3.6, g => {
+      softGlow(g, r * 1.7, '200,240,74', 0.35);
+      g.fillStyle = '#7fae22';
+      for (const [x, y, s] of [[-0.45, 0.75, 0.2], [0.1, 0.9, 0.24], [0.55, 0.7, 0.18]]) {
+        g.beginPath(); g.moveTo(x * r, (y - 0.35) * r); g.quadraticCurveTo((x + s) * r, (y + 0.05) * r, x * r, (y + s) * r); g.quadraticCurveTo((x - s) * r, (y + 0.05) * r, x * r, (y - 0.35) * r); g.fill();
+      }
+      const puffs = [[0, 0.05, 0.78], [-0.62, 0.2, 0.55], [0.64, 0.18, 0.56], [-0.32, -0.42, 0.55], [0.34, -0.4, 0.52]];
+      g.fillStyle = '#6a9a18';
+      for (const [x, y, s] of puffs) { g.beginPath(); g.arc(x * r, y * r + r * 0.08, s * r, 0, TAU); g.fill(); }
+      g.fillStyle = radial(g, r * 1.2, ['#f4ffb8', '#c8f04a', '#8fc22a'], -0.3, -0.5);
+      for (const [x, y, s] of puffs) { g.beginPath(); g.arc(x * r, y * r, s * r, 0, TAU); g.fill(); }
+      g.fillStyle = '#2b3a0a';
+      for (const sx of [-1, 1]) { g.beginPath(); g.ellipse(sx * r * 0.3, r * 0.08, r * 0.13, r * 0.09, sx * 0.35, 0, TAU); g.fill(); }
+    }],
+    // 인공위성: 은빛 몸통 + 양옆 파란 태양 전지판 + 앞쪽 접시 (오른쪽이 앞)
+    sat: r => [r * 5, g => {
+      softGlow(g, r * 1.8, '159,216,255', 0.35);
+      for (const sy of [-1, 1]) {
+        g.fillStyle = '#9aa7b8'; g.fillRect(-r * 0.12, sy > 0 ? r * 0.55 : -r * 0.85, r * 0.24, r * 0.3);
+        const y0 = sy > 0 ? r * 0.85 : -r * 2.25;
+        g.fillStyle = '#1d4f9e'; g.fillRect(-r * 0.55, y0, r * 1.1, r * 1.4);
+        g.strokeStyle = '#7fc2ff'; g.lineWidth = 1;
+        g.strokeRect(-r * 0.55, y0, r * 1.1, r * 1.4);
+        g.beginPath();
+        for (let i = 1; i < 4; i++) { g.moveTo(-r * 0.55, y0 + r * 0.35 * i); g.lineTo(r * 0.55, y0 + r * 0.35 * i); }
+        g.moveTo(0, y0); g.lineTo(0, y0 + r * 1.4);
+        g.stroke();
+      }
+      g.fillStyle = radial(g, r * 0.8, ['#ffffff', '#c9d6e6', '#6f7f96'], -0.3, -0.4);
+      g.beginPath(); g.roundRect ? g.roundRect(-r * 0.62, -r * 0.62, r * 1.24, r * 1.24, r * 0.2) : g.rect(-r * 0.62, -r * 0.62, r * 1.24, r * 1.24); g.fill();
+      g.fillStyle = '#e8f4ff';
+      g.beginPath(); g.ellipse(r * 0.85, 0, r * 0.28, r * 0.55, 0, 0, TAU); g.fill();
+      g.strokeStyle = '#9fd8ff'; g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(r * 0.85, 0); g.lineTo(r * 1.35, 0); g.stroke();
+      g.fillStyle = '#ff5d5d'; g.beginPath(); g.arc(r * 1.38, 0, r * 0.12, 0, TAU); g.fill();
+    }],
+    // 모래 벌레 (밖에 나왔을 때): 마디진 둥근 머리 + 가운데 입과 이빨
+    worm: r => [r * 3.2, g => {
+      softGlow(g, r * 1.5, '224,130,79', 0.3);
+      g.fillStyle = radial(g, r * 1.05, ['#ffc59a', '#e0824f', '#8a4424'], -0.3, -0.4);
+      g.beginPath(); g.arc(0, 0, r * 1.05, 0, TAU); g.fill();
+      g.strokeStyle = 'rgba(90,40,20,0.6)'; g.lineWidth = 1.6;
+      for (const k of [0.85, 0.7]) { g.beginPath(); g.arc(0, 0, r * k, 0, TAU); g.stroke(); }
+      g.fillStyle = '#2a0f08';
+      g.beginPath(); g.arc(0, 0, r * 0.55, 0, TAU); g.fill();
+      g.fillStyle = '#fff1dc';
+      for (let i = 0; i < 8; i++) {
+        const a = TAU * i / 8, c = Math.cos(a), s = Math.sin(a);
+        g.beginPath(); g.moveTo(c * r * 0.56 - s * r * 0.12, s * r * 0.56 + c * r * 0.12); g.lineTo(c * r * 0.56 + s * r * 0.12, s * r * 0.56 - c * r * 0.12); g.lineTo(c * r * 0.3, s * r * 0.3); g.closePath(); g.fill();
+      }
+    }],
+    // 모래 더미 (땅속): 흙무더기와 자갈
+    mound: r => [r * 3.4, g => {
+      g.fillStyle = 'rgba(40,18,8,0.45)';
+      g.beginPath(); g.ellipse(0, r * 0.25, r * 1.5, r * 0.9, 0, 0, TAU); g.fill();
+      g.fillStyle = radial(g, r * 1.3, ['#f2b27c', '#c0703f', '#7a3c1c'], -0.2, -0.5);
+      for (const [x, y, s] of [[0, 0, 1], [-0.7, 0.25, 0.6], [0.7, 0.22, 0.62], [0.2, -0.45, 0.55]]) { g.beginPath(); g.ellipse(x * r, y * r, s * r * 1.05, s * r * 0.75, 0, 0, TAU); g.fill(); }
+      g.fillStyle = '#5a2c14';
+      for (const [x, y] of [[-0.4, -0.1], [0.3, 0.2], [0.75, -0.1], [-0.8, 0.45], [0.05, 0.55]]) { g.beginPath(); g.arc(x * r, y * r, r * 0.1, 0, TAU); g.fill(); }
+    }],
+    // 번개 구름: 보랏빛 먹구름 + 가운데 노란 번개
+    zap: r => [r * 3.6, g => {
+      softGlow(g, r * 1.7, '201,182,255', 0.35);
+      const puffs = [[0, 0.1, 0.8], [-0.66, 0.22, 0.55], [0.66, 0.2, 0.56], [-0.3, -0.42, 0.58], [0.36, -0.38, 0.52]];
+      g.fillStyle = '#3a3158';
+      for (const [x, y, s] of puffs) { g.beginPath(); g.arc(x * r, y * r + r * 0.1, s * r, 0, TAU); g.fill(); }
+      g.fillStyle = radial(g, r * 1.2, ['#e9e2ff', '#9a8cc8', '#5b4f7a'], -0.3, -0.5);
+      for (const [x, y, s] of puffs) { g.beginPath(); g.arc(x * r, y * r, s * r, 0, TAU); g.fill(); }
+      g.fillStyle = '#ffe45c'; g.strokeStyle = '#8a6a00'; g.lineWidth = 1;
+      g.beginPath();
+      [[0.12, -0.55], [-0.25, 0.08], [0.02, 0.08], [-0.14, 0.62], [0.3, -0.05], [0.04, -0.05]].forEach(([x, y], i) => (i ? g.lineTo(x * r, y * r) : g.moveTo(x * r, y * r)));
+      g.closePath(); g.fill(); g.stroke();
+    }],
+    // 고리 조각: 울퉁불퉁한 금빛 얼음 바위
+    shard: r => [r * 3.4, g => {
+      softGlow(g, r * 1.6, '243,213,140', 0.35);
+      const pts = [[1.3, 0.1], [0.7, 0.75], [-0.2, 0.9], [-1.1, 0.45], [-1.25, -0.3], [-0.4, -0.85], [0.6, -0.7]];
+      g.fillStyle = radial(g, r * 1.3, ['#fff6d8', '#f3d58c', '#b58a3c', '#6e5424'], -0.3, -0.4);
+      g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x * r, y * r) : g.moveTo(x * r, y * r))); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(-0.6 * r, -0.4 * r); g.lineTo(0.5 * r, -0.45 * r); g.moveTo(-0.3 * r, 0.3 * r); g.lineTo(0.7 * r, 0.1 * r); g.stroke();
+      g.strokeStyle = 'rgba(80,55,20,0.6)';
+      g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x * r, y * r) : g.moveTo(x * r, y * r))); g.closePath(); g.stroke();
+    }],
+    // 얼음 결정: 여섯 갈래 눈꽃 + 가운데 육각
+    ice: r => [r * 3.2, g => {
+      softGlow(g, r * 1.6, '191,246,255', 0.4);
+      g.strokeStyle = '#bff6ff'; g.lineCap = 'round';
+      for (let i = 0; i < 6; i++) {
+        const a = TAU * i / 6, c = Math.cos(a), s = Math.sin(a);
+        g.lineWidth = r * 0.28;
+        g.beginPath(); g.moveTo(0, 0); g.lineTo(c * r * 1.2, s * r * 1.2); g.stroke();
+        g.lineWidth = r * 0.14;
+        for (const side of [-1, 1]) { const b = a + side * 0.7; g.beginPath(); g.moveTo(c * r * 0.75, s * r * 0.75); g.lineTo(c * r * 0.75 + Math.cos(b) * r * 0.35, s * r * 0.75 + Math.sin(b) * r * 0.35); g.stroke(); }
+      }
+      g.fillStyle = radial(g, r * 0.7, ['#ffffff', '#c8f7ff', '#6fcfe6'], -0.3, -0.4);
+      g.beginPath(); for (let i = 0; i < 6; i++) { const a = TAU * i / 6 + Math.PI / 6; g.lineTo(Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.7); } g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1;
+      g.beginPath(); for (let i = 0; i < 3; i++) { const a = TAU * i / 6 + Math.PI / 6; g.moveTo(Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.7); g.lineTo(-Math.cos(a) * r * 0.7, -Math.sin(a) * r * 0.7); } g.stroke();
+    }],
+    // 얼음 조각: 작은 세모 얼음 (오른쪽이 앞)
+    iceBit: r => [r * 3.4, g => {
+      softGlow(g, r * 1.6, '230,251,255', 0.4);
+      g.fillStyle = radial(g, r * 1.3, ['#ffffff', '#d6f8ff', '#7fd6ea'], -0.2, -0.3);
+      g.beginPath(); g.moveTo(r * 1.3, 0); g.lineTo(-r * 0.8, -r * 0.8); g.lineTo(-r * 0.4, 0); g.lineTo(-r * 0.8, r * 0.8); g.closePath(); g.fill();
+    }],
+    // 폭풍 드론: 짙은 파란 구슬에 흰 소용돌이 팔 셋
+    storm: r => [r * 3.4, g => {
+      softGlow(g, r * 1.7, '111,168,255', 0.4);
+      g.fillStyle = radial(g, r, ['#bcd6ff', '#4f7fe0', '#132a66'], -0.3, -0.4);
+      g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = r * 0.16; g.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        g.beginPath();
+        for (let k = 0; k <= 10; k++) { const t = k / 10, a = TAU * i / 3 + t * 2.4, rr = r * (0.15 + t * 0.95); const x = Math.cos(a) * rr, y = Math.sin(a) * rr; if (k) g.lineTo(x, y); else g.moveTo(x, y); }
+        g.stroke();
+      }
+      g.fillStyle = '#0a1840'; g.beginPath(); g.arc(0, 0, r * 0.2, 0, TAU); g.fill();
+    }],
+    // 하트 유령: 위는 하트, 아래는 물결 치마, 눈과 볼
+    ghost: r => [r * 3.4, g => {
+      softGlow(g, r * 1.7, '255,179,217', 0.4);
+      g.fillStyle = radial(g, r * 1.3, ['#ffffff', '#ffd1e8', '#ff8cc6'], -0.3, -0.5);
+      g.beginPath();
+      g.moveTo(0, -r * 0.45);
+      g.bezierCurveTo(-r * 0.2, -r * 1.25, -r * 1.25, -r * 1.05, -r * 1.05, -r * 0.1);
+      g.lineTo(-r * 1.0, r * 0.95);
+      for (let i = 0; i < 4; i++) { const x0 = -r * 1.0 + i * r * 0.5; g.quadraticCurveTo(x0 + r * 0.25, r * (i % 2 ? 0.65 : 1.25), x0 + r * 0.5, r * 0.95); }
+      g.lineTo(r * 1.05, -r * 0.1);
+      g.bezierCurveTo(r * 1.25, -r * 1.05, r * 0.2, -r * 1.25, 0, -r * 0.45);
+      g.closePath(); g.fill();
+      g.fillStyle = '#3a1030';
+      for (const sx of [-1, 1]) { g.beginPath(); g.ellipse(sx * r * 0.36, r * 0.05, r * 0.17, r * 0.24, 0, 0, TAU); g.fill(); }
+      g.fillStyle = '#ffffff';
+      for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * r * 0.36 + r * 0.05, -r * 0.05, r * 0.07, 0, TAU); g.fill(); }
+      g.fillStyle = 'rgba(255,90,150,0.55)';
+      for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * r * 0.62, r * 0.35, r * 0.13, 0, TAU); g.fill(); }
+    }],
+  };
+
+  function foeImg(kind, r, white) {
+    const key = kind + '|' + r;
+    const [size, paint] = FOE_ART[kind](r);
+    const c = foeSprite(key, size, paint);
+    return white ? whiteOf(key, c) : c;
+  }
+  function stamp(ctx, img, x, y, rot, alpha, scale) {
+    const s = img.size * (scale || 1);
+    ctx.save();
+    ctx.translate(x, y);
+    if (rot) ctx.rotate(rot);
+    if (alpha != null && alpha < 1) ctx.globalAlpha = alpha;
+    ctx.drawImage(img, -s / 2, -s / 2, s, s);
+    ctx.restore();
+  }
+
+  // 행성 적 한 마리 그리기. 맞는 순간은 흰 실루엣
+  function drawFoe(ctx, e, W) {
+    const white = e.flash > 0, r = e.r, t = W.t;
+    switch (e.type) {
+      case 'ember': stamp(ctx, foeImg('ember', r, white), e.x, e.y, e.emA); return;
+      case 'acid': stamp(ctx, foeImg('acid', r, white), e.x, e.y + Math.sin(t * 2.2 + e.id) * 2, 0); break;
+      case 'sat': stamp(ctx, foeImg('sat', r, white), e.x, e.y, e.ang); break;
+      case 'worm': {
+        if (e.wm !== 'up') {
+          // 땅속: 흔들리는 모래 더미. 예고 중엔 더 크게 들썩인다
+          const shake = e.wm === 'warn' ? Math.sin(t * 50) * 2.5 : 0;
+          stamp(ctx, foeImg('mound', r, false), e.x + shake, e.y, 0, 1, 1 + Math.sin(t * 12 + e.id) * 0.05);
+          return;
+        }
+        stamp(ctx, foeImg('worm', r, white), e.x, e.y, t * 1.5);
+        break;
+      }
+      case 'zap': {
+        const charging = e.busy > 0;
+        stamp(ctx, foeImg('zap', r, white || (charging && Math.floor(t * 14) % 2 === 0)), e.x, e.y, 0);
+        if (charging) {
+          // 모으는 번개 불꽃
+          ctx.strokeStyle = '#ffe45c'; ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let i = 0; i < 4; i++) {
+            const a = Math.random() * TAU, r0 = r * 1.1, r1 = r * (1.6 + Math.random() * 0.5);
+            ctx.moveTo(e.x + Math.cos(a) * r0, e.y + Math.sin(a) * r0);
+            ctx.lineTo(e.x + Math.cos(a + 0.25) * (r0 + r1) / 2, e.y + Math.sin(a + 0.25) * (r0 + r1) / 2);
+            ctx.lineTo(e.x + Math.cos(a) * r1, e.y + Math.sin(a) * r1);
+          }
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'shard': stamp(ctx, foeImg('shard', r, white), e.x, e.y, e.ang); break;
+      case 'ice': {
+        stamp(ctx, foeImg('ice', r, white), e.x, e.y, e.ang * 0.3);
+        // 금 간 얼음: 체력이 줄수록 금이 늘어난다 (곧 쪼개진다는 신호)
+        const k = 1 - e.hp / e.maxHp;
+        if (k > 0.3) {
+          ctx.strokeStyle = 'rgba(40,90,110,0.8)'; ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          const n = k > 0.65 ? 3 : 2;
+          for (let i = 0; i < n; i++) { const a = e.id + i * 2.1; ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(a) * r * 0.5, e.y + Math.sin(a) * r * 0.5); ctx.lineTo(e.x + Math.cos(a + 0.4) * r * 0.9, e.y + Math.sin(a + 0.4) * r * 0.9); }
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'iceBit': stamp(ctx, foeImg('iceBit', r, white), e.x, e.y, Math.atan2(e.vy, e.vx)); return;
+      case 'storm': stamp(ctx, foeImg('storm', r, white), e.x, e.y, -e.ang); break;
+      case 'ghost': {
+        const a = 0.12 + 0.88 * e.vis;
+        if (e.hide) {
+          // 흐릴 때: 점선 동그라미로 어디 있는지만 (이때는 못 맞히고 안 아프다)
+          ctx.strokeStyle = 'rgba(255,179,217,0.4)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 5]);
+          ctx.beginPath(); ctx.arc(e.x, e.y, r * 1.2, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+        }
+        stamp(ctx, foeImg('ghost', r, white), e.x, e.y + Math.sin(t * 3 + e.id) * 2, 0, a);
+        break;
+      }
+    }
+    // 체력바 (다친 적만)
+    if (e.hp < e.maxHp && !e.hide) {
+      const w = r * 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(e.x - w / 2, e.y - r - 10, w, 3);
+      ctx.fillStyle = e.def.color;
+      ctx.fillRect(e.x - w / 2, e.y - r - 10, w * Math.max(0, e.hp / e.maxHp), 3);
+    }
+  }
+  const FOE_DRAW = { ember: 1, acid: 1, sat: 1, worm: 1, zap: 1, shard: 1, ice: 1, iceBit: 1, storm: 1, ghost: 1 };
+
+  // 폭풍 드론의 바람 고리 (내 총알이 휘는 곳)
+  function drawWinds(ctx, W, calm) {
+    for (const e of W.enemies) {
+      if (e.type !== 'storm' || e.spawnT > 0) continue;
+      const R = e.def.windR, rot = calm ? 0 : -W.t * 3 * e.strafe;
+      ctx.strokeStyle = 'rgba(140,190,255,0.28)'; ctx.lineWidth = 3;
+      for (let i = 0; i < 3; i++) { const a = rot + TAU * i / 3; ctx.beginPath(); ctx.arc(e.x, e.y, R * 0.92, a, a + 1.3); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(140,190,255,0.16)'; ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) { const a = -rot * 1.4 + TAU * i / 3 + 0.8; ctx.beginPath(); ctx.arc(e.x, e.y, R * 0.6, a, a + 1.1); ctx.stroke(); }
+    }
+  }
+
+  // 금성 안개 웅덩이: 생기는 동안은 점선 원이 커지고, 다 생기면 연두 안개 + 보글보글 거품. 사라지기 전 옅어진다
+  function drawMists(ctx, W, calm) {
+    if (!W.mists || !W.mists.length) return;
+    for (const m of W.mists) {
+      if (m.t < m.form) {
+        const k = m.t / m.form;
+        ctx.strokeStyle = 'rgba(200,240,74,' + (0.4 + 0.5 * k) + ')'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 6]);
+        ctx.beginPath(); ctx.arc(m.x, m.y, m.r * (0.4 + 0.6 * k), 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+        continue;
+      }
+      const left = m.form + m.life - m.t, a = Math.min(1, left / 0.6, (m.t - m.form) / 0.2 + 0.3);
+      const img = foeSprite('mist|' + m.r, m.r * 2.2, g => {
+        softGlow(g, m.r * 1.1, '170,220,60', 0.55);
+        g.fillStyle = 'rgba(200,240,74,0.18)'; g.beginPath(); g.arc(0, 0, m.r, 0, TAU); g.fill();
+      });
+      stamp(ctx, img, m.x, m.y, 0, a);
+      ctx.strokeStyle = 'rgba(200,240,74,' + (0.55 * a) + ')'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, TAU); ctx.stroke();
+      ctx.fillStyle = 'rgba(230,255,170,' + (0.7 * a) + ')';
+      for (let i = 0; i < 5; i++) {
+        const ph = calm ? i * 0.2 : (m.t * 0.7 + i * 0.2 + m.seed) % 1, ang = m.seed + i * 1.9;
+        const rr = m.r * (0.25 + 0.5 * ((i * 0.37 + m.seed) % 1));
+        ctx.beginPath(); ctx.arc(m.x + Math.cos(ang) * rr, m.y + Math.sin(ang) * rr - ph * 10, 2 + (1 - ph) * 3, 0, TAU); ctx.fill();
+      }
+    }
+    // 안개 안에서 느려진 내 기체: 연두 고리
+    const p = W.player;
+    if (p.mist) {
+      ctx.strokeStyle = 'rgba(200,240,74,0.8)'; ctx.lineWidth = 2.5; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 9, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    }
+  }
+
+  // 행성 적 예고: 모래 벌레 둥근 예고 · 고리 조각 가로 띠 · 태양 불씨 날아올 방향
+  function drawFoeWarnings(ctx, W, calm) {
+    for (const e of W.enemies) {
+      if (e.type === 'worm' && e.wm === 'warn') {
+        const def = e.def, full = def.popWarn * (W.diff.foeWarn || 1), k = 1 - Math.max(0, e.wmT) / full;
+        const blink = k > 0.7 && Math.floor(W.t * 14) % 2 === 0;
+        ctx.fillStyle = 'rgba(224,110,50,' + (0.12 + 0.2 * k) + ')';
+        ctx.beginPath(); ctx.arc(e.x, e.y, def.popR, 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(255,170,90,' + (0.2 + 0.2 * k) + ')';
+        ctx.beginPath(); ctx.arc(e.x, e.y, def.popR * k, 0, TAU); ctx.fill();
+        ctx.strokeStyle = blink ? '#ffffff' : 'rgba(255,140,70,' + (0.6 + 0.4 * k) + ')';
+        ctx.lineWidth = 3; ctx.setLineDash([8, 6]); ctx.lineDashOffset = calm ? 0 : W.t * 30;
+        ctx.beginPath(); ctx.arc(e.x, e.y, def.popR, 0, TAU); ctx.stroke();
+        ctx.setLineDash([]); ctx.lineDashOffset = 0;
+      } else if (e.type === 'shard' && e.sw === 'warn') {
+        const def = e.def, full = def.warn * (W.diff.foeWarn || 1), k = 1 - Math.max(0, e.swT) / full;
+        const hh = e.r + 12, blink = k > 0.7 && Math.floor(W.t * 14) % 2 === 0;
+        ctx.fillStyle = 'rgba(243,213,140,' + (0.1 + 0.18 * k) + ')';
+        ctx.fillRect(0, e.swY - hh, W.w, hh * 2);
+        // 차오르는 띠 (조각이 지나갈 길)
+        const fx = e.dir > 0 ? 0 : W.w * (1 - k);
+        ctx.fillStyle = 'rgba(255,230,160,' + (0.12 + 0.15 * k) + ')';
+        ctx.fillRect(fx, e.swY - hh, W.w * k, hh * 2);
+        ctx.strokeStyle = blink ? '#ffffff' : 'rgba(243,213,140,' + (0.55 + 0.4 * k) + ')';
+        ctx.lineWidth = 2; ctx.setLineDash([12, 8]);
+        ctx.beginPath(); ctx.moveTo(0, e.swY - hh); ctx.lineTo(W.w, e.swY - hh); ctx.moveTo(0, e.swY + hh); ctx.lineTo(W.w, e.swY + hh); ctx.stroke();
+        ctx.setLineDash([]);
+        // 가는 쪽 화살표
+        ctx.fillStyle = 'rgba(255,240,200,' + (0.35 + 0.4 * k) + ')';
+        const off = calm ? 0 : (W.t * 160 * e.dir) % 120;
+        for (let x = -120 + off; x < W.w + 120; x += 120) {
+          const c = e.dir;
+          ctx.beginPath(); ctx.moveTo(x + c * 12, e.swY); ctx.lineTo(x - c * 6, e.swY - 10); ctx.lineTo(x - c * 6, e.swY + 10); ctx.closePath(); ctx.fill();
+        }
+      } else if (e.type === 'ember' && e.spawnT > 0) {
+        const c = Math.cos(e.emA), s = Math.sin(e.emA);
+        ctx.strokeStyle = 'rgba(255,179,71,0.7)'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + c * 70, e.y + s * 70); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+  }
+
+  // 짧은 빛줄기(인공위성)·번개(번개 구름): 예고 점선 → 발사
+  function drawFoeBeam(ctx, W, L) {
+    const c = Math.cos(L.ang), s = Math.sin(L.ang), x2 = L.x + c * L.len, y2 = L.y + s * L.len;
+    const bolt = L.kind === 'bolt', rgb = bolt ? '255,228,92' : '159,216,255';
+    if (L.t < L.warn) {
+      const k = L.t / L.warn, blink = Math.floor(L.t * (k > 0.6 ? 16 : 8)) % 2;
+      ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.35 + k * 0.45 + blink * 0.15) + ')';
+      ctx.lineWidth = 2 + k * 2;
+      ctx.setLineDash([10, 7]);
+      ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 끝 표시: 번개는 과녁, 빛줄기는 가로 막대
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (bolt) { ctx.arc(x2, y2, 10 + (1 - k) * 8, 0, TAU); ctx.moveTo(x2 - 6, y2); ctx.lineTo(x2 + 6, y2); ctx.moveTo(x2, y2 - 6); ctx.lineTo(x2, y2 + 6); }
+      else { ctx.moveTo(x2 - s * 12, y2 + c * 12); ctx.lineTo(x2 + s * 12, y2 - c * 12); }
+      ctx.stroke();
+      return;
+    }
+    const k = 1 - (L.t - L.warn) / L.on;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    if (bolt) {
+      // 지그재그 번개
+      const n = 8, pts = [];
+      for (let i = 0; i <= n; i++) {
+        const f = i / n, j = i === 0 || i === n ? 0 : (Math.sin(L.seed + i * 12.9898 + Math.floor(L.t * 30)) * 43758.5453 % 1) * 16;
+        pts.push([L.x + c * L.len * f - s * j, L.y + s * L.len * f + c * j]);
+      }
+      for (const [w, col] of [[L.w * 1.6, 'rgba(255,228,92,0.3)'], [L.w * 0.6, 'rgba(255,240,160,0.85)'], [3, 'rgba(255,255,255,0.95)']]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w * (0.6 + k * 0.4);
+        ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+      }
+    } else {
+      for (const [w, col] of [[L.w * 1.8, 'rgba(159,216,255,0.35)'], [L.w, 'rgba(200,236,255,0.8)'], [L.w * 0.35, 'rgba(255,255,255,0.95)']]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w * (0.6 + k * 0.4);
+        ctx.beginPath(); ctx.moveTo(L.x, L.y); ctx.lineTo(x2, y2); ctx.stroke();
+      }
+    }
+    ctx.lineCap = 'butt';
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 처음 만난 행성 적 이름표 ("화성 모래 벌레!"): 적 위에 둥근 이름표, 처음에 톡 튀어나온다
+  function drawTags(ctx, W, calm) {
+    if (!W.tags || !W.tags.length) return;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const g of W.tags) {
+      const age = g.max - g.life, a = Math.min(1, g.life / 0.4, age / 0.15);
+      const pop = calm ? 1 : 1 + Math.max(0, 0.25 - age) * 1.6;
+      const fs = Math.round(17 * pop);
+      ctx.font = fs + 'px "Jua", system-ui, sans-serif';
+      const tw = ctx.measureText(g.txt).width + 18;
+      const x = NG.clamp(g.x, tw / 2 + 6, W.w - tw / 2 - 6), y = Math.max(fs + 6, g.y - 40);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(8,10,20,0.78)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x - tw / 2, y - fs * 0.75, tw, fs * 1.5, fs * 0.75); else ctx.rect(x - tw / 2, y - fs * 0.75, tw, fs * 1.5);
+      ctx.fill();
+      ctx.strokeStyle = g.col; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = g.col;
+      ctx.fillText(g.txt, x, y + 1);
+      // 꼬리 삼각형 (적을 가리킨다)
+      ctx.beginPath(); ctx.moveTo(x - 6, y + fs * 0.75); ctx.lineTo(x + 6, y + fs * 0.75); ctx.lineTo(NG.clamp(g.x, x - 20, x + 20), y + fs * 0.75 + 8); ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.textBaseline = 'alphabetic';
+  }
+
   function drawEnemies(ctx, W) {
     for (const e of W.enemies) {
       if (e.spawnT > 0) {
@@ -791,6 +1233,7 @@
         ctx.globalAlpha = 1;
         continue;
       }
+      if (FOE_DRAW[e.type]) { drawFoe(ctx, e, W); continue; }
       if (e.type === 'boss') glow(ctx, 'rgba(' + (e.look ? e.look.glow : '255,46,136') + ',0.55)', e.x, e.y, Math.round(e.r * 1.8), 1);
       if (e.look) bossBack(ctx, e, W);
       if (e.chWarn > 0 || e.chDash > 0) glow(ctx, 'rgba(255,140,66,0.7)', e.x, e.y, Math.round(e.r * 2.4), e.chDash > 0 ? 0.9 : 0.5 + 0.4 * Math.sin(W.t * 30));
@@ -1064,6 +1507,7 @@
     }
     for (const L of W.lasers) {
       if (L.x == null) continue;
+      if (L.len) { drawFoeBeam(ctx, W, L); continue; }
       const c = Math.cos(L.ang), s = Math.sin(L.ang), x2 = L.x + c * far, y2 = L.y + s * far;
       if (L.t < L.warn) {
         const k = L.t / L.warn, blink = Math.floor(L.t * (k > 0.6 ? 16 : 8)) % 2;
@@ -1440,13 +1884,17 @@
       ctx.translate((Math.random() - 0.5) * s, (Math.random() - 0.5) * s);
     }
     drawMeteorZones(ctx, W, view.calm);
+    drawMists(ctx, W, view.calm);
+    drawFoeWarnings(ctx, W, view.calm);
     drawFx(ctx, W);
+    drawWinds(ctx, W, view.calm);
     drawEnemies(ctx, W);
     drawWarnings(ctx, W);
     drawBullets(ctx, W);
     drawMeteorRocks(ctx, W);
     drawShocks(ctx, W);
     drawPlayer(ctx, W);
+    drawTags(ctx, W, view.calm);
     ctx.restore();
     drawDanger(ctx, W);
     if (W.flash > 0) {

@@ -538,3 +538,41 @@ body.touch .text-btn { padding: 10px 16px; }
   .sitem.char .skin-cv { width: 84px; height: 38px; }
   .sitem.char .s-trait { font-size: 11px; line-height: 1.25; }
 }
+/* ═══ 라이벌 뱀 (2026-09-27): 시작 화면 켜기·끄기, 결과 한 줄 ═══════════ */
+.rival-tog {
+  display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
+  width: 100%; min-height: 48px; margin: 0 0 12px; padding: 4px 10px 4px 8px; cursor: pointer;
+  border: 1px solid rgba(255, 138, 31, .35); border-radius: 12px; background: rgba(255, 138, 31, .05);
+  color: var(--muted); font: inherit; text-align: left;
+}
+.rival-tog:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.rival-tog[aria-pressed=true] { color: var(--text); border-color: #ff8a1f; background: rgba(255, 138, 31, .12); }
+.rv-txt b { display: block; font: normal 18px/1.15 var(--disp); color: inherit; }
+.rival-tog[aria-pressed=true] .rv-txt b { color: #ffb35c; }
+.rv-txt small { display: block; font-size: 11.5px; line-height: 1.25; }
+/* 라이벌 얼굴: 주황 공에 보라 가면 */
+.rv-face { position: relative; display: inline-block; width: 30px; height: 30px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 38% 34%, #ffd08a, #ff8a1f 58%, #b8500a); }
+.rv-face::before { content: ""; position: absolute; left: 3px; right: 3px; top: 9px; height: 10px; border-radius: 5px; background: #4a1fa8; }
+.rv-face i { position: absolute; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: #fff; }
+.rv-face i:first-child { left: 8px; } .rv-face i:last-child { right: 8px; }
+.rv-face.sm { transform: scale(.66); margin: -5px; }
+.rival-tog:not([aria-pressed=true]) .rv-face { filter: grayscale(1) brightness(.7); }
+.rv-sw { display: flex; align-items: center; gap: 6px; font: normal 15px var(--disp); }
+.rv-sw i { position: relative; width: 40px; height: 22px; border-radius: 11px; background: #2a3344; transition: background .15s; }
+.rv-sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #8aa4b8; transition: transform .15s; }
+.rival-tog[aria-pressed=true] .rv-sw i { background: #ff8a1f; }
+.rival-tog[aria-pressed=true] .rv-sw i::after { transform: translateX(18px); background: #fff; }
+.rival-tog[aria-pressed=true] .rv-sw em { color: #ffb35c; }
+.rv-sw em { font-style: normal; min-width: 1.4em; }
+.help b.rv { color: #ffb35c; }
+.rival-line { margin: 0 0 10px; padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(255, 138, 31, .45); background: rgba(255, 138, 31, .1);
+  color: #ffcf9a; font: normal 17px var(--disp); word-break: keep-all; }
+.rival-line.win { border-color: rgba(94, 231, 255, .5); background: rgba(94, 231, 255, .1); color: #bff8ff; }
+.rival-line[hidden] { display: none; }
+@media (max-height: 600px) and (orientation: landscape) {
+  .rival-tog { min-height: 44px; margin-bottom: 8px; padding: 2px 8px 2px 6px; }
+  .rv-txt b { font-size: 16px; } .rv-txt small { font-size: 10.5px; }
+  .rival-line { font-size: 15px; margin-bottom: 6px; padding: 4px 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .rv-sw i, .rv-sw i::after { transition: none; } }

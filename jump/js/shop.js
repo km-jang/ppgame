@@ -148,7 +148,7 @@
     const r = JP.World.runStats(W);
     return {
       diff: r.diff, height: r.height, stars: r.stars, springs: r.springs, rockets: r.rockets, saves: r.saves,
-      crumbles: r.crumbles || 0, bounces: r.bounces, maxCombo: r.maxCombo, time: Math.floor(r.time), zone: r.zone, games: 1,
+      crumbles: r.crumbles || 0, bounces: r.bounces, maxCombo: r.maxCombo, time: Math.floor(r.time), zone: r.zone, stomps: r.stomps || 0, games: 1,
     };
   }
 

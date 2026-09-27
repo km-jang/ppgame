@@ -60,10 +60,33 @@
   }
 
   // diff: 'easy' | 'normal' | 'hard' (생략하면 보통). opts: makePlayer 참고 (상점 기체·강화·시작 아이템)
+  // 알아서 맞춰 주는 난이도: 난이도 수치를 복사해 압박 손잡이(적 수·운석 간격·적 연사)에 배율 m을 살짝 곱한다 (data.js ADAPT)
+  // 적이 나오는 간격은 W.gapMul로 따로 (WAVE.spawnGap은 함수라서). m이 1이면 원래 난이도 그대로
+  function adaptDiff(df, m) {
+    const A = D.ADAPT;
+    const mm = NG.clamp(Number(m) || 1, A.min, A.max);
+    if (mm === 1) return { diff: df, gapMul: 1, mul: 1 };
+    const k = w => 1 + (mm - 1) * w;
+    return {
+      diff: Object.assign({}, df, { count: df.count * k(A.count), meteorEvery: df.meteorEvery / k(A.meteor), fireRate: df.fireRate * k(A.fire) }),
+      gapMul: 1 / k(A.gap), mul: mm,
+    };
+  }
+
+  // 이번 판을 그 난이도 기준으로 얼마나 잘했나 (1 = 보통 잘한 판, 금방 지면 1 아래, 최대 ADAPT.maxPerf). HUB.adaptRun에 넘긴다
+  function perfOf(W) {
+    const A = D.ADAPT;
+    const target = A.target[W.diff.id] || A.target.normal;
+    return Math.max(0, Math.min(A.maxPerf, (W.stats.time || 0) / target));
+  }
+
+  // opts.adapt: 알아서 맞춰 주는 난이도 배율 (main.js가 HUB.adaptMul로 읽어 넘긴다. 없으면 1)
   function createWorld(w, h, seed, diff, opts) {
-    const df = D.DIFFICULTY[diff] || D.DIFFICULTY.normal;
+    const base = D.DIFFICULTY[diff] || D.DIFFICULTY.normal;
+    const ad = adaptDiff(base, opts && opts.adapt);
+    const df = ad.diff;
     const W = {
-      w, h, t: 0, diff: df,
+      w, h, t: 0, diff: df, adapt: ad.mul, gapMul: ad.gapMul,
       rand: NG.rng(seed == null ? (Date.now() & 0xffffffff) : seed),
       phase: 'play', // play | cards | over
       wave: 0, banner: 0, bossWave: false, bossKills: 0,
@@ -72,6 +95,8 @@
       enemies: [], bullets: [], eBullets: [], lasers: [], particles: [], drops: [], texts: [],
       // 태양계 여행·블랙홀·운석 (2026-09-27). place: 지금 행성(placeOf), hole: 이번 웨이브 블랙홀 {fx, fy, x, y} 또는 null
       place: null, hole: null, holes: 0, meteors: [], meteorT: 0,
+      // 행성 적 (2026-09-27): mists 금성 안개 웅덩이, tags 처음 만난 적 이름표, met 이번 판에 만난 행성 적
+      mists: [], tags: [], met: {},
       cards: null, events: [], shake: 0, flash: 0, whiteFlash: 0,
       hitstop: 0, lastStop: -1, slow: 0, pulse: 0, booms: [], shocks: [],
       score: 0, nextId: 1,
@@ -80,7 +105,8 @@
       pendDash: false, pendUlt: false,   // 화면 멈춤(히트스톱) 중에 누른 대시·필살기는 멈춤이 풀린 뒤 쓴다
       stats: { kills: 0, shots: 0, time: 0, picks: [], ults: 0,
         dashes: 0, hurts: 0, cleanWaves: 0, cleanBoss: 0, bestCombo: 0, ultBoss: 0, ultBest: 0,
-        coinPicks: 0, coins: 0, items: 0, blocks: 0, bombKills: 0 }, // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
+        coinPicks: 0, coins: 0, items: 0, blocks: 0, bombKills: 0, // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
+        planet: 0, holesCleared: 0 }, // 스티커: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10 …) · 깬 블랙홀 웨이브 수 // 아이템: 주운 코인 수·코인 값·다른 아이템 수·방패로 막음·폭탄 처치
     };
     startWave(W);
     return W;
@@ -108,7 +134,19 @@
     const q = [];
     if (boss) q.push('boss');
     for (let i = 0; i < count; i++) q.push(NG.weighted(pool, rand).type);
+    // 그 행성의 적을 웨이브 안에 고르게 바꿔 넣는다 (앞쪽 보스는 그대로)
+    const foe = foeOf(n);
+    if (foe) {
+      const PF = D.PLANET_FOE, s0 = boss ? 1 : 0, len = q.length - s0;
+      const k = Math.min(len, boss ? PF.boss : Math.max(PF.min, Math.round(len * PF.share)));
+      for (let j = 0; j < k; j++) q[s0 + Math.floor((j + 0.5) * len / k)] = foe;
+    }
     return q;
+  }
+  // n웨이브의 행성 적 종류 (없으면 null)
+  function foeOf(n) {
+    const f = placeOf(n).planet.foe;
+    return f && D.ENEMIES[f] ? f : null;
   }
 
   // ─── 태양계 여행 ───────────────────────────────────────────
@@ -151,7 +189,9 @@
     W.wave += 1;
     W.bossWave = W.wave % D.WAVE.bossEvery === 0;
     W.place = placeOf(W.wave);
+    W.stats.planet = Math.max(W.stats.planet, (W.place.lap - 1) * D.PLANETS.length + W.place.i + 1);
     rollHole(W);
+    W.mists.length = 0; W.player.mist = false;
     W.meteors.length = 0;
     W.meteorT = D.METEOR.firstDelay;
     W.spawnQueue = buildWave(W.wave, W.rand, W.diff);
@@ -168,12 +208,13 @@
     else if (W.place.first) W.events.push('planet');
   }
 
-  function spawnPoint(W, r) {
+  // edges: 고를 수 있는 가장자리 (0 위 · 1 오른쪽 · 2 아래 · 3 왼쪽). 생략하면 네 곳 모두
+  function spawnPoint(W, r, edges) {
     const p = W.player;
     const safe2 = D.WAVE.safeRadius * D.WAVE.safeRadius;
     let x = 0, y = 0;
     for (let i = 0; i < 8; i++) {
-      const edge = Math.floor(W.rand() * 4);
+      const edge = edges ? edges[Math.floor(W.rand() * edges.length)] : Math.floor(W.rand() * 4);
       const t = W.rand();
       const m = r + 8;
       if (edge === 0) { x = m + t * (W.w - 2 * m); y = m; }
@@ -204,17 +245,48 @@
     };
     // 보스는 몇 번째 보스냐에 따라 모습·색이 다르다
     if (type === 'boss') { e.look = bossLook(W.bossKills); e.mk = Math.floor(W.bossKills / D.BOSSES.length) + 1; }
+    initFoe(W, e);
     W.enemies.push(e);
     return e;
+  }
+
+  // 행성 적의 처음 상태. hide: 땅속·흐린 동안 true (못 맞히고, 닿아도 안 아프다)
+  function initFoe(W, e) {
+    const def = e.def, p = W.player, r = () => 0.5 + W.rand();
+    switch (e.type) {
+      case 'ember': e.emA = Math.atan2(p.y - e.y, p.x - e.x); break;              // 나오는 순간 내 쪽으로 방향을 정한다
+      case 'acid': e.cd = def.mistCd * r(); break;
+      case 'sat': e.cd = def.beamCd * r(); e.busy = 0; break;
+      case 'zap': e.cd = def.zapCd * r(); e.busy = 0; break;
+      case 'worm': e.wm = 'dig'; e.wmT = def.digMax; e.hide = true; break;
+      case 'shard': e.sw = 'line'; e.swT = def.aim * r(); e.dir = e.x < W.w / 2 ? 1 : -1; e.swY = e.y; break;
+      case 'ghost': e.ghT = W.rand() * def.on; e.vis = 1; break;
+      case 'storm': e.ph = W.rand() * 6; break;
+    }
   }
 
   // n번째(0부터) 보스의 모습. 적의 색은 colorOf로 읽는다 (보스는 모습 색)
   function bossLook(n) { return D.BOSSES[((n % D.BOSSES.length) + D.BOSSES.length) % D.BOSSES.length]; }
   const colorOf = e => (e.look ? e.look.color : e.def.color);
 
+  // 태양 불씨는 해가 있는 쪽(위·왼쪽)에서, 고리 조각은 왼쪽·오른쪽 끝에서 나온다
+  const FOE_EDGES = { ember: [0, 3], shard: [1, 3] };
   function spawnEnemy(W, type) {
-    const pt = spawnPoint(W, D.ENEMIES[type].r);
-    return makeEnemy(W, type, pt.x, pt.y, true);
+    const pt = spawnPoint(W, D.ENEMIES[type].r, FOE_EDGES[type]);
+    const e = makeEnemy(W, type, pt.x, pt.y, true);
+    meetFoe(W, e);
+    return e;
+  }
+
+  // 이번 판에 처음 만난 행성 적이면 그 위에 이름표 ("화성 모래 벌레!")
+  function meetFoe(W, e) {
+    if (W.met[e.type]) return;
+    const pl = D.PLANETS.find(q => q.foe === e.type);
+    if (!pl) return;
+    W.met[e.type] = true;
+    const T = D.PLANET_FOE.tag;
+    W.tags.push({ id: e.id, x: e.x, y: e.y, txt: pl.name + ' ' + e.def.name + '!', col: e.def.color, life: T, max: T });
+    W.events.push('foe');
   }
 
   function updateSpawns(W, dt) {
@@ -223,7 +295,7 @@
       if (W.spawnTimer <= 0) {
         const n = D.WAVE.groupSize(W.wave);
         for (let i = 0; i < n && W.spawnQueue.length; i++) spawnEnemy(W, W.spawnQueue.shift());
-        W.spawnTimer += D.WAVE.spawnGap(W.wave);
+        W.spawnTimer += D.WAVE.spawnGap(W.wave) * (W.gapMul || 1);
       }
       return;
     }
@@ -240,8 +312,9 @@
   function openCards(W) {
     W.phase = 'cards';
     W.cards = drawCards(W, 3);
-    W.eBullets.length = 0; W.lasers.length = 0; W.meteors.length = 0;
+    W.eBullets.length = 0; W.lasers.length = 0; W.meteors.length = 0; W.mists.length = 0;
     W.pendDash = W.pendUlt = false;
+    if (W.hole) W.stats.holesCleared += 1;
     if (!W.waveHit) {
       W.stats.cleanWaves += 1;
       if (W.bossWave) W.stats.cleanBoss += 1;
@@ -350,12 +423,14 @@
     impact(W, D.IMPACT.stop[e.type], e.type === 'boss');
 
     if (e.def.splitInto) {
-      for (let i = 0; i < 2; i++) {
-        const a = W.rand() * TAU;
+      const sn = e.def.splitN || 2;
+      for (let i = 0; i < sn; i++) {
+        const a = sn > 2 ? TAU * i / sn + W.rand() * 0.6 : W.rand() * TAU;
         const m = makeEnemy(W, e.def.splitInto, e.x + Math.cos(a) * 10, e.y + Math.sin(a) * 10, false);
         m.vx = Math.cos(a) * 200; m.vy = Math.sin(a) * 200;
       }
     }
+    if (e.type === 'ice') { W.events.push('crack'); W.particles.push({ ring: true, x: e.x, y: e.y, r: e.r * 3, life: 0.35, max: 0.35, color: '#e6fbff' }); }
     if (e.type === 'boss') {
       W.bossKills += 1;
       W.shake = Math.max(W.shake, 22);
@@ -427,7 +502,7 @@
     for (const s of W.shocks) {
       s.r += U.speed * dt;
       for (const e of W.enemies) {
-        if (e.dead || e.spawnT > 0 || s.hit.indexOf(e.id) >= 0) continue;
+        if (e.dead || e.spawnT > 0 || e.hide || s.hit.indexOf(e.id) >= 0) continue;
         const d = Math.hypot(e.x - s.x, e.y - s.y);
         if (d - e.r > s.r) continue;
         s.hit.push(e.id);
@@ -494,7 +569,7 @@
     W.eBullets.length = 0;
     const dmg = ultDamage(W) * B.dmgMul;
     for (const e of W.enemies) {
-      if (e.dead || e.spawnT > 0) continue;
+      if (e.dead || e.spawnT > 0 || e.hide) continue;
       if (NG.dist2(e.x, e.y, x, y) > (B.radius + e.r) * (B.radius + e.r)) continue;
       damageEnemy(W, e, e.type === 'boss' ? Math.min(dmg, e.maxHp * B.bossCap) : dmg, false, e.x - x, e.y - y, 'ult');
       if (e.dead) W.stats.bombKills += 1;
@@ -574,7 +649,7 @@
   function nearestEnemy(W, x, y) {
     let best = null, bd = Infinity;
     for (const e of W.enemies) {
-      if (e.dead || e.spawnT > 0) continue;
+      if (e.dead || e.spawnT > 0 || e.hide) continue;
       const d = NG.dist2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
@@ -633,9 +708,12 @@
       if (p.dashT <= 0 && p.nova > 0) nova(W, p);
     } else {
       // 속도를 바로 바꾸지 않고 빠르게 따라가게 해서 출발·정지가 부드럽다 (약 0.1초)
+      // 금성 안개 웅덩이 안에서는 느려진다 (대시는 그대로)
+      p.mist = inMist(W, p.x, p.y);
+      const sp = p.speed * (p.mist ? D.ENEMIES.acid.slow : 1);
       const k = Math.min(1, dt * 16);
-      p.vx += (mx * p.speed - p.vx) * k;
-      p.vy += (my * p.speed - p.vy) * k;
+      p.vx += (mx * sp - p.vx) * k;
+      p.vy += (my * sp - p.vy) * k;
     }
     // 블랙홀: 대시 중이 아니면 살살 끌려간다 (내 최고 속도보다 한참 약하다)
     let gx = 0, gy = 0;
@@ -671,7 +749,7 @@
         const a = p.droneAng + TAU * i / p.drones;
         const dx = p.x + Math.cos(a) * DR.radius, dy = p.y + Math.sin(a) * DR.radius;
         for (const e of W.enemies) {
-          if (e.dead || e.spawnT > 0 || e.droneHit > 0) continue;
+          if (e.dead || e.spawnT > 0 || e.hide || e.droneHit > 0) continue;
           const rr = e.r + DR.r;
           if (NG.dist2(dx, dy, e.x, e.y) < rr * rr) {
             e.droneHit = DR.hitGap;
@@ -689,7 +767,7 @@
     const N = D.NOVA;
     const radius = N.radius * (1 + 0.25 * (p.nova - 1));
     for (const e of W.enemies) {
-      if (e.dead || e.spawnT > 0) continue;
+      if (e.dead || e.spawnT > 0 || e.hide) continue;
       if (NG.dist2(e.x, e.y, p.x, p.y) < (radius + e.r) * (radius + e.r)) {
         damageEnemy(W, e, p.gun.dmg * N.dmgMul * p.nova, false, e.x - p.x, e.y - p.y);
       }
@@ -843,16 +921,196 @@
       if (L.t < L.track) L.a = Math.atan2(p.y - e.y, p.x - e.x);
       L.ang = L.a + L.off;
       if (L.t >= L.warn && L.t < L.warn + L.on && !L.hit) {
-        if (!L.fired) { L.fired = true; W.events.push('laser'); W.shake = Math.max(W.shake, 6); }
+        if (!L.fired) { L.fired = true; W.events.push(L.sfx || 'laser'); W.shake = Math.max(W.shake, L.len ? 3 : 6); }
         // 선분과 점 사이 거리
         const c = Math.cos(L.ang), s = Math.sin(L.ang);
         const along = (p.x - L.x) * c + (p.y - L.y) * s;
         const side = Math.abs(-(p.x - L.x) * s + (p.y - L.y) * c);
-        if (along > 0 && side < L.w / 2 + p.r - 3 && p.iframe <= 0 && p.dashT <= 0) { L.hit = true; hurtPlayer(W, 1); }
+        // len이 있으면 짧은 빛줄기·번개 (행성 적), 없으면 화면 끝까지 (보스)
+        if (along > 0 && (!L.len || along < L.len + p.r) && side < L.w / 2 + p.r - 3 && p.iframe <= 0 && p.dashT <= 0) { L.hit = true; hurtPlayer(W, 1); }
       }
     }
     W.lasers = W.lasers.filter(L => L.t < L.warn + L.on);
   }
+
+  // ─── 행성 적 (2026-09-27, data.js ENEMIES ember ~ ghost) ─────────
+  // 밀어내기에 안 밀리는 적: 보스, 예고·휙 지나가는 중인 고리 조각 (띠 예고와 실제 길이 어긋나지 않게)
+  const pinned = e => e.type === 'boss' || (e.type === 'shard' && e.sw !== 'line');
+  const fwOf = W => W.diff.foeWarn || 1;
+
+  // 짧은 빛줄기·번개: 보스 레이저(W.lasers)를 같이 쓴다. track 0 = 예고 시작 때 방향이 굳는다. len = 길이
+  function foeBeam(W, e, a, o) {
+    W.lasers.push(Object.assign({ boss: e.id, off: 0, a, t: 0, track: 0, hit: false }, o));
+  }
+
+  // 금성 안개 웅덩이 안인가 (다 생긴 것만)
+  function inMist(W, x, y) {
+    for (const m of W.mists) if (m.t >= m.form && NG.dist2(x, y, m.x, m.y) < m.r * m.r) return true;
+    return false;
+  }
+  function updateMists(W, dt) {
+    if (!W.mists.length) return;
+    for (const m of W.mists) m.t += dt;
+    W.mists = W.mists.filter(m => m.t < m.form + m.life);
+  }
+
+  // 나를 가운데 두고 radius px 거리에서 도는 방향 (접선 + 거리 맞추기)
+  function orbitDir(e, dx, dy, dist, radius, dir) {
+    const ox = -dx / dist, oy = -dy / dist;               // 나 → 적
+    const tx = -oy * dir, ty = ox * dir;                  // 접선
+    const pull = NG.clamp((dist - radius) / 80, -1.2, 1.2); // 멀면 다가오고 가까우면 물러난다
+    return { tx: tx - ox * pull, ty: ty - oy * pull };
+  }
+
+  const FOE_MOVE = {
+    // 수성 태양 불씨: 방향을 천천히만 튼다 (초당 turn rad). 벽에서 튕기고, 나에게 닿으면 꺼진다
+    ember(W, e, dt, dx, dy) {
+      const def = e.def, p = W.player;
+      let d = Math.atan2(dy, dx) - e.emA;
+      while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+      e.emA += NG.clamp(d, -def.turn * dt, def.turn * dt);
+      e.vx = Math.cos(e.emA) * e.speed; e.vy = Math.sin(e.emA) * e.speed;
+      const nx = e.x + e.vx * dt, ny = e.y + e.vy * dt;
+      e.x = NG.clamp(nx, e.r, W.w - e.r); e.y = NG.clamp(ny, e.r, W.h - e.r);
+      if (e.x !== nx) e.emA = Math.PI - e.emA;
+      if (e.y !== ny) e.emA = -e.emA;
+      e.ang = e.emA;
+      if (W.rand() < 0.35) burst(W, e.x, e.y, '#ffcf6b', 1, 30, 2);
+      if (Math.hypot(p.x - e.x, p.y - e.y) < e.r + p.r - 2 && p.iframe <= 0 && p.dashT <= 0) {
+        hurtPlayer(W, 1);
+        e.dead = true; // 꺼진다 (점수 없음)
+        burst(W, e.x, e.y, '#ffb347', 8, 160, 2.5);
+      }
+      return 'done';
+    },
+    // 금성 산성 구름: 느리게 쫓아오며 안개 웅덩이를 남긴다
+    acid(W, e, dt) {
+      const def = e.def;
+      e.cd -= dt;
+      if (e.cd <= 0) {
+        e.cd = def.mistCd / W.diff.fireRate;
+        if (W.mists.length < def.mistMax) {
+          W.mists.push({ x: e.x, y: e.y, r: def.mistR, t: 0, form: def.mistForm * fwOf(W), life: def.mistLife, seed: W.rand() * 100 });
+          W.events.push('mist');
+        }
+      }
+      return null;
+    },
+    // 지구 인공위성: 돌다가 멈춰서 예고 뒤 짧은 빛줄기
+    sat(W, e, dt, dx, dy, dist) {
+      const def = e.def;
+      e.ang = Math.atan2(dy, dx);
+      if (e.busy > 0) { e.busy -= dt; return { tx: 0, ty: 0 }; }
+      e.cd -= dt;
+      if (e.cd <= 0 && dist < def.beamLen + 40) {
+        const warn = def.beamWarn * fwOf(W);
+        foeBeam(W, e, e.ang, { warn, on: def.beamOn, w: def.beamW, len: def.beamLen, kind: 'beam', sfx: 'beam' });
+        e.busy = warn + def.beamOn;
+        e.cd = def.beamCd / W.diff.fireRate;
+        W.events.push('beamWarn');
+        return { tx: 0, ty: 0 };
+      }
+      return orbitDir(e, dx, dy, dist, def.orbit, e.strafe);
+    },
+    // 화성 모래 벌레: 땅속으로 따라와 → 예고 원 → 튀어나옴 → 잠깐 밖에서 쫓아옴 → 다시 땅속
+    worm(W, e, dt, dx, dy, dist) {
+      const def = e.def, p = W.player;
+      e.wmT -= dt;
+      if (e.wm === 'dig') {
+        e.hide = true;
+        const sp = Math.min(dist, def.digSpeed * W.diff.enemySpeed * dt);
+        e.x = NG.clamp(e.x + dx / dist * sp, e.r, W.w - e.r); e.y = NG.clamp(e.y + dy / dist * sp, e.r, W.h - e.r);
+        e.vx = e.vy = 0;
+        if (W.rand() < 0.3) burst(W, e.x, e.y, '#b8744a', 1, 40, 3);
+        if (dist < 16 || e.wmT <= 0) { e.wm = 'warn'; e.wmT = def.popWarn * fwOf(W); W.events.push('wormWarn'); }
+        return 'done';
+      }
+      if (e.wm === 'warn') {
+        e.hide = true;
+        if (e.wmT > 0) return 'done';
+        // 튀어나온다: 원 안에 있으면 아프다
+        const rr = def.popR + p.r * 0.4;
+        if (NG.dist2(e.x, e.y, p.x, p.y) < rr * rr) hurtPlayer(W, 1);
+        e.wm = 'up'; e.wmT = def.upTime; e.hide = false;
+        W.particles.push({ ring: true, x: e.x, y: e.y, r: def.popR * 1.2, life: 0.35, max: 0.35, color: '#e0824f' });
+        burst(W, e.x, e.y, '#c98a5a', 12, 220, 3.5);
+        W.shake = Math.max(W.shake, 5);
+        W.events.push('wormPop');
+        return 'done';
+      }
+      if (e.wmT <= 0) { e.wm = 'dig'; e.wmT = def.digMax; e.hide = true; burst(W, e.x, e.y, '#b8744a', 6, 120, 3); return 'done'; }
+      return null;
+    },
+    // 목성 번개 구름: 거리를 두고 떠 있다가, 번개를 모아(예고) 내가 있던 자리까지 짧은 번개
+    zap(W, e, dt, dx, dy, dist) {
+      const def = e.def;
+      if (e.busy > 0) { e.busy -= dt; return { tx: 0, ty: 0 }; }
+      e.cd -= dt;
+      if (e.cd <= 0 && dist < def.zapReach) {
+        const warn = def.zapWarn * fwOf(W);
+        foeBeam(W, e, Math.atan2(dy, dx), { warn, on: def.zapOn, w: def.zapW, len: Math.min(def.zapReach, dist + 30), kind: 'bolt', sfx: 'zap', seed: W.rand() * 100 });
+        e.busy = warn + def.zapOn;
+        e.cd = def.zapCd / W.diff.fireRate;
+        W.events.push('zapWarn');
+        return { tx: 0, ty: 0 };
+      }
+      const ux = dx / dist, uy = dy / dist;
+      if (dist < def.keep - 40) return { tx: -ux, ty: -uy };
+      if (dist < def.keep + 40) return { tx: -uy * e.strafe, ty: ux * e.strafe };
+      return null;
+    },
+    // 토성 고리 조각: 끝에서 내 높이로 줄 맞추기 → 가로 띠 예고 → 반대쪽 끝까지 휙
+    shard(W, e, dt, dx, dy) {
+      const def = e.def, p = W.player;
+      e.ang += dt * (e.sw === 'go' ? 9 : 2);
+      if (e.sw === 'line') {
+        e.swT -= dt;
+        const sp = e.speed * dt;
+        e.y = NG.clamp(e.y + NG.clamp(dy, -sp, sp), e.r, W.h - e.r);
+        e.x = e.dir > 0 ? e.r + 8 : W.w - e.r - 8;
+        e.vx = e.vy = 0;
+        if (e.swT <= 0) { e.sw = 'warn'; e.swT = def.warn * fwOf(W); e.swY = e.y; W.events.push('bandWarn'); }
+      } else if (e.sw === 'warn') {
+        e.swT -= dt;
+        e.y = e.swY;
+        if (e.swT <= 0) { e.sw = 'go'; W.events.push('sweep'); }
+      } else {
+        e.y = e.swY;
+        e.vx = e.dir * def.sweep * W.diff.enemySpeed; e.vy = 0;
+        e.x += e.vx * dt;
+        if (W.rand() < 0.5) burst(W, e.x, e.y, def.color, 1, 50, 2.5);
+        if ((e.dir > 0 && e.x >= W.w - e.r - 8) || (e.dir < 0 && e.x <= e.r + 8)) {
+          e.x = NG.clamp(e.x, e.r + 8, W.w - e.r - 8);
+          e.dir = -e.dir; e.sw = 'line'; e.swT = def.aim * (0.8 + W.rand() * 0.5); e.vx = 0;
+        }
+      }
+      if (Math.hypot(p.x - e.x, p.y - e.y) < e.r + p.r - 2 && p.iframe <= 0 && p.dashT <= 0) hurtPlayer(W, 1);
+      return 'done';
+    },
+    // 해왕성 폭풍 드론: 멀어졌다 가까워졌다 하며 나를 둘러싸고 돈다 (내 총알 휘게 하기는 updateBullets)
+    storm(W, e, dt, dx, dy, dist) {
+      const def = e.def;
+      e.ph += dt;
+      e.ang += dt * 5;
+      const radius = def.near + (def.far - def.near) * (0.5 + 0.5 * Math.sin(e.ph * 0.9));
+      return orbitDir(e, dx, dy, dist, radius, e.strafe);
+    },
+    // 명왕성 하트 유령: 보임(on) → 흐려짐(fade) → 안 보임(off) → 나타남(fade). 흐릴 땐 나와 거리를 둔다
+    ghost(W, e, dt, dx, dy, dist) {
+      const def = e.def;
+      const cyc = def.on + def.fade * 2 + def.off, offEnd = def.on + def.fade + def.off;
+      e.ghT = (e.ghT + dt) % cyc;
+      // 안 보이는 동안 내가 너무 가까이 있으면 나타나지 않고 기다린다 (내 코앞에서 갑자기 나타나지 않게)
+      if (e.ghT >= offEnd - 0.05 && e.ghT < offEnd + dt && dist < def.keepOff * 0.75) e.ghT = offEnd - 0.05;
+      const t = e.ghT;
+      e.vis = t < def.on ? 1 : t < def.on + def.fade ? 1 - (t - def.on) / def.fade : t < def.on + def.fade + def.off ? 0 : (t - def.on - def.fade - def.off) / def.fade;
+      e.hide = e.vis < 0.6;
+      if (!e.hide) return null;
+      const ux = dx / dist, uy = dy / dist;
+      if (dist < def.keepOff) return { tx: -ux, ty: -uy };
+      return { tx: -uy * e.strafe, ty: ux * e.strafe };
+    },
+  };
 
   function updateEnemies(W, dt) {
     const p = W.player;
@@ -901,6 +1159,11 @@
           e.chRest -= dt;
           if (e.chRest <= 0 && dist < def.range) { e.chWarn = def.warn; e.chA = Math.atan2(dy, dx); W.events.push('chargeWarn'); tx = 0; ty = 0; }
         }
+      } else if (e.def.shape && FOE_MOVE[e.type]) {
+        // 행성 적: 'done'이면 스스로 움직였다 (조향·박치기를 건너뜀), {tx, ty}면 그 방향으로 조향
+        const mv = FOE_MOVE[e.type](W, e, dt, dx, dy, dist);
+        if (mv === 'done') continue;
+        if (mv) { tx = mv.tx; ty = mv.ty; }
       } else if (e.type === 'boss') {
         const mv = bossAttack(W, e, dt, dx, dy, dist);
         if (mv) { tx = mv.tx; ty = mv.ty; }
@@ -923,9 +1186,9 @@
       e.y = NG.clamp(e.y + e.vy * dt, e.r, W.h - e.r);
       e.ang += dt * (e.type === 'tank' ? 0.8 : 2);
 
-      // 몸통 박치기
+      // 몸통 박치기 (땅속·흐린 행성 적은 안 아프다)
       const rr = e.r + p.r - 2;
-      if (dist < rr) {
+      if (dist < rr && !e.hide) {
         if (p.iframe <= 0 && p.dashT <= 0) hurtPlayer(W, 1);
         if (e.type !== 'boss') { e.vx = -ux * 260; e.vy = -uy * 260; }
       }
@@ -946,7 +1209,7 @@
           const d = Math.sqrt(d2);
           const push = (rr - d) / 2;
           const nx = dx / d, ny = dy / d;
-          const wa = a.type === 'boss' ? 0 : 1, wb = b.type === 'boss' ? 0 : 1;
+          const wa = pinned(a) ? 0 : 1, wb = pinned(b) ? 0 : 1;
           const s = wa + wb || 1;
           a.x -= nx * push * 2 * wa / s; a.y -= ny * push * 2 * wa / s;
           b.x += nx * push * 2 * wb / s; b.y += ny * push * 2 * wb / s;
@@ -959,7 +1222,15 @@
   function updateBullets(W, dt) {
     const p = W.player;
     const g = p.gun;
+    // 해왕성 폭풍 드론 둘레의 바람이 내 총알을 옆으로 휘게 한다
+    const storms = W.enemies.filter(e => e.type === 'storm' && !e.dead && e.spawnT <= 0);
     for (const b of W.bullets) {
+      for (const e of storms) {
+        const R = e.def.windR, d2 = NG.dist2(b.x, b.y, e.x, e.y);
+        if (d2 > R * R) continue;
+        const a = e.def.windTurn * dt * (1 - Math.sqrt(d2) / R) * e.strafe, c = Math.cos(a), s = Math.sin(a);
+        const vx = b.vx * c - b.vy * s; b.vy = b.vx * s + b.vy * c; b.vx = vx;
+      }
       b.x += b.vx * dt; b.y += b.vy * dt;
       b.life -= dt;
       if (b.x < b.r || b.x > W.w - b.r) {
@@ -972,7 +1243,7 @@
       }
       if (b.life <= 0) continue;
       for (const e of W.enemies) {
-        if (e.dead || e.spawnT > 0) continue;
+        if (e.dead || e.spawnT > 0 || e.hide) continue;
         if (e.look && hexShieldBlocks(e, b)) {
           b.life = 0; burst(W, b.x, b.y, e.look.color, 3, 120, 2); W.events.push('block');
           break;
@@ -1049,7 +1320,7 @@
       if (NG.dist2(m.x, m.y, p.x, p.y) < rr * rr) hurtPlayer(W, 1);
       const dmg = M.enemyDmg * (1 + (W.wave - 1) * D.WAVE.hpPerWave) * W.diff.enemyHp;
       for (const e of W.enemies) {
-        if (e.dead || e.spawnT > 0 || e.type === 'boss') continue;
+        if (e.dead || e.spawnT > 0 || e.hide || e.type === 'boss') continue;
         const er = m.r + e.r * 0.5;
         if (NG.dist2(m.x, m.y, e.x, e.y) < er * er) damageEnemy(W, e, dmg, false, e.x - m.x, e.y - m.y, 'ult');
       }
@@ -1098,6 +1369,15 @@
     }
     W.particles = W.particles.filter(q => q.life > 0);
     for (const t of W.texts) { t.life -= dt; t.y -= 30 * dt; }
+    // 처음 만난 행성 적 이름표: 그 적을 따라다닌다
+    if (W.tags.length) {
+      for (const g of W.tags) {
+        g.life -= dt;
+        const e = W.enemies.find(x => x.id === g.id && !x.dead);
+        if (e) { g.x = e.x; g.y = e.y; }
+      }
+      W.tags = W.tags.filter(g => g.life > 0);
+    }
     W.texts = W.texts.filter(t => t.life > 0);
     for (const d of W.drops) d.life -= dt;
     W.drops = W.drops.filter(d => d.life > 0);
@@ -1144,11 +1424,13 @@
     updateBullets(W, dt);
     updateLasers(W, dt);
     updateMeteors(W, dt);
+    updateMists(W, dt);
     updateShocks(W, dt);
     W.enemies = W.enemies.filter(e => !e.dead);
     updateSpawns(W, dt);
     updateFx(W, dt);
   }
 
-  NG.World = { makePlayer, addDrop, bossLook, createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage, placeOf, holePull, meteorGap };
+  NG.World = { makePlayer, addDrop, bossLook, createWorld, step, pickCard, resize, buildWave, drawCards, useUlt, ultDamage, placeOf, holePull, meteorGap,
+    foeOf, adaptDiff, perfOf, inMist, spawnEnemy };
 })(NG);

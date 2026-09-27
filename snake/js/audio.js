@@ -87,6 +87,12 @@
     portal: { gap: 0.08, fn(t) { tone(t, 'sine', 1600, 200, 0.18, 0.12); tone(t + 0.12, 'sine', 200, 1400, 0.16, 0.1); } },
     // 앞에 부딪힐 것이 있음: 짧은 경고음 두 번
     warn: { gap: 0.6, fn(t) { tone(t, 'square', 880, 880, 0.06, 0.07); tone(t + 0.1, 'square', 880, 880, 0.06, 0.07); } },
+    // 라이벌 뱀: 나오기 전 예고(우우) · 나옴(낮은 나팔) · 내 몸에 쿵(보잉) · 쉬움에서 지나감(휙) · 라이벌이 먹음(작고 낮게)
+    rivalwarn: { gap: 0.5, fn(t) { tone(t, 'triangle', 330, 440, 0.18, 0.08); tone(t + 0.2, 'triangle', 330, 440, 0.18, 0.08); } },
+    rival: { gap: 0.5, fn(t) { tone(t, 'square', 262, 262, 0.1, 0.07); tone(t + 0.1, 'square', 330, 330, 0.1, 0.07); tone(t + 0.2, 'square', 392, 392, 0.18, 0.07); } },
+    bump: { gap: 0.15, fn(t) { tone(t, 'sine', 520, 140, 0.3, 0.14); tone(t + 0.05, 'triangle', 900, 700, 0.12, 0.05); } },
+    pass: { gap: 0.2, fn(t) { noise(t, 'bandpass', 2000, 600, 0.2, 0.08); tone(t, 'sine', 900, 1400, 0.12, 0.05); } },
+    rivaleat: { gap: 0.08, fn(t) { tone(t, 'triangle', 330, 260, 0.12, 0.06); } },
     wrap: { gap: 0.08, fn(t) { noise(t, 'bandpass', 800, 3000, 0.15, 0.1); } },
     // 황금 구슬이 식음
     cool: { gap: 0.3, fn(t) { tone(t, 'triangle', 700, 350, 0.25, 0.08); } },

@@ -469,5 +469,288 @@ test('위험 경고: 앞에 판 끝·벽·내 몸이 있으면 알려 주고, �
   assert(dz(E, 3) === null, 'easy wraps, no edge danger');
 });
 
+
+// ─── 라이벌 뱀 (무한 모드) ───
+const { spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, dangerAhead } = SN.World;
+// 라이벌이 나올 때까지 (움직인 시간 intro + 예고) 봇으로 달린다
+function untilRival(W) {
+  W.wait = 0;
+  for (let i = 0; i < 60 * 20 && W.phase === 'play' && W.rival.phase !== 'play'; i++) {
+    if (!W.queue.length) turn(W, botDir(W));
+    step(W, 1 / 60);
+  }
+  return W;
+}
+// 라이벌을 원하는 모양으로 바로 놓는다 (움직이는 중)
+function placeRival(W, body, dir) {
+  const V = W.rival;
+  V.body = body.map(p => ({ x: p.x, y: p.y })); V.prev = V.body.map(p => ({ x: p.x, y: p.y }));
+  V.dir = dir; V.phase = 'play'; V.met = true; V.stun = 0; V.acc = 0; V.grow = 0; V.blocked = false; V.target = null;
+}
+// 라이벌만 정확히 n칸 움직인다 (내 뱀은 멀리서 기다리게)
+function rivalTicks(W, n) {
+  const V = W.rival;
+  W.wait = 0;
+  for (let i = 0; i < n; i++) { W.acc = 0; step(W, 1 / V.speed + 1e-9); }
+}
+
+test('라이벌: 무한 모드에만, 처음 몇 초는 없다가 예고 깜빡임 뒤에 나온다 (끄면 없음)', () => {
+  assert(create(COLS, ROWS, 1).rival === null, 'classic none');
+  assert(create(COLS, ROWS, 1, { mode: 'stage', level: 1 }).rival === null, 'stage none');
+  assert(create(COLS, ROWS, 1, { mode: 'endless', rival: false }).rival === null, 'off');
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  assert(W.rival && W.rival.phase === 'wait' && W.rival.level === 'normal', 'waits');
+  W.wait = 0;
+  let warnAt = -1, playAt = -1;
+  for (let i = 0; i < 60 * 12 && W.phase === 'play'; i++) {
+    if (!W.queue.length) turn(W, botDir(W));
+    step(W, 1 / 60);
+    if (W.rival.phase === 'warn' && warnAt < 0) warnAt = W.time;
+    if (W.rival.phase === 'play' && playAt < 0) { playAt = W.time; break; }
+  }
+  assert(warnAt >= D.RIVAL.intro - 0.05 && warnAt < D.RIVAL.intro + 0.1, 'appears after intro ' + warnAt);
+  assert(playAt - warnAt >= D.RIVAL.appear - 0.05, 'warning first ' + (playAt - warnAt));
+  assert(W.rival.body.length === D.RIVAL.len && W.rival.met, 'body');
+  assert(create(24, 15, 1, { mode: 'endless', easy: true }).rival.level === 'easy', 'easy follows difficulty');
+});
+
+test('라이벌: 절대 내 가까이에 나오지 않는다 (몸 모든 칸이 떨어져 있고, 내게서 멀어지는 방향)', () => {
+  for (const [c, r, easy] of [[32, 20, false], [20, 32, false], [24, 15, true], [15, 24, true]]) for (let seed = 1; seed <= 40; seed++) {
+    const W = create(c, r, seed, { mode: 'endless', easy });
+    W.wait = 0; W.time = D.RIVAL.intro;
+    const r0 = SN.rng(seed);
+    W.snake = [{ x: Math.floor(r0() * (c - 6)) + 5, y: Math.floor(r0() * r) }];
+    for (let i = 1; i < 4; i++) W.snake.push({ x: W.snake[0].x - i, y: W.snake[0].y });
+    W.food = null; spawnFood(W);
+    assert(spawnRival(W), 'spawned ' + seed);
+    const h = W.snake[0], V = W.rival;
+    const far = p => Math.abs(p.x - h.x) + Math.abs(p.y - h.y);
+    for (const p of V.body) {
+      assert(far(p) >= D.RIVAL.minDist, 'far enough ' + far(p));
+      assert(p.x >= 0 && p.y >= 0 && p.x < c && p.y < r, 'in board');
+      assert(!W.snake.some(q => q.x === p.x && q.y === p.y) && !(W.food.x === p.x && W.food.y === p.y), 'free cell');
+    }
+    const d = SN.World.DIRS[V.dir], hd = V.body[0];
+    assert(far({ x: hd.x + d[0], y: hd.y + d[1] }) > far(hd), 'heads away');
+  }
+});
+
+test('라이벌 쉬움: 느리고, 내가 라이벌 몸을 지나가도 끝나지 않고 라이벌이 멈칫', () => {
+  const E = D.RIVAL.levels;
+  assert(E.easy.speed < E.normal.speed && E.normal.speed < E.hard.speed, 'speed order');
+  assert(E.easy.react > E.normal.react && E.normal.react > E.hard.react, 'react order');
+  assert(E.easy.speed < D.EASY.base && E.normal.speed < D.SPEED.base, 'slower than me');
+  const W = create(24, 15, 1, { mode: 'endless', easy: true });
+  W.wait = 0; W.itemT = 99; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  W.snake = [{ x: 5, y: 7 }, { x: 4, y: 7 }, { x: 3, y: 7 }, { x: 2, y: 7 }]; W.dir = 'right';
+  placeRival(W, [{ x: 6, y: 3 }, { x: 6, y: 4 }, { x: 6, y: 5 }, { x: 6, y: 6 }, { x: 6, y: 7 }, { x: 6, y: 8 }, { x: 6, y: 9 }], 'up');
+  ticks(W, 1);
+  assert(W.phase === 'play' && W.snake[0].x === 6, 'passed through');
+  assert(W.rival.stun > 0 && W.rival.passes === 1 && W.events.includes('pass'), 'rival stunned');
+  ticks(W, 2);
+  assert(W.phase === 'play' && W.rival.passes === 1, 'one pass per stun');
+  assert(dangerAhead(W, 3) === null || dangerAhead(W, 3).cause !== 'rival', 'no rival danger on easy');
+});
+
+test('라이벌 쉬움: 봇이 오래 놀아도 라이벌 때문에 끝나는 일은 한 번도 없다', () => {
+  for (let seed = 1; seed <= 25; seed++) {
+    const W = create(24, 15, seed, { mode: 'endless', easy: true });
+    W.wait = 0;
+    const r = SN.rng(seed * 5 + 3);
+    for (let i = 0; i < 60 * 120 && W.phase === 'play'; i++) {
+      if (!W.queue.length) turn(W, r() < 0.1 ? ['up', 'down', 'left', 'right'][Math.floor(r() * 4)] : botDir(W));
+      step(W, 1 / 60);
+      W.events.length = 0; W.fx.length = 0;
+    }
+    assert(W.cause !== 'rival', 'easy rival killed on seed ' + seed);
+    assert(W.rival.met || W.time < D.RIVAL.intro + 0.1, 'rival showed up');
+  }
+});
+
+test('라이벌 보통: 라이벌 몸에 부딪히면 끝, 곧 빠질 꼬리 끝 칸은 괜찮다', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  W.wait = 0; W.itemT = 99; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  W.snake = [{ x: 5, y: 7 }, { x: 4, y: 7 }, { x: 3, y: 7 }, { x: 2, y: 7 }]; W.dir = 'right';
+  placeRival(W, [{ x: 6, y: 4 }, { x: 6, y: 5 }, { x: 6, y: 6 }, { x: 6, y: 7 }, { x: 6, y: 8 }], 'up');
+  const d = dangerAhead(W, 3);
+  assert(d && d.cause === 'rival' && d.dist === 1, 'danger shows rival ' + JSON.stringify(d));
+  ticks(W, 1);
+  assert(W.phase === 'over' && W.cause === 'rival', 'hit rival body ' + W.cause);
+  const T = create(COLS, ROWS, 1, { mode: 'endless' });
+  T.wait = 0; T.itemT = 99; T.food = { x: 0, y: 0, gold: false, born: 0 };
+  T.snake = [{ x: 5, y: 7 }, { x: 4, y: 7 }, { x: 3, y: 7 }, { x: 2, y: 7 }]; T.dir = 'right';
+  placeRival(T, [{ x: 6, y: 4 }, { x: 6, y: 5 }, { x: 6, y: 6 }, { x: 6, y: 7 }], 'up');
+  assert(rivalAt(T, 6, 7, false) && !rivalAt(T, 6, 7, true), 'tail leaves');
+  assert(dangerAhead(T, 1) === null, 'tail is not danger');
+  ticks(T, 1);
+  assert(T.phase === 'play', 'tail cell ok');
+});
+
+test('라이벌 머리가 내 몸에 부딪히면: 라이벌만 멈칫(2초)하고 줄어든다, 나는 멀쩡', () => {
+  for (const easy of [true, false]) {
+    const W = create(COLS, ROWS, 1, { mode: 'endless', easy });
+    W.wait = 0; W.itemT = 99; W.food = { x: 0, y: 0, gold: false, born: 0 };
+    // 내 뱀: 세로 벽처럼 (움직이지 않게 속도를 아주 느리게)
+    W.snake = [{ x: 10, y: 3 }, { x: 10, y: 4 }, { x: 10, y: 5 }, { x: 10, y: 6 }, { x: 10, y: 7 }, { x: 10, y: 8 }, { x: 10, y: 9 }]; W.dir = 'up';
+    W.speedMul = 1e-6;
+    placeRival(W, [{ x: 9, y: 6 }, { x: 8, y: 6 }, { x: 7, y: 6 }, { x: 6, y: 6 }, { x: 5, y: 6 }, { x: 4, y: 6 }], 'right');
+    W.rival.clumsy = 1;   // 내 몸을 못 보고 들이받는다
+    W.rival.wander = 0; W.rival.smart = 0;
+    rivalTicks(W, 1);
+    const V = W.rival;
+    assert(W.phase === 'play', 'I am fine');
+    assert(V.bumps === 1 && W.events.includes('bump'), 'bump');
+    assert(Math.abs(V.stun - D.RIVAL.bumpStun) < 0.05, 'stun ' + V.stun);
+    assert(V.body.length === 6 - D.RIVAL.bumpShrink, 'shrank ' + V.body.length);
+    const h = { x: V.body[0].x, y: V.body[0].y };
+    step(W, D.RIVAL.bumpStun * 0.9);
+    assert(V.body[0].x === h.x && V.body[0].y === h.y, 'stays still while stunned');
+    // 줄어도 minLen 밑으로는 안 간다
+    V.stun = 0; V.body = V.body.slice(0, D.RIVAL.minLen); V.prev = V.body.slice(); V.dir = 'right'; V.acc = 0;
+    V.body = [{ x: 9, y: 5 }, { x: 8, y: 5 }, { x: 7, y: 5 }];
+    rivalTicks(W, 1);
+    assert(V.body.length === D.RIVAL.minLen, 'min len ' + V.body.length);
+  }
+});
+
+test('라이벌은 같은 구슬을 두고 겨룬다: 먹으면 늘어나고, 구슬은 새 자리(라이벌 위가 아님)에', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  W.wait = 0; W.itemT = 99;
+  W.snake = [{ x: 3, y: 17 }, { x: 2, y: 17 }, { x: 1, y: 17 }, { x: 0, y: 17 }]; W.dir = 'right'; W.speedMul = 1e-6;
+  placeRival(W, [{ x: 20, y: 5 }, { x: 19, y: 5 }, { x: 18, y: 5 }, { x: 17, y: 5 }], 'right');
+  W.rival.smart = 1; W.rival.wander = 0;
+  W.food = { x: 25, y: 5, gold: false, born: W.t - 5 };
+  rivalTicks(W, 5);
+  const V = W.rival;
+  assert(V.eaten === 1 && W.eaten === 0, 'rival ate ' + V.eaten);
+  assert(W.events.includes('rivaleat'), 'event');
+  rivalTicks(W, 1);
+  assert(V.body.length === D.RIVAL.len + 1, 'grew ' + V.body.length);
+  assert(W.food && !V.body.some(p => p.x === W.food.x && p.y === W.food.y), 'new food off rival');
+  // 새 구슬은 react초 뒤에야 알아챈다
+  W.food = { x: 0, y: 0, gold: false, born: W.t };
+  V.target = null;
+  rivalTicks(W, 1);
+  assert(V.target === null || W.t - W.food.born >= V.react, 'reacts late');
+  // 게으른 아이(구슬을 안 쫓음)와 1분: 라이벌이 구슬을 꽤 먹는다 (쉬움 < 보통)
+  const got = {};
+  for (const easy of [true, false]) {
+    let sum = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const Q = create(easy ? 24 : 32, easy ? 15 : 20, seed, { mode: 'endless', easy });
+      Q.wait = 0;
+      const r = SN.rng(seed);
+      for (let i = 0; i < 60 * 65 && Q.phase === 'play'; i++) {
+        if (!Q.queue.length && (r() < 0.03 || dangerAhead(Q, 1))) { const f = Q.food; Q.food = null; turn(Q, botDir(Q)); Q.food = f; }
+        step(Q, 1 / 60);
+        Q.events.length = 0; Q.fx.length = 0;
+      }
+      sum += Q.rival.eaten;
+    }
+    got[easy ? 'easy' : 'normal'] = sum / 8;
+  }
+  assert(got.easy >= 2 && got.normal > got.easy, 'rival competes ' + JSON.stringify(got));
+});
+
+test('라이벌: 황금 구슬도 먹고, 황금 순서는 모두 먹은 수로 센다 (아이템은 안 먹음)', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  W.wait = 0; W.itemT = 99;
+  W.snake = [{ x: 3, y: 17 }, { x: 2, y: 17 }, { x: 1, y: 17 }, { x: 0, y: 17 }]; W.speedMul = 1e-6;
+  placeRival(W, [{ x: 20, y: 5 }, { x: 19, y: 5 }, { x: 18, y: 5 }, { x: 17, y: 5 }], 'right');
+  W.eaten = 3; W.rival.eaten = 0;
+  W.food = { x: 21, y: 5, gold: true, born: W.t - 5 };
+  W.item = { kind: 'slow', x: 22, y: 5, life: 99, born: W.t };
+  W.rival.smart = 1; W.rival.wander = 0;
+  rivalTicks(W, 1);
+  assert(W.rival.golds === 1 && W.rival.eaten === 1 && W.golds === 0, 'rival gold');
+  assert(W.food.gold === ((W.eaten + W.rival.eaten + 1) % D.FOOD.goldEvery === 0), 'gold cadence counts both');
+  rivalTicks(W, 1);
+  assert(W.item && W.item.kind === 'slow' && W.powers === 0, 'items are mine only');
+});
+
+test('라이벌: 막히면 멈칫, 그래도 막혀 있으면 사라졌다가 다른 자리에서 다시 나온다', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  W.wait = 0; W.itemT = 99; W.food = { x: 30, y: 18, gold: false, born: 0 };
+  W.snake = [{ x: 20, y: 15 }, { x: 19, y: 15 }, { x: 18, y: 15 }, { x: 17, y: 15 }]; W.speedMul = 1e-6;
+  // 왼쪽 위 구석, 위·왼쪽은 판 끝이고 아래는 자기 몸
+  placeRival(W, [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }, { x: 0, y: 2 }], 'left');
+  W.walls = new Uint8Array(COLS * ROWS);
+  rivalTicks(W, 1);
+  assert(W.rival.stun > 0 && W.rival.blocked, 'stunned when blocked');
+  step(W, D.RIVAL.blockStun + 0.3);
+  assert(W.rival.phase === 'gone' && W.rival.body.length === 0, 'vanished');
+  for (let i = 0; i < 60 * (D.RIVAL.back + D.RIVAL.appear + 1); i++) step(W, 1 / 60);
+  assert(W.rival.phase === 'play' && W.rival.body.length === D.RIVAL.len, 'back again ' + W.rival.phase);
+  assert(W.phase === 'play', 'never hurts me');
+});
+
+test('라이벌: 무한 봇을 오래 돌려도 몸이 판 안, 라이벌과 먹이가 겹치지 않고, 라이벌 몸은 스스로 겹치지 않는다', () => {
+  for (const easy of [false, true]) for (let seed = 1; seed <= 10; seed++) {
+    const c = easy ? 24 : COLS, r0 = easy ? 15 : ROWS;
+    const W = create(c, r0, seed, { mode: 'endless', easy, rivalLevel: seed % 3 === 0 ? 'hard' : undefined });
+    W.wait = 0;
+    const r = SN.rng(seed * 11);
+    for (let i = 0; i < 60 * 90 && W.phase === 'play'; i++) {
+      if (!W.queue.length) turn(W, r() < 0.05 ? ['up', 'down', 'left', 'right'][Math.floor(r() * 4)] : botDir(W));
+      step(W, r() * 0.04);
+      W.events.length = 0; W.fx.length = 0;
+      const V = W.rival, seen = new Set();
+      for (const p of V.body) {
+        assert(p.x >= 0 && p.y >= 0 && p.x < c && p.y < r0, 'rival in board');
+        assert(!seen.has(key(p)), 'rival no self overlap'); seen.add(key(p));
+      }
+      if (W.food && (V.phase === 'play' || V.phase === 'warn')) assert(!seen.has(key(W.food)), 'food off rival');
+      assert(V.body.length <= V.maxLen, 'max len');
+      assert(Number.isFinite(V.acc + V.alpha + V.stun), 'finite');
+    }
+    if (easy) assert(W.cause !== 'rival', 'easy never killed by rival');
+  }
+});
+
+test('알아서 맞춰 주는 난이도: 배율이 속도 오름·황금 시간·라이벌 실력에 조금씩 (기본 1, 범위 밖은 자름)', () => {
+  const A = D.ADAPT;
+  const base = create(COLS, ROWS, 1, { mode: 'endless' });
+  assert(base.adapt === 1 && base.growMul === 1 && base.goldLife === D.FOOD.goldLife, 'default 1');
+  const hard = create(COLS, ROWS, 1, { mode: 'endless', adapt: 1.12 });
+  const soft = create(COLS, ROWS, 1, { mode: 'endless', adapt: 0.85 });
+  for (const W of [base, hard, soft]) for (let i = 0; i < 10; i++) W.snake.push({ x: 0, y: 0 });
+  assert(speed(hard) > speed(base) && speed(base) > speed(soft), 'speed ramp ' + [speed(soft), speed(base), speed(hard)]);
+  assert(Math.abs(hard.growMul - Math.pow(1.12, A.perGrow)) < 1e-9, 'perGrow pow');
+  assert(hard.goldLife < base.goldLife && soft.goldLife > base.goldLife, 'gold time');
+  assert(hard.rival.speed > base.rival.speed && soft.rival.speed < base.rival.speed, 'rival speed');
+  assert(hard.rival.react < base.rival.react && hard.rival.smart >= base.rival.smart, 'rival react/smart');
+  assert(hard.rival.smart <= 1, 'smart <= 1');
+  // 처음 길이일 때 속도는 같다 (오르는 정도만 달라진다)
+  const h0 = create(COLS, ROWS, 1, { mode: 'endless', adapt: 1.12 });
+  assert(speed(h0) === speed(create(COLS, ROWS, 1, { mode: 'endless' })), 'same start speed');
+  assert(create(COLS, ROWS, 1, { adapt: 9 }).adapt === 1.3 && create(COLS, ROWS, 1, { adapt: 'x' }).adapt === 1, 'clamped');
+  const e1 = create(24, 15, 1, { mode: 'endless', easy: true, adapt: 1.12 }), e0 = create(24, 15, 1, { mode: 'endless', easy: true });
+  for (const W of [e1, e0]) for (let i = 0; i < 10; i++) W.snake.push({ x: 0, y: 0 });
+  assert(speed(e1) > speed(e0), 'easy ramp too');
+  const s1 = create(COLS, ROWS, 1, { mode: 'stage', level: 3, adapt: 0.85 }), s0 = create(COLS, ROWS, 1, { mode: 'stage', level: 3 });
+  for (const W of [s1, s0]) for (let i = 0; i < 10; i++) W.snake.push({ x: 0, y: 0 });
+  assert(speed(s1) < speed(s0), 'stage ramp too');
+});
+
+test('놀이 본부 값: 길이·황금·구슬·깬 레벨·라이벌 이김, 알아서 맞추기 perf', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  W.maxLen = 27; W.golds = 2; W.eaten = 23;
+  let h = hubStats(W);
+  assert(h.len === 27 && h.golds === 2 && h.orbs === 23 && h.level === 0 && h.rivalWin === 0, 'no rival met yet ' + JSON.stringify(h));
+  assert(rivalResult(W) === null, 'no result before rival');
+  W.rival.met = true; W.rival.eaten = 20;
+  h = hubStats(W);
+  assert(h.rivalWin === 1 && rivalResult(W).diff === 3, 'win');
+  W.rival.eaten = 23;
+  assert(hubStats(W).rivalWin === 0 && rivalResult(W).diff === 0, 'tie is not a win');
+  assert(Math.abs(adaptPerf(W) - 23 / D.ADAPT.target.normal) < 1e-9, 'perf normal');
+  const E = create(24, 15, 1, { mode: 'endless', easy: true }); E.eaten = D.ADAPT.target.easy;
+  assert(adaptPerf(E) === 1, 'perf easy 1');
+  const S = create(COLS, ROWS, 1, { mode: 'stage', level: 4 });
+  assert(hubStats(S).level === 0, 'none cleared');
+  S.levelsCleared = 2;
+  assert(hubStats(S).level === 5 && hubStats(S).rivalWin === 0, 'cleared 4 and 5');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -346,5 +346,37 @@ test('공통 지갑(HUB)과 이어 붙이면 네 게임이 같은 코인을 쓴�
   assert(!SH2.buy(st, 'galaxy').ok && H.coins() === 20, 'not enough in shared wallet');
 });
 
+test('놀이 본부: 판 값(hubStats)으로 스티커가 붙고, 알아서 맞추기 배율이 판에 들어간다', () => {
+  const ctx = load(true);
+  const H = vm.runInContext('HUB', ctx), S2 = vm.runInContext('SN', ctx), W2 = S2.World, SH2 = S2.Shop;
+  // 무한: 라이벌보다 많이 먹고 길이 31, 황금 5
+  const W = W2.create(32, 20, 1, { mode: 'endless' });
+  W.maxLen = 31; W.golds = 5; W.eaten = 30; W.rival.met = true; W.rival.eaten = 12;
+  H.reportRun('snake', W2.hubStats(W), 60);
+  const got = H.stickers().filter(t => t.got).map(t => t.id).sort();
+  assert(JSON.stringify(got) === JSON.stringify(['sn_first', 'sn_gold', 'sn_len30', 'sn_rival']), 'stickers ' + got.join(','));
+  // 스테이지 레벨 5까지 깸 → 스테이지 스티커
+  const S = W2.create(32, 20, 1, { mode: 'stage', level: 1 });
+  S.levelsCleared = 5;
+  H.reportRun('snake', W2.hubStats(S), 60);
+  assert(H.stickers().find(t => t.id === 'sn_stage').got, 'stage sticker');
+  // 오늘의 미션 값 이름도 맞다 (len · golds · orbs)
+  for (const m of H.DAILY.snake) assert(m.stat === 'games' || m.stat in W2.hubStats(W), 'daily stat ' + m.stat);
+  // 알아서 맞추기: 처음 두 판은 1, 잘하면 올라가고 판 옵션으로 들어간다
+  assert(H.adaptMul('snake', 'normal') === 1, 'warm');
+  W.eaten = D.ADAPT.target.normal * 2;
+  for (let i = 0; i < 4; i++) H.adaptRun('snake', 'normal', W2.adaptPerf(W));
+  const mul = H.adaptMul('snake', 'normal');
+  assert(mul > 1 && mul <= 1.12, 'harder after good runs ' + mul);
+  assert(H.adaptMul('snake', 'easy') === 1, 'easy separate');
+  const st = SH2.blank();
+  const G = W2.create(32, 20, 2, SH2.worldOpts(st, {}, { mode: 'endless', adapt: mul }));
+  assert(G.adapt === mul && G.rival.speed > D.RIVAL.levels.normal.speed, 'adapt reaches world');
+  const E = W2.create(24, 15, 2, { mode: 'endless', easy: true });
+  E.eaten = 1;
+  for (let i = 0; i < 6; i++) H.adaptRun('snake', 'easy', W2.adaptPerf(E));
+  assert(H.adaptMul('snake', 'easy') < 1 && H.adaptMul('snake', 'easy') >= 0.85, 'easier after short runs');
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

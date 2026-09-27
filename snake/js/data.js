@@ -140,6 +140,32 @@
     ],
     MISSION_SLOTS: 3,
 
+    // 우주 여행 배경 (2026-09-27, 소유자 "다른 게임도 우주배경 반영"): 뿅뿅 우주선처럼 판 뒤 하늘이 태양계를 지나간다.
+    // 그림만 바뀌고 규칙은 그대로다 (space.js가 그린다). 무한: 내가 구슬 perOrbs개를 먹을 때마다 다음 행성
+    // (수성부터, 명왕성 다음은 다시 수성 "2바퀴"). 장면이 holeFrom번째부터는 바로 앞이 블랙홀이 아닐 때 holeChance로
+    // 행성 대신 블랙홀 하늘이 한 번 끼어든다 (행성 차례는 밀리지 않는다). 스테이지: 레벨마다 정해진 하늘 (stage, 12개를 돈다)
+    SPACE: {
+      perOrbs: 12, holeFrom: 2, holeChance: 0.22, bannerTime: 2.8,
+      planets: [
+        { id: 'mercury', name: '수성',   fact: '태양과 가장 가까운 행성',     color: '#c9c3bb' },
+        { id: 'venus',   name: '금성',   fact: '노란 구름이 빙글빙글',         color: '#ffcf6b' },
+        { id: 'earth',   name: '지구',   fact: '우리 집! 파란 바다 행성',      color: '#6fc3ff' },
+        { id: 'mars',    name: '화성',   fact: '빨간 모래 행성',               color: '#ff7a4d' },
+        { id: 'jupiter', name: '목성',   fact: '가장 큰 행성, 커다란 빨간 점', color: '#f0b98a' },
+        { id: 'saturn',  name: '토성',   fact: '멋진 고리를 두른 행성',        color: '#f3d58c' },
+        { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성',   color: '#9ef0f0' },
+        { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',     color: '#5b8cff' },
+        { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',          color: '#e8d2b8' },
+      ],
+      // 행성이 아닌 하늘
+      others: {
+        hole:   { name: '블랙홀',    fact: '빛도 빨려 드는 곳, 구경만 해요', color: '#c9a0ff' },
+        galaxy: { name: '은하수',    fact: '별이 아주아주 많이 모인 곳',     color: '#b8c8ff' },
+        core:   { name: '은하 중심', fact: '은하 한가운데 커다란 블랙홀',    color: '#ffc27a' },
+      },
+      stage: ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core'],
+    },
+
     // 라이벌 뱀 (2026-09-27, 소유자 "추천대로"): 무한 모드에서 컴퓨터가 모는 주황·보라 줄무늬 뱀(눈에 가면)이
     // 같은 구슬을 두고 겨룬다. 아이템은 먹지 않는다 (황금 구슬은 먹는다). 시작 화면에서 끄고 켤 수 있다
     RIVAL: {
@@ -158,9 +184,9 @@
       //   smart: 한 칸마다 구슬 쪽으로 갈 확률 (나머지는 그냥 앞으로) · wander: 아무 데로 꺾을 확률
       //   clumsy: 내 몸을 못 보고 부딪힐 확률 (부딪히면 라이벌만 멈칫) · keepAway: 내 머리 둘레 이 칸 안은 피한다
       levels: {
-        easy:   { speed: 3.6, maxLen: 12, react: 1.2, smart: 0.55, wander: 0.12, clumsy: 0.25, keepAway: 3 },
-        normal: { speed: 6.4, maxLen: 20, react: 0.5, smart: 0.85, wander: 0.04, clumsy: 0.08, keepAway: 2 },
-        hard:   { speed: 8.6, maxLen: 26, react: 0.2, smart: 0.97, wander: 0.01, clumsy: 0,    keepAway: 1 },
+        easy:   { speed: 3.6, maxLen: 12, react: 1.2, smart: 0.55, wander: 0.12, clumsy: 0.15, keepAway: 3 },
+        normal: { speed: 6.4, maxLen: 20, react: 0.5, smart: 0.85, wander: 0.04, clumsy: 0.05, keepAway: 3 },
+        hard:   { speed: 8.6, maxLen: 26, react: 0.2, smart: 0.97, wander: 0.01, clumsy: 0,    keepAway: 2 },
       },
     },
 
@@ -174,7 +200,7 @@
       rivalReact: -1.5, // 라이벌이 새 구슬을 알아채는 시간 (잘하면 빨리)
       rivalSmart: 1,    // 라이벌이 구슬 쪽으로 가는 확률
       // 판이 끝나면 perf = 먹은 구슬 / target 을 HUB.adaptRun에 알린다 (1 = 그 난이도에서 아이가 보통 잘한 판).
-      // 봇(botDir)이 라이벌과 겨루며 먹는 수의 중간값은 쉬움 약 50 · 보통 약 40 (tests/snake.test.js), 아이는 그 절반쯤
+      // 봇(botDir)이 라이벌과 겨루며 3분 동안 먹는 수의 중간값은 쉬움 약 68 · 보통 약 63. 아이의 잘한 판은 그 3분의 1쯤
       target: { easy: 22, normal: 18 },
     },
 

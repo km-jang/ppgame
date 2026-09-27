@@ -323,7 +323,7 @@
 
   // ─── 그리기 상태 (꾸밈 전용) ───────────────────────────────
   const R = { bgKey: '', zones: [], cloudLayer: null, stars: null, colKey: '', col: null, mileKey: '', miles: {},
-    parts: [], texts: [], clouds: [], shake: 0, flash: 0, world: null, banner: null, big: null };
+    parts: [], texts: [], clouds: [], squash: [], shake: 0, flash: 0, world: null, banner: null, big: null, stormKey: '', storm: null };
   const ITEM = D.ITEM.kinds;
 
   // 떠오르는 글자 (월드 좌표)
@@ -355,7 +355,7 @@
 
   // 규칙이 남긴 연출 요청(W.fx)을 입자로 바꾼다. 좌표는 월드(점), 크기는 화면 픽셀
   function takeFx(W, v) {
-    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.clouds.length = 0; R.shake = 0; R.flash = 0; R.banner = null; R.big = null; }
+    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.clouds.length = 0; R.squash.length = 0; R.shake = 0; R.flash = 0; R.banner = null; R.big = null; }
     const s = v.scale, big = v.hud !== false;
     const zoneNow = W.fx.some(f => f.kind === 'zone');
     for (const f of W.fx) {
@@ -395,12 +395,23 @@
         ring(f.x, f.y, 60 * s, '#7fd3ff', 0.5);
         burst(f.x, f.y, 18, ['#7fd3ff', '#ffffff', '#ff4d6d'], 360, 4 * s);
         if (f.kind === 'save' && big) text(f.x, f.y + 40, '방울이 지켜 줬어요!', '#7fd3ff', 24 * s);
+      } else if (f.kind === 'stomp') {
+        // 몬스터 밟기: 납작하게 눌린 몬스터가 잠깐 남고, 반짝이 · 점수
+        const K = MON[f.mk] || MON.slime;
+        if (R.squash.length > 6) R.squash.shift();
+        R.squash.push({ x: f.x, y: f.y, kind: f.mk, life: 0.4, max: 0.4 });
+        ring(f.x, f.y, 50 * s, K.top, 0.4);
+        burst(f.x, f.y, 16, [K.color, K.top, '#ffffff', '#ffe66d'], 340, 5 * s);
+        if (big) { text(f.x, f.y + 44, '꾹!', K.top, 30 * s); text(f.x + 30, f.y + 10, '+' + f.pts, '#ffe66d', 22 * s); }
+      } else if (f.kind === 'bump') {
+        ring(f.x, f.y, 34 * s, '#ffffff', 0.3);
+        if (big) text(f.x, f.y + 40, '앗!', '#ffe6f4', 24 * s);
       } else if (f.kind === 'rescue') {
         R.clouds.push({ x: f.x, y: f.y, life: 1.1, max: 1.1 });
         burst(f.x, f.y + 20, 16, ['#ffffff', '#bfe3ff', '#ffe66d'], 260, 5 * s);
         if (big) text(f.x, f.y + 110, '구름이 받아 줬어요!', '#ffffff', 26 * s);
       } else if (f.kind === 'die') {
-        if (f.cause === 'mine') {
+        if (f.cause === 'mine' || f.cause === 'monster') {
           ring(f.x, f.y, 90 * s, '#ff4d6d', 0.6);
           burst(f.x, f.y, 36, ['#ff4d6d', '#ff2e88', '#ffffff', '#ffe66d'], 520, 6 * s);
           if (!v.calm) { R.shake = D.FX.shake * 2; R.flash = D.FX.flash; }
@@ -421,6 +432,7 @@
     }
     for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y += 40 * dt; if (q.life <= 0) R.texts.splice(i, 1); }
     for (let i = R.clouds.length - 1; i >= 0; i--) { const q = R.clouds[i]; q.life -= dt; q.y += 30 * dt; if (q.life <= 0) R.clouds.splice(i, 1); }
+    for (let i = R.squash.length - 1; i >= 0; i--) { if ((R.squash[i].life -= dt) <= 0) R.squash.splice(i, 1); }
     if (R.banner && (R.banner.life -= dt) <= 0) R.banner = null;
     if (R.big && (R.big.life -= dt) <= 0) R.big = null;
     R.shake = Math.max(0, R.shake - dt * 40);
@@ -782,6 +794,213 @@
     }
   }
 
+  // ─── 밟는 몬스터 (D.MONSTER) ───────────────────────────────
+  // 몸통(광택·그라데이션·윗면 빛)은 종류·크기별로 한 번 미리 그려 두고 찍기만 한다. 눈·날개만 매 프레임 도형으로.
+  // 윗면은 밝게 빛나 "여기를 밟아요", 보통·어려움은 옆·아래에 작은 빨간 경고 테두리
+  const MON = D.MONSTER.kinds;
+  const monCache = {};
+  function monSprite(kind, rp, dpr) {
+    const key = kind + '|' + rp + '|' + dpr;
+    let c = monCache[key];
+    if (c) return c;
+    const K = MON[kind] || MON.slime, m = Math.ceil(rp * 0.5) + 4, size = (rp + m) * 2;
+    c = document.createElement('canvas');
+    c.width = c.height = Math.round(size * dpr);
+    const g = c.getContext('2d');
+    g.scale(dpr, dpr); g.translate(size / 2, size / 2);
+    const body = new Path2D();
+    if (kind === 'slime') {
+      // 말랑한 방울 모양: 아래는 넓고 평평, 위는 둥글게
+      body.moveTo(-rp * 1.05, rp * 0.75);
+      body.bezierCurveTo(-rp * 1.2, -rp * 0.2, -rp * 0.7, -rp * 1.05, 0, -rp * 1.05);
+      body.bezierCurveTo(rp * 0.7, -rp * 1.05, rp * 1.2, -rp * 0.2, rp * 1.05, rp * 0.75);
+      body.quadraticCurveTo(0, rp * 1.0, -rp * 1.05, rp * 0.75);
+    } else if (kind === 'balloon') {
+      body.ellipse(0, -rp * 0.08, rp * 0.98, rp * 1.02, 0, 0, TAU);
+    } else {
+      body.ellipse(0, 0, rp * 1.05, rp * 0.82, 0, 0, TAU);
+    }
+    g.shadowColor = K.color; g.shadowBlur = rp * 0.6;
+    const grad = g.createLinearGradient(0, -rp, 0, rp);
+    grad.addColorStop(0, K.top); grad.addColorStop(0.45, K.color); grad.addColorStop(1, 'rgba(20,10,40,0.95)');
+    g.fillStyle = grad; g.fill(body);
+    g.shadowBlur = 0;
+    // 윗면 빛 띠 (밟는 곳)
+    g.save(); g.clip(body);
+    const cap = g.createLinearGradient(0, -rp * 1.1, 0, -rp * 0.2);
+    cap.addColorStop(0, 'rgba(255,255,255,0.85)'); cap.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = cap; g.fillRect(-rp * 1.3, -rp * 1.2, rp * 2.6, rp);
+    g.restore();
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = Math.max(1.5, rp * 0.12); g.lineCap = 'round';
+    g.beginPath(); g.ellipse(-rp * 0.35, -rp * 0.55, rp * 0.28, rp * 0.14, -0.5, 0, TAU); g.stroke();
+    if (kind === 'balloon') {
+      // 풍선 매듭과 짧은 줄
+      g.fillStyle = K.color;
+      g.beginPath(); g.moveTo(-rp * 0.16, rp * 0.92); g.lineTo(rp * 0.16, rp * 0.92); g.lineTo(0, rp * 1.12); g.fill();
+      g.strokeStyle = 'rgba(255,214,244,0.7)'; g.lineWidth = Math.max(1, rp * 0.07);
+      g.beginPath(); g.moveTo(0, rp * 1.12); g.quadraticCurveTo(rp * 0.25, rp * 1.3, 0, rp * 1.45); g.stroke();
+    } else if (kind === 'bird') {
+      // 로봇 새: 부리 · 머리 안테나 · 배의 볼트
+      g.fillStyle = '#ffe66d';
+      g.beginPath(); g.moveTo(rp * 0.95, -rp * 0.05); g.lineTo(rp * 1.35, rp * 0.08); g.lineTo(rp * 0.95, rp * 0.22); g.fill();
+      g.strokeStyle = K.top; g.lineWidth = Math.max(1, rp * 0.08);
+      g.beginPath(); g.moveTo(0, -rp * 0.8); g.lineTo(rp * 0.1, -rp * 1.15); g.stroke();
+      g.fillStyle = '#fff4c2'; g.beginPath(); g.arc(rp * 0.1, -rp * 1.18, rp * 0.1, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(40,20,0,0.5)'; g.beginPath(); g.arc(-rp * 0.2, rp * 0.45, rp * 0.08, 0, TAU); g.arc(rp * 0.2, rp * 0.45, rp * 0.08, 0, TAU); g.fill();
+    }
+    monCache[key] = c;
+    return c;
+  }
+  // 눈: 주인공 쪽을 본다. 움직임 줄이기면 깜빡이지 않는다
+  function monEyes(ctx, x, y, rp, look, t, calm, id) {
+    const blink = !calm && ((t + id * 0.37) % 3.2) < 0.12;
+    for (const e of [-1, 1]) {
+      const ex = x + e * rp * 0.36, ey = y - rp * 0.1;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.ellipse(ex, ey, rp * 0.24, blink ? rp * 0.04 : rp * 0.28, 0, 0, TAU); ctx.fill();
+      if (blink) continue;
+      ctx.fillStyle = '#1b1030';
+      ctx.beginPath(); ctx.arc(ex + look * rp * 0.08, ey + rp * 0.04, rp * 0.13, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(ex + look * rp * 0.08 - rp * 0.05, ey - rp * 0.04, rp * 0.045, 0, TAU); ctx.fill();
+    }
+    // 웃는 입
+    ctx.strokeStyle = '#1b1030'; ctx.lineWidth = Math.max(1.2, rp * 0.08); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(x, y + rp * 0.2, rp * 0.18, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  }
+  function drawMonsters(ctx, W, v, a) {
+    const s = v.scale, rp = Math.max(6, Math.round(D.MONSTER.r * s)), P = W.p;
+    for (const m of W.monsters) {
+      if (m.gone) continue;
+      const K = MON[m.kind] || MON.slime;
+      const wx = Math.abs(m.x - m.px) < WW / 2 ? m.px + (m.x - m.px) * a : m.x;
+      const x = SX(v, wx), y = SY(v, m.y);
+      if (y < v.cy - 50 || y > v.cy + v.ch + 50) continue;
+      const spr = monSprite(m.kind, rp, v.dpr), hs = spr.width / v.dpr / 2;
+      // 통통 숨쉬기 (움직임 줄이기면 가만히)
+      const k = v.calm ? 0 : Math.sin(W.t * 5 + m.id) * 0.06;
+      const sx = 1 + k, sy = 1 - k;
+      const by = y;
+      // 윗면 빛: 여기를 밟아요
+      glow(ctx, K.top.length === 7 ? K.top : '#ffffff', x, by - rp * 0.95, rp * 1.25, 0.45);
+      // 보통·어려움: 옆·아래 빨간 경고 테두리
+      if (!W.easy) {
+        ctx.strokeStyle = 'rgba(255,77,109,0.85)'; ctx.lineWidth = Math.max(2, rp * 0.14); ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(x, by, rp * 1.2, 0.05 * Math.PI, 0.95 * Math.PI); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, by, rp * 1.2, -0.02 * Math.PI, 0.12 * Math.PI, true); ctx.stroke();
+      }
+      // 로봇 새 날개 (몸 뒤)
+      if (m.kind === 'bird') {
+        const f = v.calm ? 0.5 : (Math.sin(W.t * 18 + m.id) + 1) / 2;
+        ctx.fillStyle = K.color;
+        for (const e of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(x + e * rp * 0.4, by);
+          ctx.lineTo(x + e * rp * 1.35, by - rp * (0.2 + f * 0.8));
+          ctx.lineTo(x + e * rp * 1.1, by + rp * 0.3);
+          ctx.fill();
+        }
+      }
+      ctx.save();
+      ctx.translate(x, by + rp * 0.8);
+      ctx.scale(m.vx < 0 && m.kind === 'bird' ? -sx : sx, sy);
+      ctx.drawImage(spr, -hs, -hs - rp * 0.8, hs * 2, hs * 2);
+      ctx.restore();
+      const look = Math.sign(JP.World.wrapDelta(m.x, P.x)) || 0;
+      monEyes(ctx, x, by, rp, look, W.t, v.calm, m.id);
+      // 처음 보일 때 이름표 "위에서 꾹!"
+      const age = m.seen >= 0 ? W.t - m.seen : 0;
+      if (age < 2.5 && v.hud !== false && y > v.cy + 20) {
+        const fs = Math.round(Math.max(13, 15 * v.ui));
+        ctx.globalAlpha = Math.min(1, (2.5 - age) * 2);
+        label(ctx, W.easy ? '위에서 꾹!' : '위에서만 꾹!', Math.max(v.cx + fs * 3, Math.min(v.cx + v.cw - fs * 3, x)), Math.max(v.cy + fs, y - rp * 2.2 - fs * 0.5), fs, K.top, 'rgba(5,7,12,0.85)', W.easy ? null : 'rgba(255,77,109,0.8)');
+        ctx.globalAlpha = 1;
+      }
+    }
+    // 밟힌 몬스터: 납작하게 눌렸다가 사라진다
+    for (const q of R.squash) {
+      const k = q.life / q.max, x = SX(v, q.x), y = SY(v, q.y);
+      const spr = monSprite(q.kind, rp, v.dpr), hs = spr.width / v.dpr / 2;
+      ctx.globalAlpha = Math.min(1, k * 1.6);
+      ctx.save();
+      ctx.translate(x, y + rp * 0.8);
+      if (!v.calm) ctx.scale(1.45, 0.35);
+      ctx.drawImage(spr, -hs, -hs - rp * 0.8, hs * 2, hs * 2);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ─── 쫓아오는 먹구름 (보통·어려움) ─────────────────────────
+  // 기둥 폭의 먹구름 띠를 한 번 그려 두고, 윗면 높이에 맞춰 찍는다. 그 아래는 어두운 색으로 채운다
+  function stormSprite(v) {
+    const key = v.cw + '|' + v.dpr;
+    if (R.stormKey === key) return R.storm;
+    const w = v.cw * 1.5, h = Math.max(90, v.cw * 0.28);
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * v.dpr); c.height = Math.round(h * v.dpr);
+    const g = c.getContext('2d');
+    g.scale(v.dpr, v.dpr);
+    const rnd = JP.rng(1234);
+    // 아래는 꽉 찬 어두운 층
+    const base = g.createLinearGradient(0, h * 0.35, 0, h);
+    base.addColorStop(0, 'rgba(38,30,70,0.96)'); base.addColorStop(1, 'rgba(14,10,28,1)');
+    g.fillStyle = base; g.fillRect(0, h * 0.45, w, h * 0.55);
+    // 위쪽 뭉게 덩어리 (가장자리는 보랏빛으로 빛난다)
+    g.shadowColor = 'rgba(160,120,255,0.8)'; g.shadowBlur = 14;
+    for (let i = 0; i < 16; i++) {
+      const x = (i / 15) * w, rr = h * (0.22 + rnd() * 0.18), y = h * 0.42 + rnd() * h * 0.08;
+      const gr = g.createRadialGradient(x, y - rr * 0.4, rr * 0.1, x, y, rr);
+      gr.addColorStop(0, 'rgba(120,100,170,1)'); gr.addColorStop(0.6, 'rgba(62,48,104,1)'); gr.addColorStop(1, 'rgba(40,30,72,1)');
+      g.fillStyle = gr;
+      g.beginPath(); g.arc(x, y, rr, 0, TAU); g.fill();
+    }
+    g.shadowBlur = 0;
+    R.stormKey = key; R.storm = c;
+    return c;
+  }
+  function drawStorm(ctx, W, v, a) {
+    const S = W.storm;
+    if (!S || !S.on) return;
+    const wy = S.py + (S.y - S.py) * a;
+    const top = SY(v, wy), bottom = v.cy + v.ch;
+    const spr = stormSprite(v), sw = spr.width / v.dpr, sh = spr.height / v.dpr;
+    const y0 = top - sh * 0.3;   // 뭉게 윗면이 먹구름 높이에 오게
+    if (y0 < bottom) {
+      const drift = v.calm ? 0 : (W.t * 12) % (sw - v.cw);
+      ctx.drawImage(spr, v.cx - drift, y0, sw, sh);
+      if (y0 + sh < bottom) { ctx.fillStyle = 'rgb(14,10,28)'; ctx.fillRect(v.cx, y0 + sh - 1, v.cw, bottom - y0 - sh + 1); }
+      // 가끔 번쩍 (움직임 줄이기면 없음)
+      if (!v.calm && (W.t % 3.7) < 0.08) glow(ctx, 'rgba(200,180,255,0.8)', v.cx + v.cw * ((Math.floor(W.t / 3.7) * 0.37) % 1), y0 + sh * 0.6, sh * 0.8, 0.7);
+    }
+    // 화면 아래에 숨어 있을 때: 아래 끝이 보랏빛으로 어둑어둑 (가까울수록 진하게)
+    const gap = (CAM - wy) / W.viewH;
+    if (gap > -0.05) {
+      const k = Math.max(0, Math.min(1, 1 - gap / D.STORM.lag));
+      const h = Math.max(26, v.ch * 0.08);
+      const g = ctx.createLinearGradient(0, bottom - h, 0, bottom);
+      g.addColorStop(0, 'rgba(90,60,170,0)'); g.addColorStop(1, 'rgba(90,60,170,' + (0.25 + k * 0.5).toFixed(2) + ')');
+      ctx.fillStyle = g; ctx.fillRect(v.cx, bottom - h, v.cw, h);
+    }
+  }
+  // 먹구름까지 남은 높이(m). 없으면 null
+  function stormGap(W) {
+    const S = W.storm;
+    if (!S || !S.on || W.phase !== 'play') return null;
+    return Math.max(0, (W.p.y - D.PLAYER.r - S.y) / D.METER);
+  }
+  // "구름이 쫓아와요!" (처음 화면에 보인 뒤 잠깐)
+  function drawStormHint(ctx, W, v) {
+    const S = W.storm;
+    if (!S || S.seen < 0) return;
+    const age = W.t - S.seen;
+    if (age > D.STORM.hint) return;
+    const fs = Math.round(Math.max(18, Math.min(28, v.cw * 0.055)));
+    ctx.globalAlpha = Math.min(1, age * 4, (D.STORM.hint - age) * 2);
+    label(ctx, '구름이 쫓아와요! 위로 위로!', v.cx + v.cw / 2, v.cy + v.ch * 0.78, fs, '#e6dcff', 'rgba(24,16,48,0.92)', '#a98bff');
+    ctx.globalAlpha = 1;
+  }
+
   // ─── 캐릭터 다섯 (D.CHARS) ─────────────────────────────────
   // 좌표는 몸 가운데가 (0,0), 반지름 r. S: {lean -1~1, up 0~1 오르는 힘, fall 0~1 떨어지는 빠르기, land 0~1 착지 직후,
   // t 시간, calm 움직임 줄이기, dead, cause, blink, rocket}
@@ -789,9 +1008,10 @@
 
   // 끝난 판의 눈: 가시 폭탄이면 X, 떨어졌으면 아래로 굽은 눈
   function deadEye(ctx, S, cx, ey, r, col) {
-    ctx.strokeStyle = S.cause === 'mine' ? '#ff8a96' : col; ctx.lineWidth = Math.max(1.5, r * 0.1); ctx.lineCap = 'round';
+    const hurt = S.cause === 'mine' || S.cause === 'monster';
+    ctx.strokeStyle = hurt ? '#ff8a96' : col; ctx.lineWidth = Math.max(1.5, r * 0.1); ctx.lineCap = 'round';
     ctx.beginPath();
-    if (S.cause === 'mine') { const e = r * 0.12; ctx.moveTo(cx - e, ey - e); ctx.lineTo(cx + e, ey + e); ctx.moveTo(cx + e, ey - e); ctx.lineTo(cx - e, ey + e); }
+    if (hurt) { const e = r * 0.12; ctx.moveTo(cx - e, ey - e); ctx.lineTo(cx + e, ey + e); ctx.moveTo(cx + e, ey - e); ctx.lineTo(cx - e, ey + e); }
     else ctx.arc(cx, ey + r * 0.05, r * 0.12, Math.PI * 1.1, Math.PI * 1.9);
     ctx.stroke();
   }
@@ -1243,6 +1463,19 @@
       const bw = Math.min(sw - 50 * s, 120 * s);
       ctx.fillStyle = 'rgba(255,159,67,0.2)'; ctx.fillRect(x0 + 44 * s, y + 6 * s, bw, 8 * s);
       ctx.fillStyle = '#ff9f43'; ctx.fillRect(x0 + 44 * s, y + 6 * s, bw * Math.min(1, W.rocket / W.rocketTime), 8 * s);
+      y += 30 * s;
+    }
+    // 먹구름까지 남은 높이: 가까울수록 막대가 차고 빨개진다
+    const sg = stormGap(W);
+    if (sg != null) {
+      const near = sg < D.STORM.warn, full = W.viewH * D.STORM.lag / D.METER + 4;
+      ctx.font = Math.round(15 * s) + 'px ' + DISP; ctx.fillStyle = near ? '#ff8a96' : '#b9a6ff';
+      const lt = '먹구름 ' + Math.floor(sg) + 'm 아래';
+      ctx.fillText(lt, x0, y);
+      const bw = Math.min(sw - 8 * s, 150 * s), by = y + 24 * s;
+      ctx.fillStyle = 'rgba(169,139,255,0.18)'; ctx.fillRect(x0, by, bw, 8 * s);
+      const k = Math.max(0.04, Math.min(1, 1 - sg / full));
+      ctx.fillStyle = near ? '#ff4d6d' : '#a98bff'; ctx.fillRect(x0, by, bw * k, 8 * s);
     }
     ctx.textBaseline = 'alphabetic';
   }
@@ -1263,6 +1496,8 @@
     if (W.combo >= D.COMBO.show) items.push(['콤보 ' + W.combo, '#ff9ee0']);
     if (W.L.rescues) items.push(['구름 ' + W.rescues, '#e9f6ff']);
     if (W.shield) items.push(['방울', '#7fd3ff']);
+    const sg = stormGap(W);
+    if (sg != null) items.push(['먹구름 ' + Math.floor(sg) + 'm', sg < D.STORM.warn ? '#ff8a96' : '#b9a6ff']);
     items.push(['BEST ' + Math.max(v.bestH || 0, W.height) + ' m', '#bcd3e2']);
     for (const [txt, col] of items) {
       if (x - 70 * s < v.hudLeft) break; // 버튼 묶음과 겹치면 생략
@@ -1408,10 +1643,12 @@
     drawStars(ctx, W, v);
     drawItems(ctx, W, v);
     drawMines(ctx, W, v);
+    drawMonsters(ctx, W, v, a);
     drawRescue(ctx, v);
     drawDust(ctx, v);
     drawPlayer(ctx, W, v, a);
     drawFx(ctx, v);
+    drawStorm(ctx, W, v, a);
     drawBottom(ctx, W, v);
     ctx.restore();
     if (R.flash > 0) {
@@ -1420,13 +1657,13 @@
     }
     if (v.hud !== false) {
       if (v.side) drawSideHud(ctx, W, v); else drawTopHud(ctx, W, v);
-      if (W.phase === 'play') { drawControls(ctx, W, v); drawIntro(ctx, W, v); }
+      if (W.phase === 'play') { drawControls(ctx, W, v); drawIntro(ctx, W, v); drawStormHint(ctx, W, v); }
       drawBanner(ctx, W, v);
     }
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
-  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || R.clouds.length > 0 || !!R.banner || !!R.big;
+  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || R.clouds.length > 0 || R.squash.length > 0 || !!R.banner || !!R.big;
 
   JP.Render = { draw, layout, busy, paintChar, paintSkin: paintChar };
 })(JP);

@@ -115,6 +115,50 @@
     }
   }
 
+  // ─── 우주 여행 배경 (그림만, 규칙에는 영향 없음) ────────────────
+  // W.space: {scene: 지금 하늘 id, step: 장면 차례(무한), planet: 지나온 행성 수 - 1, lap, hole: 지금 블랙홀인가,
+  //           max: 이번 판에 간 가장 먼 행성 번호(1 = 수성, 2바퀴면 10부터), changedAt: 장면이 바뀐 시각(W.t), rng: 따로 쓰는 난수}
+  const SP = D.SPACE;
+  function sceneInfo(id) {
+    const p = SP.planets.find(q => q.id === id);
+    if (p) return Object.assign({ kind: 'planet', index: SP.planets.indexOf(p) + 1 }, p);
+    const o = SP.others[id] || SP.others.hole;
+    return Object.assign({ kind: id === 'galaxy' ? 'galaxy' : id === 'core' ? 'core' : 'hole', index: 0, id }, o);
+  }
+  // 스테이지 n번째 레벨의 하늘 (1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심, 그다음은 다시 돈다)
+  function stageScene(n) { return SP.stage[(Math.max(1, n) - 1) % SP.stage.length]; }
+  function spaceInit(W, seed0) {
+    W.space = { scene: SP.planets[0].id, step: 0, planet: 0, lap: 1, hole: false, max: 1, changedAt: 0,
+      rng: SN.rng(((seed0 >>> 0) ^ 0x2545f491) * 7 + 3) };
+  }
+  // 스테이지: 레벨을 시작할 때 그 레벨 하늘로
+  function spaceStage(W) {
+    const S = W.space, id = stageScene(W.level), info = sceneInfo(id);
+    S.scene = id; S.hole = info.kind !== 'planet'; S.changedAt = W.t;
+    S.max = Math.max(S.max, info.kind === 'planet' ? info.index : SP.planets.length);
+  }
+  // 무한·기본: 내가 먹은 구슬 수로 장면 차례를 맞춘다 (라이벌이 먹은 것은 세지 않는다)
+  function spaceAdvance(W) {
+    const S = W.space, want = Math.floor(W.eaten / SP.perOrbs);
+    while (S.step < want) {
+      S.step++;
+      if (!S.hole && S.step >= SP.holeFrom && S.rng() < SP.holeChance) { S.hole = true; S.scene = 'hole'; }
+      else {
+        S.hole = false; S.planet++;
+        S.scene = SP.planets[S.planet % SP.planets.length].id;
+        S.lap = Math.floor(S.planet / SP.planets.length) + 1;
+        S.max = Math.max(S.max, S.planet + 1);
+      }
+      S.changedAt = W.t;
+      W.events.push('planet');
+    }
+  }
+  // 지금 하늘 설명 (그리기·알림용)
+  function spaceScene(W) {
+    const S = W.space;
+    return Object.assign(sceneInfo(S.scene), { lap: S.hole ? 1 : S.lap, since: W.t - S.changedAt });
+  }
+
   // 판 준비: 벽·포털·뱀·먹이. 스테이지는 레벨을 넘길 때마다 다시 부른다 (점수는 그대로)
   function setup(W) {
     const C = W.cols, R = W.rows;
@@ -141,6 +185,7 @@
     W.lastEat = -99; W.combo = 0; W.mult = 1;
     W.food = null;
     if (W.rival) resetRival(W);
+    if (W.mode === 'stage') spaceStage(W);
     spawnFood(W);
   }
 
@@ -179,7 +224,7 @@
       eaten: 0, golds: 0, score: 0,
       phase: 'play',      // play | clear(스테이지 레벨 깸) | over
       won: false,         // 판을 가득 채우면 true
-      cause: null,        // wall | self
+      cause: null,        // wall | self | rival (보통에서 라이벌 몸)
       t: 0,               // 흐른 시간 (출발 대기 포함, 연출용)
       time: 0,            // 실제로 움직인 시간 (기록용)
       wait: 0, acc: 0, alpha: 0, ticks: 0, turns: 0,
@@ -204,6 +249,7 @@
     W.speedMul = T.speedMul || 1;
     W.startGhost = T.startGhost || 0;
     W.ghostMul = T.ghostMul || 1;
+    spaceInit(W, seed0);
     // 라이벌 뱀: 무한 모드에만. 규칙용 난수는 따로 써서 내 판(먹이 자리)의 흐름을 흔들지 않는다
     W.rival = null;
     if (mode === 'endless' && opts.rival !== false) {
@@ -386,6 +432,7 @@
       W.score += pts;
       W.lastPts = pts;
       if (gold) W.golds++;
+      if (W.mode !== 'stage') spaceAdvance(W);
       W.events.push(gold ? 'gold' : 'eat');
       W.fx.push({ kind: gold ? 'gold' : 'eat', x: nx, y: ny, pts });
       if (W.mode === 'stage') W.got++;
@@ -442,6 +489,202 @@
     }
   }
 
+  // ─── 라이벌 뱀 (무한 모드) ─────────────────────────────────
+  // W.rival: {phase: wait(아직) | warn(나오기 전 깜빡임) | play | gone(사라졌다가 다시 나올 때까지),
+  //           body, prev, dir, acc, alpha, stun, t, target, eaten, golds, bumps(내게 부딪혀 멈칫), passes(쉬움: 내가 지나감), met(한 번이라도 나옴)}
+  const rivalShown = W => !!(W.rival && (W.rival.phase === 'warn' || W.rival.phase === 'play'));
+  const rivalLive = W => !!(W.rival && W.rival.phase === 'play');
+
+  // 판(레벨)을 새로 준비할 때: 처음 상태로. 나오는 시각은 판에서 움직인 시간 기준
+  function resetRival(W) {
+    const V = W.rival;
+    V.phase = 'wait'; V.body = []; V.prev = []; V.dir = 'right'; V.acc = 0; V.alpha = 0;
+    V.stun = 0; V.t = 0; V.grow = 0; V.target = null; V.blocked = false;
+  }
+
+  // (x, y)가 라이벌 몸인가. skipTail: 곧 빠질 꼬리 끝 칸은 빼고 (자랄 때·멈칫할 때는 꼬리가 안 빠진다)
+  function rivalAt(W, x, y, skipTail) {
+    if (!rivalLive(W)) return false;
+    const V = W.rival, B = V.body;
+    const n = B.length - (skipTail && V.grow === 0 && !(V.stun > 0) ? 1 : 0);
+    for (let i = 0; i < n; i++) if (B[i].x === x && B[i].y === y) return true;
+    return false;
+  }
+  const onPlayer = (W, x, y) => { for (const p of W.snake) if (p.x === x && p.y === y) return true; return false; };
+
+  // 나올 자리 찾기: 몸 모든 칸이 비어 있고 내 머리에서 멀며, 앞 3칸도 비어 있고, 내게서 멀어지는 방향
+  function spawnRival(W) {
+    const V = W.rival, C = W.cols, R = W.rows, len = D.RIVAL.len, h = W.snake[0];
+    const used = new Uint8Array(C * R);
+    for (const p of W.snake) used[p.y * C + p.x] = 1;
+    if (W.walls) for (let i = 0; i < used.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) used[i] = 1;
+    if (W.food) used[W.food.y * C + W.food.x] = 1;
+    if (W.item) used[W.item.y * C + W.item.x] = 1;
+    const far = (x, y) => Math.abs(x - h.x) + Math.abs(y - h.y);
+    const keys = Object.keys(DIRS);
+    for (let k = 0; k < 400; k++) {
+      const x = Math.floor(V.rng() * C), y = Math.floor(V.rng() * R), dir = keys[Math.floor(V.rng() * 4)];
+      const [dx, dy] = DIRS[dir];
+      let ok = far(x + dx, y + dy) > far(x, y);
+      for (let i = -3; i < len && ok; i++) {          // i < 0: 머리 앞 3칸, 0..len-1: 몸
+        const cx = x - dx * i, cy = y - dy * i;
+        if (cx < 0 || cy < 0 || cx >= C || cy >= R || used[cy * C + cx]) ok = false;
+        else if (i >= 0 && far(cx, cy) < D.RIVAL.minDist) ok = false;
+      }
+      if (!ok) continue;
+      V.body = [];
+      for (let i = 0; i < len; i++) V.body.push({ x: x - dx * i, y: y - dy * i });
+      V.prev = copy(V.body); V.dir = dir; V.acc = 0; V.alpha = 0; V.stun = 0; V.grow = 0; V.target = null; V.blocked = false;
+      V.phase = 'warn'; V.t = D.RIVAL.appear; V.met = true;
+      W.fx.push({ kind: 'rivalIn', x, y });
+      W.events.push('rivalwarn');
+      return true;
+    }
+    V.phase = 'gone'; V.t = 1;   // 자리가 없으면 1초 뒤 다시 찾는다
+    return false;
+  }
+
+  // 라이벌 머리가 dir로 가면 닿는 칸 (쉬움은 판 끝을 넘어 반대편, 보통은 판 밖이면 null)
+  function rivalNext(W, h, dir) {
+    let x = h.x + DIRS[dir][0], y = h.y + DIRS[dir][1];
+    const C = W.cols, R = W.rows;
+    if (x < 0 || y < 0 || x >= C || y >= R) { if (!W.easy) return null; x = (x + C) % C; y = (y + R) % R; }
+    return { x, y };
+  }
+
+  // 한 칸 전진: 갈 수 있는 방향 중 (구슬 쪽 / 그냥 앞 / 아무 데) 하나. 내 머리 둘레는 피하고, 빈 곳이 넉넉한 쪽
+  function rivalTick(W) {
+    const V = W.rival, C = W.cols, R = W.rows, B = V.body, h = B[0];
+    // 새 구슬은 react초 뒤에야 알아챈다 (그동안 아이가 먼저 갈 수 있다). 옛 자리에 닿으면 잊는다
+    if (W.food && W.t - W.food.born >= V.react) V.target = { x: W.food.x, y: W.food.y };
+    if (V.target && V.target.x === h.x && V.target.y === h.y) V.target = null;
+    const clumsy = V.rng() < V.clumsy;
+    const block = new Uint8Array(C * R);   // 라이벌이 피하는 칸: 벽 · 자기 몸(빠질 꼬리 빼고) · 내 몸
+    for (let i = 0; i < B.length - (V.grow ? 0 : 1); i++) block[B[i].y * C + B[i].x] = 1;
+    if (W.walls) for (let i = 0; i < block.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) block[i] = 1;
+    const mine = new Uint8Array(C * R);
+    for (const p of W.snake) mine[p.y * C + p.x] = 1;
+    const reach = (sx, sy, limit) => {
+      const seen = new Uint8Array(C * R), st = [sy * C + sx];
+      seen[st[0]] = 1;
+      let n = 0;
+      while (st.length && n < limit) {
+        const c = st.pop(); n++;
+        const x = c % C, y = (c - x) / C;
+        for (const k in DIRS) {
+          let ax = x + DIRS[k][0], ay = y + DIRS[k][1];
+          if (ax < 0 || ay < 0 || ax >= C || ay >= R) { if (!W.easy) continue; ax = (ax + C) % C; ay = (ay + R) % R; }
+          const j = ay * C + ax;
+          if (!seen[j] && !block[j] && !mine[j]) { seen[j] = 1; st.push(j); }
+        }
+      }
+      return n;
+    };
+    const ph = W.snake[0], pd = DIRS[W.queue.length && W.queue[0] !== OPP[W.dir] ? W.queue[0] : W.dir];
+    const aheadX = ph.x + pd[0], aheadY = ph.y + pd[1];
+    const need = B.length + 2;
+    const mode = V.rng() < V.wander ? 'wander' : V.target && V.rng() < V.smart ? 'food' : 'straight';
+    const cand = [];
+    let forced = null;
+    for (const k in DIRS) {
+      if (k === OPP[V.dir]) continue;
+      const c = rivalNext(W, h, k);
+      if (!c || block[c.y * C + c.x]) continue;
+      const onMe = !!mine[c.y * C + c.x];
+      if (onMe && !clumsy) { if (!forced) forced = { k, c }; continue; }
+      const room = onMe ? need : reach(c.x, c.y, need);   // 덜렁댈 때(clumsy)는 내 몸을 빈 칸으로 안다
+      const pd2 = Math.abs(c.x - ph.x) + Math.abs(c.y - ph.y);
+      let sc = room >= need ? 1000 : room * 10;
+      if (pd2 < V.keepAway) sc -= (V.keepAway - pd2) * 60;          // 내 머리 가까이는 되도록 안 간다
+      if (pd2 <= 1) sc -= 400;                                       // 내 머리 바로 옆 칸은 거의 안 간다
+      if (c.x === aheadX && c.y === aheadY) sc -= 800;               // 내 바로 앞 칸은 막지 않는다
+      for (let j = 2; j <= 4; j++) if (c.x === ph.x + pd[0] * j && c.y === ph.y + pd[1] * j) sc -= 300 / j;   // 내 앞길 몇 칸도 되도록 비켜 준다
+      if (mode === 'food') sc -= Math.abs(c.x - V.target.x) + Math.abs(c.y - V.target.y);
+      else if (mode === 'wander') sc += V.rng() * 8;
+      if (k === V.dir) sc += mode === 'straight' ? 3 : 0.5;
+      cand.push({ k, c, s: sc });
+    }
+    let pick = null;
+    for (const q of cand) if (!pick || q.s > pick.s) pick = q;
+    if (!pick && forced) pick = forced;   // 내 몸 말고는 갈 데가 없다: 부딪혀 멈칫
+    if (!pick) {
+      // 막혔다: 멈칫, 그래도 막혀 있으면 사라졌다가 다른 자리에서 다시
+      if (V.blocked) { W.fx.push({ kind: 'rivalOut', x: h.x, y: h.y }); V.phase = 'gone'; V.t = D.RIVAL.back; V.body = []; V.prev = []; return; }
+      V.blocked = true; V.stun = D.RIVAL.blockStun; V.prev = copy(B);
+      return;
+    }
+    V.blocked = false;
+    const c = pick.c;
+    V.dir = pick.k;
+    V.prev = copy(B);
+    if (mine[c.y * C + c.x]) {
+      // 라이벌 머리가 내 몸에 쿵: 라이벌만 멈칫하고 조금 줄어든다 (내가 이긴 것)
+      V.stun = D.RIVAL.bumpStun; V.bumps++;
+      const cut = Math.max(0, Math.min(D.RIVAL.bumpShrink, B.length - D.RIVAL.minLen));
+      for (let i = 0; i < cut; i++) B.pop();
+      V.grow = 0; V.prev = copy(B);
+      W.events.push('bump');
+      W.fx.push({ kind: 'bump', x: c.x, y: c.y, hx: h.x, hy: h.y, n: cut });
+      return;
+    }
+    B.unshift({ x: c.x, y: c.y });
+    const eat = !!W.food && W.food.x === c.x && W.food.y === c.y;
+    if (eat) {
+      V.eaten++;
+      if (W.food.gold) V.golds++;
+      if (B.length < V.maxLen) V.grow++;
+      V.target = null;
+      W.events.push('rivaleat');
+      W.fx.push({ kind: 'rivalEat', x: c.x, y: c.y, gold: W.food.gold });
+      spawnFood(W);
+    }
+    if (V.grow > 0) V.grow--; else B.pop();
+  }
+
+  // 라이벌 시간 흐름: 나오기 · 예고 깜빡임 · 멈칫 · 자기 속도로 전진
+  function rivalStep(W, dt) {
+    const V = W.rival;
+    if (!V || W.phase !== 'play') return;
+    if (V.phase === 'wait') { if (W.time >= D.RIVAL.intro) spawnRival(W); return; }
+    if (V.phase === 'gone') { V.t -= dt; if (V.t <= 0) spawnRival(W); return; }
+    if (V.phase === 'warn') { V.t -= dt; if (V.t <= 0) { V.phase = 'play'; V.acc = 0; V.shownAt = W.time; W.events.push('rival'); } return; }
+    if (V.stun > 0) {
+      V.stun -= dt; V.alpha = 0;
+      if (V.stun > 0) return;
+      dt = -V.stun; V.stun = 0; V.acc = 0;
+    }
+    V.acc += dt;
+    const iv = 1 / V.speed;
+    let guard = 0;
+    while (V.acc >= iv && V.phase === 'play' && !(V.stun > 0) && W.phase === 'play') {
+      V.acc -= iv;
+      rivalTick(W);
+      if (++guard > 8) { V.acc = 0; break; }
+    }
+    V.alpha = V.phase === 'play' && !(V.stun > 0) ? Math.min(1, V.acc / iv) : 0;
+  }
+
+  // 판이 끝났을 때 라이벌과 비교 (라이벌이 한 번도 안 나왔으면 null). diff > 0 이면 내가 더 먹었다
+  function rivalResult(W) {
+    if (!W.rival || !W.rival.met) return null;
+    return { me: W.eaten, rival: W.rival.eaten, diff: W.eaten - W.rival.eaten, bumps: W.rival.bumps };
+  }
+
+  // 놀이 본부(common/hub.js) reportRun에 보낼 이번 판 값 (스티커북·오늘의 미션)
+  function hubStats(W) {
+    const r = rivalResult(W);
+    return {
+      len: W.maxLen, golds: W.golds, orbs: W.eaten, planet: W.space.max,
+      level: W.mode === 'stage' && W.levelsCleared > 0 ? W.startLevel + W.levelsCleared - 1 : 0,
+      rivalWin: r && r.diff > 0 ? 1 : 0,
+    };
+  }
+  // 알아서 맞춰 주는 난이도: 이번 판이 그 난이도 기준으로 얼마나 잘했나 (1이 보통, HUB.adaptRun이 0~3으로 자른다)
+  function adaptPerf(W) {
+    const T = D.ADAPT.target, t = W.easy ? T.easy : T.normal;
+    return t > 0 ? W.eaten / t : 1;
+  }
+
   // 시간을 모아 두었다가 칸 간격만큼 찰 때마다 한 칸씩 전진한다
   function step(W, dt) {
     if (W.phase === 'clear') { W.t += dt; W.clearT += dt; return; }
@@ -463,6 +706,7 @@
       iv = 1 / speed(W);
       if (++guard > 8) { W.acc = 0; break; } // 멈췄다 돌아온 긴 프레임은 버린다
     }
+    if (W.rival) rivalStep(W, dt);
     W.alpha = W.phase === 'play' ? Math.min(1, W.acc / iv) : 0;
   }
 
@@ -473,6 +717,7 @@
     const block = new Uint8Array(cols * rows);
     for (let i = 0; i < W.snake.length - 1; i++) block[W.snake[i].y * cols + W.snake[i].x] = 1;
     if (W.walls) for (let i = 0; i < block.length; i++) if (W.walls[i]) block[i] = 1;
+    if (rivalLive(W) && !W.easy) for (const p of W.rival.body) block[p.y * cols + p.x] = 1;
     const reach = (sx, sy, limit) => {
       const seen = new Uint8Array(cols * rows), st = [sy * cols + sx];
       seen[st[0]] = 1;
@@ -504,7 +749,7 @@
   }
 
   // 앞길 위험 살피기 (그리기용 경고): 지금 방향(줄 선 방향이 있으면 그 방향)으로 max칸 안에
-  // 부딪히면 끝나는 칸(벽·판 끝·내 몸)이 있으면 {dist, x, y, cause}, 없으면 null.
+  // 부딪히면 끝나는 칸(벽·판 끝·내 몸·보통일 때 라이벌 몸)이 있으면 {dist, x, y, cause}, 없으면 null.
   // 몸은 그 칸에 닿을 때쯤 꼬리가 빠져 있으면 위험이 아니다. 유령일 때는 늘 null
   function dangerAhead(W, max) {
     if (!W || W.phase !== 'play' || (W.eff && W.eff.ghost > 0)) return null;
@@ -521,6 +766,8 @@
       if (W.walls && W.walls[y * C + x]) return { dist: k, x, y, cause: 'wall' };
       if (W.portalAt && W.portalAt[y * C + x] >= 0) return null;   // 포털 너머는 살피지 않는다
       for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return { dist: k, x, y, cause: 'self' };
+      // 라이벌 몸 (보통만. 쉬움은 지나가도 괜찮다). 곧 빠질 꼬리 끝 칸은 빼고
+      if (!W.easy && rivalAt(W, x, y, true)) return { dist: k, x, y, cause: 'rival' };
     }
     return null;
   }
@@ -538,5 +785,5 @@
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, DIRS, OPP };
 })(SN);

@@ -73,6 +73,15 @@
     easy = !!on; SN.store.set(EASY_KEY, easy); renderEasy();
     demo = null;
   }
+  // 라이벌 뱀 켜기·끄기 (그냥 놀기에만, 처음엔 켬). 이 기기에 기억한다
+  const RIVAL_KEY = 'snake.rival';
+  let rivalOn = SN.store.get(RIVAL_KEY, true) !== false;
+  function renderRival() {
+    const b = $('btn-rival');
+    b.setAttribute('aria-pressed', String(rivalOn));
+    $('rival-state').textContent = rivalOn ? '켬' : '끔';
+  }
+  function setRival(on) { rivalOn = !!on; SN.store.set(RIVAL_KEY, rivalOn); renderRival(); }
 
   // HUD 줄은 왼쪽 위 버튼 묶음과 같은 높이. 판은 그 아래부터.
   // 일시정지 버튼은 게임 중에만 보이므로 화면이 바뀔 때마다 다시 잰다
@@ -306,6 +315,14 @@
     requestAnimationFrame(tick);
   }
 
+  // 놀이 본부(common/hub.js)의 알아서 맞춰 주는 난이도. 본부가 없거나 실패하면 1
+  const diffId = e => (e ? 'easy' : 'normal');
+  function adaptMul(e) {
+    try { if (typeof HUB !== 'undefined' && HUB.adaptMul) { const m = Number(HUB.adaptMul('snake', diffId(e))); if (m > 0) return m; } } catch (err) { /* 무시 */ }
+    return 1;
+  }
+  let rivalToast = false;
+
   // 놀이 본부(common/hub.js)에 알린다: 기록실 요약과 오늘의 미션
   function reportSummary() {
     if (typeof HUB === 'undefined' || !HUB.report) return;
@@ -318,9 +335,11 @@
     if (typeof HUB === 'undefined' || !HUB.reportRun) return;
     reportSummary();
     try {
-      const fresh = HUB.reportRun('snake', { len: W.maxLen, golds: W.golds, orbs: W.eaten, games: 1 }, W.time);
+      // 스티커북·오늘의 미션: 길이 · 황금 · 구슬 · 깬 레벨 · 라이벌 이김 (world.js hubStats)
+      const fresh = HUB.reportRun('snake', Object.assign(SN.World.hubStats(W), { games: 1 }), W.time);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1000);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
+    try { if (HUB.adaptRun) HUB.adaptRun('snake', diffId(W.easy), SN.World.adaptPerf(W)); } catch (e) { /* 무시 */ }
   }
 
   // 예전 꾸미기를 캐릭터로 바꿨으면 한 번 알려 준다
@@ -383,12 +402,14 @@
   // ─── 흐름 ──────────────────────────────────────────────────
   function newGame(seed, opts) {
     SN.Audio.unlock();
-    if (opts) lastOpts = Object.assign({}, opts, { easy });
+    if (opts) lastOpts = Object.assign({ rival: rivalOn }, opts, { easy });
     const [cols, rows] = lastOpts.easy ? (size().h > size().w * 1.1 ? D.EASY.board.port : D.EASY.board.land) : (size().h > size().w * 1.1 ? D.BOARD.port : D.BOARD.land);
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다. 강화는 늘 적용
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
-    W = SN.World.create(cols, rows, seed, SH.worldOpts(shop, lo, lastOpts));
+    // 알아서 맞춰 주는 난이도 (놀이 본부): 처음 두 판은 1, 그 뒤 0.85~1.12. 속도 오름·황금 시간·라이벌 실력에 조금씩
+    W = SN.World.create(cols, rows, seed, Object.assign(SH.worldOpts(shop, lo, lastOpts), { adapt: adaptMul(lastOpts.easy) }));
+    rivalToast = false;
     lastEarn = null;
     view.char = shop.char;
     const used = D.START_ITEMS.filter(it => lo[it.id]).map(it => it.name);
@@ -459,7 +480,15 @@
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     if (fresh.length) setTimeout(() => { if (mode === 'over') SN.Audio.play('medal'); }, 900);
     $('over-t3').textContent = W.mode === 'stage' ? '레벨' : '시간';
-    $('over-title').textContent = W.won ? '판을 가득 채웠다!' : W.cause === 'self' ? '꼬리를 물었다' : '벽에 부딪혔다';
+    $('over-title').textContent = W.won ? '판을 가득 채웠다!' : W.cause === 'self' ? '꼬리를 물었다' : W.cause === 'rival' ? '라이벌에 부딪혔다' : '벽에 부딪혔다';
+    // 라이벌과 겨룬 결과 (라이벌이 나온 판만). 져도 다정하게
+    const rr = SN.World.rivalResult(W), rl = $('over-rival');
+    if (rr) {
+      rl.textContent = rr.diff > 0 ? '라이벌보다 ' + rr.diff + '개 더 먹었어요!' : rr.diff === 0 ? '라이벌과 똑같이 먹었어요! 아깝다' : '라이벌이 ' + (-rr.diff) + '개 더 먹었어요. 다음엔 이길 수 있어요!';
+      if (rr.bumps > 0) rl.textContent += ' (라이벌 멈칫 ' + rr.bumps + '번)';
+      rl.className = 'rival-line' + (rr.diff > 0 ? ' win' : '');
+      rl.hidden = false;
+    } else rl.hidden = true;
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-len').textContent = W.snake.length;
@@ -475,6 +504,8 @@
       if (!sound) continue;
       if (ev === 'eat') SN.Audio.play('eat', { k: (world.eaten - 1) % D.FOOD.goldEvery });
       else SN.Audio.play(ev);
+      if (ev === 'rival') { toast(rivalToast ? '라이벌이 다시 왔어요' : '라이벌 뱀 등장! 구슬을 먼저 먹어요'); rivalToast = true; }
+      else if (ev === 'bump') vibrate([15, 20, 15]);
       if (ev === 'over') vibrate(250);
       else if (ev === 'gold') vibrate([20, 30, 40]);
       else if (ev === 'power' || ev === 'combo') vibrate(20);
@@ -501,6 +532,7 @@
     if (mode === 'play' && W && SN.World.turn(W, dir) && touch) vibrate(10);
   };
   for (const b of document.querySelectorAll('[data-easy]')) b.addEventListener('click', () => { SN.Audio.unlock(); setEasy(b.dataset.easy === '1'); });
+  $('btn-rival').addEventListener('click', () => { SN.Audio.unlock(); setRival(!rivalOn); SN.Audio.play('pick'); });
   input.onKey = code => {
     SN.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
@@ -624,6 +656,7 @@
 
   // ─── 시작 ──────────────────────────────────────────────────
   renderEasy();
+  renderRival();
   SN.Audio.setMuted(SN.store.get(MUTE_KEY, false));
   $('btn-mute').classList.toggle('muted', SN.Audio.muted);
   resize();
@@ -649,6 +682,7 @@
     get demo() { return demo; },
     get best() { return best; },
     get rec() { return rec; }, get easy() { return easy; }, setEasy,
+    get rival() { return rivalOn; }, setRival, get adapt() { return W ? W.adapt : adaptMul(easy); },
     newGame, pause, resume, toTitle, openStage, openMedals,
     turn(dir) { return W ? SN.World.turn(W, dir) : false; },
     autopilot(on) { auto = on !== false; return auto; },

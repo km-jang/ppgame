@@ -259,5 +259,21 @@ test('예전 꾸미기 저장본: 값이 같은 캐릭터로 옮기고, 맞는 �
   }
 });
 
+test('몬스터 밟기: 판 요약에 stomps, 미션 "몬스터 밟기" (누적·한 판)', () => {
+  const W = create(1, { diff: 'normal' });
+  W.stomps = 6;
+  const r = SH.runOf(W);
+  assert(r.stomps === 6, 'runOf stomps ' + r.stomps);
+  const st = SH.blank();
+  st.missions = [{ id: 'stomp15', prog: 0, done: false }, { id: 'stomp5', prog: 0, done: false }, { id: 'h100', prog: 0, done: false }];
+  SH.progressMissions(st, run({ stomps: 6 }));
+  assert(st.missions[0].prog === 6 && !st.missions[0].done && st.missions[1].done, 'progress ' + JSON.stringify(st.missions));
+  SH.progressMissions(st, run({ stomps: 9 }));
+  assert(st.missions[0].done && st.missions[0].prog === 15, 'life adds up');
+  // 예전 판 요약(stomps 없음)도 괜찮다
+  SH.progressMissions(st, run({}));
+  assert(Number.isFinite(st.missions[2].prog), 'old run shape');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
