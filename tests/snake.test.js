@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON, Uint8Array });
+// 공통 우주 여행 도감 (외계 행성 이름·색). index.html과 같은 차례로 data.js보다 먼저
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'snake', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -877,7 +879,7 @@ test('우주 여행 무한: 수성에서 출발, 내가 구슬 12개 먹을 때�
   assert(W.space.step === 1 && W.space.scene === 'venus' && W.events.includes('planet'), 'venus after 12 ' + W.space.scene);
   // 오래 먹으며 장면 차례 기록
   const seq = [W.space.scene];
-  for (let k = 0; k < 24; k++) { eatN(W, SPD.perOrbs); seq.push(W.space.scene); }
+  for (let k = 0; k < 40; k++) { eatN(W, SPD.perOrbs); seq.push(W.space.scene); }
   const planets = seq.filter(id => id !== 'hole');
   const ids = SPD.planets.map(p => p.id);
   for (let i = 0; i < planets.length; i++) assert(planets[i] === ids[(i + 1) % ids.length], 'planet order at ' + i + ' ' + planets.join(','));
@@ -916,13 +918,20 @@ test('우주 여행: 라이벌이 먹은 구슬로는 넘어가지 않고, 하�
   assert(A.food.x === B.food.x && A.food.y === B.food.y, 'food independent of sky');
 });
 
-test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 · 11 은하수 · 12 은하 중심, 그다음은 다시', () => {
-  const want = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core'];
-  for (let n = 1; n <= 24; n++) {
-    assert(stageScene(n) === want[(n - 1) % 12], 'level ' + n);
+test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 · 11 은하수 · 12 은하 중심, 13~20 외계 행성, 그다음은 다시', () => {
+  const want = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core',
+    'frost', 'lava', 'ocean', 'glass', 'gem', 'twin', 'shroom', 'rogue'];
+  for (let n = 1; n <= 44; n++) {
+    assert(stageScene(n) === want[(n - 1) % 20], 'level ' + n);
     const S = create(COLS, ROWS, 1, { mode: 'stage', level: n });
-    assert(S.space.scene === want[(n - 1) % 12], 'world scene ' + n);
+    assert(S.space.scene === want[(n - 1) % 20], 'world scene ' + n);
   }
+  // 외계 행성 레벨은 10~17번째 행성으로 센다
+  const X = create(COLS, ROWS, 1, { mode: 'stage', level: 13 });
+  assert(X.space.max === 10 && hubStats(X).planet === 10 && spaceScene(X).kind === 'planet', 'frost is planet 10');
+  assert(create(COLS, ROWS, 1, { mode: 'stage', level: 20 }).space.max === 17, 'rogue is planet 17');
+  // 스테이지는 그냥 놀기 출발 행성을 따르지 않는다
+  assert(create(COLS, ROWS, 1, { mode: 'stage', level: 2, skyStart: 12 }).space.scene === 'venus', 'stage ignores skyStart');
   assert(sceneInfo('mars').name === '화성' && sceneInfo('mars').index === 4, 'mars info');
   assert(sceneInfo('hole').kind === 'hole' && sceneInfo('galaxy').kind === 'galaxy' && sceneInfo('core').kind === 'core', 'other kinds');
   for (const id of want) assert(sceneInfo(id).name && sceneInfo(id).color, 'has name ' + id);
@@ -939,6 +948,56 @@ test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 �
   const Q = create(COLS, ROWS, 1, { mode: 'stage', level: 1 });
   Q.eaten = 30; foodAhead(Q); Q.wait = 0; ticks(Q, 1);
   assert(Q.space.scene === 'mercury', 'stage fixed');
+});
+
+test('우주 여행 17행성: 명왕성 다음은 공통 도감의 외계 행성 여덟 (도감 차례 그대로), 떠돌이 행성 다음은 다시 수성', () => {
+  const WORLDS = vm.runInContext('WORLDS', ctx);
+  const ids = SPD.planets.map(p => p.id);
+  assert(ids.length === 17 && SPD.solar === 9, 'seventeen ' + ids.length);
+  assert(ids.slice(0, 9).join() === 'mercury,venus,earth,mars,jupiter,saturn,uranus,neptune,pluto', 'solar first');
+  assert(ids.slice(9).join() === WORLDS.EXO.map(p => p.id).join(), 'exo order same as catalogue ' + ids.slice(9).join());
+  for (const p of SPD.planets.slice(9)) {
+    const e = WORLDS.exo(p.id);
+    assert(p.exo && p.name === e.name && p.fact === e.line && p.color === e.color, 'catalogue text ' + p.id);
+    assert(sceneInfo(p.id).kind === 'planet' && sceneInfo(p.id).index === ids.indexOf(p.id) + 1, 'info ' + p.id);
+  }
+  // 모든 행성에 날씨가 있다 (그림이 날씨를 찾는다)
+  for (const id of ids) assert(WORLDS.weatherOf(id), 'weather ' + id);
+  // 블랙홀 없이 끝까지: 씨앗을 골라 블랙홀이 한 번도 안 끼게 난수를 막는다
+  const W = create(4000, 5, 3, { mode: 'endless', rival: false });
+  W.itemT = 1e9; W.space.rng = () => 0.99;
+  const seq = [W.space.scene];
+  for (let k = 0; k < 18; k++) { eatN(W, SPD.perOrbs); seq.push(W.space.scene); }
+  assert(seq.slice(0, 17).join() === ids.join(), 'journey ' + seq.join());
+  assert(seq[9] === 'frost' && seq[16] === 'rogue' && seq[17] === 'mercury' && seq[18] === 'venus', 'after rogue comes mercury');
+  assert(W.space.lap === 2 && W.space.max === 19, 'lap 2 max ' + W.space.max);
+});
+
+test('우주 여행 이어 가기: 그냥 놀기는 지난 판에 닿은 행성에서 출발 (skyStart), 이상한 값은 수성', () => {
+  const { skyStartOf, skyNext } = SN.World;
+  const ids = SPD.planets.map(p => p.id);
+  const W = create(4000, 5, 3, { mode: 'endless', rival: false, skyStart: 9 });
+  W.itemT = 1e9; W.space.rng = () => 0.99;
+  assert(W.space.scene === 'frost' && W.space.max === 10 && W.space.lap === 1 && spaceScene(W).name === '꽁꽁 얼음 행성', 'start frost');
+  eatN(W, SPD.perOrbs);
+  assert(W.space.scene === 'lava' && W.space.max === 11 && skyNext(W) === 10, 'lava next');
+  for (let k = 0; k < 7; k++) eatN(W, SPD.perOrbs);
+  assert(W.space.scene === 'mercury' && W.space.lap === 1 && skyNext(W) === 0, 'wraps to mercury, still first lap from frost');
+  for (let k = 0; k < 9; k++) eatN(W, SPD.perOrbs);
+  assert(W.space.scene === 'frost' && W.space.lap === 2, 'lap 2 back at frost');
+  // 블랙홀 하늘이면 바로 앞 행성에서 이어 간다
+  const H = create(4000, 5, 3, { mode: 'endless', rival: false, skyStart: 3 });
+  H.itemT = 1e9; H.space.rng = () => 0.99; eatN(H, SPD.perOrbs);
+  H.space.rng = () => 0; eatN(H, SPD.perOrbs);
+  assert(H.space.scene === 'hole' && skyNext(H) === 4, 'hole keeps jupiter ' + skyNext(H));
+  // 값 다듬기: 음수·글자·빈 값은 0, 큰 값은 바퀴 안으로
+  assert(skyStartOf(-3) === 0 && skyStartOf('abc') === 0 && skyStartOf(undefined) === 0 && skyStartOf(null) === 0, 'bad to 0');
+  assert(skyStartOf(20) === 3 && skyStartOf('5') === 5 && skyStartOf(16.7) === 16, 'wrap and floor');
+  assert(create(COLS, ROWS, 1, { mode: 'endless', skyStart: 40 }).space.scene === ids[40 % 17], 'create wraps');
+  // 출발 행성은 먹이 자리를 흔들지 않는다
+  const A = create(200, ROWS, 9, { mode: 'endless', rival: false }), B = create(200, ROWS, 9, { mode: 'endless', rival: false, skyStart: 14 });
+  for (let i = 0; i < 30; i++) { foodAhead(A); ticks(A, 1); foodAhead(B); ticks(B, 1); }
+  assert(A.food.x === B.food.x && A.food.y === B.food.y && A.score === B.score, 'rules same');
 });
 
 // ─── 어려움 ───

@@ -343,6 +343,8 @@
     const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.diff || (W.easy ? 1 : 0), W.wallVer || 0].join(',');
     if (R.boardKey !== key || R.boardWalls !== W.walls) { R.boardKey = key; R.boardWalls = W.walls; R.board = paintBoard(v, W.cols, W.rows, v.dpr, W); }
     ctx.drawImage(R.board, v.bx - BM, v.by - BM, v.bw + BM * 2, v.bh + BM * 2);
+    // 행성 날씨가 테두리에 닿은 모습 (쌓인 눈·달아오른 용암 빛 등, 판 바깥에만)
+    if (SN.Space && SN.Space.drawFrame) SN.Space.drawFrame(ctx, W, v);
   }
 
   // ─── 먹이 ─────────────────────────────────────────────────

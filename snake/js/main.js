@@ -94,6 +94,10 @@
     $('rival-state').textContent = rivalOn ? '켬' : '끔';
   }
   function setRival(on) { rivalOn = !!on; SN.store.set(RIVAL_KEY, rivalOn); renderRival(); }
+  // 우주 여행 이어 가기 (2026-09-27): 그냥 놀기는 지난 판에 닿은 행성에서 출발한다 (행성 번호 0~16, 이 기기에 기억)
+  const SKY_KEY = 'snake.sky';
+  const skyStart = () => SN.World.skyStartOf(SN.store.get(SKY_KEY, 0));
+  function keepSky() { if (W && W.mode === 'endless' && W.space) SN.store.set(SKY_KEY, SN.World.skyNext(W)); }
 
   // HUD 줄은 왼쪽 위 버튼 묶음과 같은 높이. 판은 그 아래부터.
   // 일시정지 버튼은 게임 중에만 보이므로 화면이 바뀔 때마다 다시 잰다
@@ -402,10 +406,12 @@
   function openStage() {
     const box = $('level-list'), open = rec.stage.max + 1;
     box.innerHTML = '';
-    D.LEVELS.forEach((L, i) => {
-      const n = i + 1, b = document.createElement('button');
+    // 12레벨을 다 깨면 외계 행성 레벨(13~20, 더 빠른 두 번째 바퀴)이 열린 만큼 칸이 늘어난다 (그 전에는 12칸 그대로)
+    const last = rec.stage.max >= D.LEVELS.length ? Math.min(D.SPACE.stage.length, Math.max(open, D.LEVELS.length + 1)) : D.LEVELS.length;
+    for (let n = 1; n <= last; n++) {
+      const L = SN.World.levelDef(n), b = document.createElement('button');
       b.className = 'lvl' + (n <= rec.stage.max ? ' done' : n === open ? ' next' : n > open ? ' locked' : '');
-      // 레벨마다 정해진 하늘 (1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심): 칸 구석에 작은 그림
+      // 레벨마다 정해진 하늘 (1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심, 13~20 외계 행성): 칸 구석에 작은 그림
       const sky = SN.World.sceneInfo(SN.World.stageScene(n));
       b.innerHTML = '<canvas class="lvl-sky" width="72" height="72" aria-hidden="true"></canvas><b>' + n + '</b><small>' + L.name + '</small><em class="lvl-sky-name" style="color:' + sky.color + '">' + sky.name + '</em>';
       if (SN.Space) SN.Space.icon(b.querySelector('canvas'), sky.id);
@@ -414,7 +420,7 @@
         keep(); newGame(undefined, { mode: 'stage', level: n });
       });
       box.appendChild(b);
-    });
+    }
     show('scr-stage');
   }
 
@@ -432,7 +438,7 @@
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
     // 알아서 맞춰 주는 난이도 (놀이 본부): 처음 두 판은 1, 그 뒤 0.85~1.12. 속도 오름·황금 시간·라이벌 실력에 조금씩
-    W = SN.World.create(cols, rows, seed, Object.assign(SH.worldOpts(shop, lo, lastOpts), { adapt: adaptMul(lastOpts.diff) }));
+    W = SN.World.create(cols, rows, seed, Object.assign(SH.worldOpts(shop, lo, lastOpts), { adapt: adaptMul(lastOpts.diff), skyStart: skyStart() }));
     rivalToast = false;
     lastEarn = null;
     view.char = shop.char;
@@ -449,6 +455,7 @@
   }
 
   function toTitle() {
+    keepSky();
     W = null;
     mode = 'title';
     wakeLock(false);
@@ -472,6 +479,7 @@
 
   function gameOver() {
     mode = 'over';
+    keepSky();
     overAt = performance.now();
     // 기록 장부: 신기록은 칩으로 보여 준다
     const newRec = [];
@@ -652,7 +660,7 @@
 
     if (mode === 'title' || mode === 'shop') {
       // 시연: 자동 운전 뱀이 시작 화면 뒤에서 돈다. 끝나면 잠시 뒤 새로
-      if (!demo) { const [c, r] = boardFor(size()); demo = SN.World.create(c, r, 777); demo.char = view.char; demo.wait = 0; demoRest = 0; }
+      if (!demo) { const [c, r] = boardFor(size()); demo = SN.World.create(c, r, 777, { skyStart: skyStart() }); demo.char = view.char; demo.wait = 0; demoRest = 0; }
       if (demo.phase === 'play') { drive(demo); SN.World.step(demo, dt); }
       else if ((demoRest += dt) > 1.5) demo = null;
       if (demo) {

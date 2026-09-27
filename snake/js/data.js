@@ -159,8 +159,9 @@
 
     // 우주 여행 배경 (2026-09-27, 소유자 "다른 게임도 우주배경 반영"): 뿅뿅 우주선처럼 판 뒤 하늘이 태양계를 지나간다.
     // 그림만 바뀌고 규칙은 그대로다 (space.js가 그린다). 무한: 내가 구슬 perOrbs개를 먹을 때마다 다음 행성
-    // (수성부터, 명왕성 다음은 다시 수성 "2바퀴"). 장면이 holeFrom번째부터는 바로 앞이 블랙홀이 아닐 때 holeChance로
-    // 행성 대신 블랙홀 하늘이 한 번 끼어든다 (행성 차례는 밀리지 않는다). 스테이지: 레벨마다 정해진 하늘 (stage, 12개를 돈다)
+    // (수성부터, 명왕성 다음은 외계 행성 여덟, 떠돌이 행성 다음은 다시 수성 "2바퀴". 그냥 놀기는 지난 판에 닿은 행성에서 출발: opts.skyStart).
+    // 장면이 holeFrom번째부터는 바로 앞이 블랙홀이 아닐 때 holeChance로
+    // 행성 대신 블랙홀 하늘이 한 번 끼어든다 (행성 차례는 밀리지 않는다). 스테이지: 레벨마다 정해진 하늘 (stage, 20개를 돈다)
     SPACE: {
       perOrbs: 12, holeFrom: 2, holeChance: 0.22, bannerTime: 2.8,
       planets: [
@@ -173,14 +174,23 @@
         { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성',   color: '#9ef0f0' },
         { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',     color: '#5b8cff' },
         { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',          color: '#e8d2b8' },
+        // 명왕성 다음은 외계 행성 여덟 (2026-09-27, 소유자 "다른 행성 배경도 다양하게"). 이름·한 줄·색은 공통 도감
+        // common/worlds.js(WORLDS.EXO)에서 가져온다. 차례는 여기 고정 (도감이 없어도 규칙은 같다)
+        ...['frost', 'lava', 'ocean', 'glass', 'gem', 'twin', 'shroom', 'rogue'].map(id => {
+          const e = typeof WORLDS !== 'undefined' && WORLDS && WORLDS.exo ? WORLDS.exo(id) : null;
+          return { id, name: e ? e.name : '외계 행성', fact: e ? e.line : '', color: e ? e.color : '#bfe0ff', exo: true };
+        }),
       ],
+      solar: 9,   // 앞의 아홉이 태양계 (블랙홀·은하 하늘은 스테이지 기록에서 명왕성(9)으로 센다)
       // 행성이 아닌 하늘
       others: {
         hole:   { name: '블랙홀',    fact: '빛도 빨려 드는 곳, 구경만 해요', color: '#c9a0ff' },
         galaxy: { name: '은하수',    fact: '별이 아주아주 많이 모인 곳',     color: '#b8c8ff' },
         core:   { name: '은하 중심', fact: '은하 한가운데 커다란 블랙홀',    color: '#ffc27a' },
       },
-      stage: ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core'],
+      // 스테이지 1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심, 13~20 외계 행성 여덟 (12레벨을 깨고 이어 가는 두 번째 바퀴), 그다음은 다시
+      stage: ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core',
+        'frost', 'lava', 'ocean', 'glass', 'gem', 'twin', 'shroom', 'rogue'],
     },
 
     // 라이벌 뱀 (2026-09-27, 소유자 "추천대로"): 무한 모드에서 컴퓨터가 모는 주황·보라 줄무늬 뱀(눈에 가면)이

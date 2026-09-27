@@ -188,8 +188,9 @@
   }
 
   // ─── 우주 여행 배경 (그림만, 규칙에는 영향 없음) ────────────────
-  // W.space: {scene: 지금 하늘 id, step: 장면 차례(무한), planet: 지나온 행성 수 - 1, lap, hole: 지금 블랙홀인가,
-  //           max: 이번 판에 간 가장 먼 행성 번호(1 = 수성, 2바퀴면 10부터), changedAt: 장면이 바뀐 시각(W.t), rng: 따로 쓰는 난수}
+  // W.space: {scene: 지금 하늘 id, step: 장면 차례(무한), planet: 지금 행성 번호(0 수성, 출발 행성부터 센다), start: 출발 행성,
+  //           lap, hole: 지금 블랙홀인가, max: 이번 판에 간 가장 먼 행성 번호(1 수성 ~ 9 명왕성 ~ 17 떠돌이 행성, 2바퀴면 18부터),
+  //           changedAt: 장면이 바뀐 시각(W.t), rng: 따로 쓰는 난수}
   const SP = D.SPACE;
   function sceneInfo(id) {
     const p = SP.planets.find(q => q.id === id);
@@ -197,17 +198,25 @@
     const o = SP.others[id] || SP.others.hole;
     return Object.assign({ kind: id === 'galaxy' ? 'galaxy' : id === 'core' ? 'core' : 'hole', index: 0, id }, o);
   }
-  // 스테이지 n번째 레벨의 하늘 (1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심, 그다음은 다시 돈다)
+  // 스테이지 n번째 레벨의 하늘 (1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심, 13~20 외계 행성, 그다음은 다시 돈다)
   function stageScene(n) { return SP.stage[(Math.max(1, n) - 1) % SP.stage.length]; }
-  function spaceInit(W, seed0) {
-    W.space = { scene: SP.planets[0].id, step: 0, planet: 0, lap: 1, hole: false, max: 1, changedAt: 0,
+  // 그냥 놀기 출발 행성 번호(0부터). 지난 판에 닿은 행성에서 이어 간다 (main.js가 이 기기에 기억). 이상한 값이면 수성
+  function skyStartOf(v) {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) && n >= 0 ? n % SP.planets.length : 0;
+  }
+  function spaceInit(W, seed0, start) {
+    const p = W.mode === 'stage' ? 0 : skyStartOf(start);
+    W.space = { scene: SP.planets[p].id, step: 0, planet: p, lap: 1, hole: false, max: p + 1, start: p, changedAt: 0,
       rng: SN.rng(((seed0 >>> 0) ^ 0x2545f491) * 7 + 3) };
   }
+  // 다음 판 출발 행성 (지금 행성, 블랙홀이면 바로 앞 행성). 한 바퀴를 넘었으면 바퀴 안의 번호
+  function skyNext(W) { return W.space ? W.space.planet % SP.planets.length : 0; }
   // 스테이지: 레벨을 시작할 때 그 레벨 하늘로
   function spaceStage(W) {
     const S = W.space, id = stageScene(W.level), info = sceneInfo(id);
     S.scene = id; S.hole = info.kind !== 'planet'; S.changedAt = W.t;
-    S.max = Math.max(S.max, info.kind === 'planet' ? info.index : SP.planets.length);
+    S.max = Math.max(S.max, info.kind === 'planet' ? info.index : SP.solar);
   }
   // 무한·기본: 내가 먹은 구슬 수로 장면 차례를 맞춘다 (라이벌이 먹은 것은 세지 않는다)
   function spaceAdvance(W) {
@@ -218,7 +227,7 @@
       else {
         S.hole = false; S.planet++;
         S.scene = SP.planets[S.planet % SP.planets.length].id;
-        S.lap = Math.floor(S.planet / SP.planets.length) + 1;
+        S.lap = Math.floor((S.planet - S.start) / SP.planets.length) + 1;
         S.max = Math.max(S.max, S.planet + 1);
       }
       S.changedAt = W.t;
@@ -333,7 +342,7 @@
     W.speedMul = T.speedMul || 1;
     W.startGhost = T.startGhost || 0;
     W.ghostMul = T.ghostMul || 1;
-    spaceInit(W, seed0);
+    spaceInit(W, seed0, opts.skyStart);
     W.funRng = SN.rng(((seed0 >>> 0) ^ 0x68e31da4) * 13 + 5);   // 선물 자리·상 (먹이 흐름을 흔들지 않게 따로)
     W.gifts = 0; W.giftCoins = 0; W.giftStart = []; W.lastGift = null; W.giftT = 0;
     W.fever = 0; W.fevers = 0; W.giants = 0; W.smashed = 0;
@@ -949,5 +958,5 @@
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, diffOf, spawnGift, openGift, startFever, startGiant, biteRival, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, skyStartOf, skyNext, diffOf, spawnGift, openGift, startFever, startGiant, biteRival, DIRS, OPP };
 })(SN);
