@@ -32,6 +32,8 @@
 | 게임 고르기 (네 게임) | https://claude.ai/artifact/1NdyjCYm93T3mgEURVTa5g |
 | 뚝딱 로봇카 (보류, 마지막 버전 그대로) | https://claude.ai/artifact/VjcTry8wHiiamThjBWTnhG |
 | 냠냠 뱀 (N-SNAKE) | https://claude.ai/artifact/L7ZpZUk2D3JoALBrgMz1Yt |
+| 통통 점프 | https://claude.ai/artifact/LEoZaLGDtkW1YGxDL9JUad |
+| 슝슝 우주 달리기 | https://claude.ai/artifact/8H1RimBK5smscCYK2YXnGT |
 | 뿅뿅 우주선 (N-GUN) | https://claude.ai/artifact/7KzosHZcRwWjAiWzJd6Hdj (옛 주소 8vHaFFqDBamdV7ZgTmhp3H는 첫 빌드 때 것, 갱신 안 함) |
 
 ## 소유자 결정 기록
