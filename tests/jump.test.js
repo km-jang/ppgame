@@ -75,8 +75,7 @@ function makeHuman(seed, cfg) {
     }
     if (wait > 0) { wait -= dt; return prev; }
     if (!t || W.rocket > 0) { prev = 0; return 0; }
-    const g = D.PLAYER.gravity, q = P.vy * P.vy + 2 * g * (P.y - t.y - R);
-    const tt = q < 0 ? 0 : (P.vy + Math.sqrt(q)) / g;
+    const tt = Math.max(0, JP.World.timeTo(W, t.y + R));   // 캐릭터마다 내려오는 빠르기가 다르다 (펭귄)
     const dx = wrapDelta(P.x, t.x + t.vx * tt + aimOff);
     const brake = P.vx * P.vx / (2 * C.decel);
     prev = Math.abs(dx) < Math.max(6, t.w * 0.2) + (Math.sign(dx) === Math.sign(P.vx) ? brake * 0.5 : 0) ? 0 : dx > 0 ? 1 : -1;
@@ -84,10 +83,10 @@ function makeHuman(seed, cfg) {
   };
 }
 // 여러 판을 돌려 처음 떨어질 때(구조 구름이 받거나 끝날 때)까지의 높이·시간과 끝 높이를 잰다
-function measure(diff, cfg, seeds, maxSec) {
+function measure(diff, cfg, seeds, maxSec, char) {
   const out = { first: [], time: [], final: [], reach100: 0, over60: 0 };
   for (let seed = 1; seed <= seeds; seed++) {
-    const W = create(seed, { diff, viewH: 600 });
+    const W = create(seed, { diff, viewH: 600, char });
     const bot = makeHuman(seed, cfg);
     let fh = null, ft = null;
     for (let i = 0; i < 60 * maxSec && W.phase === 'play'; i++) {
@@ -362,8 +361,8 @@ test('같은 시드면 같은 판 (결정적)', () => {
 });
 
 // 로켓으로 아주 높은 곳까지 날아가며 만들어진 길(줄)을 모두 모은다
-function rowsOf(diff, seed, n) {
-  const W = create(seed, { diff, viewH: 600 });
+function rowsOf(diff, seed, n, char) {
+  const W = create(seed, { diff, viewH: 600, char });
   const rows = new Map();
   for (let i = 0; i < (n || 400); i++) {
     W.rocket = 10; W.cam += 150; W.p.y = W.cam + 300; tick(W);
@@ -394,6 +393,106 @@ test('닿지 못하는 틈이 없다: 세 난이도 모두 위로도 옆으로�
     assert(maxGap < top * 0.9, diff + ' gap ' + maxGap);
     assert(worst < 1, diff + ' sideways ' + worst);
   }
+});
+
+// ─── 캐릭터 다섯 ──────────────────────────────────────────
+const CHAR_IDS = D.CHARS.map(c => c.id);
+test('캐릭터 5개: 이름·값·좋은 점이 모두 다르고, 통통 로봇만 공짜', () => {
+  assert(CHAR_IDS.join() === 'robot,frog,rabbit,penguin,alien', 'ids ' + CHAR_IDS.join());
+  assert(new Set(D.CHARS.map(c => c.price)).size === 5 && new Set(D.CHARS.map(c => c.name)).size === 5, 'unique prices and names');
+  assert(D.CHARS[0].price === 0 && D.CHARS.slice(1).every((c, i) => c.price > D.CHARS[i].price), 'free first, then dearer');
+  const looks = new Set(D.CHARS.map(c => c.look)), traits = new Set(D.CHARS.map(c => Object.keys(c.trait).sort().join()));
+  assert(looks.size === 5 && traits.size === 5, 'each looks and plays differently');
+  for (const c of D.CHARS) assert(c.desc && c.short && c.body.length === 3 && /^\d+,\d+,\d+$/.test(c.glow), 'fields ' + c.id);
+  // 장점만 있고 단점은 없다 (늘 기본보다 같거나 좋은 쪽)
+  for (const c of D.CHARS) {
+    const F = JP.World.physOf(c.id), T = c.trait;
+    assert(F.jump >= D.PLAYER.jump && F.spring >= D.SPRING.jump && F.gDown <= D.PLAYER.gravity && F.gUp === D.PLAYER.gravity && F.magnet >= 1, 'no downside ' + c.id);
+    assert((T.speed || 1) >= 1 && (T.accel || 1) >= 1 && (T.rocket || 1) >= 1, 'no downside ctl ' + c.id);
+  }
+  // 모르는 캐릭터·없는 값이면 통통 로봇
+  assert(create(1, { char: 'nope' }).char === 'robot' && create(1, {}).char === 'robot', 'fallback robot');
+  // 캐릭터가 달라도 판(발판 자리)은 같다 (가시 폭탄 자리만 튀는 높이에 맞춰 달라질 수 있다)
+  const plats = ch => JSON.stringify(create(5, { viewH: 600, char: ch }).plats.map(p => [p.kind, p.x, p.y]));
+  for (const ch of CHAR_IDS) assert(plats(ch) === plats('robot'), 'same platforms ' + ch);
+});
+
+test('캐릭터 좋은 점이 정말 규칙을 바꾼다 (로봇 별 자석 · 개구리 점프 · 토끼 속도 · 펭귄 천천히 · 외계인 로켓·스프링)', () => {
+  // 개구리: 보통 발판에서 더 높이
+  const peak = ch => {
+    const W = empty({ char: ch }); W.plats.push({ id: 1, kind: 'normal', x: 200, y: 0, w: 400, px: 200, vx: 0, on: true, t: 0, broken: false });
+    W.p.y = R + 30; W.p.vy = -100; let top = 0;
+    for (let i = 0; i < 240; i++) { tick(W); top = Math.max(top, W.p.y); }
+    return top - R;
+  };
+  const base = peak('robot'), fr = peak('frog');
+  assert(Math.abs(base - D.PLAYER.jump) < 6 && Math.abs(fr - D.PLAYER.jump * D.CHARS[1].trait.jump) < 6 && fr > base + 15, 'frog higher ' + base.toFixed(0) + ' ' + fr.toFixed(0));
+  // 토끼: 더 빠르다
+  const run = ch => { const W = empty({ char: ch }); W.input.dir = 1; for (let i = 0; i < 60; i++) tick(W); return W.p.vx; };
+  assert(run('rabbit') > run('robot') * 1.1 && Math.abs(run('robot') - D.DIFFICULTY.normal.ctl.maxVx) < 1, 'rabbit faster ' + run('rabbit') + ' ' + run('robot'));
+  // 펭귄: 같은 높이를 떨어지는 데 더 오래 걸린다 (오르는 높이는 같다)
+  const drop = ch => { const W = empty({ char: ch }); W.p.y = 900; W.cam = 0; W.p.vy = 0; let n = 0; while (W.p.y > 300 && n < 1000) { tick(W); n++; } return n; };
+  assert(drop('penguin') > drop('robot') * 1.1, 'penguin slower ' + drop('penguin') + ' ' + drop('robot'));
+  assert(Math.abs(peak('penguin') - base) < 1, 'penguin same jump height');
+  // 외계인: 로켓이 오래 · 스프링이 높이
+  const a = create(1, { char: 'alien' }), r0 = create(1, {});
+  assert(a.rocketTime > r0.rocketTime * 1.3 && a.phys.spring > r0.phys.spring * 1.1, 'alien rocket spring');
+  // 로봇: 별을 조금 떨어져서도 먹는다
+  const star = ch => { const W = empty({ char: ch }); W.p.y = 300; W.p.vy = 0; W.stars.push({ id: 9, x: W.p.x + (R + D.STAR.r) * 1.4, y: 300, got: false }); tick(W); return W.starsGot; };
+  assert(star('robot') === 1 && star('frog') === 0, 'robot magnet');
+  // 상점 강화와 겹친다
+  const up = create(1, { char: 'rabbit', upgrades: { speed: 5, rocket: 5 } }), up0 = create(1, { upgrades: { speed: 5 } });
+  assert(up.ctl.maxVx > up0.ctl.maxVx * 1.1, 'speed upgrade stacks');
+  assert(runStats(create(1, { char: 'frog' })).char === 'frog', 'run stats keep char');
+});
+
+test('닿지 못하는 틈이 없다: 다섯 캐릭터 모두, 세 난이도 모두', () => {
+  for (const ch of CHAR_IDS) {
+    for (const diff of LEVELS) {
+      let worst = 0, maxGap = 0;
+      for (let seed = 1; seed <= 3; seed++) {
+        const { W, rows } = rowsOf(diff, seed, 250, ch);
+        const F = W.phys, top = F.jump;
+        for (let i = 1; i < rows.length; i++) {
+          const a = rows[i - 1], b = rows[i], gap = b.y - a.y;
+          maxGap = Math.max(maxGap, gap / top);
+          if (!a.kind || b.kind === 'moving' || a.kind === 'moving') continue;
+          const t = Math.sqrt(2 * top / F.gUp) + Math.sqrt(2 * Math.max(0, top - gap) / F.gDown);
+          const need = Math.abs(wrapDelta(a.xs[0], b.xs[0])) - b.w / 2;
+          worst = Math.max(worst, need / (W.ctl.maxVx * t * 0.8));
+        }
+      }
+      assert(maxGap < 0.9, ch + ' ' + diff + ' gap ' + maxGap);
+      assert(worst < 1, ch + ' ' + diff + ' sideways ' + worst);
+    }
+  }
+});
+
+test('가시 폭탄은 캐릭터가 튀어 오르는 길 위에도 놓이지 않는다 (더 높이 뛰는 개구리)', () => {
+  for (let seed = 1; seed <= 4; seed++) {
+    const W = create(seed, { viewH: 600, char: 'frog' });
+    const seen = [];
+    for (let i = 0; i < 250; i++) {
+      W.rocket = 10; W.cam += 120; W.p.y = W.cam + 300; tick(W);
+      for (const p of W.plats) if (!seen.includes(p)) seen.push(p);
+      for (const m of W.mines) for (const p of seen) {
+        if (m.y > p.y && m.y < p.y + W.phys.jump + R && p.kind !== 'moving' && p.kind !== 'ground') {
+          assert(Math.abs(wrapDelta(m.x, p.x)) >= D.MINE.clear - 1, 'mine above plat');
+        }
+      }
+    }
+  }
+});
+
+test('사람 닮은 봇: 어느 캐릭터든 쉬움은 늘 100m, 보통도 비슷하게 (숫자를 찍는다)', () => {
+  const line = [];
+  for (const ch of CHAR_IDS) {
+    const E = measure('easy', HUMAN, 8, 120, ch), N = measure('normal', HUMAN, 8, 120, ch);
+    line.push(ch + ' 쉬움 ' + E.avgFirst.toFixed(0) + 'm·보통 ' + N.avgFirst.toFixed(0) + 'm');
+    assert(E.reach100 === 8, ch + ' easy reach 100 ' + E.reach100);
+    assert(N.avgFirst >= 120, ch + ' normal ' + N.avgFirst.toFixed(0));
+  }
+  console.log('       처음 떨어질 때까지 평균: ' + line.join(' / '));
 });
 
 test('난이도 표: 쉬움 → 보통 → 어려움 순서로 좁고 멀고 폭탄이 빠르다', () => {

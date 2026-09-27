@@ -236,7 +236,7 @@
       SH.save(shop);
       SN.Audio.play('buy');
       vibrate(20);
-      if (SH.charDef(id)) toast(SH.charDef(id).name + '(으)로 바꿨어요!');
+      if (SH.charDef(id)) toast(SH.charDef(id).name + ' 골랐어요!');
     } else {
       SN.Audio.play('deny');
       toast(NAMES[r.reason] || '살 수 없어요');
@@ -247,7 +247,7 @@
   }
   function useChar(id) {
     const ok = SH.selectChar(shop, id);
-    if (ok) { SH.save(shop); SN.Audio.play('pick'); toast(SH.charDef(id).name + '(으)로 바꿨어요!'); }
+    if (ok) { SH.save(shop); SN.Audio.play('pick'); toast(SH.charDef(id).name + ' 골랐어요!'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
     return ok;

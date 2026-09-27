@@ -37,10 +37,12 @@ const run = o => Object.assign({ mode: 'endless', score: 0, golds: 0, eaten: 0, 
 
 console.log('냠냠 뱀 상점 · 미션 테스트');
 
-test('수치: 꾸미기 6개(기본 무료, 황금이 가장 비쌈) · 강화 5단계 · 시작 아이템 3개까지 · 미션 15개 안팎', () => {
-  assert(D.SKINS.length === 6 && D.SKINS[0].price === 0, 'skins');
-  const gold = D.SKINS.find(s => s.id === 'gold');
-  assert(D.SKINS.every(s => s.price <= gold.price), 'gold most expensive');
+test('수치: 캐릭터 5종(기본 무료, 값이 오름) · 강화 5단계 · 시작 아이템 3개까지 · 미션 15개 안팎', () => {
+  assert(D.CHARS.length === 5 && D.CHARS[0].price === 0 && D.CHARS[0].id === 'neon', 'chars');
+  assert(new Set(D.CHARS.map(c => c.id)).size === 5, 'char ids unique');
+  assert(new Set(D.CHARS.map(c => c.price)).size === 5 && D.CHARS.every((c, i) => !i || c.price > D.CHARS[i - 1].price), 'prices unique and rising');
+  for (const c of D.CHARS) assert(c.name && c.look && c.trait && c.traits && Object.keys(c.traits).length >= 1 && /^#[0-9a-f]{6}$/i.test(c.color), 'char fields ' + c.id);
+  assert(D.SKINS === undefined, 'old skins removed');
   for (const u of D.UPGRADES) assert(u.prices.length === D.UPGRADE_MAX && u.prices.every((p, i) => !i || p > u.prices[i - 1]), 'upgrade prices rise ' + u.id);
   for (const it of D.START_ITEMS) assert(it.max === 3 && D.ITEM.kinds[it.eff], 'start item ' + it.id);
   assert(D.MISSIONS.length >= 14 && D.MISSIONS.length <= 18, 'missions count ' + D.MISSIONS.length);
@@ -52,9 +54,10 @@ test('수치: 꾸미기 6개(기본 무료, 황금이 가장 비쌈) · 강화 5
   assert(SN.Render === undefined, 'no render in node');
 });
 
-test('처음 상태: 기본 네온만 가짐, 미션 3개, 강화 0', () => {
+test('처음 상태: 네온 뱀만 가짐, 미션 3개, 강화 0', () => {
   const { st } = fresh();
-  assert(st.skin === 'neon' && st.skins.neon && !st.skins.gold, 'skins');
+  assert(st.v === 2 && st.char === 'neon' && st.chars.neon && Object.keys(st.chars).length === 1, 'chars');
+  assert(!('skin' in st) && !('skins' in st), 'no old keys');
   assert(st.missions.length === D.MISSION_SLOTS && new Set(st.missions.map(m => m.id)).size === 3, 'missions 3 unique');
   assert(D.UPGRADES.every(u => st.up[u.id] === 0), 'up 0');
   assert(D.START_ITEMS.every(it => st.items[it.id] === 0), 'items 0');
@@ -93,25 +96,104 @@ test('판이 끝나면 지갑에 코인이 들어오고 판 수가 오른다', (
   assert(st.life.games === 1 && st.life.earned === 13, 'life');
 });
 
-test('꾸미기 사기: 코인이 있으면 사고 바로 입음, 모자라면 못 삼, 두 번은 못 삼', () => {
+test('캐릭터 사기: 코인이 있으면 사고 바로 고름, 모자라면 못 삼, 두 번은 못 삼', () => {
   const { st, w } = fresh(350);
-  let r = SH.buy(st, 'fire');
-  assert(!r.ok && r.reason === 'coins' && w.coins() === 350 && !st.skins.fire, 'not enough');
-  r = SH.buy(st, 'rainbow');
-  assert(r.ok && r.cost === 300 && w.coins() === 50 && st.skins.rainbow && st.skin === 'rainbow', 'bought');
-  r = SH.buy(st, 'rainbow');
+  let r = SH.buy(st, 'dragon');
+  assert(!r.ok && r.reason === 'coins' && w.coins() === 350 && !st.chars.dragon, 'not enough');
+  r = SH.buy(st, 'robot');
+  assert(r.ok && r.cost === 300 && w.coins() === 50 && st.chars.robot && st.char === 'robot', 'bought');
+  r = SH.buy(st, 'robot');
   assert(!r.ok && r.reason === 'owned' && w.coins() === 50, 'owned');
   assert(SH.price(st, 'neon') === null, 'free one owned');
   assert(SH.buy(st, 'nope').reason === 'unknown', 'unknown');
+  assert(SH.buy(st, 'rainbow').reason === 'unknown', 'old skin id not for sale');
 });
 
-test('꾸미기 고르기는 가진 것만', () => {
+test('캐릭터 고르기는 가진 것만 (selectSkin은 같은 것)', () => {
   const { st } = fresh(0);
-  assert(!SH.selectSkin(st, 'gold') && st.skin === 'neon', 'not owned');
-  assert(!SH.selectSkin(st, 'zzz'), 'unknown');
-  st.skins.ice = true;
-  assert(SH.selectSkin(st, 'ice') && st.skin === 'ice', 'owned');
-  assert(SH.selectSkin(st, 'neon') && st.skin === 'neon', 'back to neon');
+  assert(!SH.selectChar(st, 'galaxy') && st.char === 'neon', 'not owned');
+  assert(!SH.selectChar(st, 'zzz') && !SH.selectChar(st, 'gold'), 'unknown');
+  st.chars.bug = true;
+  assert(SH.selectChar(st, 'bug') && st.char === 'bug', 'owned');
+  assert(SH.selectSkin(st, 'neon') && st.char === 'neon', 'alias back to neon');
+  // 고른 캐릭터가 판 옵션으로 들어간다
+  st.char = 'bug';
+  assert(SH.worldOpts(st, {}, { mode: 'endless' }).char === 'bug', 'worldOpts char');
+  assert(WD.create(32, 20, 1, SH.worldOpts(st, {}, { mode: 'endless' })).char === 'bug', 'world char');
+});
+
+test('예전 꾸미기 저장본: 비슷한 캐릭터로 바꾸고, 맞는 것이 없으면 값을 한 번만 돌려준다', () => {
+  const w = SH.useWallet(SH.memWallet(10));
+  const store = fakeStore({ 'snake.shop1': JSON.stringify({ v: 1, skin: 'fire', skins: { neon: true, rainbow: true, fire: true, ice: true, gold: true }, up: { coin: 2 }, items: { slow: 1 }, missions: [], mseed: 5, life: { earned: 900, games: 4 } }) });
+  const st = SH.load(store);
+  assert(st.chars.neon && st.chars.bug && st.chars.dragon && !st.chars.galaxy && !st.chars.robot, 'mapped ' + JSON.stringify(st.chars));
+  assert(st.char === 'dragon', 'selected fire becomes dragon ' + st.char);
+  assert(w.coins() === 10 + 900 + 1400, 'ice and gold refunded ' + w.coins());
+  assert(st.up.coin === 2 && st.items.slow === 1 && st.life.games === 4, 'other things kept');
+  assert(!('refund' in st) && !('migrated' in st) && !('skins' in st), 'no leftovers');
+  const m = SH.takeMigration();
+  assert(m && m.refund === 2300 && m.from.length === 4 && SH.takeMigration() === null, 'migration note once');
+  // 바로 저장되어 다시 읽어도 두 번 돌려주지 않는다
+  const saved = JSON.parse(store.mem['snake.shop1']);
+  assert(saved.v === 2 && saved.chars.dragon && !saved.skins, 'saved as v2');
+  const again = SH.load(store);
+  assert(w.coins() === 2310 && again.char === 'dragon' && SH.takeMigration() === null, 'no second refund');
+  // 고르던 꾸미기가 돌려받은 것(얼음)이면 네온 뱀으로
+  const w2 = SH.useWallet(SH.memWallet(0));
+  const st2 = SH.load(fakeStore({ 'snake.shop1': JSON.stringify({ skin: 'ice', skins: { neon: true, ice: true, star: true } }) }));
+  assert(st2.char === 'neon' && st2.chars.galaxy && w2.coins() === 900, 'ice refunded, star becomes galaxy');
+  assert(SH.takeMigration().refund === 900, 'note for second');
+  // 꾸미기를 산 적 없는 옛 저장본: 바뀌는 것 없음
+  const w3 = SH.useWallet(SH.memWallet(0));
+  const st3 = SH.load(fakeStore({ 'snake.shop1': JSON.stringify({ skin: 'neon', skins: { neon: true } }) }));
+  assert(st3.char === 'neon' && Object.keys(st3.chars).length === 1 && w3.coins() === 0 && SH.takeMigration() === null, 'plain old save');
+  // 옛 id 표는 없는 캐릭터를 가리키지 않고, 맞는 캐릭터가 없는 것은 돌려줄 값이 있다
+  for (const [id, m2] of Object.entries(D.OLD_SKINS)) assert(m2.to ? !!SH.charDef(m2.to) : m2.refund > 0, 'old map ' + id);
+});
+
+test('캐릭터 특기가 규칙에 들어간다 (char를 안 넘기면 특기 없음)', () => {
+  const base = WD.create(32, 20, 5, { mode: 'endless' });
+  const mk = id => WD.create(32, 20, 5, { mode: 'endless', char: id });
+  const C = id => D.CHARS.find(c => c.id === id).traits;
+  assert(base.speedMul === 1 && base.startGhost === 0 && base.ghostMul === 1 && base.char === 'neon', 'no char = no trait');
+  // 네온 뱀: 조금 느긋하게
+  const N = mk('neon');
+  assert(Math.abs(WD.speed(N) - WD.speed(base) * C('neon').speedMul) < 1e-9 && WD.speed(N) < WD.speed(base), 'neon slower');
+  // 로봇 뱀: 아이템이 더 자주
+  const R = mk('robot');
+  assert(Math.abs(R.itemGapMul - C('robot').itemMul) < 1e-9 && R.itemT < base.itemT, 'robot items sooner');
+  // 꼬마 용: 콤보 시간 +
+  const G = mk('dragon');
+  assert(Math.abs(G.comboWindow - (D.COMBO.window + C('dragon').comboPlus)) < 1e-9, 'dragon combo');
+  G.wait = 0; G.item = null; G.itemT = 999;
+  const eatAhead = () => { const d = WD.DIRS[G.dir], h = G.snake[0]; G.food = { x: h.x + d[0], y: h.y + d[1], gold: false, born: G.t }; G.acc = 1 / WD.speed(G); WD.step(G, 1e-6); };
+  eatAhead(); G.time += D.COMBO.window + 0.5; eatAhead();
+  assert(G.combo === 2, 'dragon keeps combo past base window');
+  // 무지개 애벌레: 황금 구슬이 더 오래
+  assert(mk('bug').goldLife === D.FOOD.goldLife + C('bug').goldPlus, 'bug gold life');
+  // 은하 해룡: 출발 유령 (대기 동안 줄지 않음) + 유령 아이템 더 오래, 다음 레벨에도 출발 유령
+  const X = mk('galaxy');
+  assert(X.eff.ghost === C('galaxy').startGhost && X.eff.slow === 0, 'galaxy start ghost');
+  WD.step(X, D.START.wait * 0.5);
+  assert(X.eff.ghost === C('galaxy').startGhost, 'no drain while waiting');
+  const Y = mk('galaxy'); Y.wait = 0; Y.eff.ghost = 0; Y.food = { x: 0, y: 0, gold: false, born: 0 };
+  const h = Y.snake[0]; Y.item = { kind: 'ghost', x: h.x + 1, y: h.y, life: 8, born: 0 };
+  WD.step(Y, 1 / WD.speed(Y) + 1e-9);
+  assert(Math.abs(Y.eff.ghost - D.ITEM.kinds.ghost.time * C('galaxy').ghostMul) < 1e-6, 'galaxy ghost item longer ' + Y.eff.ghost);
+  const S = WD.create(32, 20, 5, { mode: 'stage', level: 1, char: 'galaxy' });
+  S.eff.ghost = 0; WD.nextLevel(S);
+  assert(S.eff.ghost === C('galaxy').startGhost, 'start ghost again on next level');
+  // 강화와 함께: 강화 위에 특기를 더한다
+  const U = WD.create(32, 20, 5, { mode: 'endless', char: 'bug', up: { goldTime: 2 } });
+  assert(U.goldLife === D.FOOD.goldLife + 2 + C('bug').goldPlus, 'upgrade + trait stack');
+  const V = WD.create(32, 20, 5, { mode: 'endless', char: 'robot', up: { itemFreq: 5 } });
+  assert(V.itemGapMul >= 0.3 && V.itemGapMul < 0.6, 'item floor ' + V.itemGapMul);
+  // 모르는 캐릭터는 특기 없이
+  const Z = WD.create(32, 20, 5, { mode: 'endless', char: 'zzz' });
+  assert(Z.char === 'neon' && Z.speedMul === 1 && Z.itemGapMul === 1, 'unknown char no trait');
+  // 특기는 서로 다른 한 가지 쪽만 돕는다 (어느 하나가 모두 낫지 않게)
+  const keys = D.CHARS.map(c => Object.keys(c.traits).sort().join());
+  assert(new Set(keys).size === 5, 'different traits');
 });
 
 test('강화 사기: 단계마다 값이 오르고 5단계에서 멈춤', () => {
@@ -231,14 +313,16 @@ test('보통 미션·스테이지 레벨 미션은 판 요약에서 맞게 잰�
   assert(SH.runOf(S).lvlTop === 4, 'cleared 3 and 4');
 });
 
-test('망가진 저장본도 올바른 모양으로 (가지지 않은 꾸미기는 못 입음)', () => {
-  for (const junk of [null, 5, 'x', [], { skins: 'a' }, { missions: [1, null, { id: 'nope' }] }]) {
+test('망가진 저장본도 올바른 모양으로 (가지지 않은 캐릭터는 못 고름)', () => {
+  SH.useWallet(SH.memWallet(0));
+  for (const junk of [null, 5, 'x', [], { skins: 'a' }, { chars: 'a', char: 7 }, { chars: [], skins: [] }, { missions: [1, null, { id: 'nope' }] }]) {
     const st = SH.load(fakeStore({ 'snake.shop1': JSON.stringify(junk) }));
-    assert(st.skin === 'neon' && st.missions.length === 3, 'junk ' + JSON.stringify(junk));
+    assert(st.char === 'neon' && st.chars.neon && Object.keys(st.chars).length === 1 && st.missions.length === 3, 'junk ' + JSON.stringify(junk));
   }
-  const st = SH.load(fakeStore({ 'snake.shop1': JSON.stringify({ skin: 'gold', skins: { gold: 'yes', ice: true }, up: { coin: 9, goldTime: 2.7, zzz: 4 }, items: { ghost: 8, slow: -1 },
+  assert(SH.coins() === 0, 'junk refunds nothing');
+  const st = SH.load(fakeStore({ 'snake.shop1': JSON.stringify({ v: 2, char: 'galaxy', chars: { galaxy: 'yes', bug: true, zzz: true }, up: { coin: 9, goldTime: 2.7, zzz: 4 }, items: { ghost: 8, slow: -1 },
     missions: [{ id: 'len25', prog: 99 }, { id: 'len25', prog: 1 }, { id: 'gold5', prog: 2 }, { id: 'combo8', prog: 1 }, { id: 't120' }] }) }));
-  assert(st.skin === 'neon' && !st.skins.gold && st.skins.ice, 'skin not owned falls back');
+  assert(st.char === 'neon' && !st.chars.galaxy && st.chars.bug && !st.chars.zzz, 'char not owned falls back');
   assert(st.up.coin === 5 && st.up.goldTime === 2 && !('zzz' in st.up), 'up clamp');
   assert(st.items.ghost === 3 && st.items.slow === 0, 'items clamp');
   assert(st.missions.length === 3 && st.missions[0].id === 'len25' && st.missions[0].done && st.missions[0].prog === 25, 'missions cleaned');
@@ -258,8 +342,8 @@ test('공통 지갑(HUB)과 이어 붙이면 네 게임이 같은 코인을 쓴�
   assert(SH2.coins() === 20, 'coins via hub ' + SH2.coins());
   assert(H && H.coins() === 20, 'hub sees it');
   H.addCoins(300);   // 다른 게임이 번 코인
-  assert(SH2.buy(st, 'rainbow').ok && H.coins() === 20, 'spent from shared wallet');
-  assert(!SH2.buy(st, 'gold').ok && H.coins() === 20, 'not enough in shared wallet');
+  assert(SH2.buy(st, 'robot').ok && H.coins() === 20, 'spent from shared wallet');
+  assert(!SH2.buy(st, 'galaxy').ok && H.coins() === 20, 'not enough in shared wallet');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

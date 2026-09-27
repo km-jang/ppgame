@@ -164,7 +164,7 @@
       { id: 'frog',    name: '개구리',      price: 300,  look: 'frog',    trait: { jump: 1.1 },
         desc: '뒷다리가 튼튼해 조금 더 높이 뛰어요', short: '더 높이 점프',
         body: ['#f2ffe0', '#6cf25a', '#157a2c'], rim: '255,230,109', glow: '108,242,90' },
-      { id: 'rabbit',  name: '토끼',        price: 500,  look: 'rabbit',  trait: { speed: 1.14, accel: 1.12 },
+      { id: 'rabbit',  name: '토끼',        price: 500,  look: 'rabbit',  trait: { speed: 1.14, accel: 1.14, decel: 1.14 },
         desc: '재빨라서 왼쪽·오른쪽으로 더 빨리 가요', short: '옆으로 더 빨리',
         body: ['#ffffff', '#ffd6ec', '#c0608f'], rim: '255,120,190', glow: '255,160,215' },
       { id: 'penguin', name: '펭귄',        price: 800,  look: 'penguin', trait: { fall: 0.8 },

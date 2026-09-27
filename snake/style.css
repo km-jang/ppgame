@@ -392,7 +392,6 @@ body.touch .text-btn { padding: 10px 16px; }
 .tabs button[aria-selected="true"] { color: var(--cyan); border-color: var(--cyan); background: rgba(94, 231, 255, .14); }
 .shop-sub { margin: 0 0 10px; font-size: 13px; }
 .shop-list { display: grid; gap: 10px; margin-bottom: 14px; text-align: left; }
-.shop-list.t-skins { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .shop-list.t-up, .shop-list.t-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sitem { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(94, 231, 255, .04); min-width: 0; }
 .sitem.skin { --sc: var(--cyan); display: grid; grid-template-columns: 1fr; grid-template-areas: "cv" "name" "desc" "btn"; row-gap: 4px; align-items: start; }
@@ -454,7 +453,6 @@ body.touch .text-btn { padding: 10px 16px; }
 /* 좁은 화면 (세로 폰): 상점 한 칸 · 두 칸 */
 @media (max-width: 700px) {
   .shop-list.t-up, .shop-list.t-items { grid-template-columns: 1fr; }
-  .shop-list.t-skins { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -504,4 +502,39 @@ body.touch .text-btn { padding: 10px 16px; }
 @media (max-height: 420px) and (orientation: landscape) {
   #scr-title .logo { font-size: 40px; }
   #scr-title .tagline, #scr-title .help { display: none; }
+}
+/* ═══ 캐릭터 5종 (2026-09-27, 뿅뿅 우주선 "내 기체" 칸과 같은 모양) ═══════════ */
+.char-card {
+  display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 10px;
+  width: 100%; min-height: 60px; margin: 0 0 12px; padding: 6px 10px 6px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 14px; background: rgba(94, 231, 255, .05);
+  color: var(--text); font: inherit; text-align: left; transition: transform .08s, border-color .15s;
+}
+.char-card:hover { border-color: var(--cyan); }
+.char-card:active { transform: scale(.97); }
+.char-card:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.char-cv { width: 96px; height: 44px; display: block; }
+.cc-txt { min-width: 0; }
+.cc-txt small { display: block; font-size: 11px; color: var(--muted); }
+.cc-txt b { display: block; font: normal 21px/1.15 var(--disp); letter-spacing: .5px; }
+.cc-txt em { display: block; font-style: normal; font-size: 12px; line-height: 1.3; color: #9dffcb; word-break: keep-all; }
+.cc-go { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; font: normal 15px var(--disp); color: var(--cyan); white-space: nowrap; }
+/* 상점 캐릭터 칸: 이름 · 모양 · 특기 */
+.shop-list.t-chars { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.sitem.char { grid-template-areas: "cv" "name" "desc" "trait" "btn"; }
+.sitem.char .skin-cv { aspect-ratio: 168 / 76; }
+.sitem.char .s-trait { grid-area: trait; font-size: 12px; line-height: 1.35; color: #9dffcb; word-break: keep-all; }
+.sitem.char > button, .sitem.char > .maxed { align-self: end; }
+@media (max-width: 900px) { .shop-list.t-chars { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .shop-list.t-chars { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-height: 600px) and (orientation: landscape) {
+  .char-card { grid-template-columns: 80px 1fr auto; min-height: 48px; padding: 3px 8px 3px 4px; margin-bottom: 8px; gap: 8px; }
+  .char-cv { width: 80px; height: 36px; }
+  .cc-txt b { font-size: 17px; }
+  .cc-txt em { font-size: 11px; }
+  .cc-go { padding: 6px 10px; font-size: 14px; }
+  .shop-list.t-chars { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sitem.char { grid-template-columns: 84px 1fr; grid-template-areas: "cv name" "cv desc" "trait trait" "btn btn"; }
+  .sitem.char .skin-cv { width: 84px; height: 38px; }
+  .sitem.char .s-trait { font-size: 11px; line-height: 1.25; }
 }

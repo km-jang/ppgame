@@ -164,7 +164,7 @@
     const T = charOf(ch).trait || {};
     const U = id => { const d = D.UPGRADES.find(u => u.id === id); const lv = Math.max(0, Math.min(D.UPGRADE_MAX, Math.floor(Number(up[id]) || 0))); return d ? lv * d.per : 0; };
     return {
-      ctl: Object.assign({}, L.ctl, { maxVx: L.ctl.maxVx * (1 + U('speed')) * (T.speed || 1), accel: L.ctl.accel * (T.accel || 1) }),
+      ctl: Object.assign({}, L.ctl, { maxVx: L.ctl.maxVx * (1 + U('speed')) * (T.speed || 1), accel: L.ctl.accel * (T.accel || 1), decel: L.ctl.decel * (T.decel || 1) }),
       rocketTime: D.ROCKET.time * (1 + U('rocket')) * (T.rocket || 1),
       rescues: L.rescues > 0 ? L.rescues + Math.round(U('cloud')) : 0,   // 구조 구름 강화는 쉬움만
     };

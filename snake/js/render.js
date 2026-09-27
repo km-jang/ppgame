@@ -543,15 +543,28 @@
   // 꼬마 용: 등 가시 · 날개 한 쌍 · 꼬리 불꽃
   function paintDragonDeco(ctx, pts, far, c, tm, dirs, calm) {
     const n = pts.length;
-    // 등 가시: 꼬리 쪽을 향한 작은 삼각형 줄
-    ctx.fillStyle = 'rgba(255,236,170,0.9)';
+    // 비늘: 마디마다 꼬리 쪽으로 둥글게 휜 줄
+    ctx.strokeStyle = 'rgba(110,18,8,0.5)'; ctx.lineWidth = Math.max(1, c * 0.07);
     ctx.beginPath();
-    for (let i = 2; i < n - 1; i += 2) {
+    for (let i = 1; i < n; i++) {
+      const t = i / (n - 1), s = c * (1 - 0.35 * t), [ux, uy] = dirs[i], p = pts[i];
+      const a0 = Math.atan2(-uy, -ux), cx = p.x + ux * s * 0.2, cy = p.y + uy * s * 0.2;
+      ctx.moveTo(cx + Math.cos(a0 - 0.95) * s * 0.3, cy + Math.sin(a0 - 0.95) * s * 0.3);
+      ctx.arc(cx, cy, s * 0.3, a0 - 0.95, a0 + 0.95);
+    }
+    ctx.stroke();
+    // 옆 가시: 두 마디마다 양옆으로 뒤를 향한 작은 가시
+    ctx.fillStyle = '#ffe9b0';
+    ctx.beginPath();
+    for (let i = 3; i < n - 1; i += 2) {
       const t = i / (n - 1), s = c * (1 - 0.45 * t), [ux, uy] = dirs[i], px = -uy, py = ux, p = pts[i];
-      ctx.moveTo(p.x - ux * s * 0.34, p.y - uy * s * 0.34);
-      ctx.lineTo(p.x + ux * s * 0.1 + px * s * 0.13, p.y + uy * s * 0.1 + py * s * 0.13);
-      ctx.lineTo(p.x + ux * s * 0.1 - px * s * 0.13, p.y + uy * s * 0.1 - py * s * 0.13);
-      ctx.closePath();
+      for (const sd of [1, -1]) {
+        const bx = p.x + px * sd * s * 0.3, by = p.y + py * sd * s * 0.3;
+        ctx.moveTo(bx + ux * s * 0.14, by + uy * s * 0.14);
+        ctx.lineTo(bx + px * sd * s * 0.26 - ux * s * 0.2, by + py * sd * s * 0.26 - uy * s * 0.2);
+        ctx.lineTo(bx - ux * s * 0.16, by - uy * s * 0.16);
+        ctx.closePath();
+      }
     }
     ctx.fill();
     // 날개: 머리 뒤 두 번째 마디에서 양옆으로 (천천히 파닥)
@@ -812,7 +825,7 @@
 
   // 금빛 왕관: 언제나 화면 위쪽을 향한다 (보석 셋)
   function paintCrown(ctx, x, y, c) {
-    const w = c * 0.62, hh = c * 0.4;
+    const w = c * 0.72, hh = c * 0.46;
     ctx.save();
     ctx.translate(x, y);
     ctx.beginPath();
@@ -851,13 +864,13 @@
   }
 
   // 캐릭터 미리보기: 작은 캔버스에 짧은 뱀 (칸 7×3, 머리가 오른쪽). 상점 카드·시작 화면 카드
-  const PREVIEW = [[6, 1], [5, 1], [4, 1], [4, 2], [3, 2], [2, 2], [2, 1], [1, 1], [1, 0], [0, 0]];
+  const PREVIEW = [[5, 0], [4, 0], [3, 0], [3, 1], [2, 1], [1, 1], [0, 1]];
   function drawCharPreview(cv, id, tm) {
     const g = cv.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, cv.width, cv.height);
-    const c = Math.min(cv.width / 7.8, cv.height / 3.6);
-    const ox = (cv.width - c * 7) / 2, oy = (cv.height - c * 3) / 2 + c * 0.12;
+    const c = Math.min(cv.width / 7.2, cv.height / 2.9);
+    const ox = (cv.width - c * 6) / 2 + c * 0.3, oy = (cv.height - c * 2) / 2 + c * 0.15;
     const pts = PREVIEW.map(([x, y]) => ({ x: ox + (x + 0.5) * c, y: oy + (y + 0.5) * c }));
     const lk = lookOf(id), t = tm == null ? 1.3 : tm;
     paintBody(g, pts, () => false, c, lk, t, false, [1, 0], true);

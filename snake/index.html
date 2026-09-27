@@ -43,13 +43,18 @@
   </div>
   <div id="toast" role="status"></div>
 
-  <!-- 시작 화면: 가로 화면은 두 칸 (왼쪽 로고·난이도·시작·상점 / 오른쪽 미션·도움말) -->
+  <!-- 시작 화면: 가로 화면은 두 칸 (왼쪽 로고·내 캐릭터·난이도·시작·상점 / 오른쪽 미션·도움말) -->
   <section id="scr-title" class="screen">
     <div class="panel tpanel">
       <div class="t-left">
         <h1 class="logo ko">냠냠 <span>뱀</span></h1>
         <p class="tagline">구슬을 먹으면 쭉쭉 길어져요</p>
         <p id="best" class="best"></p>
+        <button id="btn-char" type="button" class="char-card" aria-label="캐릭터 바꾸기">
+          <canvas id="char-preview" class="char-cv" width="168" height="76" aria-hidden="true"></canvas>
+          <span class="cc-txt"><small>내 캐릭터</small><b id="char-name">네온 뱀</b><em id="char-trait"></em></span>
+          <span class="cc-go">바꾸기</span>
+        </button>
         <div class="level-seg" role="group" aria-label="난이도">
           <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>느리게 · 벽 통과</small></button>
           <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>빠르게 · 벽 조심</small></button>
@@ -78,7 +83,7 @@
     </div>
   </section>
 
-  <!-- 상점: 꾸미기 · 강화 · 시작 아이템 -->
+  <!-- 상점: 캐릭터 · 강화 · 시작 아이템 -->
   <section id="scr-shop" class="screen">
     <div class="panel wide spanel">
       <div class="shop-head">
@@ -86,7 +91,7 @@
         <span class="coin-pill big"><i class="cn" aria-hidden="true"></i><b id="shop-coins">0</b></span>
       </div>
       <div class="tabs" role="tablist" aria-label="상점 칸">
-        <button type="button" role="tab" data-tab="skins" aria-selected="true">꾸미기</button>
+        <button type="button" role="tab" data-tab="chars" aria-selected="true">캐릭터</button>
         <button type="button" role="tab" data-tab="up" aria-selected="false">강화</button>
         <button type="button" role="tab" data-tab="items" aria-selected="false">시작 아이템</button>
       </div>

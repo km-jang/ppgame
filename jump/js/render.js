@@ -1030,9 +1030,9 @@
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, w, h);
     // 토끼 귀 끝(몸 위 약 2배)부터 개구리 발(아래 1.3배)까지 들어가게
-    const r = Math.round(Math.min(w, h) * 0.27);
+    const r = Math.round(Math.min(w, h) * 0.3);
     const stub = { phase: 'play', rocket: 0, shield: false, t: 1, cause: null, p: { vx: 0, vy: 0, land: -9, face: 1 }, ctl: { maxVx: 1 } };
-    drawBot(g, stub, { calm: true, dpr: 1, char: id }, w / 2, h * 0.04 + r * 2.02, r, 1, 1);
+    drawBot(g, stub, { calm: true, dpr: 1, char: id }, w / 2, h * 0.03 + r * 2.04, r, 1, 1);
   }
 
   // ─── 주인공 ────────────────────────────────────────────────
