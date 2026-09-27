@@ -45,17 +45,17 @@
   </div>
   <div id="toast" role="status"></div>
 
-  <!-- 시작 화면: 왼쪽 로고·내 우주선·미션 / 오른쪽 난이도·출발·상점·메달·도움말 -->
+  <!-- 시작 화면: 왼쪽 로고·내 캐릭터·미션 / 오른쪽 난이도·출발·상점·메달·도움말 -->
   <section id="scr-title" class="screen">
     <div class="panel tpanel">
       <div class="t-left">
         <h1 class="logo ko">슝슝 <span class="space">우주 </span><span class="hl">달리기</span></h1>
         <p class="tagline">별을 모으며 우주 길을 달려요</p>
         <p id="best" class="best"></p>
-        <button id="btn-ship" type="button" class="ship-card" aria-label="우주선 꾸미기">
+        <button id="btn-ship" type="button" class="ship-card" aria-label="캐릭터 바꾸기">
           <canvas id="ship-preview" class="ship-cv" width="128" height="128" aria-hidden="true"></canvas>
-          <span class="sc-txt"><small>내 우주선</small><b id="ship-name">기본</b><em id="ship-desc"></em></span>
-          <span class="sc-go">꾸미기</span>
+          <span class="sc-txt"><small>내 캐릭터</small><b id="ship-name">슝슝 제트</b><em id="ship-desc"></em></span>
+          <span class="sc-go">바꾸기</span>
         </button>
         <div id="title-missions" class="mcard"></div>
       </div>
@@ -91,7 +91,7 @@
         <span class="coin-pill big"><i class="cn" aria-hidden="true"></i><b id="shop-coins">0</b></span>
       </div>
       <div class="tabs" role="tablist" aria-label="상점 칸">
-        <button type="button" role="tab" data-tab="skins" aria-selected="true">꾸미기</button>
+        <button type="button" role="tab" data-tab="chars" aria-selected="true">캐릭터</button>
         <button type="button" role="tab" data-tab="up" aria-selected="false">강화</button>
         <button type="button" role="tab" data-tab="items" aria-selected="false">시작 아이템</button>
       </div>

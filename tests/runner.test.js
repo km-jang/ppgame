@@ -822,7 +822,7 @@ test('캐릭터 5종: id·값이 다 다르고, 첫 캐릭터는 공짜로 처�
   for (let i = 1; i < 5; i++) assert(D.CHARS[i].price > D.CHARS[i - 1].price, 'price order');
   for (const c of D.CHARS) {
     assert(c.name && c.desc && c.look && c.trait && Object.keys(c.trait).length > 0, 'trait ' + c.id);
-    assert(!/[—–]/.test(c.name + c.desc + c.look), 'no dashes ' + c.id);
+    assert(!/[\u2014\u2013]/.test(c.name + c.desc + c.look), 'no dashes ' + c.id);
   }
   const st = SH.blank();
   assert(st.chars.jet && Object.keys(st.chars).length === 1 && st.char === 'jet', 'only jet owned');

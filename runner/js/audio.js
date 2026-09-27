@@ -110,6 +110,8 @@
     claim: { gap: 0.2, fn(t) { [1047, 1319, 1568, 2093].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.2, 0.1)); noise(t, 'highpass', 6000, 9000, 0.3, 0.05); } },
     coin: { gap: 0.06, fn(t) { tone(t, 'square', 1976, 1976, 0.04, 0.04); tone(t + 0.04, 'square', 2637, 2637, 0.06, 0.04); } },
     start: { gap: 0.2, fn(t) { tone(t, 'square', 392, 392, 0.08, 0.1); tone(t + 0.09, 'square', 523, 523, 0.08, 0.1); tone(t + 0.18, 'square', 784, 784, 0.14, 0.1); } },
+    // 불사조 부활: 아래에서 위로 솟는 불꽃 소리
+    revive: { gap: 0.5, fn(t) { tone(t, 'sine', 330, 990, 0.45, 0.14); [784, 1047, 1319, 1568].forEach((f, i) => tone(t + 0.1 + i * 0.06, 'triangle', f, f, 0.2, 0.1)); noise(t, 'bandpass', 800, 4000, 0.4, 0.08); } },
     medal: { gap: 0.3, fn(t) { [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.35, 0.14)); noise(t, 'highpass', 5000, 9000, 0.4, 0.06); } },
   };
 
