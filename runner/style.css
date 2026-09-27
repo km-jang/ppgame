@@ -1,0 +1,324 @@
+:root {
+  --bg: #07080d;
+  --panel: rgba(12, 16, 26, 0.92);
+  --line: rgba(94, 231, 255, 0.28);
+  --text: #e8f7ff;
+  --muted: #8aa4b8;
+  --cyan: #5ee7ff;
+  --yellow: #ffe66d;
+  --pink: #ff2e88;
+  --red: #ff4d6d;
+  --disp: "Jua", system-ui, sans-serif;
+  --num: "Rajdhani", system-ui, sans-serif;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --back: cubic-bezier(.2, 1.5, .45, 1);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+#game { display: block; position: fixed; inset: 0; }
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font: 12px ui-monospace, monospace;
+  color: var(--cyan);
+}
+.i { width: 1em; height: 1em; fill: currentColor; flex: none; vertical-align: -0.14em; }
+
+/* ─── 위쪽 버튼: 아이콘 + 유리 느낌 ─── */
+#topbar {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(10px, env(safe-area-inset-left));
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+}
+.icon-btn {
+  display: grid; place-items: center;
+  width: 38px; height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(12, 16, 26, .72);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .35);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform .08s, border-color .15s;
+}
+.icon-btn:hover { border-color: var(--cyan); }
+.icon-btn:active { transform: scale(.92); }
+.icon-btn .i { width: 20px; height: 20px; color: var(--text); }
+#btn-mute .off { display: none; }
+#btn-mute.muted .on { display: none; }
+#btn-mute.muted .off { display: block; color: var(--red); }
+#btn-fs[hidden] { display: none; }
+/* 일시정지 버튼은 게임 중에만 */
+body:not(.playing) #btn-pause { display: none; }
+
+body.touch .only-pc { display: none; }
+body:not(.touch) .only-touch { display: none; }
+
+#toast {
+  position: fixed;
+  left: 50%; bottom: 40px;
+  transform: translateX(-50%) translateY(10px);
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transition: opacity .2s, transform .2s;
+  pointer-events: none;
+  z-index: 20;
+}
+#toast.on { opacity: 1; transform: translateX(-50%); }
+
+/* ─── 오버레이 화면 ─── */
+.screen {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(7, 8, 13, 0.55);
+  z-index: 10;
+  overflow-y: auto;
+}
+.screen.on { display: flex; animation: fade .25s ease-out; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+.panel {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  padding: 28px 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(16, 22, 36, .97), rgba(8, 11, 19, .97));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 1px rgba(94, 231, 255, .06) inset, 0 1px 0 rgba(255, 255, 255, .08) inset;
+  text-align: center;
+}
+.panel::before { content: ""; position: absolute; left: 24px; right: 24px; top: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
+.screen.on .panel { animation: panelIn .4s var(--ease) both; }
+@keyframes panelIn { from { opacity: 0; transform: translateY(18px) scale(.97); } }
+
+h1, h2 { margin: 0 0 6px; }
+h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
+.sub { color: var(--muted); margin: 0 0 18px; }
+
+/* 로고: N-GUN과 같은 기울어진 네온 글자 */
+.logo {
+  font: 700 54px/1 var(--num); font-style: italic; letter-spacing: 5px; margin-bottom: 8px; white-space: nowrap;
+  background: linear-gradient(180deg, #e9fdff 0%, #5ee7ff 55%, #1aa7c4 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 18px rgba(94, 231, 255, .55));
+}
+.logo span { color: var(--yellow); -webkit-text-fill-color: var(--yellow); }
+.tagline { margin: 0 0 14px; font: normal 18px var(--disp); letter-spacing: 1px; }
+.best { color: var(--yellow); margin: 0 0 20px; font: 600 18px var(--num); letter-spacing: .5px; }
+
+/* 큰 버튼: 비스듬한 네온 + 광택이 스친다 */
+.big-btn {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  transform: skewX(-8deg);
+  background: linear-gradient(180deg, #a8f6ff 0%, #5ee7ff 45%, #22b8d6 100%);
+  box-shadow: 0 6px 0 #0c6a7e, 0 10px 26px rgba(94, 231, 255, .35), inset 0 2px 0 rgba(255, 255, 255, .6);
+  color: var(--bg);
+  font: normal 24px var(--disp); letter-spacing: 2px;
+  cursor: pointer;
+}
+.big-btn > * { transform: skewX(8deg); }
+.big-btn .i { width: 20px; height: 20px; }
+.big-btn kbd { color: var(--bg); border-color: rgba(7, 8, 13, 0.35); margin-left: 6px; font-size: 12px; letter-spacing: 0; }
+.big-btn::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .6) 48%, transparent 60%) no-repeat;
+  background-size: 250% 100%; background-position: 160% 0;
+  animation: sweep 3.4s 1s ease-in-out infinite;
+}
+@keyframes sweep { 0% { background-position: 160% 0; } 28%, 100% { background-position: -70% 0; } }
+.big-btn:active { transform: skewX(-8deg) translateY(4px); box-shadow: 0 2px 0 #0c6a7e, 0 6px 16px rgba(94, 231, 255, .3), inset 0 2px 0 rgba(255, 255, 255, .5); }
+.big-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.text-btn {
+  margin-top: 14px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.help {
+  list-style: none;
+  padding: 0;
+  margin: 22px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: left;
+}
+.help li { display: flex; align-items: center; gap: 8px; }
+.help .i { width: 18px; height: 18px; color: var(--cyan); }
+.help .i.pink { color: var(--pink); }
+.help .i.gold { color: var(--yellow); }
+.help .i.red { color: var(--red); }
+.help b { color: var(--text); }
+.pc-line { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+
+/* ─── 게임 오버 ─── */
+#scr-over h2 { font-size: 36px; color: var(--red); text-shadow: 0 0 20px rgba(255, 77, 109, .5); }
+.score-big { font: 700 64px/1 var(--num); letter-spacing: 1px; margin: 8px 0 0; color: var(--yellow); }
+.score-big small { font-size: 20px; margin-left: 4px; color: var(--muted); }
+.new-best {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 8px 0 0; padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(255, 230, 109, .12);
+  color: var(--yellow); font-weight: 700;
+  animation: pop .5s .3s var(--back) both;
+}
+@keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.9); } }
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 18px 0 20px;
+}
+.stats div { padding: 10px 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(94, 231, 255, .04); }
+.stats dt { font-size: 12px; color: var(--muted); }
+.stats dd { margin: 4px 0 0; font: 700 22px var(--num); }
+
+/* ─── 모드 버튼 · 메달 ─── */
+.modes { display: flex; flex-direction: column; gap: 14px; }
+.big-btn.pink { background: linear-gradient(180deg, #ffb3d4 0%, #ff5fa8 45%, #d81f76 100%); box-shadow: 0 6px 0 #7a0f44, 0 10px 26px rgba(255, 46, 136, .35), inset 0 2px 0 rgba(255, 255, 255, .55); }
+.big-btn.pink:active { box-shadow: 0 2px 0 #7a0f44, 0 6px 16px rgba(255, 46, 136, .3), inset 0 2px 0 rgba(255, 255, 255, .5); }
+.big-btn .tag { font: 700 14px var(--num); letter-spacing: .5px; padding: 2px 8px; border-radius: 999px; background: rgba(7, 8, 13, .25); }
+.big-btn .tag:empty { display: none; }
+.mini-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 16px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .06); color: var(--text); font: normal 16px var(--disp); letter-spacing: 1px; cursor: pointer; }
+.mini-btn .i { width: 20px; height: 20px; color: var(--yellow); }
+.mini-btn b { font: 700 16px var(--num); color: var(--yellow); margin-left: 4px; }
+.help .glyphs { display: inline-flex; gap: 3px; min-width: 18px; font: 700 13px var(--num); font-style: normal; }
+.help .glyphs i { font-style: normal; }
+.panel.wide { max-width: 720px; }
+
+
+#medal-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 6px 0 12px; }
+.medal { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .04); text-align: left; }
+.medal .coin { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font: 700 15px var(--num); color: #1a1000;
+  background: radial-gradient(circle at 35% 30%, #fff 0 12%, var(--m1) 14% 55%, var(--m2) 100%); box-shadow: 0 0 0 2px rgba(255, 255, 255, .25), 0 0 14px var(--m3); }
+.medal b { display: block; font: normal 14px var(--disp); letter-spacing: .5px; color: var(--text); }
+.medal small { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; }
+.medal.t1 { --m1: #e08a4a; --m2: #7a3a14; --m3: rgba(224, 138, 74, .45); }
+.medal.t2 { --m1: #dfe7f2; --m2: #6b7a90; --m3: rgba(223, 231, 242, .45); }
+.medal.t3 { --m1: #ffe66d; --m2: #b98600; --m3: rgba(255, 230, 109, .6); }
+.medal.locked { opacity: .38; }
+.medal.locked .coin { background: #1a2130; box-shadow: none; color: var(--muted); }
+.records { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 16px; }
+.records div { padding: 8px 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(94, 231, 255, .04); }
+.records dt { font-size: 11px; color: var(--muted); }
+.records dd { margin: 2px 0 0; font: 700 20px var(--num); }
+
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: -8px 0 12px; }
+.chips span { padding: 3px 10px; border-radius: 999px; background: rgba(255, 46, 136, .14); border: 1px solid rgba(255, 46, 136, .5); color: #ffb3d4; font: 700 13px var(--num); animation: pop .45s .4s var(--back) both; }
+.new-medals { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 16px; }
+.new-medals:empty { display: none; }
+.new-medals .medal { animation: pop .5s var(--back) both; }
+.new-medals .medal:nth-child(2) { animation-delay: .15s; } .new-medals .medal:nth-child(3) { animation-delay: .3s; }
+
+
+/* 쉬움·보통 고르기 */
+.level-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 16px; }
+.level-seg button { min-height: 56px; padding: 6px; border-radius: 12px; border: 1px solid var(--line); background: rgba(94, 231, 255, .04); color: var(--muted); cursor: pointer; }
+.level-seg b { display: block; font: normal 22px var(--disp); letter-spacing: 1px; }
+.level-seg small { display: block; font-size: 12px; }
+.level-seg [aria-pressed=true] { border-color: var(--cyan); background: rgba(94, 231, 255, .14); color: var(--text); box-shadow: 0 0 0 1px var(--cyan), 0 0 16px rgba(94, 231, 255, .3); }
+.level-seg [aria-pressed=true] b { color: var(--cyan); }
+
+/* ─── 터치 기기: 누르기 쉬운 크기 (최소 44px) ─── */
+body.touch .icon-btn { width: 44px; height: 44px; }
+body.touch .big-btn { padding: 16px; }
+body.touch .text-btn { padding: 10px 16px; }
+
+@media (max-width: 600px) {
+  .logo { font-size: 44px; letter-spacing: 3px; }
+  .panel { padding: 22px 16px; }
+  #medal-list { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* 낮은 가로 화면(작은 탭·가로 폰): 시작 화면을 두 칸으로 */
+@media (max-height: 600px) and (orientation: landscape) {
+  .screen { padding: 10px 16px; }
+  #scr-title .panel {
+    max-width: 760px;
+    display: grid; grid-template-columns: 1fr 1fr; column-gap: 26px;
+    align-items: center; text-align: left;
+    padding: 20px 24px;
+  }
+  #scr-title .logo { font-size: 46px; grid-column: 1; grid-row: 1; }
+  #scr-title .tagline { grid-column: 1; grid-row: 2; margin-bottom: 6px; }
+  #scr-title .best { grid-column: 1; grid-row: 3; margin-bottom: 10px; }
+  #scr-title .level-seg { grid-column: 1; grid-row: 4; margin-bottom: 10px; }
+  #scr-title .modes { grid-column: 1; grid-row: 5; gap: 10px; }
+  #scr-title .help { grid-column: 2; grid-row: 1 / span 5; margin: 0; }
+  .level-seg button { min-height: 48px; padding: 4px; } .level-seg b { font-size: 18px; }
+  .modes .big-btn { padding: 11px; font-size: 21px; }
+  #medal-list { gap: 6px; margin-bottom: 8px; }
+  .medal { padding: 5px 6px; gap: 6px; } .medal .coin { width: 28px; height: 28px; font-size: 12px; } .medal b { font-size: 12px; } .medal small { font-size: 10px; }
+  .records { gap: 4px; margin-bottom: 8px; } .records div { padding: 3px 2px; } .records dt { font-size: 10px; } .records dd { font-size: 14px; margin: 0; }
+  #scr-medals .sub { margin-bottom: 8px; font-size: 13px; } #scr-medals h2 { font-size: 24px; }
+  #scr-medals .big-btn { padding: 9px; font-size: 18px; }
+  .panel.wide { padding: 16px 20px; }
+  #scr-title .pc-line { display: none; }
+  .score-big { font-size: 48px; }
+  .stats { margin: 12px 0 14px; }
+}
+@media (max-height: 420px) and (orientation: landscape) {
+  #scr-title .logo { font-size: 38px; }
+  .help { font-size: 13px; gap: 4px; }
+}
+
+/* 움직임 줄이기 설정: CSS 연출을 모두 건너뛴다 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* 시작 화면 도움말: 피해야 할 것 */
+.help b.danger { color: #ff6b7a; }
+
+/* 한글 이름 로고 (냠냠 뱀과 같은 주아 서체, 기울임). "달리기"는 분홍빛 노랑, 좁은 화면에선 "우주"를 뺀다 */
+.logo.ko { font-family: var(--disp); font-weight: normal; font-style: normal; letter-spacing: 2px; transform: skewX(-8deg); }
+.logo .hl { color: var(--yellow); -webkit-text-fill-color: var(--yellow); }
+.logo .space { color: inherit; -webkit-text-fill-color: transparent; }
+@media (max-width: 420px) { .logo .space { display: none; } }
+.help .glyphs { gap: 2px; }
+.help .glyphs .i { width: 16px; height: 16px; }

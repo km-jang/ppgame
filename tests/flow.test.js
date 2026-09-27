@@ -199,6 +199,37 @@ async function until(page, fn, arg, ms) {
   await test('N-SNAKE 콘솔 오류 없음', async () => { assert(!sn.errors.length, sn.errors.join(' | ')); });
   await sn.ctx.close();
 
+  console.log('슝슝 우주 달리기');
+  const rn = await open(browser, ROOT + '/runner/index.html');
+  const U = rn.page;
+  await test('시작 → 옆으로 밀면 줄이 바뀌고, 위로 밀면 뛴다', async () => {
+    assert(await on(U, 'scr-title'), '시작 화면 아님');
+    await U.tap('#btn-start');
+    assert(await until(U, () => RN.debug.mode === 'play'), '게임이 시작 안 됨');
+    const cdp = await U.context().newCDPSession(U);
+    const swipe = async (x0, y0, dx, dy) => {
+      const pt = (x, y) => [{ x, y, id: 5 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(x0, y0) });
+      for (let i = 1; i <= 4; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(x0 + dx * i / 4, y0 + dy * i / 4) });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    const l0 = await U.evaluate(() => RN.debug.world.p.lane);
+    await swipe(640, 500, 120, 0);
+    assert(await until(U, l => RN.debug.world.p.lane === Math.min(2, l + 1), l0), '오른쪽으로 밀었는데 줄이 안 바뀜');
+    await swipe(640, 500, 0, -120);
+    assert(await until(U, () => RN.debug.world.p.y > 0, null, 2000), '위로 밀었는데 안 뜀');
+  });
+  await test('부딪혀서 하트가 다하면 게임 오버 → 다시 하기', async () => {
+    await U.evaluate(() => { const W = RN.debug.world; W.hearts = 1; W.inv = 0; RN.debug.autopilot(false); });
+    // 운석이 나올 때까지 줄을 바꾸지 않고 가만히 있는다 (쉬움은 느리므로 넉넉히 기다린다)
+    assert(await until(U, () => { const W = RN.debug.world; W.inv = 0; W.shield = false; if (W.eff) for (const k in W.eff) W.eff[k] = 0; return RN.debug.mode === 'over'; }, null, 40000), '게임 오버 안 됨');
+    assert(await until(U, () => document.getElementById('scr-over').classList.contains('on'), null, 4000), '게임 오버 화면 안 나옴');
+    await U.tap('#btn-retry');
+    assert(await until(U, () => RN.debug.mode === 'play'), '다시 하기 안 됨');
+  });
+  await test('슝슝 우주 달리기 콘솔 오류 없음', async () => { assert(!rn.errors.length, rn.errors.join(' | ')); });
+  await rn.ctx.close();
+
   await browser.close();
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);

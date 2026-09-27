@@ -1,0 +1,20 @@
+{
+  "name": "슝슝 우주 달리기",
+  "short_name": "슝슝 달리기",
+  "description": "별을 모으며 네온 우주 길을 슝슝 달리는 게임",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07080d",
+  "theme_color": "#07080d",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
