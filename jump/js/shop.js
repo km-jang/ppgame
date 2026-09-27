@@ -147,27 +147,35 @@
   function runOf(W) {
     const r = JP.World.runStats(W);
     return {
-      diff: r.diff, height: r.height, stars: r.stars, springs: r.springs, rockets: r.rockets, saves: r.saves,
+      // height: 이번 판에 오른 거리 (미션 "오르기"는 출발 장소에서 시작해도 오른 만큼만) · top: 끝 높이 · start: 출발 높이
+      diff: r.diff, height: r.climb != null ? r.climb : r.height, top: r.height, start: r.start || 0, stars: r.stars, springs: r.springs, rockets: r.rockets, saves: r.saves,
       crumbles: r.crumbles || 0, bounces: r.bounces, maxCombo: r.maxCombo, time: Math.floor(r.time), zone: r.zone, stomps: r.stomps || 0, games: 1,
       gifts: r.gifts || 0, giftCoins: r.giftCoins || 0, giftItems: (r.giftItems || []).slice(), fevers: r.fevers || 0, rooms: r.rooms || 0,
     };
   }
 
-  // 코인 계산: 부분별로 돌려준다 (결과 화면에 나눠 보여 줌)
+  // 코인 계산: 부분별로 돌려준다 (결과 화면에 나눠 보여 줌).
+  // run.height = 이번 판에 오른 거리 (runOf). run.start가 있으면 출발 구역까지의 구역 보너스는 없다 (올라서 닿은 구역만)
   function coinsFor(run, st) {
     const C = D.COINS;
+    const zoneOfM = m => { let z = 0; D.ZONES.forEach((Z, i) => { if (m >= Z.from) z = i; }); return z; };
     const z = Math.max(0, Math.min(C.zone.length - 1, int(run.zone)));
+    const z0 = Math.min(z, zoneOfM(num(run.start)));
     let zone = 0;
-    for (let i = 0; i <= z; i++) zone += C.zone[i];
+    for (let i = z0 + 1; i <= z; i++) zone += C.zone[i];
     const parts = { height: Math.floor(num(run.height) / C.perMeter), stars: Math.floor(num(run.stars) / C.perStars), zone };
     const raw = parts.height + parts.stars + parts.zone;
     parts.level = Math.floor(raw * ((C.level[run.diff] || 1) - 1));   // 보통·어려움 보너스
     const base = raw + parts.level;
     const lv = st ? (st.up.coin || 0) : 0;
     parts.bonus = Math.floor(base * lv * upDef('coin').per);
+    // 논 시간: perSec초마다 1코인 (배율 없음)
+    parts.time = C.perSec > 0 ? Math.floor(num(run.time) / C.perSec) : 0;
+    // 도전 코인: tryTime초 넘게 논 판마다 (배율 없음. 바로 떨어지기만 되풀이해서는 모이지 않게)
+    parts.try = num(run.time) >= (C.tryTime || 0) ? int(C.tryCoins) : 0;
     // 깜짝 선물 코인: 난이도·강화 배율 없이 그대로 더한다
     parts.gift = int(run.giftCoins);
-    return { parts, total: base + parts.bonus + parts.gift };
+    return { parts, total: base + parts.bonus + parts.time + parts.try + parts.gift };
   }
 
   // ─── 미션 ─────────────────────────────────────────────────

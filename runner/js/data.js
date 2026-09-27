@@ -38,8 +38,8 @@
     normal: {
       id: 'normal', name: '보통', desc: '빠르게 · 하트 2개',
       hearts: 2, inv: 1.8,
-      speed: { base: 16, max: 32, warm: 10, ramp: 110 },
-      gap: { start: [1.15, 1.55], end: [0.78, 1.0] },
+      speed: { base: 16, max: 31, warm: 10, ramp: 120 },
+      gap: { start: [1.15, 1.55], end: [0.8, 1.02] },
       rows: {
         start: { one: 3, two: 3, gate: 1, bar: 1, mg: 1.5, mb: 1.5, gg: 0.5, bb: 0.5, gb: 1, g3: 1, b3: 1, mgb: 1, mover: 1.5, stars: 1 },
         end:   { one: 1, two: 4, gate: 0.5, bar: 0.5, mg: 2, mb: 2, gg: 1, bb: 1, gb: 1.5, g3: 1, b3: 1, mgb: 2, mover: 4, stars: 1 },
@@ -236,7 +236,7 @@
     ],
 
     // 연출 (그리기 전용, 규칙에는 영향 없음). 부딪힘은 분명하지만 무섭지 않게: 흔들림·번쩍임은 작게
-    FX: { starSparks: 8, hitSparks: 26, smashSparks: 24, maxParticles: 160, shake: 10, flash: 0.22, zoneFade: 2.2, banner: 2.6 },
+    FX: { starSparks: 8, hitSparks: 26, smashSparks: 24, maxParticles: 160, shake: 10, flash: 0.22, zoneFade: 2.2, banner: 2.6, texts: 3 },
     // 행성 날씨 (그리기 전용): 날씨 입자는 max개까지 (worlds.js amount 1일 때), 움직임 줄이기면 calm배 개수·calmSpeed배 빠르기.
     // fade: 행성이 바뀔 때 날씨가 바뀌는 시간(초) · boltEvery: 번개 사이 (초, 범위) · bolt: 번개 빛이 남는 시간(초)
     WEATHER: { max: 90, calm: 0.4, calmSpeed: 0.45, fade: 2.2, boltEvery: [2.8, 5.5], bolt: 0.35 },
@@ -262,7 +262,7 @@
   const CHARS = [
     { id: 'jet', name: '슝슝 제트', price: 0, shape: 'jet', ui: '#5ee7ff',
       body: ['#d9fbff', '#5ee7ff', '#1a9ec0'], accent: '#ff2e88', flame: '255,46,136', core: '#5ee7ff',
-      look: '청록 날개, 분홍 불꽃', desc: '별 한 줄을 다 먹으면 보너스 점수가 더 많아요',
+      look: '청록 날개, 분홍 불꽃', desc: '별 한 줄을 다 먹으면 점수가 더 많아요',
       trait: { perfectMul: 1.5 } },
     { id: 'ufo', name: '비행접시', price: 300, shape: 'ufo', ui: '#b6ff5c',
       body: ['#ffffff', '#c9d3e6', '#56607a'], accent: '#b6ff5c', flame: '182,255,92', core: '#b6ff5c',

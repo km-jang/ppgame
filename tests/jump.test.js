@@ -1287,5 +1287,122 @@ test('비밀 방: 20초 동안 떨어지지 않고 별을 모으며, 높이·먹
   }
 });
 
+// ─── 출발 장소 고르기 · 한 번 더 (2026-09-27 점검) ─────────────────
+test('출발 장소: 구름 위·우주·외계 행성 높이의 발사대에서 짧은 로켓으로 출발 (로켓 횟수에는 안 셈)', () => {
+  assert(D.STARTS.map(s => s.id + ':' + s.at).join() === 'ground:0,cloud:100,space:250,exo:700', 'places');
+  assert(JP.World.startOf('space').at === 250 && JP.World.startOf(700).id === 'exo' && JP.World.startOf('nope').id === 'ground', 'startOf');
+  for (const S of D.STARTS) {
+    const W = create(4, { diff: 'normal', viewH: 600, start: S.id });
+    assert(W.start === S.at && W.height === S.at && W.y0 === S.at * D.METER, S.id + ' height');
+    assert(W.zone === zoneAt(S.at) && W.planet === W.planet0 && W.mile === Math.floor(S.at / D.MILE.big), S.id + ' zone/planet/mile set without events');
+    const g = W.plats[0];
+    assert(g.kind === 'ground' && g.y === W.y0 && g.w === WW && !!g.pad === S.at > 0, S.id + ' pad');
+    assert(W.p.y === W.y0 + R && W.cam < W.y0 && W.genY > W.cam + 600, S.id + ' hero on pad, rows ahead');
+    assert(W.rockets === 0 && (S.at > 0 ? W.rocket === D.WARP.rocket && W.events.includes('warp') : W.rocket === 0), S.id + ' warp rocket');
+    clear(W);
+    for (let i = 0; i < 60 * 6 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+    assert(W.phase === 'play' && W.height > S.at + 20 && !W.events.includes('zone'), S.id + ' climbs ' + W.height);
+    const r = runStats(W);
+    assert(r.start === S.at && r.climb === W.height - S.at, S.id + ' run stats ' + JSON.stringify([r.start, r.climb]));
+  }
+  // 로켓 출발(시작 아이템)은 그대로 한 번 센다
+  const L = create(4, { start: 'space', loadout: { rocket: true } });
+  assert(L.rockets === 1 && L.rocket === L.rocketTime, 'loadout rocket still counts');
+  // 같은 시드·같은 출발 장소면 같은 판
+  const A = create(9, { start: 'cloud' }), B = create(9, { start: 'cloud' });
+  assert(JSON.stringify(A.plats.map(p => [p.x, p.y, p.kind])) === JSON.stringify(B.plats.map(p => [p.x, p.y, p.kind])), 'deterministic');
+});
+
+test('출발 장소: 높은 곳에서도 처음 몇 m는 몸풀기, 닿지 못하는 틈이 없다 (세 난이도)', () => {
+  const g = D.PLAYER.gravity, top = D.PLAYER.jump;
+  for (const diff of LEVELS) for (const st of ['cloud', 'space', 'exo']) {
+    const W = create(2, { diff, viewH: 600, start: st });
+    const L = D.DIFFICULTY[diff];
+    const rows = new Map();
+    for (let i = 0; i < 120; i++) { W.rocket = 10; W.cam += 150; W.p.y = W.cam + 300; tick(W); for (const r of W.recent) rows.set(r.y, r); }
+    const list = [...rows.values()].sort((a, b) => a.y - b.y);
+    const warm = list.filter(r => r.y > W.y0 && (r.y - W.y0) / D.METER < L.warm * 0.9);
+    assert(!warm.length || warm.every(r => r.kind === 'normal' || r.kind === 'spring'), diff + ' ' + st + ' warm rows only normal/spring');
+    let worst = 0, maxGap = 0;
+    for (let i = 1; i < list.length; i++) {
+      const a = list[i - 1], b = list[i], gap = b.y - a.y;
+      maxGap = Math.max(maxGap, gap);
+      if (!a.kind || b.kind === 'moving' || a.kind === 'moving' || !a.xs.length) continue;
+      const t = Math.sqrt(2 * top / g) + Math.sqrt(2 * Math.max(0, top - gap) / g);
+      worst = Math.max(worst, (Math.abs(wrapDelta(a.xs[0], b.xs[0])) - b.w / 2) / (W.ctl.maxVx * t * 0.8));
+    }
+    assert(maxGap < top * 0.9 && worst < 1, diff + ' ' + st + ' gap ' + maxGap.toFixed(0) + ' side ' + worst.toFixed(2));
+  }
+});
+
+test('출발 장소: 장소 메달은 올라서 닿아야, 높이 메달은 이번 판에 오른 거리로', () => {
+  const M = id => D.MEDALS.find(m => m.id === id), rec = { total: { games: 0, stars: 0 } };
+  assert(M('spacez').check({ height: 250, start: 0 }, rec) && M('spacez').check({ height: 260, start: 100 }, rec), 'reach space from below');
+  assert(!M('spacez').check({ height: 400, start: 250 }, rec) && !M('cloudz').check({ height: 300, start: 250 }, rec), 'starting there does not count');
+  assert(!M('starz').check({ height: 720, start: 700 }, rec) && M('galaxy').check({ height: 1100, start: 700 }, rec), 'exo start, galaxy reached');
+  assert(!M('h50').check({ height: 290, start: 250, climb: 40 }, rec) && M('h50').check({ height: 300, start: 250, climb: 50 }, rec), 'h50 by climb');
+  assert(!M('n100').check({ diff: 'normal', height: 330, start: 250, climb: 80 }, rec), 'n100 by climb');
+  // 실제 판: 우주에서 출발해 조금 오르면 우주 도착 메달은 없다
+  const W = create(1, { diff: 'easy', viewH: 600, start: 'space' });
+  for (let i = 0; i < 60 * 8 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+  const got = D.MEDALS.filter(m => m.check(runStats(W), rec)).map(m => m.id);
+  assert(!got.includes('spacez') && !got.includes('cloudz') && !got.includes('h150'), 'medals ' + got.join(','));
+});
+
+test('출발 장소: 올라서 닿은 곳이 열리고 기억된다 (예전 최고 기록도 이어받음), 잠긴 곳을 고르면 땅', () => {
+  const r = RC.blank();
+  assert(JSON.stringify(r.places) === '{}' && RC.placeOpen(r, 'ground') && !RC.placeOpen(r, 'cloud'), 'blank');
+  const a = RC.finish(r, { diff: 'easy', height: 260, score: 300, stars: 3 });
+  assert(a.places.join() === 'cloud,space' && RC.placeOpen(r, 'space') && !RC.placeOpen(r, 'exo'), 'unlocked ' + a.places.join());
+  assert(RC.finish(r, { diff: 'easy', height: 300, score: 1, stars: 0 }).places.length === 0, 'only once');
+  const old = RC.clean({ v: 2, byDiff: { normal: { height: 720, score: 900, stars: 4, games: 3 } } });
+  assert(RC.placeOpen(old, 'exo') && RC.placeOpen(old, 'cloud'), 'old records open places');
+  assert(!RC.placeOpen(RC.clean({ places: { exo: 'yes', nope: true } }), 'exo'), 'bad saved places ignored');
+  const store = memStore({ 'jump.start': 'space' });
+  assert(RC.loadStart(store, r) === 'space' && RC.loadStart(store, RC.blank()) === 'ground' && RC.loadStart(memStore({ 'jump.start': 42 }), r) === 'ground', 'loadStart');
+  RC.saveStart('cloud', store);
+  assert(store.m['jump.start'] === 'cloud', 'saveStart');
+});
+
+test('한 번 더: 한 판에 한 번, 구조 구름이 아래에서 받아 던져 올리고 잠깐 지켜 준다', () => {
+  for (const diff of LEVELS) {
+    const W = empty({ diff });
+    assert(!JP.World.canContinue(W) && !JP.World.revive(W), diff + ' not while playing');
+    put(W, 200, W.cam + 300, 0);
+    for (let i = 0; i < 1200 && W.phase === 'play'; i++) tick(W);
+    assert(W.phase === 'over' && JP.World.canContinue(W), diff + ' can continue after the end ' + W.cause);
+    clear(W);
+    const cam = W.cam;
+    assert(JP.World.revive(W) && W.phase === 'play' && W.continued && W.safeT === D.CONTINUE.safe && W.cause === null, diff + ' revived');
+    assert(W.events.includes('revive') && W.fx.some(f => f.kind === 'rescue') && W.p.vy > 0 && Math.abs(W.p.y - (W.cam + R)) < 1e-6 && W.cam === cam, diff + ' thrown up from the bottom');
+    // 지켜 주는 동안: 떨어져도 다시 받아 주고, 폭탄·몬스터는 톡 터진다
+    const r0 = W.rescued;
+    W.mines.push({ id: 991, x: W.p.x, y: W.p.y + 30, gone: false, seen: -1 });
+    W.monsters.push({ id: 992, kind: 'bird', x: W.p.x, px: W.p.x, x0: W.p.x, y: W.p.y + 60, y0: W.p.y + 60, off: 0, range: 0, vx: 0, float: 0, host: 0, gone: false, cool: 0, seen: -1, hit: -9 });
+    ticks(W, 40);
+    assert(W.phase === 'play' && W.mines[0].gone && W.monsters[0].gone, diff + ' safe from mine and monster');
+    ticks(W, 60 * 2);
+    assert(W.phase === 'play' && W.rescued === r0, diff + ' falls back up while safe, rescue clouds untouched');
+    // 지켜 주는 시간이 끝나면 다시 끝날 수 있고, 두 번째에는 이어 할 수 없다
+    for (let i = 0; i < 2400 && W.phase === 'play'; i++) tick(W);
+    assert(W.phase === 'over' && W.safeT === 0 && !JP.World.canContinue(W) && !JP.World.revive(W), diff + ' only once');
+    assert(runStats(W).continued, diff + ' run stats');
+  }
+});
+
+test('한 번 더: 먹구름은 멀리 물러나 쉬고, 이어 한 판도 기록·높이가 그대로 이어진다', () => {
+  const W = create(3, { diff: 'hard', viewH: 600 });
+  // 봇으로 조금 올라가 먹구름이 나온 뒤, 발판을 치워 떨어지게 한다
+  for (let i = 0; i < 60 * 60 && W.phase === 'play' && W.height < 30; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+  for (let i = 0; i < 60 * 20 && W.phase === 'play'; i++) { W.plats = []; W.input.dir = 0; step(W, 1 / 60); clear(W); }
+  assert(W.phase === 'over' && W.storm.on, 'ended with the storm on');
+  const h = W.height, stars = W.starsGot, S = W.storm;
+  JP.World.revive(W);
+  assert(W.height === h && W.starsGot === stars, 'keeps height and stars');
+  assert(S.y <= W.cam - W.viewH * D.CONTINUE.back + 1e-6 && S.rest >= D.CONTINUE.safe, 'storm pushed back ' + (W.cam - S.y));
+  for (let i = 0; i < 60 * 2.5 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+  assert(W.phase === 'play' && W.height >= h, 'goes on (safe for ' + D.CONTINUE.safe + 's)');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

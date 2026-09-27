@@ -21,16 +21,19 @@
   let W = null;        // 실제 판
   let demo = null;     // 시작 화면 뒤에서 혼자 도는 시연 판
   let demoRest = 0;    // 시연 판이 끝난 뒤 다시 시작까지
-  let mode = 'title';  // title | play | paused | over
+  let mode = 'title';  // title | shop | play | paused | cont (한 번 더?) | over
   let auto = false;    // 자동 운전 (테스트·시연용)
   let overAt = 0;
   let diff = RC.loadDiff(JP.store);   // 쉬움이 기본. 이 기기에 기억한다 (예전 쉬움 켜기 키도 이어받음)
   let tutNeed = RC.needTutorial(JP.store);   // 처음 해 보는 판에만 큰 조작 안내
   let lastSeed;        // 다시 하기용 (시드를 정해 시작했으면 같은 판)
+  let shownAt = 0;     // 결과·한 번 더 화면이 뜬 때 (처음 잠깐은 누름을 무시한다: 떨어지며 누르던 손가락)
+  let contT = 0, contOn = false;   // 한 번 더: 화면이 뜬 뒤 지난 시간 · 떠 있는지
 
   // 기록 장부: 난이도별 최고 높이·점수, 모두 합친 수, 받은 메달 (이 기기 안에만, records.js)
   let rec = RC.load(JP.store);
   const saveRec = () => RC.save(rec, JP.store);
+  let startId = RC.loadStart(JP.store, rec);   // 출발 장소 (한 번이라도 올라서 닿은 곳만 고를 수 있다)
   // 코인·상점·미션 (shop.js, 저장 키 jump.shop1). 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js)
   const SH = JP.Shop;
   let shop = SH.load();
@@ -91,17 +94,26 @@
   window.addEventListener('resize', resize);
 
   // ─── 오버레이 ──────────────────────────────────────────────
-  const screens = ['scr-title', 'scr-shop', 'scr-pause', 'scr-over', 'scr-medals'];
+  const screens = ['scr-title', 'scr-shop', 'scr-pause', 'scr-cont', 'scr-over', 'scr-medals'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('on', s === id);
     document.body.classList.toggle('playing', mode === 'play');
+    if (id === 'scr-over' || id === 'scr-cont') shownAt = performance.now();
     measureHud();
   }
+  // 결과·한 번 더 화면이 막 떴을 때는 누름을 무시한다 (D.CONTINUE.wait초)
+  const early = () => performance.now() - shownAt < D.CONTINUE.wait * 1000;
 
+  // 알림 한 줄: 게임 중(가로 화면)에는 기둥 왼쪽 옆자리 위, 그 밖에는 화면 위 가운데 (발판·주인공·점수판을 가리지 않게)
   let toastTimer = 0;
   function toast(msg) {
     const t = $('toast');
     t.textContent = msg;
+    const side = (mode === 'play' || mode === 'paused') && view.side && view.cx > 140;
+    t.classList.toggle('side', side);
+    t.style.left = side ? Math.round(view.cx / 2) + 'px' : '';
+    t.style.top = side ? Math.round(view.hudH + 6) + 'px' : '';
+    t.style.maxWidth = side ? Math.round(view.cx - 20) + 'px' : '';
     t.classList.add('on');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('on'), 1600);
@@ -112,6 +124,34 @@
     view.bestH = b.height;
     $('best').textContent = b.height > 0 ? name + ' 최고 ' + b.height + 'm · ' + b.score.toLocaleString() + '점' : name + ' 첫 도전! 얼마나 높이 갈까요?';
     $('medal-count').textContent = Object.keys(rec.medals).length + '/' + D.MEDALS.length;
+    renderStarts();
+  }
+
+  // ─── 출발 장소 고르기 ──────────────────────────────────────
+  // 열린 곳이 땅뿐이면 숨긴다 (처음 하는 아이에게는 없는 것처럼). 잠긴 곳은 "몇 m 가면 열려요"
+  function renderStarts() {
+    const box = $('start-pick');
+    if (!box) return;
+    if (!RC.placeOpen(rec, startId)) startId = 'ground';
+    const any = D.STARTS.some(S => S.at > 0 && RC.placeOpen(rec, S.id));
+    box.hidden = !any;
+    if (!any) return;
+    const row = $('start-row');
+    if (row.dataset.key !== JSON.stringify([rec.places, startId])) {
+      row.dataset.key = JSON.stringify([rec.places, startId]);
+      row.innerHTML = D.STARTS.map(S => {
+        const open = RC.placeOpen(rec, S.id);
+        return '<button type="button" class="sp' + (open ? '' : ' locked') + '" data-start="' + S.id + '" aria-pressed="' + (S.id === startId) + '"' + (open ? '' : ' disabled') + ' style="--pc:' + S.color + '">' +
+          '<canvas class="sp-cv" width="120" height="72" data-place="' + S.id + '" aria-hidden="true"></canvas>' +
+          '<b>' + esc(S.name) + '</b>' + (open ? '' : '<small>' + S.at + 'm 가면 열려요</small>') + '</button>';
+      }).join('');
+      for (const cv of row.querySelectorAll('canvas[data-place]')) JP.Render.paintPlace(cv, cv.dataset.place, !RC.placeOpen(rec, cv.dataset.place));
+    }
+  }
+  function setStart(id) {
+    if (!RC.placeOpen(rec, id)) return startId;
+    startId = id; RC.saveStart(id, JP.store); renderStarts();
+    return startId;
   }
 
   // ─── 메달 ──────────────────────────────────────────────────
@@ -288,7 +328,7 @@
   function renderEarn() {
     const e = lastEarn || { coins: 0, parts: { height: 0, stars: 0, zone: 0, level: 0, bonus: 0, gift: 0 }, done: [] };
     $('over-coins').textContent = '+0';
-    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['난이도 보너스', P.level], ['강화 보너스', P.bonus], ['선물', P.gift || 0]];
+    const P = e.parts, bits = [['높이', P.height], ['별', P.stars], ['구역', P.zone], ['난이도 보너스', P.level], ['강화 보너스', P.bonus], ['논 시간', P.time || 0], ['도전', P.try || 0], ['선물', P.gift || 0]];
     $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
@@ -324,20 +364,23 @@
     try { return typeof HUB !== 'undefined' && HUB.adaptMul ? HUB.adaptMul('jump', d) : 1; } catch (e) { return 1; }
   }
   function adaptRun() {
-    try { if (typeof HUB !== 'undefined' && HUB.adaptRun) HUB.adaptRun('jump', W.diff, W.height / (D.ADAPT.target[W.diff] || 100)); } catch (e) { /* 무시 */ }
+    try { if (typeof HUB !== 'undefined' && HUB.adaptRun) HUB.adaptRun('jump', W.diff, JP.World.runStats(W).climb / (D.ADAPT.target[W.diff] || 100)); } catch (e) { /* 무시 */ }
   }
   function reportHub() {
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
       // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터·지나온 가장 먼 행성(1 수성 … 9 명왕성)·선물·피버·비밀 방 (이번 판)
-      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet, gifts: W.giftsGot, fevers: W.fevers, rooms: W.rooms, games: 1 }, W.t);
+      // 높이는 이번 판에 오른 거리, 행성은 출발한 뒤에 더 지나갔을 때만 (출발 장소에서 시작해 얻지 않게)
+      const run = JP.World.runStats(W);
+      const fresh = HUB.reportRun('jump', { height: run.climb, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet > W.planet0 ? W.planet : 0, gifts: W.giftsGot, fevers: W.fevers, rooms: W.rooms, games: 1 }, W.t);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
 
   // ─── 흐름 ──────────────────────────────────────────────────
-  // opts: {diff: 'easy'|'normal'|'hard'} 또는 예전 방식 {easy} (없으면 지금 고른 난이도), {tutorial} 처음 안내 강제
+  // opts: {diff: 'easy'|'normal'|'hard'} 또는 예전 방식 {easy} (없으면 지금 고른 난이도), {tutorial} 처음 안내 강제,
+  //       {start} 출발 장소 id (없으면 시작 화면에서 고른 곳, 처음 안내 판은 늘 땅)
   function newGame(seed, opts) {
     JP.Audio.unlock();
     opts = opts || {};
@@ -349,10 +392,12 @@
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다. 강화는 계속
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
-    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial, adapt: opts.adapt != null ? opts.adapt : adaptMul(diff) }, SH.worldOpts(shop, lo)));
+    const start = tutorial ? 'ground' : opts.start && RC.placeOpen(rec, opts.start) ? opts.start : startId;
+    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial, start, adapt: opts.adapt != null ? opts.adapt : adaptMul(diff) }, SH.worldOpts(shop, lo)));
     view.bestH = rec.byDiff[diff].height;
     medalCheckT = 0;
-    input.reset();
+    contOn = false;
+    input.soft();
     mode = 'play';
     wakeLock(true);
     show(null);
@@ -374,37 +419,101 @@
     if (mode !== 'play') return;
     mode = 'paused';
     frozenDrawn = false;
+    input.soft();   // 누른 쪽 화살표 불 끄기 (손가락은 그대로 기억)
     show('scr-pause');
   }
 
   function resume() {
     if (mode !== 'paused') return;
-    input.reset();
+    input.soft();
     mode = 'play';
     show(null);
   }
 
-  function gameOver() {
-    mode = 'over';
-    overAt = performance.now();
+  // 판 정리: 기록 장부·메달·코인·미션·놀이 본부 (게임 오버와 멈춤 화면 "처음 화면으로" 모두 여기서, 한 판에 한 번)
+  let settled = null;
+  function settle(quit) {
+    if (!W || settled === W) return null;
+    settled = W;
+    const run = JP.World.runStats(W);
     // 기록 장부 (난이도별): 신기록은 칩으로 보여 준다
-    const { isBest, chips } = RC.finish(rec, JP.World.runStats(W));
+    const fin = RC.finish(rec, run);
     saveRec();
     const fresh = checkMedals(false);
     // 코인·미션 (상점)
     lastEarn = SH.finishRun(shop, SH.runOf(W));
     SH.save(shop);
     reportHub();
-    if (!auto) adaptRun();
+    if (!auto && !quit) adaptRun();   // 그만둔 판은 얼마나 잘했는지 재지 않는다
+    return { fin, fresh };
+  }
+
+  // 멈춤 화면 "처음 화면으로": 지금까지 한 것(코인·기록·미션·메달)을 모두 챙기고 시작 화면으로
+  function quitRun() {
+    if (W && (mode === 'paused' || mode === 'play' || mode === 'cont')) {
+      const r = settle(true);
+      if (r) {
+        const bits = [];
+        if (lastEarn && lastEarn.coins > 0) bits.push('코인 ' + fmt(lastEarn.coins) + '개');
+        if (r.fresh.length) bits.push('메달 ' + r.fresh.length + '개');
+        if (lastEarn && lastEarn.done.length) bits.push('미션 완료 ' + lastEarn.done.length + '개');
+        toTitle();
+        if (bits.length) toast('받았어요: ' + bits.join(' · '));
+        return;
+      }
+    }
+    toTitle();
+  }
+
+  // 한 번 더? 판이 끝났을 때 한 판에 한 번 (공짜). 떨어지는 모습을 잠깐 보여 준 뒤 묻는다
+  function askContinue() {
+    mode = 'cont';
+    contT = 0; contOn = false;
+    overAt = performance.now();
+    wakeLock(false);
+    setTimeout(() => { if (mode === 'cont') { contOn = true; renderCont(); show('scr-cont'); } }, 800);
+  }
+  function renderCont() {
+    const k = Math.max(0, 1 - contT / D.CONTINUE.ask);
+    const ring = $('cont-ring');
+    if (ring) ring.style.strokeDashoffset = String((1 - k) * 100);
+    $('cont-num').textContent = String(Math.max(1, Math.ceil(D.CONTINUE.ask - contT)));
+    $('cont-height').textContent = W ? W.height + 'm' : '';
+  }
+  function doContinue() {
+    if (mode !== 'cont' || !contOn || early()) return;
+    if (!JP.World.revive(W)) return;
+    mode = 'play'; contOn = false;
+    input.soft();
+    wakeLock(true);
+    show(null);
+    JP.Audio.play('rescue');
+    vibrate([15, 30, 25]);
+  }
+  function stopContinue() {
+    if (mode !== 'cont' || !contOn || early()) return;
+    gameOver(true);
+  }
+
+  function gameOver(now) {
+    mode = 'over';
+    overAt = performance.now();
+    contOn = false;
+    const { fin, fresh } = settle(false) || { fin: { isBest: false, chips: [], places: [] }, fresh: [] };
+    const { isBest, chips } = fin;
     renderEarn();
-    $('over-records').innerHTML = chips.map(x => '<span>신기록 · ' + x + '</span>').join('') + (W.stomps ? '<span>꾹 밟은 몬스터 ' + W.stomps + '</span>' : '');
+    const names = (fin.places || []).map(id => (D.STARTS.find(S => S.id === id) || {}).name).filter(Boolean);
+    $('over-records').innerHTML = chips.map(x => '<span>신기록 · ' + x + '</span>').join('') +
+      names.map(n => '<span class="place">새 출발 장소 · ' + esc(n) + '</span>').join('') + (W.stomps ? '<span>꾹 밟은 몬스터 ' + W.stomps + '</span>' : '');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
+    $('over-medals').classList.toggle('many', fresh.length > 2);
     if (fresh.length) setTimeout(() => { if (mode === 'over') JP.Audio.play('medal'); }, 900);
-    // 쉬움은 부드럽게 끝난다 (칭찬하는 말, 빨간색 없음)
-    const soft = W.easy;
-    $('scr-over').classList.toggle('soft', soft);
-    $('over-title').textContent = soft ? (W.height >= 30 ? '높이 날았어요!' : '잘했어요!') : ({ mine: '가시 폭탄에 닿았다', monster: '몬스터에 부딪혔다', storm: '먹구름에 잡혔다' }[W.cause] || '아래로 떨어졌다');
-    $('over-sub').textContent = soft ? '구름이 다 쉬러 갔어요. 한 번 더 해 볼까요?' : '';
+    // 모든 난이도가 부드럽게 끝난다 (칭찬하는 말, 빨간색 없음)
+    $('scr-over').classList.add('soft');
+    const good = W.height - (W.start || 0) >= 30;
+    $('over-title').textContent = W.easy ? (good ? '높이 날았어요!' : '잘했어요!')
+      : ({ mine: '앗, 가시 폭탄!', monster: '앗, 몬스터랑 쿵!', storm: '먹구름이 따라왔어요' }[W.cause] || (good ? '높이 날았어요!' : '아이쿠, 미끄러졌어요'));
+    $('over-sub').textContent = W.easy ? '구름이 다 쉬러 갔어요. 한 번 더 해 볼까요?' : '괜찮아요. 한 번 더 해 볼까요?';
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-height').textContent = W.height + 'm';
@@ -415,8 +524,9 @@
     $('over-stars').textContent = W.starsGot;
     $('over-time').textContent = JP.fmtTime(W.t);
     wakeLock(false);
-    // 떨어지는 모습을 잠깐 보여 준 뒤 결과 화면
-    setTimeout(() => { if (mode === 'over') { show('scr-over'); countCoins(); } }, 900);
+    // 떨어지는 모습을 잠깐 보여 준 뒤 결과 화면 (한 번 더 화면에서 왔으면 바로)
+    const go = () => { if (mode === 'over') { show('scr-over'); countCoins(); } };
+    if (now) go(); else setTimeout(go, 900);
   }
 
   function drainEvents(world, sound) {
@@ -458,7 +568,8 @@
     if (code === 'KeyM') return toggleMute();
     if (mode === 'shop') { if (code === 'Escape') closeShop(); return; }
     if (mode === 'title' && (code === 'Enter' || code === 'Space')) return newGame();
-    if (mode === 'over' && (code === 'Enter' || code === 'Space')) return newGame(lastSeed);
+    if (mode === 'cont') { if (code === 'Enter' || code === 'Space') doContinue(); else if (code === 'Escape') stopContinue(); return; }
+    if (mode === 'over' && (code === 'Enter' || code === 'Space')) { if (!early()) newGame(lastSeed); return; }
     if (code === 'KeyP' || code === 'Escape' || code === 'Space') return mode === 'play' ? pause() : resume();
   };
 
@@ -492,10 +603,15 @@
   for (const id of ['title-missions', 'over-missions']) {
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) { JP.Audio.unlock(); claimMission(+b.dataset.claim, b); } });
   }
-  $('btn-retry').addEventListener('click', () => newGame(lastSeed));
-  $('btn-home').addEventListener('click', toTitle);
+  $('btn-retry').addEventListener('click', () => { if (!early()) newGame(lastSeed); });
+  $('btn-home').addEventListener('click', () => { if (!early()) toTitle(); });
+  // 게임 고르기(놀이 본부)로 가는 집 버튼: 결과 화면에서는 막 뜬 때 잘못 누르지 않게
+  $('btn-over-hub').addEventListener('click', e => { if (early()) e.preventDefault(); });
   $('btn-resume').addEventListener('click', resume);
-  $('btn-quit').addEventListener('click', toTitle);
+  $('btn-quit').addEventListener('click', quitRun);
+  $('btn-cont').addEventListener('click', doContinue);
+  $('btn-cont-no').addEventListener('click', stopContinue);
+  $('start-row').addEventListener('click', e => { const b = e.target.closest('[data-start]'); if (b && !b.disabled) { JP.Audio.unlock(); JP.Audio.play('pick'); setStart(b.dataset.start); } });
   $('btn-pause').addEventListener('click', () => (mode === 'play' ? pause() : resume()));
   $('btn-mute').addEventListener('click', toggleMute);
 
@@ -521,12 +637,25 @@
     } catch (e) { hideFs(); }
   });
 
+  // 다른 게임·게임 고르기에서 코인·저장이 바뀌었을 수 있다: 돌아오면 다시 읽는다
+  function reloadSaves() {
+    try {
+      if (mode === 'title' || mode === 'shop' || mode === 'over') {
+        rec = RC.load(JP.store); shop = SH.load();
+        startId = RC.loadStart(JP.store, rec);
+        renderBest(); renderTitleShop();
+        if (mode === 'shop') renderShop();
+      } else SH.sync(shop);
+    } catch (e) { /* 무시 */ }
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pause();
-    else if (mode === 'play' || mode === 'paused') wakeLock(true); // 돌아오면 다시 요청
+    else { reloadSaves(); if (mode === 'play' || mode === 'paused') wakeLock(true); } // 돌아오면 다시 요청
   });
   // 뒤로 가기 제스처·앱 전환으로 창이 가려져도 멈춤 화면
   window.addEventListener('pagehide', pause);
+  // 뒤로 가기로 돌아왔을 때(저장해 둔 페이지를 그대로 다시 보여 줄 때)도 다시 읽는다
+  window.addEventListener('pageshow', e => { if (e.persisted) reloadSaves(); });
 
   // ─── 루프 ──────────────────────────────────────────────────
   function frame(ts) {
@@ -556,15 +685,21 @@
         drainEvents(W, true);
         // 게임 중에 딸 수 있는 메달은 바로 알려 준다
         if ((medalCheckT += dt) > 0.5 && W.phase === 'play') { medalCheckT = 0; checkMedals(true); }
-        if (W.phase === 'over') gameOver();
+        // 끝: 한 판에 한 번 "한 번 더?" (자동 운전은 묻지 않는다)
+        if (W.phase === 'over') { if (!auto && JP.World.canContinue(W)) askContinue(); else gameOver(); }
         frozenDrawn = false;
-      } else if (mode === 'over') {
+      } else if (mode === 'over' || mode === 'cont') {
         input.dir();   // 화살표 불빛 끄기
+        if (mode === 'cont' && contOn) {
+          contT += dt;   // 화면이 가려져 있으면 프레임이 안 돌아 시간도 멈춘다
+          renderCont();
+          if (contT >= D.CONTINUE.ask) gameOver(true);
+        }
       }
       // 결과 화면이 뜨고 연출이 끝나면 그리기를 쉰다 (배터리)
-      const idle = mode === 'paused' || (mode === 'over' && performance.now() - overAt > 1300 && !JP.Render.busy());
+      const idle = mode === 'paused' || ((mode === 'over' || mode === 'cont') && performance.now() - overAt > 1300 && !JP.Render.busy());
       if ((!idle || !frozenDrawn) && !(skip && !idle)) {
-        JP.Render.draw(ctx, W, view, mode === 'play' || mode === 'over' ? dt : 0);
+        JP.Render.draw(ctx, W, view, mode === 'play' || mode === 'over' || mode === 'cont' ? dt : 0);
         frozenDrawn = idle;
       }
     }
@@ -598,12 +733,15 @@
     get demo() { return demo; },
     get rec() { return rec; }, get easy() { return diff === 'easy'; }, setEasy,
     get diff() { return diff; }, setDiff,
+    // 출발 장소 · 한 번 더
+    get start() { return startId; }, setStart, doContinue, stopContinue, quitRun,
+    unlockPlace(id) { rec.places[id] = true; saveRec(); renderBest(); return RC.placeOpen(rec, id); },
     get tutorial() { return tutNeed; },
     // 상점·미션 (shop.js)
     get shop() { return shop; }, get missions() { return SH.missionView(shop); }, get lastEarn() { return lastEarn; },
     giveCoins(n) { shop.coins += n; SH.save(shop); renderTitleShop(); if (mode === 'shop') renderShop(); return shop.coins; },
     openShop, closeShop, claim: i => claimMission(i), buy: id => buyThing(id), selectChar: id => useChar(id), selectSkin: id => useChar(id),
-    reload() { rec = RC.load(JP.store); shop = SH.load(); renderBest(); renderTitleShop(); }, resetTutorial() { tutNeed = true; JP.store.set(RC.TUT_KEY, false); },
+    reload() { rec = RC.load(JP.store); shop = SH.load(); startId = RC.loadStart(JP.store, rec); renderBest(); renderTitleShop(); }, resetTutorial() { tutNeed = true; JP.store.set(RC.TUT_KEY, false); },
     newGame, pause, resume, toTitle, openMedals, adaptMul,
     autopilot(on) { auto = on !== false; return auto; },
     get pad() { return input; }, get view() { return view; },

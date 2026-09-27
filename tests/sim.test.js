@@ -1872,5 +1872,154 @@ test('놀이 본부 통계: 선물·피버·동료 수를 runOf와 판 통계에
   console.log('       300초 봇 판: 선물 ' + W.stats.gifts + ' · 피버 ' + W.stats.fevers + ' · 동료 ' + W.stats.wingmen);
 });
 
+
+// ─── 아이 눈높이 점검 (2026-09-27) ──────────────────────────
+// 한 번 더!: 지고 나서 되살아나는 규칙이 world.js 안에 있어야 main.js 없이도 믿을 수 있다
+function deadWorld(seed, d) {
+  const W = createWorld(1280, 800, seed, d || 'easy', {});
+  for (let i = 0; i < 60; i++) step(W, IDLE, DT);
+  W.player.hp = 1; W.player.iframe = 0; W.player.dashT = 0; W.player.shield = 0;
+  const e = NG.World.spawnEnemy(W, 'grunt'); e.spawnT = 0; e.x = W.player.x; e.y = W.player.y;
+  for (let i = 0; i < 30 && W.phase === 'play'; i++) { e.x = W.player.x; e.y = W.player.y; step(W, IDLE, DT); }
+  return W;
+}
+
+test('한 번 더!: 지면 한 번 되살아날 수 있고, 되살아나면 체력 절반·3초 무적·주변 적 탄과 적이 치워진다', () => {
+  const RV = NG.DATA.REVIVE;
+  const W = deadWorld(501);
+  assert(W.phase === 'over' && W.canRevive, 'can revive after first death');
+  const p = W.player;
+  // 주변에 적 탄 · 멀리에 적 탄 · 바로 옆 적
+  W.eBullets.push({ x: p.x + 30, y: p.y, vx: 0, vy: 0, r: 5, life: 5 }, { x: p.x + RV.clearR + 200, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
+  const near = NG.World.spawnEnemy(W, 'grunt'); near.spawnT = 0; near.x = p.x + 10; near.y = p.y;
+  // 지고 나면 세상은 멈춘다 (한 번 더를 기다리는 동안 더 맞지 않음)
+  const t0 = W.t;
+  for (let i = 0; i < 60; i++) step(W, IDLE, DT);
+  assert(W.t === t0 && W.phase === 'over', 'frozen while waiting');
+  assert(NG.World.revive(W) === true, 'revive ok');
+  assert(W.phase === 'play' && W.revives === 1 && W.stats.revives === 1 && !W.canRevive, 'state');
+  assert(p.hp === Math.min(p.maxHp, Math.max(RV.hpMin, Math.ceil(p.maxHp * RV.hpShare))), 'hp ' + p.hp);
+  assert(Math.abs(p.iframe - RV.iframe) < 1e-9 && p.iframe >= 2.5, 'invulnerable about 3 s');
+  assert(W.eBullets.length === 1 && W.eBullets[0].x > p.x + RV.clearR, 'nearby bullets cleared, far kept');
+  assert(Math.hypot(near.x - p.x, near.y - p.y) >= RV.pushR - 1, 'near enemy pushed away');
+  assert(W.events.indexOf('revive') >= 0, 'event');
+  // 무적 동안은 적이 붙어도 안 아프다
+  const hp = p.hp;
+  for (let i = 0; i < 60; i++) { near.x = p.x; near.y = p.y; step(W, IDLE, DT); }
+  assert(p.hp === hp && W.phase === 'play', 'no damage while invulnerable');
+});
+
+test('한 번 더!: 한 판에 한 번뿐, 안 쓰면(giveUp) 그대로 끝, 판 기록은 이어진다', () => {
+  const W = deadWorld(502);
+  const kills = W.stats.kills, time = W.stats.time;
+  assert(NG.World.revive(W), 'first');
+  for (let i = 0; i < 60 * 4; i++) step(W, IDLE, DT);
+  W.player.hp = 1; W.player.iframe = 0; W.player.shield = 0;
+  const e = NG.World.spawnEnemy(W, 'grunt'); e.spawnT = 0;
+  for (let i = 0; i < 60 && W.phase === 'play'; i++) { e.x = W.player.x; e.y = W.player.y; step(W, IDLE, DT); }
+  assert(W.phase === 'over' && !W.canRevive, 'second death cannot revive');
+  assert(NG.World.revive(W) === false && W.phase === 'over', 'revive refused');
+  assert(W.stats.time > time && W.stats.kills >= kills, 'run continued');
+  // giveUp: 한 번 더를 안 쓰면 막힌다
+  const V = deadWorld(503);
+  NG.World.giveUp(V);
+  assert(!V.canRevive && NG.World.revive(V) === false && V.phase === 'over', 'give up');
+  // 판 도중(살아 있을 때)엔 revive가 아무것도 안 한다
+  const A = createWorld(800, 600, 504);
+  assert(NG.World.revive(A) === false && A.phase === 'play' && A.revives === 0, 'no revive while alive');
+});
+
+test('카드 글: 모든 카드에 큰 그림과 아이 말 두세 마디 (퍼센트·영어 없음), 수치는 작게 남는다', () => {
+  for (const c of NG.DATA.CARDS.concat([NG.DATA.FALLBACK_CARD])) {
+    const t = NG.World.cardText(c);
+    assert(t.pic && t.pic !== c.icon, 'picture ' + c.id);
+    const words = t.words.split(' ');
+    assert(words.length >= 2 && words.length <= 3, 'two or three words ' + c.id + ' ' + t.words);
+    assert(!/[%×A-Za-z0-9+]/.test(t.words), 'no numbers or jargon ' + c.id + ' ' + t.words);
+    assert(t.small === c.desc, 'small numbers kept ' + c.id);
+  }
+});
+
+test('추천 카드: 체력이 절반 이하면 체력 카드, 아니면 대포 추가 먼저, 없으면 차례대로', () => {
+  const W = createWorld(800, 600, 510, 'easy');
+  const C = id => NG.DATA.CARDS.find(c => c.id === id) || NG.DATA.FALLBACK_CARD;
+  W.cards = [C('rate'), C('vital'), C('barrel')];
+  W.player.hp = W.player.maxHp;
+  assert(NG.World.recommendCard(W) === 2, 'barrel when healthy');
+  W.player.hp = 1;
+  assert(NG.World.recommendCard(W) === 1, 'vital when hurt');
+  W.cards = [C('bounce'), C('crit'), C('move')];
+  W.player.hp = W.player.maxHp;
+  assert(NG.World.recommendCard(W) === 2, 'first in order (move) ' + NG.World.recommendCard(W));
+  W.cards = null;
+  assert(NG.World.recommendCard(W) === -1, 'no cards');
+  // 웨이브를 넘기면 카드와 함께 추천도 정해진다
+  const V = createWorld(800, 600, 511, 'easy');
+  V.player.hp = 1e9;
+  for (let i = 0; i < 60 * 120 && V.phase !== 'cards'; i++) { for (const e of V.enemies) e.hp = 0; step(V, IDLE, DT); }
+  assert(V.phase === 'cards' && V.recommend >= 0 && V.recommend < V.cards.length, 'recommend set ' + V.recommend);
+});
+
+test('보스 스티커: 이긴 보스 종류를 판 기록에 남기고, 기록은 처음 이긴 종류만 새로 넣는다', () => {
+  const W = createWorld(1280, 800, 520, 'easy', {});
+  W.bossKills = 1; // 두 번째 보스 모습 (스타 크러셔)
+  const b = NG.World.spawnEnemy(W, 'boss'); b.spawnT = 0;
+  const id = b.look.id;
+  NG.World.killEnemy(W, b, 0, 0);
+  assert(W.stats.bossTypes.length === 1 && W.stats.bossTypes[0] === id && W.lastBoss === id, 'recorded ' + id);
+  const again = NG.World.spawnEnemy(W, 'boss'); again.spawnT = 0; again.look = b.look;
+  NG.World.killEnemy(W, again, 0, 0);
+  assert(W.stats.bossTypes.length === 1, 'no duplicate in run');
+  const rec = R.blank();
+  assert(R.bossKindCount(rec) === 0, 'empty');
+  assert(R.addBossKinds(rec, W.stats.bossTypes, '2026-09-27').join() === id, 'fresh');
+  assert(R.addBossKinds(rec, [id, 'octa', 'nope']).join() === 'octa', 'only new known kinds');
+  assert(R.bossKindCount(rec) === 2, 'count');
+  // 저장본을 거쳐도 남고, 모르는 보스 id는 버린다
+  const st = fakeStore();
+  rec.bossKinds.fake = 'x';
+  R.save(rec, st);
+  const back = R.load(st);
+  assert(R.bossKindCount(back) === 2 && back.bossKinds[id] === '2026-09-27' && !('fake' in back.bossKinds), 'saved');
+  // 예전 저장본(bossKinds 없음)도 빈 칸으로
+  assert(R.bossKindCount(R.load(fakeStore({ 'ngun.rec1': JSON.stringify({ v: 1 }) }))) === 0, 'old save');
+});
+
+test('화면 크기 바꾸기: 아이템·동료 캡슐·선물 상자·안개·운석 예고도 새 화면 안으로', () => {
+  const W = createWorld(1280, 800, 530, 'easy', {});
+  NG.World.addDrop(W, 1250, 780, 'coin');
+  const c = NG.World.spawnCapsule(W); c.x = 1260; c.y = 790;
+  const g = NG.World.spawnGift(W); g.baseY = g.y = 780;
+  W.mists.push({ x: 1200, y: 760, r: 58, t: 0, form: 0.6, life: 4.5 });
+  W.meteors.push({ x: 1220, y: 770, r: 58, t: 0, warn: 1, rot: 0 });
+  NG.World.resize(W, 600, 400);
+  const d = W.drops[W.drops.length - 1];
+  assert(d.x <= 600 && d.y <= 400, 'drop inside ' + d.x + ',' + d.y);
+  assert(c.x <= 600 - c.r && c.y <= 400 - c.r, 'capsule inside');
+  assert(g.y <= 400 - g.r && g.baseY <= 400, 'gift height inside');
+  assert(W.mists[0].x <= 600 && W.mists[0].y <= 400 && W.meteors[0].x <= 600 && W.meteors[0].y <= 400, 'mist and meteor inside');
+});
+
+test('처음 난이도는 쉬움, 행성 도착 글은 도감의 재미 한 줄 (사실 설명 없음)', () => {
+  assert(NG.DATA.DEFAULT_DIFF === 'easy' && NG.DATA.DIFFICULTY[NG.DATA.DEFAULT_DIFF], 'default easy');
+  const SW = vm.runInContext('WORLDS', ctx).SOLAR_WEATHER;
+  for (const p of NG.DATA.PLANETS.filter(q => !q.exo)) assert(p.fact === SW[p.id].line, 'fun line ' + p.id + ' ' + p.fact);
+  for (const p of NG.DATA.PLANETS) assert(!/가장|행성입니다|태양과/.test(p.fact), 'no fact ' + p.fact);
+});
+
+test('파편은 상한을 넘지 않고, 내 기체 위 글자는 겹치지 않게 쌓인다', () => {
+  const W = createWorld(800, 600, 540, 'easy', {});
+  const cap = NG.DATA.VIEW.particles;
+  for (let i = 0; i < 80; i++) { const e = NG.World.spawnEnemy(W, 'tank'); e.spawnT = 0; NG.World.killEnemy(W, e, 1, 0); }
+  assert(W.particles.length <= cap, 'cap ' + W.particles.length);
+  W.texts.length = 0; W.hitstop = 0; W.enemies.length = 0; W.drops.length = 0;
+  NG.World.addDrop(W, W.player.x, W.player.y, 'shield');
+  NG.World.addDrop(W, W.player.x, W.player.y, 'heat');
+  step(W, IDLE, DT);
+  const mine = W.texts.filter(t => t.mine);
+  assert(mine.length === 2 && Math.abs(mine[0].y - mine[1].y) >= 16, 'stacked ' + mine.map(t => t.y).join());
+  for (const t of mine) assert(t.y < W.player.y - W.player.r * 2, 'above the ship');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

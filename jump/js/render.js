@@ -315,7 +315,25 @@
 
   // ─── 그리기 상태 (꾸밈 전용) ───────────────────────────────
   const R = { bgKey: '', zones: [], cloudLayer: null, stars: null, colKey: '', col: null, mileKey: '', miles: {},
-    parts: [], texts: [], clouds: [], squash: [], shake: 0, flash: 0, world: null, banner: null, big: null, stormKey: '', storm: null };
+    parts: [], texts: [], clouds: [], squash: [], shake: 0, flash: 0, world: null, banner: null, big: null, stormKey: '', storm: null,
+    occ: [], fixed: [] };
+
+  // ─── 글자 자리 나누기 (2026-09-27 점검) ─────────────────────
+  // 이름표("위에서 꾹!"·"위험!" 등)가 높이 눈금 이름표·주인공·주인공이 노리는 발판·서로와 겹치지 않게, 한 프레임 동안 차지한 칸을 적어 둔다.
+  // R.occ: 이름표가 피할 칸 (화면 좌표 사각형) · R.fixed: 떠오르는 글자(+10 등)가 피할 칸 (위쪽 시간 막대)
+  const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  function occupy(x, y, w, h) { R.occ.push({ x, y, w, h }); }
+  // 가운데 (x, y), 크기 w × h 이름표를 놓을 세로 자리: 원래 자리 → 위 → 아래 → 두 칸 위 … 빈 곳. 다 막히면 원래 자리
+  function placeY(x, y, w, h, lo, hi) {
+    for (const k of [0, -1, 1, -2, 2, -3]) {
+      const yy = y + k * (h + 4);
+      if (yy - h / 2 < lo || yy + h / 2 > hi) continue;
+      const box = { x: x - w / 2, y: yy - h / 2, w, h };
+      if (!R.occ.some(o => overlap(box, o))) { R.occ.push(box); return yy; }
+    }
+    R.occ.push({ x: x - w / 2, y: y - h / 2, w, h });
+    return y;
+  }
   const ITEM = D.ITEM.kinds;
 
   // 떠오르는 글자 (월드 좌표)
@@ -386,7 +404,7 @@
         ring(f.x, f.y, 70 * s, '#ffe66d', 0.5);
         burst(f.x, f.y, 40, ['#ff5ec8', '#ffe66d', '#5ee7ff', '#7dff6a', '#ff9f43', '#ffffff'], 520, 6 * s);
       } else if (f.kind === 'fever') {
-        R.banner = { title: 'FEVER!', sub: '별 점수 두 배! ' + D.FEVER.time + '초', color: '#ff9ee0', life: 2.2, max: 2.2, text: true };
+        R.banner = { title: '피버!', sub: '별 점수 두 배! ' + D.FEVER.time + '초', color: '#ff9ee0', life: 2.2, max: 2.2, text: true };
         R.big = null;
         ring(f.x, f.y, 120 * s, '#ff9ee0', 0.7);
         burst(f.x, f.y, 36, ['#ff5ec8', '#ffe66d', '#5ee7ff', '#7dff6a'], 560, 6 * s);
@@ -397,8 +415,19 @@
         R.banner = { title: '비밀 방 끝!', sub: '원래 자리로 돌아왔어요', color: '#d9c8ff', life: 2, max: 2, text: true };
         ring(f.x, f.y, 80 * s, '#d9c8ff', 0.6);
       } else if (f.kind === 'hole') {
-        R.banner = { title: '블랙홀 주의!', sub: (f.side < 0 ? '왼쪽' : '오른쪽') + '으로 살짝 끌려가요 · 반대쪽을 눌러요', color: '#c9a0ff', life: 2.8, max: 2.8, text: true };
+        R.banner = { title: '블랙홀 주의!', sub: (f.side < 0 ? '왼쪽' : '오른쪽') + '으로 살짝 끌려가요 · 반대쪽으로 가요', color: '#c9a0ff', life: 2.8, max: 2.8, text: true };
         R.big = null;
+      } else if (f.kind === 'warp') {
+        // 출발 장소에서 시작: 발사대에서 슝
+        const S = D.STARTS.find(q => q.id === f.id) || D.STARTS[0];
+        R.banner = { title: S.name + '에서 출발!', sub: '발사대에서 슝!', color: S.color, life: 2.4, max: 2.4, text: true };
+        R.big = null;
+        ring(f.x, f.y, 90 * s, S.color, 0.7);
+        burst(f.x, f.y, 26, [S.color, '#ffffff', '#ffe66d'], 420, 5 * s);
+      } else if (f.kind === 'revive') {
+        R.banner = { title: '한 번 더!', sub: D.CONTINUE.safe + '초 동안 지켜 줄게요', color: '#ffe66d', life: 2.2, max: 2.2, text: true };
+        R.big = null;
+        burst(f.x, f.y, 30, ['#ffe66d', '#ffffff', '#5ee7ff'], 460, 6 * s);
       } else if (f.kind === 'mile') {
         if (!zoneNow && !R.banner) R.big = { txt: f.m + ' m!', life: 1.6, max: 1.6 };
         ring(W.p.x, W.p.y, 90 * s, '#ffe66d', 0.6);
@@ -507,7 +536,11 @@
       ctx.globalAlpha = Math.min(1, q.life / q.max * 2);
       ctx.font = Math.round(Math.max(14, q.size)) + 'px ' + DISP;
       const hw = ctx.measureText(q.txt).width / 2 + 6;   // 기둥 밖으로 잘리지 않게
-      const x = Math.max(v.cx + hw, Math.min(v.cx + v.cw - hw, SX(v, q.x))), y = SY(v, q.y);
+      const x = Math.max(v.cx + hw, Math.min(v.cx + v.cw - hw, SX(v, q.x)));
+      let y = SY(v, q.y);
+      // 위쪽 시간 막대(비밀 방·피버)와 겹치면 그 아래로
+      const hh = Math.max(14, q.size) * 0.7;
+      for (const f of R.fixed) if (overlap({ x: x - hw, y: y - hh, w: hw * 2, h: hh * 2 }, f)) y = f.y + f.h + hh + 2;
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.strokeText(q.txt, x, y);
       ctx.fillStyle = q.color; ctx.fillText(q.txt, x, y);
     }
@@ -703,6 +736,8 @@
     return c;
   }
 
+  // 기둥 모서리 꺾쇠(paintColumn) 자리: 위·아래 끝에서 EDGE px, 왼쪽에서 EDGE_X px 안쪽은 눈금 글자를 피한다
+  const EDGE = 30, EDGE_X = 12;
   // 높이 눈금 (10m마다) + 50m 빛나는 선 + 최고 기록 선
   function drawMarks(ctx, W, v) {
     const M = D.METER, step = D.MILE.tick;
@@ -714,19 +749,25 @@
         ctx.drawImage(mileSprite(v, gold), v.cx, y - 12, v.cw, 24);
         const fs = Math.round(Math.max(14, 17 * v.ui));
         ctx.font = '700 ' + fs + 'px ' + NUM;
-        const txt = m + ' m', tw = ctx.measureText(txt).width + fs * 0.8;
+        const txt = m + ' m', tw = ctx.measureText(txt).width + fs * 0.8, th = fs * 1.25;
+        // 이름표는 선 위에. 기둥 위 끝(모서리 꺾쇠)에 걸리면 선 아래로
+        const ty = y - fs * 1.5 < v.cy + EDGE ? y + fs * 0.25 : y - fs * 1.5, lx = v.cx + EDGE_X;
         ctx.fillStyle = gold ? 'rgba(40,30,4,0.85)' : 'rgba(4,20,30,0.8)';
-        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(v.cx + 6, y - fs * 1.5, tw, fs * 1.25, fs * 0.35); else ctx.rect(v.cx + 6, y - fs * 1.5, tw, fs * 1.25); ctx.fill();
+        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(lx, ty, tw, th, fs * 0.35); else ctx.rect(lx, ty, tw, th); ctx.fill();
         ctx.fillStyle = gold ? '#ffe66d' : '#bff8ff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(txt, v.cx + 6 + tw / 2, y - fs * 0.86);
+        ctx.fillText(txt, lx + tw / 2, ty + th / 2 + 1);
+        occupy(lx, ty, tw, th);
         continue;
       }
       ctx.fillStyle = 'rgba(94,231,255,0.08)';
       ctx.fillRect(v.cx, y, v.cw, 1);
-      ctx.font = '700 ' + Math.round(Math.max(11, 13 * v.scale * 1.2)) + 'px ' + NUM;
+      // 작은 눈금 글자: 기둥 위·아래 끝 모서리(꺾쇠)에 걸리는 자리에서는 쓰지 않는다
+      const fs2 = Math.round(Math.max(11, 13 * v.scale * 1.2));
+      if (y - fs2 - 2 < v.cy + EDGE || y > v.cy + v.ch - EDGE) continue;
+      ctx.font = '700 ' + fs2 + 'px ' + NUM;
       ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
       ctx.fillStyle = 'rgba(160,190,210,0.5)';
-      ctx.fillText(m + 'm', v.cx + 6, y - 2);
+      ctx.fillText(m + 'm', v.cx + EDGE_X, y - 2);
     }
     ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
     // 최고 기록 높이: 금색 점선 + 이름표
@@ -740,11 +781,12 @@
         const fs = Math.round(Math.max(13, 16 * v.ui));
         ctx.font = fs + 'px ' + DISP;
         const txt = '최고 ' + bh + 'm', tw = ctx.measureText(txt).width + fs;
-        const x = v.cx + v.cw - tw - 6;
+        const x = v.cx + v.cw - tw - EDGE_X, ty = y - fs * 1.4 < v.cy + EDGE ? y + fs * 0.2 : y - fs * 1.4;
         ctx.fillStyle = 'rgba(40,30,4,0.85)';
-        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y - fs * 1.4, tw, fs * 1.3, fs * 0.4); else ctx.rect(x, y - fs * 1.4, tw, fs * 1.3); ctx.fill();
+        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, ty, tw, fs * 1.3, fs * 0.4); else ctx.rect(x, ty, tw, fs * 1.3); ctx.fill();
         ctx.fillStyle = '#ffe66d'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(txt, x + tw / 2, y - fs * 0.72);
+        ctx.fillText(txt, x + tw / 2, ty + fs * 0.68);
+        occupy(x, ty, tw, fs * 1.3);
       }
     }
     ctx.textBaseline = 'alphabetic';
@@ -794,7 +836,25 @@
       }
       if (p.kind === 'spring') drawSpring(ctx, W, x + wPx / 2, y, s, p);
       ctx.drawImage(spr, x - PM, y - PM, wPx + PM * 2, hPx + PM * 2);
+      if (p.pad) drawPad(ctx, W, v, y, hPx);
     }
+  }
+
+  // 발사대 (높은 곳에서 출발할 때 첫 발판): 노랑·검정 줄무늬 띠와 양옆 깜빡이는 불, 가운데 과녁
+  function drawPad(ctx, W, v, y, hPx) {
+    const x0 = v.cx, w = v.cw, bh = Math.max(10, hPx * 0.9);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0, y + hPx, w, bh); ctx.clip();
+    ctx.fillStyle = '#1a1406'; ctx.fillRect(x0, y + hPx, w, bh);
+    ctx.strokeStyle = 'rgba(255,210,63,0.9)'; ctx.lineWidth = bh * 0.45;
+    ctx.beginPath();
+    for (let x = x0 - bh; x < x0 + w + bh; x += bh * 1.4) { ctx.moveTo(x, y + hPx + bh); ctx.lineTo(x + bh, y + hPx); }
+    ctx.stroke();
+    ctx.restore();
+    const blink = v.calm ? 1 : 0.5 + 0.5 * Math.sin(W.t * 8);
+    for (const f of [0.08, 0.92]) glow(ctx, 'rgba(255,90,90,0.9)', x0 + w * f, y - 4, 10 + 6 * blink, 0.9);
+    ctx.strokeStyle = 'rgba(255,230,109,0.8)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(x0 + w / 2, y + hPx * 0.45, w * 0.1, hPx * 0.35, 0, 0, TAU); ctx.stroke();
   }
 
   // 스프링: 발판 위 용수철. 밟으면 눌렸다가 튀어 오른다
@@ -840,6 +900,14 @@
     }
   }
 
+  // 비어 있는 자리를 찾아 이름표를 단다 (placeY). 기둥 안에서만
+  function plabel(ctx, v, txt, x, y, fs, color, bg, border) {
+    ctx.font = fs + 'px ' + DISP;
+    const tw = ctx.measureText(txt).width + fs * 0.9, th = fs * 1.44;
+    x = Math.max(v.cx + tw / 2 + 4, Math.min(v.cx + v.cw - tw / 2 - 4, x));
+    const yy = placeY(x, y, tw, th, v.cy + 2, v.cy + v.ch - 2);
+    label(ctx, txt, x, yy, fs, color, bg, border);
+  }
   function label(ctx, txt, x, y, fs, color, bg, border) {
     ctx.font = fs + 'px ' + DISP;
     const tw = ctx.measureText(txt).width + fs * 0.9;
@@ -875,7 +943,7 @@
       if (age < 3 && v.hud !== false) {
         ctx.globalAlpha = Math.min(1, (3 - age) * 2);
         const fs = Math.round(Math.max(14, 16 * v.ui));
-        label(ctx, K.name, Math.max(v.cx + fs * 2.5, Math.min(v.cx + v.cw - fs * 2.5, x)), Math.max(v.cy + fs, y - r - fs), fs, K.color, 'rgba(5,7,12,0.85)', null);
+        plabel(ctx, v, K.name, x, Math.max(v.cy + fs, y - r - fs), fs, K.color, 'rgba(5,7,12,0.85)', null);
         ctx.globalAlpha = 1;
       }
     }
@@ -931,7 +999,7 @@
       if ((age < 2.5 || near) && y > v.cy && y < v.cy + v.ch - r) {
         const fs = Math.round(Math.max(14, 16 * v.ui));
         ctx.globalAlpha = near ? (v.calm ? 1 : 0.7 + Math.sin(W.t * 16) * 0.3) : Math.min(1, (2.5 - age) * 2);
-        label(ctx, '위험!', Math.max(v.cx + fs * 1.8, Math.min(v.cx + v.cw - fs * 1.8, x)), Math.max(v.cy + fs, y - r * 1.5 - fs), fs, '#ffd0d5', 'rgba(40,4,10,0.9)', '#ff3b4e');
+        plabel(ctx, v, '위험!', x, Math.max(v.cy + fs, y - r * 1.5 - fs), fs, '#ffd0d5', 'rgba(40,4,10,0.9)', '#ff3b4e');
         ctx.globalAlpha = 1;
       }
     }
@@ -1056,7 +1124,7 @@
       if (age < 2.5 && v.hud !== false && y > v.cy + 20) {
         const fs = Math.round(Math.max(13, 15 * v.ui));
         ctx.globalAlpha = Math.min(1, (2.5 - age) * 2);
-        label(ctx, W.easy ? '위에서 꾹!' : '위에서만 꾹!', Math.max(v.cx + fs * 3, Math.min(v.cx + v.cw - fs * 3, x)), Math.max(v.cy + fs, y - rp * 2.2 - fs * 0.5), fs, K.top, 'rgba(5,7,12,0.85)', W.easy ? null : 'rgba(255,77,109,0.8)');
+        plabel(ctx, v, W.easy ? '위에서 꾹!' : '위에서만 꾹!', x, Math.max(v.cy + fs, y - rp * 2.2 - fs * 0.5), fs, K.top, 'rgba(5,7,12,0.85)', W.easy ? null : 'rgba(255,77,109,0.8)');
         ctx.globalAlpha = 1;
       }
     }
@@ -1134,7 +1202,7 @@
       if (age < 3 && v.hud !== false) {
         const fs = Math.round(Math.max(13, 15 * v.ui));
         ctx.globalAlpha = Math.min(1, (3 - age) * 2);
-        label(ctx, '깜짝 선물!', Math.max(v.cx + fs * 3, Math.min(v.cx + v.cw - fs * 3, x)), Math.max(v.cy + fs, y - rp * 1.8 - fs * 0.4), fs, '#ffe66d', 'rgba(5,7,12,0.85)', null);
+        plabel(ctx, v, '깜짝 선물!', x, Math.max(v.cy + fs, y - rp * 1.8 - fs * 0.4), fs, '#ffe66d', 'rgba(5,7,12,0.85)', null);
         ctx.globalAlpha = 1;
       }
     }
@@ -1149,7 +1217,7 @@
       if (age < 3.5 && v.hud !== false) {
         const fs = Math.round(Math.max(13, 15 * v.ui));
         ctx.globalAlpha = Math.min(1, (3.5 - age) * 2);
-        label(ctx, '비밀 방!', Math.max(v.cx + fs * 3, Math.min(v.cx + v.cw - fs * 3, x)), Math.max(v.cy + fs, yb - rp * 3.2 - fs * 0.4), fs, '#e6dcff', 'rgba(24,16,48,0.9)', '#a98bff');
+        plabel(ctx, v, '비밀 방!', x, Math.max(v.cy + fs, yb - rp * 3.2 - fs * 0.4), fs, '#e6dcff', 'rgba(24,16,48,0.9)', '#a98bff');
         ctx.globalAlpha = 1;
       }
     }
@@ -1185,11 +1253,19 @@
     if (!W.room) return;
     ctx.drawImage(roomSprite(v), v.cx, v.cy, v.cw, v.ch);
   }
+  // 시간 막대가 차지하는 자리 (떠오르는 글자·이름표가 피한다)
+  function timersRect(W, v) {
+    const n = (W.room ? 1 : 0) + (W.feverT > 0 ? 1 : 0);
+    if (!n) return null;
+    const fs = Math.round(Math.max(14, Math.min(20, v.cw * 0.04)));
+    const bw = Math.min(v.cw * 0.5, 220) + fs * 2;
+    return { x: v.cx + v.cw / 2 - bw / 2, y: v.cy, w: bw, h: fs * 1.2 + n * fs * 2.3 };
+  }
   // 비밀 방 남은 시간 · 피버 남은 시간 (기둥 위쪽 가운데 막대)
   function drawTimers(ctx, W, v) {
     const bars = [];
     if (W.room) bars.push(['비밀 방 ' + Math.ceil(W.room.t) + '초', W.room.t / D.ROOM.time, '#c9a0ff']);
-    if (W.feverT > 0) bars.push(['FEVER ' + Math.ceil(W.feverT) + '초', W.feverT / D.FEVER.time, '#ff9ee0']);
+    if (W.feverT > 0) bars.push(['피버 ' + Math.ceil(W.feverT) + '초', W.feverT / D.FEVER.time, '#ff9ee0']);
     const fs = Math.round(Math.max(14, Math.min(20, v.cw * 0.04)));
     let y = v.cy + fs * 1.2;
     for (const [txt, k, col] of bars) {
@@ -1541,6 +1617,56 @@
     drawBot(g, stub, { calm: true, dpr: 1, char: id }, w / 2, h * 0.03 + r * 2.04, r, 1, 1);
   }
 
+  // 출발 장소 그림 버튼 (시작 화면): 그곳 하늘색 + 알아보기 쉬운 소품 하나. 잠긴 곳은 어둡게 + 자물쇠
+  const PLACE_SKY = { ground: ['#1a3570', '#3d5fa8', '#e08a64'] };
+  function paintPlace(cv, id, locked) {
+    if (!cv) return;
+    const g = cv.getContext('2d'), w = cv.width, h = cv.height;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    const Z = D.ZONES.find(z => z.id === id) || D.ZONES[0], sky = PLACE_SKY[id] || Z.sky;
+    const bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, sky[0]); bg.addColorStop(0.6, sky[1]); bg.addColorStop(1, sky[2]);
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    const rnd = JP.rng(id.length * 31 + 7);
+    const dots = n => { g.fillStyle = '#e8f7ff'; for (let i = 0; i < n; i++) { g.globalAlpha = 0.3 + rnd() * 0.6; g.fillRect(rnd() * w, rnd() * h * 0.8, 1.6, 1.6); } g.globalAlpha = 1; };
+    const puff = (x, y, r, col) => { g.fillStyle = col; g.beginPath(); for (const [dx, dy, k] of [[-1, 0.2, 0.7], [-0.3, -0.25, 0.9], [0.5, -0.05, 0.8], [1.1, 0.25, 0.6]]) { g.moveTo(x + dx * r + k * r, y + dy * r); g.arc(x + dx * r, y + dy * r, k * r, 0, TAU); } g.fill(); };
+    if (id === 'ground') {
+      g.fillStyle = 'rgba(255,190,110,0.9)'; g.beginPath(); g.arc(w * 0.72, h * 0.62, h * 0.18, 0, TAU); g.fill();
+      g.fillStyle = '#16203a';
+      for (const [x, bw, bh] of [[0.02, 0.2, 0.26], [0.2, 0.16, 0.36], [0.36, 0.22, 0.22], [0.78, 0.2, 0.3]]) { g.fillRect(w * x, h * (1 - bh), w * bw, h * bh); g.beginPath(); g.moveTo(w * x - 2, h * (1 - bh)); g.lineTo(w * (x + bw / 2), h * (1 - bh - 0.1)); g.lineTo(w * (x + bw) + 2, h * (1 - bh)); g.fill(); }
+      g.fillStyle = '#ffd23f'; g.fillRect(w * 0.6, h * 0.35, w * 0.035, h * 0.65); g.fillRect(w * 0.55, h * 0.35, w * 0.13, h * 0.04);
+    } else if (id === 'cloud') {
+      dots(6);
+      g.fillStyle = 'rgba(255,240,200,0.9)'; g.beginPath(); g.arc(w * 0.78, h * 0.28, h * 0.12, 0, TAU); g.fill();
+      puff(w * 0.28, h * 0.8, h * 0.2, 'rgba(255,255,255,0.95)'); puff(w * 0.72, h * 0.88, h * 0.18, 'rgba(235,245,255,0.9)'); puff(w * 0.5, h * 0.5, h * 0.12, 'rgba(255,255,255,0.7)');
+    } else if (id === 'space') {
+      dots(26);
+      const px = w * 0.55, py = h * 0.55, pr = h * 0.24;
+      const pg = g.createRadialGradient(px - pr * 0.4, py - pr * 0.4, pr * 0.1, px, py, pr);
+      pg.addColorStop(0, '#fff3c4'); pg.addColorStop(1, '#c08a3a');
+      g.strokeStyle = 'rgba(243,213,140,0.9)'; g.lineWidth = 3;
+      g.beginPath(); g.ellipse(px, py, pr * 1.8, pr * 0.5, -0.3, Math.PI, TAU); g.stroke();
+      g.fillStyle = pg; g.beginPath(); g.arc(px, py, pr, 0, TAU); g.fill();
+      g.beginPath(); g.ellipse(px, py, pr * 1.8, pr * 0.5, -0.3, 0, Math.PI); g.stroke();
+    } else {
+      dots(26);
+      const px = w * 0.45, py = h * 0.58, pr = h * 0.27;
+      glow(g, 'rgba(125,255,207,0.6)', px, py, pr * 2, 0.8);
+      const pg = g.createRadialGradient(px - pr * 0.4, py - pr * 0.4, pr * 0.1, px, py, pr);
+      pg.addColorStop(0, '#d8fff0'); pg.addColorStop(0.5, '#3fd6a8'); pg.addColorStop(1, '#0f5a58');
+      g.fillStyle = pg; g.beginPath(); g.arc(px, py, pr, 0, TAU); g.fill();
+      g.fillStyle = '#c9a0ff'; g.beginPath(); g.arc(w * 0.8, h * 0.28, h * 0.08, 0, TAU); g.fill();
+      g.fillStyle = '#ffe66d'; g.beginPath(); g.arc(w * 0.18, h * 0.25, h * 0.05, 0, TAU); g.fill();
+    }
+    if (locked) {
+      g.fillStyle = 'rgba(5,7,12,0.62)'; g.fillRect(0, 0, w, h);
+      const lx = w / 2, ly = h / 2 + 4, lw = h * 0.3;
+      g.strokeStyle = '#cfd8e6'; g.lineWidth = Math.max(3, lw * 0.18);
+      g.beginPath(); g.arc(lx, ly - lw * 0.35, lw * 0.36, Math.PI, TAU); g.stroke();
+      g.fillStyle = '#cfd8e6'; g.fillRect(lx - lw * 0.55, ly - lw * 0.35, lw * 1.1, lw * 0.85);
+    }
+  }
+
   // ─── 주인공 ────────────────────────────────────────────────
   function drawPlayer(ctx, W, v, a) {
     const P = W.p, s = v.scale, r = D.PLAYER.r * s;
@@ -1605,6 +1731,15 @@
       ctx.beginPath(); ctx.ellipse(x, y - r * 0.1, r * 1.55 + wob, r * 1.55 - wob, 0, 0, TAU); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,255,255,0.8)';
       ctx.beginPath(); ctx.arc(x, y - r * 0.1, r * 1.3, Math.PI * 1.1, Math.PI * 1.45); ctx.stroke();
+    }
+    // 한 번 더 뒤 지켜 주는 동안: 금빛 반짝 고리 (끝나 갈수록 흐려진다)
+    if (W.safeT > 0) {
+      const k = Math.min(1, W.safeT / 1), wob = v.calm ? 1 : 0.8 + Math.sin(W.t * 12) * 0.2;
+      glow(ctx, 'rgba(255,230,109,0.5)', x, y, r * 2.4, 0.7 * k);
+      ctx.globalAlpha = k * wob;
+      ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = Math.max(2, r * 0.12); ctx.setLineDash([r * 0.5, r * 0.3]);
+      ctx.beginPath(); ctx.arc(x, y - r * 0.1, r * 1.7, v.calm ? 0 : W.t * 3, (v.calm ? 0 : W.t * 3) + TAU); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
   }
 
@@ -1684,14 +1819,14 @@
     const s = v.ui, x0 = v.cx + v.cw + Math.round(24 * s), right = v.w - Math.round(18 * s);
     const sw = right - x0;
     let y = v.hudMid - 12 * s;
-    // 우주에서는 뒤로 행성이 지나가므로 점수판 뒤에 어두운 유리를 깐다 (글자가 늘 또렷하게)
-    const camM = CAM / D.METER;
-    if (camM > D.PLANETS[0].at - SPAN || (camM > D.SKY.cloud[0] - 25 && camM < D.SKY.cloud[1] + 20)) {
-      const px = x0 - 14 * s, pw = right - px + 8 * s, ph = Math.min(v.h * 0.62, 360 * s);
-      const g = ctx.createLinearGradient(0, y - 14 * s, 0, y - 14 * s + ph);
-      g.addColorStop(0, 'rgba(5,8,18,0.62)'); g.addColorStop(0.8, 'rgba(5,8,18,0.5)'); g.addColorStop(1, 'rgba(5,8,18,0)');
-      ctx.fillStyle = g;
+    const big = Math.min(54 * s, sw * 0.3);
+    // 점수판 뒤에는 늘 짙은 유리 판을 깐다: 블랙홀·행성·새·구름이 뒤로 지나가도 글자가 또렷하게 (2026-09-27 점검).
+    // 판 높이는 아래에서 쓸 줄 수만큼 (sideHudRows와 같은 계산)
+    {
+      const px = x0 - 14 * s, pw = right - px + 8 * s, ph = sideHudHeight(W, v, big) + 26 * s;
+      ctx.fillStyle = 'rgba(5,8,18,0.84)';
       ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(px, y - 14 * s, pw, ph, 14 * s); else ctx.rect(px, y - 14 * s, pw, ph); ctx.fill();
+      ctx.strokeStyle = 'rgba(94,231,255,0.22)'; ctx.lineWidth = 1; ctx.stroke();
     }
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     // 난이도 · 지금 구역
@@ -1703,7 +1838,6 @@
     ctx.fillStyle = PL.color;
     ctx.fillText(PL.planet ? PL.name + ' 근처' : PL.name, x0 + ctx.measureText(dn).width, y);
     y += 26 * s;
-    const big = Math.min(54 * s, sw * 0.3);
     ctx.font = Math.round(16 * s) + 'px ' + DISP; ctx.fillStyle = '#8aa4b8';
     ctx.fillText('점수', x0, y);
     ctx.font = '700 ' + Math.round(big) + 'px ' + NUM; ctx.fillStyle = '#e8f7ff';
@@ -1718,23 +1852,28 @@
     starPath(ctx, x0 + hw + 30 * s, y + 14 * s, 10 * s, 0); ctx.fill();
     ctx.fillText(String(W.starsGot), x0 + hw + 44 * s, y);
     y += 36 * s;
-    ctx.font = '700 ' + Math.round(16 * s) + 'px ' + NUM; ctx.fillStyle = '#bcd3e2';
-    ctx.fillText('BEST ' + Math.max(v.bestH || 0, W.height) + ' m', x0, y);
-    y += 30 * s;
+    // 최고 기록: 처음 하는 판(기록 없음)에는 보이지 않는다. 넘어서면 금색으로 "최고 기록!"
+    if (v.bestH > 0) {
+      const over = W.height > v.bestH;
+      ctx.font = Math.round(16 * s) + 'px ' + DISP; ctx.fillStyle = over ? '#ffe66d' : '#bcd3e2';
+      ctx.fillText(over ? '최고 기록! ' + W.height + ' m' : '최고 ' + v.bestH + ' m', x0, y);
+      y += 30 * s;
+    }
     // 콤보 칩: 이어서 더 높이 밟은 수 · 별 점수 배율
     if (W.combo >= D.COMBO.show) {
-      const mul = JP.World.comboMul(W.combo);
+      // 별 점수가 커진 만큼 작은 별을 하나씩 (배율 숫자 대신)
+      const mul = JP.World.comboMul(W.combo), pips = Math.round((mul - 1) / D.COMBO.add);
       ctx.font = Math.round(18 * s) + 'px ' + DISP;
       const txt = '콤보 ' + W.combo, tw = ctx.measureText(txt).width;
-      const sub = mul > 1 ? '별 ×' + mul : '', ch = 30 * s;
-      ctx.font = '700 ' + Math.round(15 * s) + 'px ' + NUM;
+      const sub = pips > 0 ? '★'.repeat(pips) : '', ch = 30 * s;
+      ctx.font = Math.round(15 * s) + 'px ' + DISP;
       const sw2 = sub ? ctx.measureText(sub).width + 10 * s : 0;
       ctx.fillStyle = 'rgba(60,10,50,0.75)'; ctx.strokeStyle = 'rgba(255,94,200,0.7)'; ctx.lineWidth = 1.5;
       ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x0, y, tw + sw2 + 22 * s, ch, ch / 2); else ctx.rect(x0, y, tw + sw2 + 22 * s, ch); ctx.fill(); ctx.stroke();
       ctx.textBaseline = 'middle';
       ctx.font = Math.round(18 * s) + 'px ' + DISP; ctx.fillStyle = '#ff9ee0';
       ctx.fillText(txt, x0 + 11 * s, y + ch / 2 + 1);
-      if (sub) { ctx.font = '700 ' + Math.round(15 * s) + 'px ' + NUM; ctx.fillStyle = '#ffe66d'; ctx.fillText(sub, x0 + 11 * s + tw + 10 * s, y + ch / 2 + 1); }
+      if (sub) { ctx.font = Math.round(15 * s) + 'px ' + DISP; ctx.fillStyle = '#ffe66d'; ctx.fillText(sub, x0 + 11 * s + tw + 10 * s, y + ch / 2 + 1); }
       ctx.textBaseline = 'top';
       y += ch + 12 * s;
     }
@@ -1764,7 +1903,7 @@
     if (W.fever > 0 || W.feverT > 0) {
       const on = W.feverT > 0, k = on ? W.feverT / D.FEVER.time : W.fever;
       ctx.font = Math.round(15 * s) + 'px ' + DISP; ctx.fillStyle = on ? '#ff9ee0' : '#d8a8d0';
-      ctx.fillText(on ? 'FEVER!' : '피버', x0, y);
+      ctx.fillText(on ? '피버!' : '피버', x0, y);
       const bw = Math.min(sw - 60 * s, 110 * s), bx = x0 + 56 * s;
       ctx.fillStyle = 'rgba(255,94,200,0.18)'; ctx.fillRect(bx, y + 6 * s, bw, 8 * s);
       ctx.fillStyle = on ? '#ffe66d' : '#ff5ec8'; ctx.fillRect(bx, y + 6 * s, bw * Math.min(1, k), 8 * s);
@@ -1791,6 +1930,21 @@
     ctx.textBaseline = 'alphabetic';
   }
 
+  // 옆자리 점수판 높이 (drawSideHud가 한 줄씩 내려가는 만큼, 뒤 판 크기용)
+  function sideHudHeight(W, v, big) {
+    const s = v.ui;
+    let h = 26 * s + 18 * s + big + 10 * s + 36 * s;
+    if (v.bestH > 0) h += 30 * s;
+    if (W.combo >= D.COMBO.show) h += 42 * s;
+    if (W.rescueMax) h += 56 * s;
+    if (W.shield) h += 30 * s;
+    if (W.rocket > 0) h += 30 * s;
+    if (W.fever > 0 || W.feverT > 0) h += 28 * s;
+    if (W.hole && W.phase === 'play') h += 30 * s;
+    if (stormGap(W) != null) h += 34 * s;
+    return h - 10 * s;
+  }
+
   // 위 한 줄 HUD (세로 화면·옆자리가 좁을 때): 오른쪽 끝에 점수, 그 왼쪽에 작은 칸들
   function drawTopHud(ctx, W, v) {
     const s = v.ui, mid = v.hudMid, right = v.w - v.hudRight;
@@ -1810,8 +1964,8 @@
     const sg = stormGap(W);
     if (sg != null) items.push(['먹구름 ' + Math.floor(sg) + 'm', sg < D.STORM.warn ? '#ff8a96' : '#b9a6ff']);
     if (W.hole && W.phase === 'play') items.push([W.hole.side < 0 ? '← 블랙홀' : '블랙홀 →', '#c9a0ff']);
-    if (W.feverT > 0) items.push(['FEVER', '#ff9ee0']); else if (W.fever >= 0.3) items.push(['피버 ' + Math.floor(W.fever * 100) + '%', '#d8a8d0']);
-    items.push(['BEST ' + Math.max(v.bestH || 0, W.height) + ' m', '#bcd3e2']);
+    if (W.feverT > 0) items.push(['피버!', '#ff9ee0']); else if (W.fever >= 0.3) items.push(['피버 ' + Math.floor(W.fever * 100) + '%', '#d8a8d0']);
+    if (v.bestH > 0) items.push(W.height > v.bestH ? ['최고 기록!', '#ffe66d'] : ['최고 ' + v.bestH + ' m', '#bcd3e2']);
     for (const [txt, col] of items) {
       if (x - 70 * s < v.hudLeft) break; // 버튼 묶음과 겹치면 생략
       x -= chip(ctx, x, cy, ch, txt, col, s) + 6 * s;
@@ -1836,16 +1990,12 @@
     }
     for (const d of [-1, 1]) {
       const on = side === d, x = d < 0 ? lx : rx, ask = want === d;
-      const a = (on ? 0.85 : v.side ? 0.22 : 0.14) + (ask ? 0.6 : pulse);
+      const a = (on ? 0.85 : v.side ? 0.3 : 0.2) + (ask ? 0.5 : pulse);
+      // 짙은 받침: 행성·풍선·구름 위에서도 화살표가 사라지지 않게
+      ctx.fillStyle = 'rgba(4,7,14,0.62)';
+      ctx.beginPath(); ctx.arc(x, y, size * 1.3, 0, TAU); ctx.fill();
       if (on) glow(ctx, 'rgba(94,231,255,0.5)', x, y, size * 1.8, 0.8);
-      if (ask) {
-        // 여기를 눌러요: 노란 빛 + 퍼지는 고리
-        const k = v.calm ? 0.5 : (W.t * 1.2) % 1;
-        glow(ctx, 'rgba(255,230,109,0.55)', x, y, size * 2, 0.9);
-        ctx.globalAlpha = 1 - k;
-        ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = Math.max(3, size * 0.08);
-        ctx.beginPath(); ctx.arc(x, y, size * (1 + k * 0.7), 0, TAU); ctx.stroke();
-      }
+      if (ask) glow(ctx, 'rgba(255,230,109,0.45)', x, y, size * 1.8, 0.8);
       ctx.globalAlpha = Math.min(1, a);
       ctx.fillStyle = 'rgba(12,22,38,0.6)';
       ctx.beginPath(); ctx.arc(x, y, size, 0, TAU); ctx.fill();
@@ -1870,9 +2020,35 @@
   }
 
   // 처음 몇 초 조작 안내. 처음 해 보는 판(W.tut)은 양쪽을 다 눌러 볼 때까지 큰 안내
+  // 처음 안내의 큰 화살표: 눌러 볼 쪽 기둥 안에 반투명하게 (안내 글 바로 아래, 퍼지는 노란 고리)
+  function tutArrow(ctx, W, v, d, y) {
+    const sz = Math.max(34, Math.min(70, v.cw * 0.13)), x = v.cx + v.cw * (d < 0 ? 0.2 : 0.8);
+    const k = v.calm ? 0.5 : (W.t * 1.2) % 1, bob = v.calm ? 0 : Math.sin(W.t * 6) * sz * 0.12;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = 'rgba(4,7,14,0.7)';
+    ctx.beginPath(); ctx.arc(x, y, sz * 1.15, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1 - k;
+    ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = Math.max(3, sz * 0.07);
+    ctx.beginPath(); ctx.arc(x, y, sz * (1.15 + k * 0.5), 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = 'rgba(255,230,109,0.85)'; ctx.strokeStyle = 'rgba(40,30,4,0.9)'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+    const ax = x + d * bob;
+    ctx.beginPath();
+    ctx.moveTo(ax + d * sz * 0.72, y);
+    ctx.lineTo(ax - d * sz * 0.05, y - sz * 0.62);
+    ctx.lineTo(ax - d * sz * 0.05, y - sz * 0.26);
+    ctx.lineTo(ax - d * sz * 0.66, y - sz * 0.26);
+    ctx.lineTo(ax - d * sz * 0.66, y + sz * 0.26);
+    ctx.lineTo(ax - d * sz * 0.05, y + sz * 0.26);
+    ctx.lineTo(ax - d * sz * 0.05, y + sz * 0.62);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
   function drawIntro(ctx, W, v) {
     const T = W.tut;
-    const cx = v.cx + v.cw / 2, cy = v.cy + v.ch * 0.3;
+    // 안내 글은 기둥 위쪽: 주인공 바로 위 발판들을 가리지 않게 (2026-09-27 점검)
+    const cx = v.cx + v.cw / 2, cy = v.cy + v.ch * 0.1 + 20;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const fs = Math.round(Math.max(18, Math.min(30, v.cw * 0.058)));
     if (T && (!T.done || W.t - T.at < 1.6)) {
@@ -1889,7 +2065,9 @@
       ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - bw / 2, cy - big * 1.1, bw, bh, big * 0.6); else ctx.rect(cx - bw / 2, cy - big * 1.1, bw, bh); ctx.fill();
       ctx.globalAlpha = a;
       lines.forEach(([t, col], i) => { ctx.font = (i ? fs : big) + 'px ' + DISP; outlined(ctx, t, cx, cy + i * big * 1.35, col); });
-      ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
+      ctx.globalAlpha = 1;
+      if (!T.done) tutArrow(ctx, W, v, T.left ? 1 : -1, cy - big * 1.1 + bh + Math.max(34, Math.min(70, v.cw * 0.13)) * 1.5);
+      ctx.textBaseline = 'alphabetic';
       return;
     }
     const a = Math.max(0, Math.min(1, D.HINT_TIME - W.t));
@@ -1916,19 +2094,25 @@
       const pop = v.calm ? 1 : 1 + Math.max(0, 0.25 - age) * 1.2;
       const fs = Math.round(Math.max(26, Math.min(46, v.cw * 0.085)) * pop), y = v.cy + v.ch * 0.2;
       ctx.font = fs + 'px ' + DISP;
-      const bw = Math.min(v.cw - 16, ctx.measureText(B.title).width + fs * 1.4), bh = fs * 2.2;
+      const titleW = ctx.measureText(B.title).width;
+      // 한 줄 글(행성 한 줄·블랙홀 안내)은 둥근 글꼴, 숫자(높이)는 숫자 글꼴. 상자는 제목과 한 줄 중 넓은 쪽에 맞추고,
+      // 기둥보다 넓으면 한 줄 글자를 줄여 상자 안에 들어가게 (2026-09-27 점검: 한 줄이 상자 밖으로 삐져나왔다)
+      let sf = Math.round(fs * (B.text ? 0.46 : 0.5));
+      const subFont = () => (B.text ? '' : '700 ') + sf + 'px ' + (B.text ? DISP : NUM);
+      ctx.font = subFont();
+      let sw = B.sub ? ctx.measureText(B.sub).width : 0;
+      const maxW = v.cw - 16;
+      const bw = Math.min(maxW, Math.max(titleW + fs * 1.4, sw + fs * 1.0)), bh = fs * 2.2;
+      if (sw > bw - fs * 0.8) { sf = Math.max(11, Math.floor(sf * (bw - fs * 0.8) / sw)); ctx.font = subFont(); sw = ctx.measureText(B.sub).width; }
+      ctx.font = fs + 'px ' + DISP;
       ctx.globalAlpha = a;
       glow(ctx, 'rgba(255,255,255,0.25)', cx, y + fs * 0.3, bw * 0.6, 0.8);
       ctx.fillStyle = 'rgba(6,10,20,0.72)';
       ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - bw / 2, y - fs * 0.8, bw, bh, fs * 0.5); else ctx.rect(cx - bw / 2, y - fs * 0.8, bw, bh); ctx.fill();
       ctx.strokeStyle = B.color; ctx.lineWidth = 2; ctx.stroke();
+      if (titleW > bw - fs * 0.4) ctx.font = Math.max(14, Math.floor(fs * (bw - fs * 0.4) / titleW)) + 'px ' + DISP;
       outlined(ctx, B.title, cx, y, B.color);
-      // 글로 된 한 줄(행성 설명·블랙홀 안내)은 둥근 글꼴, 숫자(높이)는 숫자 글꼴. 길면 기둥 폭에 맞춰 줄인다
-      let sf = Math.round(fs * (B.text ? 0.46 : 0.5));
-      ctx.font = (B.text ? '' : '700 ') + sf + 'px ' + (B.text ? DISP : NUM);
-      const sw = ctx.measureText(B.sub).width;
-      if (sw > v.cw - 24) { sf = Math.max(11, Math.floor(sf * (v.cw - 24) / sw)); ctx.font = (B.text ? '' : '700 ') + sf + 'px ' + (B.text ? DISP : NUM); }
-      outlined(ctx, B.sub, cx, y + fs * 0.85, '#e8f7ff');
+      if (B.sub) { ctx.font = subFont(); outlined(ctx, B.sub, cx, y + fs * 0.85, '#e8f7ff'); }
     }
     const G = R.big;
     if (G) {
@@ -1948,9 +2132,24 @@
     ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
     const a = W.phase === 'play' ? W.alpha : 1;
     CAM = W.pcam + (W.cam - W.pcam) * a;
+    R.occ.length = 0;
     takeFx(W, v);
     updateFx(dt || 0);
     drawBackground(ctx, W, v, dt);
+    // 이번 프레임 글자 자리: 시간 막대 · 주인공 · 주인공이 노리는 발판 (이름표가 피한다)
+    R.occ.length = 0; R.fixed.length = 0;
+    if (v.hud !== false && W.phase === 'play') {
+      const tr = timersRect(W, v);
+      if (tr) { R.fixed.push(tr); R.occ.push(tr); }
+      const P = W.p, r = D.PLAYER.r * v.scale, hx = SX(v, P.px + (P.x - P.px) * a), hy = SY(v, P.py + (P.y - P.py) * a);
+      occupy(hx - r * 1.8, hy - r * 2.4, r * 3.6, r * 3.8);
+      const reach = (W.phys ? W.phys.jump : D.PLAYER.jump) * 1.6;
+      for (const p of W.plats) {
+        if (!p.main || p.broken || p.y < P.y - D.PLAYER.r * 2 || p.y > P.y + reach) continue;
+        const wp = p.w * v.scale;
+        occupy(SX(v, p.x) - wp / 2, SY(v, p.y) - r * 2.2, wp, r * 2.2 + D.PLAT.h * v.scale);
+      }
+    }
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     ctx.beginPath(); ctx.rect(v.cx, v.cy, v.cw, v.ch); ctx.clip();
@@ -1985,5 +2184,5 @@
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
   const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || R.clouds.length > 0 || R.squash.length > 0 || !!R.banner || !!R.big;
 
-  JP.Render = { draw, layout, busy, paintChar, paintSkin: paintChar, placeOf };
+  JP.Render = { draw, layout, busy, paintChar, paintSkin: paintChar, paintPlace, placeOf };
 })(JP);

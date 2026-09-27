@@ -1169,7 +1169,10 @@
     ctx.globalAlpha = 1;
 
     // 행성 또는 블랙홀 (앞 장면은 흐려지며 사라진다)
-    const layer = (L, a) => { if (L.sc.hole) drawHole(ctx, W, L, t, a, calm); else drawPlanet(ctx, W, L, px, py, t, a); };
+    // 웨이브 중엔 행성을 VIEW.planetDim만큼 어둡게 (적·탄이 잘 보이게). 도착 알림이 떠 있는 동안은 밝게, 1초쯤에 걸쳐 바뀐다
+    const dimTo = W.phase === 'play' && !(W.banner > 0) ? ((D.VIEW && D.VIEW.planetDim) || 1) : 1;
+    bg.dim = bg.dim == null ? dimTo : bg.dim + (dimTo - bg.dim) * Math.min(1, rdt * 2);
+    const layer = (L, a) => { if (L.sc.hole) drawHole(ctx, W, L, t, a, calm); else drawPlanet(ctx, W, L, px, py, t, a * bg.dim); };
     if (prev) layer(prev, bg.fade);
     layer(cur, prev ? 1 - bg.fade : 1);
     // 날씨 (행성 날씨가 없으면 예전 먼지). 장면이 바뀌는 동안엔 앞 날씨가 흐려지며 넘어간다
@@ -1662,7 +1665,8 @@
       const fs = Math.round(17 * pop);
       ctx.font = fs + 'px "Jua", system-ui, sans-serif';
       const tw = ctx.measureText(g.txt).width + 18;
-      const x = NG.clamp(g.x, tw / 2 + 6, W.w - tw / 2 - 6), y = Math.max(fs + 6, g.y - 40);
+      // 위쪽 HUD(체력·점수) 밑으로 들어가지 않게 VIEW.hudSafe 아래에
+      const x = NG.clamp(g.x, tw / 2 + 6, W.w - tw / 2 - 6), y = Math.max(fs + 6 + ((D.VIEW && D.VIEW.hudSafe) || 0), g.y - 40);
       ctx.globalAlpha = a;
       ctx.fillStyle = 'rgba(8,10,20,0.78)';
       ctx.beginPath();
@@ -1843,16 +1847,17 @@
       const F = D.FEVER, age = F.banner - W.feverBanner;
       const a = Math.min(1, W.feverBanner / 0.4, calm ? 1 : age / 0.12);
       const pop = calm ? 1 : 1 + Math.max(0, 0.3 - age) * 1.8;
-      const fs = Math.round(Math.min(80, W.w / 8) * pop), y = W.h * 0.34;
+      // 웨이브 알림(높이 38%)이 떠 있으면 겹치지 않게 아래쪽에
+      const fs = Math.round(Math.min(72, W.w / 9) * pop), y = W.banner > 0 ? W.h * 0.64 : W.h * 0.34;
       ctx.globalAlpha = a;
-      ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
+      ctx.font = fs + 'px ' + DISP;
       ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillText('FEVER!', W.w / 2 + 3, y + 3);
-      const tw = ctx.measureText('FEVER!').width;
+      ctx.fillText('피버 타임!', W.w / 2 + 3, y + 3);
+      const tw = ctx.measureText('피버 타임!').width;
       const gr = ctx.createLinearGradient(W.w / 2 - tw / 2, 0, W.w / 2 + tw / 2, 0);
       ['#ff4d6d', '#ffb703', '#ffe66d', '#3dff8b', '#5ee7ff', '#c77dff'].forEach((c, i, arr) => gr.addColorStop(i / (arr.length - 1), c));
       ctx.fillStyle = gr;
-      ctx.fillText('FEVER!', W.w / 2, y);
+      ctx.fillText('피버 타임!', W.w / 2, y);
       ctx.font = Math.round(Math.min(26, W.w / 30)) + 'px ' + DISP;
       ctx.fillStyle = '#fff4c2';
       ctx.fillText('점수 두 배!', W.w / 2, y + fs * 0.62);
@@ -1972,10 +1977,13 @@
     ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(ex, ey, r * 0.16, 0, TAU); ctx.fill();
   }
 
-  function drawPlayer(ctx, W) {
+  // calm: 움직임 줄이기. 내 기체는 맞는 판정(p.r)보다 VIEW.shipScale배 크게 그린다 (아이 눈에 잘 보이게, 2026-09-27)
+  function drawPlayer(ctx, W, calm) {
     const p = W.player;
     const g = p.gun;
-    const blink = p.iframe > 0 && p.dashT <= 0 && Math.floor(W.t * 20) % 2 === 0;
+    const vr = p.r * ((D.VIEW && D.VIEW.shipScale) || 1);
+    // 움직임 줄이기면 깜빡이지 않는다. 한 번 더! 뒤 무적 동안도 깜빡이지 않고 금빛 고리로 보여 준다 (기체를 놓치지 않게)
+    const blink = !calm && p.iframe > 0 && !(p.reviveT > 0) && p.dashT <= 0 && Math.floor(W.t * 20) % 2 === 0;
     if (W.phase === 'over') return;
 
     // 드론
@@ -1998,9 +2006,10 @@
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
       const a = p.aim + (n === 1 ? 0 : -spread / 2 + spread * i / (n - 1));
-      ctx.moveTo(p.x + Math.cos(a) * p.r * 0.5, p.y + Math.sin(a) * p.r * 0.5);
-      ctx.lineTo(p.x + Math.cos(a) * (p.r + 10), p.y + Math.sin(a) * (p.r + 10));
+      ctx.moveTo(p.x + Math.cos(a) * vr * 0.5, p.y + Math.sin(a) * vr * 0.5);
+      ctx.lineTo(p.x + Math.cos(a) * (vr + 12), p.y + Math.sin(a) * (vr + 12));
     }
+    ctx.lineWidth = 5;
     ctx.stroke();
 
     // 총구 화염
@@ -2010,7 +2019,7 @@
       for (let i = 0; i < n; i++) {
         const a = p.aim + (n === 1 ? 0 : -spread / 2 + spread * i / (n - 1));
         ctx.beginPath();
-        ctx.arc(p.x + Math.cos(a) * (p.r + 13), p.y + Math.sin(a) * (p.r + 13), 5, 0, TAU);
+        ctx.arc(p.x + Math.cos(a) * (vr + 15), p.y + Math.sin(a) * (vr + 15), 6, 0, TAU);
         ctx.fill();
       }
       ctx.globalCompositeOperation = 'source-over';
@@ -2024,13 +2033,23 @@
     // 과열: 붉은 기운
     if (p.heatT > 0) glow(ctx, 'rgba(255,122,61,0.7)', p.x, p.y, 40, 0.6 + 0.3 * Math.sin(W.t * 18));
     const look = p.look || SHIP0;
-    glow(ctx, 'rgba(' + look.glow + ',0.6)', p.x, p.y, 34, p.dashT > 0 ? 1 : 0.7);
-    drawShip(ctx, look, p.x, p.y, p.r, p.aim, p.dashT > 0);
+    glow(ctx, 'rgba(' + look.glow + ',0.6)', p.x, p.y, Math.round(vr * 2.6), p.dashT > 0 ? 1 : 0.75);
+    // 은은한 고리: 적·탄 사이에서도 내 기체가 어디 있는지 보이게
+    ctx.strokeStyle = 'rgba(' + look.glow + ',0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, vr + 8, 0, TAU); ctx.stroke();
+    drawShip(ctx, look, p.x, p.y, vr, p.aim, p.dashT > 0);
+    // 한 번 더!로 되살아난 뒤 무적 동안: 금빛 고리
+    if (p.reviveT > 0) {
+      ctx.strokeStyle = 'rgba(255,230,109,' + (calm ? 0.7 : 0.45 + 0.35 * Math.sin(W.t * 10)) + ')';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(p.x, p.y, vr + 16, 0, TAU); ctx.stroke();
+    }
     // 방패: 기체를 감싸는 푸른 육각 고리
     if (p.shield > 0) {
       ctx.strokeStyle = 'rgba(94,231,255,0.85)';
       ctx.lineWidth = 2.5;
-      poly(ctx, p.x, p.y, p.r + 11, 6, W.t * 1.2);
+      poly(ctx, p.x, p.y, vr + 12, 6, W.t * 1.2);
       ctx.stroke();
       ctx.globalAlpha = 0.12;
       ctx.fillStyle = '#5ee7ff';
@@ -2325,7 +2344,7 @@
       }
     }
     ctx.globalAlpha = 1;
-    ctx.font = 'bold 14px system-ui, sans-serif';
+    ctx.font = '16px ' + DISP;
     ctx.textAlign = 'center';
     for (const t of W.texts) {
       ctx.globalAlpha = Math.min(1, t.life * 2);
@@ -2342,11 +2361,13 @@
     if (!I) return;
     const list = [];
     if (p.shield > 0) list.push([I.shield.color, '방패', '', 1]);
-    if (p.heatT > 0) list.push([I.heat.color, '과열', p.heatT.toFixed(1), p.heatT / I.heat.time]);
-    if (p.magT > 0) list.push([I.magnet.color, '자석', p.magT.toFixed(1), p.magT / I.magnet.time]);
+    // 남은 시간은 소수점 없이 초로 (아이가 읽기 쉽게) + 아래 막대
+    const sec = v => String(Math.ceil(v));
+    if (p.heatT > 0) list.push([I.heat.color, '과열', sec(p.heatT), p.heatT / I.heat.time]);
+    if (p.magT > 0) list.push([I.magnet.color, '자석', sec(p.magT), p.magT / I.magnet.time]);
     // 선물 드론 · 동료 우주선 남은 초
-    if (p.giftDroneT > 0) list.push(['#a6ffc9', '드론', p.giftDroneT.toFixed(1), p.giftDroneT / D.GIFT.rewards.find(r => r.id === 'drone').time]);
-    if (W.wing && W.wing.bye <= 0) list.push([W.wing.look.color, '동료', W.wing.t.toFixed(1), W.wing.t / D.WINGMAN.time]);
+    if (p.giftDroneT > 0) list.push(['#a6ffc9', '드론', sec(p.giftDroneT), p.giftDroneT / D.GIFT.rewards.find(r => r.id === 'drone').time]);
+    if (W.wing && W.wing.bye <= 0) list.push([W.wing.look.color, '동료', sec(W.wing.t), W.wing.t / D.WINGMAN.time]);
     const h = 17 * s, w = 76 * s;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -2359,7 +2380,7 @@
       ctx.globalAlpha = 0.28;
       ctx.fillRect(x + 3 * s, cy + h - 2 * s, (w - 3 * s) * Math.max(0, Math.min(1, c[3])), 2 * s);
       ctx.globalAlpha = 1;
-      ctx.font = Math.round(12 * s) + 'px ' + DISP;
+      ctx.font = Math.round(13 * s) + 'px ' + DISP;
       ctx.fillText(c[1], x + 8 * s, cy + h / 2 + 0.5);
       if (c[2]) {
         ctx.textAlign = 'right';
@@ -2370,6 +2391,60 @@
       }
     });
     ctx.textBaseline = 'top';
+  }
+
+  // ─── HUD 발광 그림 (처음 한 번만 그려 두고 찍는다, 2026-09-27 성능 점검) ───
+  const HP_PAD = 6;
+  const hpCache = {};
+  function hpCell(hs, on) {
+    const key = Math.round(hs * 10) + (on ? 'a' : 'b');
+    let c = hpCache[key];
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = c.height = Math.ceil(hs + HP_PAD * 2);
+    const g = c.getContext('2d');
+    g.translate(HP_PAD, HP_PAD);
+    g.fillStyle = on ? '#ff4d6d' : 'rgba(255,77,109,0.16)';
+    if (on) { g.shadowColor = 'rgba(255,77,109,0.8)'; g.shadowBlur = 6; }
+    g.beginPath(); g.moveTo(hs * 0.25, 0); g.lineTo(hs, 0); g.lineTo(hs * 0.75, hs); g.lineTo(0, hs); g.closePath(); g.fill();
+    hpCache[key] = c;
+    return c;
+  }
+  const barCache = {};
+  function glowBar(ctx, x, y, w, h, color, blur) {
+    const key = Math.round(w) + 'x' + Math.round(h * 10) + color + blur;
+    let c = barCache[key];
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = Math.ceil(w + blur * 2); c.height = Math.ceil(h + blur * 2);
+      const g = c.getContext('2d');
+      g.shadowColor = color; g.shadowBlur = blur; g.fillStyle = color;
+      g.fillRect(blur, blur, w, h);
+      barCache[key] = c;
+    }
+    ctx.drawImage(c, x - blur, y - blur);
+  }
+  let textCache = new Map();
+  // k: 선명하게 그릴 배율 (화면 dpr). 돌려준 w·h는 CSS px
+  function glowText(txt, font, color, glowCol, blur, k) {
+    k = Math.max(1, Math.min(2, k || 1));
+    const key = txt + '|' + font + '|' + color + '|' + glowCol + '|' + k;
+    let t = textCache.get(key);
+    if (t) return t;
+    if (textCache.size > 24) textCache = new Map();
+    const c = document.createElement('canvas');
+    let g = c.getContext('2d');
+    g.font = font;
+    const w = Math.ceil(g.measureText(txt).width + blur * 3), fsz = parseInt(font, 10) || 40, h = Math.ceil(fsz * 1.4 + blur * 2);
+    c.width = Math.ceil(w * k); c.height = Math.ceil(h * k);
+    g = c.getContext('2d');
+    g.scale(k, k);
+    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.shadowColor = glowCol; g.shadowBlur = blur; g.fillStyle = color;
+    g.fillText(txt, w / 2, h / 2);
+    t = { c, w, h };
+    textCache.set(key, t);
+    return t;
   }
 
   function drawHud(ctx, W, view) {
@@ -2384,11 +2459,9 @@
     const cell = 16 * s, perRow = Math.max(5, Math.floor((right - 120 * s - x0) / cell));
     for (let i = 0; i < p.maxHp; i++) {
       const hx = x0 + (i % perRow) * cell, hy = top + 2 + Math.floor(i / perRow) * cell, hs = 12 * s;
-      const on = i < p.hp;
-      ctx.fillStyle = on ? '#ff4d6d' : 'rgba(255,77,109,0.16)';
-      if (on) { ctx.shadowColor = 'rgba(255,77,109,0.8)'; ctx.shadowBlur = 6; }
-      ctx.beginPath(); ctx.moveTo(hx + hs * 0.25, hy); ctx.lineTo(hx + hs, hy); ctx.lineTo(hx + hs * 0.75, hy + hs); ctx.lineTo(hx, hy + hs); ctx.closePath(); ctx.fill();
-      ctx.shadowBlur = 0;
+      // 발광 칸은 미리 그려 둔 그림을 찍기만 한다 (매 프레임 shadowBlur 없음)
+      const img = hpCell(hs, i < p.hp);
+      ctx.drawImage(img, hx - HP_PAD, hy - HP_PAD);
     }
     const rows = Math.ceil(p.maxHp / perRow);
     // 대시 게이지
@@ -2396,24 +2469,20 @@
     const gy = top + 2 + rows * cell + 4;
     ctx.fillStyle = 'rgba(94,231,255,0.16)';
     ctx.fillRect(x0, gy, 76 * s, 5 * s);
-    ctx.fillStyle = k >= 1 ? '#5ee7ff' : '#2b7f91';
-    if (k >= 1) { ctx.shadowColor = '#5ee7ff'; ctx.shadowBlur = 8; }
-    ctx.fillRect(x0, gy, 76 * s * k, 5 * s);
-    ctx.shadowBlur = 0;
+    if (k >= 1) glowBar(ctx, x0, gy, 76 * s, 5 * s, '#5ee7ff', 8);
+    else { ctx.fillStyle = '#2b7f91'; ctx.fillRect(x0, gy, 76 * s * k, 5 * s); }
     ctx.textAlign = 'left';
-    ctx.font = '700 ' + Math.round(11 * s) + 'px ' + NUM;
+    ctx.font = Math.round(12 * s) + 'px ' + DISP;
     ctx.fillStyle = k >= 1 ? '#5ee7ff' : '#4a7f8c';
-    ctx.fillText('DASH', x0 + 80 * s, gy - 3 * s);
+    ctx.fillText('대시', x0 + 80 * s, gy - 4 * s);
     // 필살기 게이지
     const u = Math.min(1, p.ult / D.ULT.need), uy = gy + 14 * s, full = u >= 1;
     ctx.fillStyle = 'rgba(255,207,58,0.16)';
     ctx.fillRect(x0, uy, 76 * s, 5 * s);
-    ctx.fillStyle = full ? '#ffd23f' : '#a67c12';
-    if (full) { ctx.shadowColor = '#ffcf3a'; ctx.shadowBlur = 10; }
-    ctx.fillRect(x0, uy, 76 * s * u, 5 * s);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = full ? (Math.floor(W.t * 3) % 2 ? '#fff4c2' : '#ffd23f') : '#8a6d2a';
-    ctx.fillText(full ? (view.ui > 1 ? 'N-BURST!' : 'N-BURST [Q]') : 'N-BURST', x0 + 80 * s, uy - 3 * s);
+    if (full) glowBar(ctx, x0, uy, 76 * s, 5 * s, '#ffd23f', 10);
+    else { ctx.fillStyle = '#a67c12'; ctx.fillRect(x0, uy, 76 * s * u, 5 * s); }
+    ctx.fillStyle = full ? (view.calm || Math.floor(W.t * 3) % 2 ? '#fff4c2' : '#ffd23f') : '#8a6d2a';
+    ctx.fillText(full ? (view.ui > 1 ? '필살기!' : '필살기 [Q]') : '필살기', x0 + 80 * s, uy - 4 * s);
     // 피버 게이지: 콤보로 차고, 피버 중엔 남은 시간만큼 줄어든다 (무지개)
     const F = D.FEVER, fk = Math.min(1, (W.fever || 0) / F.need), fy = uy + 14 * s, on = W.feverT > 0;
     ctx.fillStyle = 'rgba(255,94,200,0.16)';
@@ -2425,7 +2494,7 @@
       ctx.fillRect(x0, fy, 76 * s * fk, 5 * s);
     }
     ctx.fillStyle = on ? '#ff9ed8' : '#8a5a7c';
-    ctx.fillText(on ? 'FEVER x' + F.scoreMul + ' ' + Math.ceil(W.feverT) : 'FEVER', x0 + 80 * s, fy - 3 * s);
+    ctx.fillText(on ? '피버 ×' + F.scoreMul + ' ' + Math.ceil(W.feverT) : '피버', x0 + 80 * s, fy - 4 * s);
     drawEffectChips(ctx, W, x0, fy + 12 * s, s);
 
     ctx.textAlign = 'right';
@@ -2437,7 +2506,7 @@
     // 맨 앞 칸은 지금 있는 곳 (행성 이름 또는 블랙홀, 행성 색)
     const place = W.place || NG.World.placeOf(W.wave);
     const where = W.hole ? ['블랙홀', '#c9a0ff'] : [place.planet.name + (place.lap > 1 ? ' ' + place.lap + '바퀴' : ''), place.planet.color];
-    const chips = [[where[0], '', where[1], true], ['WAVE', W.wave], ['N', p.gun.barrels, '#ffe66d'], ['', NG.fmtTime(W.stats.time)]];
+    const chips = [[where[0], '', where[1], true], ['웨이브 ' + W.wave, '', '', true], ['대포 ' + p.gun.barrels, '', '#ffe66d', true], ['', NG.fmtTime(W.stats.time)]];
     let cx = right;
     for (let i = chips.length - 1; i >= 0; i--) {
       const ch = chips[i];
@@ -2463,14 +2532,8 @@
       ctx.fillRect(bx, by, bw * Math.max(0, boss.hp / boss.maxHp), 8);
       ctx.textAlign = 'center';
       ctx.fillStyle = col;
-      ctx.font = '700 13px ' + NUM;
-      ctx.fillText('BOSS #' + (W.bossKills + 1), W.w / 2 - 6, by + 12);
-      if (L) {
-        ctx.font = Math.round(14) + 'px ' + DISP;
-        ctx.textAlign = 'left';
-        ctx.fillText(L.name + (boss.mk > 1 ? ' MK' + boss.mk : ''), W.w / 2 + 34, by + 12);
-        ctx.textAlign = 'center';
-      }
+      ctx.font = '15px ' + DISP;
+      ctx.fillText('보스 ' + (W.bossKills + 1) + (L ? ' · ' + L.name + (boss.mk > 1 ? ' ' + boss.mk + '탄' : '') : ''), W.w / 2, by + 12);
     }
 
     drawCombo(ctx, W, view, right, boss ? by + 26 : top + 50 * s);
@@ -2483,16 +2546,15 @@
       ctx.textBaseline = 'middle';
       const fs = Math.min(64, Math.round(W.w / 7));
       const ty = W.h * 0.38, slide = view.calm ? 0 : (1 - Math.min(1, (D.WAVE.banner - W.banner) * 3)) * 40;
-      ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
       const nb = NG.World.bossLook(W.bossKills);   // 이번 웨이브에 나올 보스
-      ctx.fillStyle = W.bossWave ? nb.color : '#e8f7ff';
-      ctx.shadowColor = W.bossWave ? 'rgba(' + nb.glow + ',0.8)' : 'rgba(94,231,255,0.7)'; ctx.shadowBlur = 20;
-      ctx.fillText(W.bossWave ? 'BOSS WAVE' : 'WAVE ' + W.wave, W.w / 2 + slide, ty);
-      ctx.shadowBlur = 0;
+      // 발광 글자는 처음 한 번만 그려 두고 찍는다 (매 프레임 shadowBlur 없음)
+      const head = glowText(W.bossWave ? '보스 웨이브' : '웨이브 ' + W.wave, fs + 'px ' + DISP, W.bossWave ? nb.color : '#e8f7ff',
+        W.bossWave ? 'rgba(' + nb.glow + ',0.8)' : 'rgba(94,231,255,0.7)', 20, view.dpr);
+      ctx.drawImage(head.c, Math.round(W.w / 2 + slide - head.w / 2), Math.round(ty - head.h / 2), head.w, head.h);
       // 아랫줄: 보스 이름 · 블랙홀 주의 · 새 행성 도착 (행성 색) · 그 밖엔 "끝까지 버텨라"
       const place = W.place || NG.World.placeOf(W.wave);
       let sub = '끝까지 버텨라', subCol = '#8aa4b8', fact = '';
-      if (W.bossWave) { sub = nb.name + (W.bossKills >= D.BOSSES.length ? ' MK' + (Math.floor(W.bossKills / D.BOSSES.length) + 1) : '') + ' 등장!'; subCol = '#ffffff'; }
+      if (W.bossWave) { sub = nb.name + (W.bossKills >= D.BOSSES.length ? ' ' + (Math.floor(W.bossKills / D.BOSSES.length) + 1) + '탄' : '') + ' 등장!'; subCol = '#ffffff'; }
       else if (W.hole) { sub = '블랙홀 주의!'; subCol = '#d7b8ff'; fact = '빨려 들지 않게 계속 움직여요'; }
       else if (place.first) {
         sub = place.planet.name + ' 도착!' + (place.lap > 1 ? ' (' + place.lap + '바퀴)' : ''); subCol = place.planet.color; fact = place.planet.fact;
@@ -2506,7 +2568,7 @@
       ctx.fillStyle = subCol;
       ctx.fillText(sub, W.w / 2 - slide, ty + fs * (big ? 0.72 : 0.62));
       if (fact) {
-        ctx.font = Math.round(fs * 0.28) + 'px ' + DISP;
+        ctx.font = Math.max(16, Math.round(fs * 0.3)) + 'px ' + DISP;
         ctx.fillStyle = '#e8f7ff';
         ctx.fillText(fact, W.w / 2 - slide, ty + fs * 1.18);
       }
@@ -2523,11 +2585,11 @@
     const s = view.ui || 1;
     const pop = view.calm ? 0 : W.comboPop;
     const col = n >= 50 ? '#ff2e88' : n >= 25 ? '#ffb703' : n >= 10 ? '#ffe66d' : '#5ee7ff';
-    const fs = Math.round(24 * s * (1 + 0.4 * pop * pop));
+    const fs = Math.round(22 * s * (1 + 0.4 * pop * pop));
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
-    const txt = 'x' + n + ' COMBO';
+    ctx.font = fs + 'px ' + DISP;
+    const txt = n + ' 콤보';
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillText(txt, right + 2, y + 2);
     ctx.fillStyle = pop > 0.6 ? '#ffffff' : col;
@@ -2539,9 +2601,9 @@
     ctx.fillRect(right - bw * Math.max(0, W.comboT / C.window), by, bw * Math.max(0, W.comboT / C.window), 3 * s);
     const mul = D.comboMul(n);
     if (mul > 1) {
-      ctx.font = '700 ' + Math.round(12 * s) + 'px ' + NUM;
+      ctx.font = Math.round(13 * s) + 'px ' + DISP;
       ctx.fillStyle = '#bcd3e2';
-      ctx.fillText('SCORE x' + mul.toFixed(1), right, by + 6 * s);
+      ctx.fillText('점수 ×' + mul.toFixed(1), right, by + 6 * s);
     }
     ctx.textBaseline = 'alphabetic';
   }
@@ -2559,8 +2621,8 @@
     ctx.fillText('엄지로 밀어서 이동', h.x, h.y - R - 14);
     ctx.textBaseline = 'middle';
     ctx.fillText('오른쪽 드래그: 조준', W.w * 0.72, W.h * 0.5);
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.fillText('(안 해도 자동 조준)', W.w * 0.72, W.h * 0.5 + 20);
+    ctx.font = '14px ' + DISP;
+    ctx.fillText('(안 해도 저절로 조준)', W.w * 0.72, W.h * 0.5 + 22);
     ctx.globalAlpha = 1;
     ctx.textBaseline = 'alphabetic';
   }
@@ -2586,15 +2648,22 @@
     drawMeteorRocks(ctx, W);
     drawFunThings(ctx, W, view.calm);
     drawShocks(ctx, W);
-    drawPlayer(ctx, W);
+    drawPlayer(ctx, W, view.calm);
     drawWing(ctx, W, view.calm);
     drawTags(ctx, W, view.calm);
     ctx.restore();
     if (view.hud !== false) drawFeverFrame(ctx, W, view.calm);
     drawDanger(ctx, W);
     if (W.flash > 0) {
-      ctx.fillStyle = 'rgba(255,77,109,' + (W.flash * 0.6) + ')';
-      ctx.fillRect(0, 0, W.w, W.h);
+      if (view.calm) {
+        // 움직임 줄이기: 화면 전체 번쩍 대신 옅은 빨간 테두리만
+        ctx.strokeStyle = 'rgba(255,77,109,' + Math.min(0.6, W.flash * 3) + ')';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(4, 4, W.w - 8, W.h - 8);
+      } else {
+        ctx.fillStyle = 'rgba(255,77,109,' + (W.flash * 0.6) + ')';
+        ctx.fillRect(0, 0, W.w, W.h);
+      }
     }
     if (W.whiteFlash > 0) {
       ctx.fillStyle = 'rgba(255,255,255,' + Math.min(view.calm ? 0.12 : 0.4, W.whiteFlash * 0.8) + ')';
@@ -2604,6 +2673,23 @@
     if (touch && view.touchHint) drawTouchHint(ctx, W, touch);
   }
 
+  // 보스 스티커 그림 (main.js 스티커 창). g: 캔버스 2D, look: data.js BOSSES 한 칸, S: 캔버스 한 변 px
+  function drawBossIcon(g, look, S) {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, S, S);
+    const r = S * 0.3, c = S / 2;
+    const e = { x: c, y: c, r, ang: 0.4, look, def: D.ENEMIES.boss, type: 'boss', vx: 0, vy: 0 };
+    const fakeW = { player: { x: c, y: c + S } };
+    glow(g, 'rgba(' + look.glow + ',0.6)', c, c, Math.round(S * 0.5), 1);
+    bossBack(g, e, fakeW);
+    shapePath(g, e);
+    g.fillStyle = look.color;
+    g.fill();
+    g.lineWidth = 2; g.strokeStyle = 'rgba(0,0,0,0.35)'; g.stroke();
+    bossFront(g, e, fakeW);
+    g.globalAlpha = 1;
+  }
+
   // wx: 날씨 손잡이 (auto=false로 느린 기기 자동 전환을 끄고, low로 직접 정한다. 스크린샷용)
-  NG.Render = { draw, drawShip, wx: wxOpt };
+  NG.Render = { draw, drawShip, drawBossIcon, wx: wxOpt };
 })(NG);

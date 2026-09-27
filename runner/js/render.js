@@ -920,12 +920,50 @@
   // bgs: 곳마다 미리 그린 배경 (지금·겹치는 중·곧 올 것만 남긴다) · key/fromKey/zf: 곳이 바뀔 때 겹쳐 바뀌기 · banner: 가운데 큰 글자
   // bhK: 블랙홀 연출 세기 (0 → 1, 별이 휘어 보이기·도는 빛) · sk: 미끄러지는 자세 (0 → 1)
   const R = { bgKey: '', bgs: {}, L: null, parts: [], texts: [], shake: 0, flash: 0, flashColor: '255,77,109', world: null, lines: [], twinkle: null,
-    key: '0', fromKey: null, zf: 1, banner: null, bank: 0, bhK: 0, bhSide: 0, sk: 0,
+    key: '0', fromKey: null, zf: 1, banner: null, bq: [], bank: 0, bhK: 0, bhSide: 0, sk: 0,
     pirK: 0, pirX: 0, pirY: 0 };
 
-  function text(x, y, txt, color, size, life) {
-    if (R.texts.length > 10) R.texts.shift();
-    R.texts.push({ x, y, txt, color, size, life: life || 0.9, max: life || 0.9 });
+  // 떠오르는 글자 (우주선 근처 "완벽! +20" "아슬아슬!" "잘했어요!"). 한 번에 FX.texts개까지만, 겹치면 위로 쌓는다.
+  // o.key: 같은 종류가 아직 떠 있으면 새로 쌓지 않고 합친다 ("완벽! +20 ×3"). o.replace: 합칠 때 ×를 붙이지 않고 글만 바꾼다 (10연속 → 15연속)
+  function text(x, y, txt, color, size, life, o) {
+    life = life || 0.9; o = o || {};
+    if (o.key) {
+      const old = R.texts.find(q => q.key === o.key && q.life > q.max * 0.3);
+      if (old) {
+        old.n++;
+        old.txt = o.replace ? txt : txt + ' ×' + old.n;
+        old.color = color; old.life = old.max = Math.max(life, old.life);
+        old.pop = 0.18;
+        return;
+      }
+    }
+    const max = (D.FX && D.FX.texts) || 3;
+    while (R.texts.length >= max) R.texts.shift();
+    const gap = Math.max(16, Math.min(40, size)) * 1.2;
+    let yy = y;
+    for (let k = 0; k < max; k++) {
+      const hit = R.texts.find(q => Math.abs(q.x - x) < gap * 5 && Math.abs(q.y - yy) < gap);
+      if (!hit) break;
+      yy = hit.y - gap;
+    }
+    R.texts.push({ x, y: yy, txt, color, size, life, max: life, key: o.key || '', n: 1, pop: 0 });
+  }
+  // 가운데 큰 글자 (행성 도착·블랙홀·해적·선물·별 잔치·워프). 한 칸뿐이라 차례를 세운다.
+  // prio: 3 행성 도착 · 2 블랙홀·해적 경고 · 1 나머지. 더 중요한 것이 오면 지금 것은 막 떴을 때(0.6초 안)만 뒤로 미루고, 이미 봤으면 버린다
+  // (같은 글자가 두 번 뜨지 않게). 기다리는 줄은 3개까지, 기다리는 것이 있으면 지금 글자는 1.6초만 보여 준다
+  function banner(b, prio) {
+    b.prio = prio || 1; b.t = 0;
+    const cur = R.banner;
+    if (!cur) { R.banner = b; return; }
+    if (b.prio > cur.prio) {
+      if (cur.t < 0.6) { cur.t = 0; R.bq.unshift(cur); }
+      R.banner = b;
+    } else {
+      let i = R.bq.findIndex(q => q.prio < b.prio);
+      if (i < 0) i = R.bq.length;
+      R.bq.splice(i, 0, b);
+    }
+    if (R.bq.length > 3) R.bq.length = 3;
   }
   function burst(x, y, n, colors, speed, size) {
     const P = R.parts;
@@ -952,18 +990,19 @@
 
   // 규칙이 남긴 연출 요청(W.fx)을 입자로 바꾼다
   function takeFx(W, v, L, dist) {
-    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; R.key = skyKey(W); R.fromKey = null; R.zf = 1; R.banner = null; R.bhK = W.bh ? 1 : 0; R.sk = 0; WX.parts.length = 0; WX.cur = null; WX.a = 0; WX.dist = null; }
+    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; R.key = skyKey(W); R.fromKey = null; R.zf = 1; R.banner = null; R.bq.length = 0; R.bhK = W.bh ? 1 : 0; R.sk = 0; WX.parts.length = 0; WX.cur = null; WX.a = 0; WX.dist = null; }
     const s0 = L.F / CAMZ, sq = proj(L, W.p.x, 0, 1.4);
     for (const f of W.fx) {
       const q = proj(L, f.x, Math.max(0, f.z - dist), f.kind === 'star' || f.kind === 'power' ? (f.y || 0.5) : 0.9);
       if (f.kind === 'star') {
         burst(q.x, q.y, D.FX.starSparks, f.fever ? RAINBOW : ['#ffe66d', '#fff4c2', '#ffffff'], s0 * 3, s0 * 0.07);
-        if (W.chain >= 5 && W.chain % 5 === 0 && !W.fx.some(g => g.kind === 'perfect')) text(q.x, q.y - s0 * 0.6, W.chain + '연속!', '#ffe66d', s0 * 0.3);
+        // 연속 별: 다른 글자가 떠 있으면 새로 띄우지 않고, 떠 있는 "연속" 글자만 바꾼다
+        if (W.chain >= 5 && W.chain % 5 === 0 && !W.fx.some(g => g.kind === 'perfect') && (R.texts.length < 2 || R.texts.some(t => t.key === 'chain'))) text(sq.x, sq.y - s0 * 0.6, W.chain + '연속!', '#ffe66d', s0 * 0.3, 0.9, { key: 'chain', replace: true });
       } else if (f.kind === 'power') {
         const K = ITEM[f.item];
         ring(q.x, q.y, s0 * 1.4, K.color, 0.5);
         burst(q.x, q.y, 22, [K.color, '#ffffff'], s0 * 4, s0 * 0.09);
-        text(q.x, q.y - s0 * 0.8, f.item === 'heart' ? '하트 +1' : K.name + '!', K.color, s0 * 0.36);
+        text(q.x, q.y - s0 * 0.8, f.item === 'heart' ? '하트 +1' : K.name + '!', K.color, s0 * 0.36, 0.9, { key: 'power', replace: true });
       } else if (f.kind === 'shield') {
         ring(q.x, q.y, s0 * 1.6, '#5ee7ff', 0.5); ring(q.x, q.y, s0 * 2.4, '#bff8ff', 0.6);
         burst(q.x, q.y, 20, ['#5ee7ff', '#ffffff', '#8a6470'], s0 * 5, s0 * 0.1);
@@ -982,33 +1021,35 @@
         R.flash = D.FX.flash; R.flashColor = '255,107,138';
         if (!big && !W.fx.some(g => g.kind === 'revive')) text(sq.x, sq.y - s0 * 0.4, W.hearts > 0 ? '앗, 쿵! 하트 ' + W.hearts + '개 남았어요' : '쿵!', '#ffb3c4', s0 * 0.3, 1.3);
       } else if (f.kind === 'near') {
-        text(sq.x, sq.y - s0 * 0.2, '아슬아슬! +' + f.pts, '#bff8ff', s0 * 0.3, 1.0);
+        text(sq.x, sq.y - s0 * 0.2, '아슬아슬! +' + f.pts, '#bff8ff', s0 * 0.3, 1.0, { key: 'near' });
         burst(sq.x, sq.y + s0 * 0.3, 10, ['#bff8ff', '#ffffff'], s0 * 3, s0 * 0.06);
       } else if (f.kind === 'perfect') {
         ring(q.x, q.y, s0 * 1.8, '#ffe66d', 0.6);
         burst(q.x, q.y, 16, ['#ffe66d', '#fff4c2', '#ff9fcb'], s0 * 5, s0 * 0.09);
-        text(sq.x, sq.y - s0 * 1.0, '완벽! +' + f.pts, '#ffe66d', s0 * 0.4, 1.2);
+        text(sq.x, sq.y - s0 * 1.0, '완벽! +' + f.pts, '#ffe66d', s0 * 0.4, 1.2, { key: 'perfect' });
       } else if (f.kind === 'milestone') {
         const A = artOf(R.key);
-        // 행성 도착과 같은 아치면 행성 글자 아래에 거리만 덧붙인다
-        if (R.banner && !R.banner.small && R.banner.t < 0.5) R.banner.sub2 = f.m.toLocaleString() + 'm · +' + f.pts + '점';
-        else R.banner = { big: f.m.toLocaleString() + 'm', sub: '+' + f.pts + '점', color: A.accent, t: 0, max: 1.6, small: true };
+        // 행성 도착과 같은 아치면 행성 글자 아래에 거리만 덧붙인다. 워프 터널 안에서 지나간 아치는 워프 글자에 거리만 (점수 글자는 한 번만)
+        if (R.banner && R.banner.kind === 'zone' && R.banner.t < 0.5) R.banner.sub2 = f.m.toLocaleString() + 'm · +' + f.pts + '점';
+        else if (W.warp || (R.banner && R.banner.kind === 'warp')) { if (R.banner && (R.banner.kind === 'warp' || R.banner.kind === 'zone')) R.banner.sub2 = f.m.toLocaleString() + 'm 통과'; }
+        else banner({ kind: 'arch', big: f.m.toLocaleString() + 'm', sub: '+' + f.pts + '점', color: A.accent, max: 1.6, small: true }, 1);
         burst(L.cx, L.hy + (L.py - L.hy) * 0.2, 26, [A.accent, '#ffffff'], s0 * 6, s0 * 0.1);
       } else if (f.kind === 'zone') {
         // 행성 도착: 이름과 한 줄 (2바퀴째부터는 몇 바퀴째인지도)
         const pl = RN.World.placeOf(f.i), A = PLANET_ART[pl.stop];
-        R.banner = { big: pl.name + ' 도착!', sub: (pl.lap > 1 && pl.stop === 0 ? '우주 여행 ' + pl.lap + '바퀴째! ' : '') + pl.line, color: A.accent, t: 0, max: D.FX.banner + 0.6 };
+        banner({ kind: 'zone', big: pl.name + ' 도착!', sub: (pl.lap > 1 && pl.stop === 0 ? '우주 여행 ' + pl.lap + '바퀴째! ' : '') + pl.line, color: A.accent, max: D.FX.banner + 0.6 }, 3);
       } else if (f.kind === 'bh') {
-        R.banner = { big: '블랙홀 주의!', sub: '끌려가면 반대쪽으로 밀어서 버텨요', color: '#d8b0ff', t: 0, max: D.FX.banner + 0.6 };
+        banner({ kind: 'bh', big: '블랙홀 주의!', sub: '끌려가면 반대쪽으로 밀어서 버텨요', color: '#d8b0ff', max: D.FX.banner + 0.6 }, 2);
         if (!v.calm) R.shake = Math.max(R.shake, D.FX.shake * 0.4);
       } else if (f.kind === 'bhout') {
-        R.banner = { big: '블랙홀 탈출!', sub: '+' + f.pts + '점', color: '#d8b0ff', t: 0, max: 1.8, small: true, disp: true };
+        banner({ kind: 'bhout', big: '블랙홀 탈출!', sub: '+' + f.pts + '점', color: '#d8b0ff', max: 1.8, small: true, disp: true }, 1);
         burst(L.cx, L.hy + (L.py - L.hy) * 0.2, 26, ['#d8b0ff', '#ffd27a', '#ffffff'], s0 * 6, s0 * 0.1);
       } else if (f.kind === 'pirate') {
-        R.banner = { big: '우주 해적 출현!', sub: '빨갛게 빛나는 줄은 옆으로 피해요', color: '#ff9a3d', t: 0, max: D.FX.banner + 0.6 };
+        // 경고 줄은 주황색으로 빛난다: 글도 주황색. 해적선을 가리지 않게 지평선 쪽 아래에 (low)
+        banner({ kind: 'pirate', big: '우주 해적 출현!', sub: '주황색으로 빛나는 줄은 옆으로 피해요', color: '#ff9a3d', max: D.FX.banner + 0.6, low: true }, 2);
         R.pirY = 0;
       } else if (f.kind === 'pirout') {
-        R.banner = { big: '해적선을 따돌렸어요!', sub: '+' + f.pts + '점 · 별 소나기!', color: '#ffe66d', t: 0, max: 2.6, disp: true };
+        banner({ kind: 'pirout', big: '해적선을 따돌렸어요!', sub: '+' + f.pts + '점 · 별 소나기!', color: '#ffe66d', max: 2.6, disp: true }, 1);
         burst(L.cx, L.hy * 0.5, 30, ['#ffe66d', '#ff9a3d', '#ffffff'], s0 * 7, s0 * 0.1);
       } else if (f.kind === 'pull') {
         text(sq.x, sq.y - s0 * 0.6, '슈웅, 끌려갔어요', '#d8b0ff', s0 * 0.3, 1.1);
@@ -1025,21 +1066,26 @@
         // 선물 상자: 색종이 + 큰 글자 "선물: 코인 25개!"
         const txt = f.kind === 'gift' && f.n ? '코인 ' + f.n + '개!' : f.item ? (ITEM[f.item] ? ITEM[f.item].name : '') + '!' : startItemName(f.id) + '!';
         const sub = f.id ? '다음 판 시작할 때 써요' : f.item === 'shield' ? '한 번 부딪혀도 괜찮아요' : f.item === 'magnet' ? '별을 끌어와요' : f.item === 'boost' ? '슝! 부딪혀도 부숴요' : '판이 끝나면 받아요';
-        R.banner = { big: '선물: ' + txt, sub, color: '#ffd24a', t: 0, max: 2.4, disp: true, gift: true };
+        banner({ kind: 'gift', big: '선물: ' + txt, sub, color: '#ffd24a', max: 2.4, disp: true, gift: true }, 1);
         ring(q.x, q.y, s0 * 1.8, '#ff5fa8', 0.6);
         confetti(q.x, q.y, v.calm ? 16 : 44, s0 * 7, s0 * 0.14, v.calm);
         confetti(L.cx, L.hy * 0.6, v.calm ? 10 : 30, s0 * 6, s0 * 0.14, v.calm);
       } else if (f.kind === 'fever') {
-        R.banner = { big: 'FEVER!', sub: '별 점수 2배! 별이 잔뜩!', color: '#ff5fa8', t: 0, max: 2.4, disp: true, rainbow: true };
+        banner({ kind: 'fever', big: '별 잔치!', sub: '별 점수 두 배! 별이 잔뜩!', color: '#ff5fa8', max: 2.4, disp: true, rainbow: true }, 1);
         confetti(L.cx, L.hy * 0.55, v.calm ? 12 : 36, s0 * 6, s0 * 0.12, v.calm);
       } else if (f.kind === 'warp') {
-        R.banner = { big: '워프!', sub: '+' + f.pts + '점 · ' + D.WARP.dist + 'm 앞으로 슝!', color: '#8fe9ff', t: 0, max: 2.0, disp: true };
+        banner({ kind: 'warp', big: '워프!', sub: D.WARP.dist + 'm 앞으로 슝! +' + f.pts + '점', color: '#8fe9ff', max: 2.0, disp: true }, 1);
         R.flash = v.calm ? 0 : D.FX.flash * 0.8; R.flashColor = '190,240,255';
       } else if (f.kind === 'tutok') {
-        text(sq.x, sq.y - s0 * 0.8, '잘했어요!', '#ffe66d', s0 * 0.45, 1.4);
+        text(sq.x, sq.y - s0 * 0.8, '잘했어요!', '#ffe66d', s0 * 0.45, 1.4, { key: 'tut', replace: true });
         burst(sq.x, sq.y, 24, ['#ffe66d', '#5ee7ff', '#ffffff'], s0 * 5, s0 * 0.1);
+      } else if (f.kind === 'continue') {
+        // 한 번 더!: 빛 고리와 함께 다시 출발
+        ring(sq.x, sq.y, s0 * 1.6, '#ffe66d', 0.6); ring(sq.x, sq.y, s0 * 2.6, '#5ee7ff', 0.8);
+        burst(sq.x, sq.y, 26, ['#ffe66d', '#5ee7ff', '#ffffff'], s0 * 5, s0 * 0.1);
+        R.shake = 0; R.flash = 0;
       } else if (f.kind === 'tutmiss') {
-        text(sq.x, sq.y - s0 * 0.8, '괜찮아요! 다시 한 번', '#bff8ff', s0 * 0.36, 1.4);
+        text(sq.x, sq.y - s0 * 0.8, '괜찮아요! 다시 한 번', '#bff8ff', s0 * 0.36, 1.4, { key: 'tut', replace: true });
       }
     }
     W.fx.length = 0;
@@ -1054,11 +1100,16 @@
       if (q.conf) { q.vy += q.g * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.97; }
       else if (!q.ring) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.9; q.vy *= 0.9; }
     }
-    for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y -= 36 * dt; if (q.life <= 0) R.texts.splice(i, 1); }
+    for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y -= 36 * dt; if (q.pop > 0) q.pop = Math.max(0, q.pop - dt); if (q.life <= 0) R.texts.splice(i, 1); }
     R.shake = Math.max(0, R.shake - dt * 40);
     R.flash = Math.max(0, R.flash - dt);
     if (R.zf < 1) { R.zf = Math.min(1, R.zf + dt / D.FX.zoneFade); if (R.zf >= 1) R.fromKey = null; }
-    if (R.banner && (R.banner.t += dt) > R.banner.max) R.banner = null;
+    if (R.banner) {
+      R.banner.t += dt;
+      // 기다리는 글자가 있으면 지금 글자는 1.6초만
+      if (R.banner.t > R.banner.max || (R.bq.length && R.banner.t > 1.6)) R.banner = null;
+    }
+    if (!R.banner && R.bq.length) { R.banner = R.bq.shift(); R.banner.t = 0; }
   }
 
   function drawFx(ctx) {
@@ -1086,7 +1137,7 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const q of R.texts) {
       ctx.globalAlpha = Math.min(1, q.life / q.max * 2);
-      ctx.font = Math.round(Math.max(16, Math.min(40, q.size))) + 'px ' + DISP;
+      ctx.font = Math.round(Math.max(16, Math.min(40, q.size)) * (1 + (q.pop || 0) * 1.5)) + 'px ' + DISP;
       ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.strokeText(q.txt, q.x, q.y);
       ctx.fillStyle = q.color; ctx.fillText(q.txt, q.x, q.y);
     }
@@ -1115,6 +1166,8 @@
     const hole = W.bhs && W.bhs.find(b => b.start > dist && b.start - dist < 160);
     if (hole) soon.push('bh' + hole.side);
     if (W.bh && W.bh.end - dist < 160) soon.push(String(stopOf(Math.floor(W.bh.end / leg))));
+    // 워프: 200m를 단숨에 건너니, 터널에 들어가자마자 나갈 곳의 행성 배경을 먼저 그려 둔다
+    if (W.warp) { const k = String(stopOf(Math.floor(W.warp.to / leg))); if (soon.indexOf(k) < 0) soon.unshift(k); }
     for (const k in R.bgs) if (k !== R.key && k !== R.fromKey && soon.indexOf(k) < 0) delete R.bgs[k];
     for (const k of soon) if (!R.bgs[k]) { backdrop(k, L, v); break; }   // 한 번에 한 장만 (끊김 없게)
     if (R.zf < 1 && R.fromKey != null) {
@@ -1923,7 +1976,7 @@
     ctx.font = Math.round(14 * s) + 'px ' + DISP;
     ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(5,7,12,0.85)';
-    const lab = on ? 'FEVER ' + Math.ceil(W.fever) : '피버';
+    const lab = on ? '별 잔치 ' + Math.ceil(W.fever) : '별 잔치';
     ctx.strokeText(lab, x - 7 * s, y + h / 2 + 1);
     ctx.fillStyle = on ? '#ffd24a' : '#ffc2de'; ctx.fillText(lab, x - 7 * s, y + h / 2 + 1);
     ctx.textBaseline = 'alphabetic';
@@ -2297,6 +2350,7 @@
   BUBBLE.bomb = BUBBLE.gate;
   function drawDanger(ctx, W, L, dist, v) {
     if (W.phase !== 'play' || W.wait > 0 || W.eff.boost > 0) return;
+    if (W.tut && W.tut.step !== 'done') return;   // 처음 안내 동안은 안내 글자 하나만 (말풍선이 겹치지 않게)
     const d = RN.World.dangerAhead(W, 1.3);
     if (!d || d.t < 0.12) return;
     const o = d.o, rel = o.z - dist, B = BUBBLE[o.kind] || BUBBLE.meteor;
@@ -2422,7 +2476,7 @@
     const dm = Math.floor(W.dist).toLocaleString() + 'm';
     ctx.fillText(dm, right, mid + 2 * s);
     let x = right - ctx.measureText(dm).width - 12 * s;
-    ctx.font = '700 ' + Math.round(15 * s) + 'px ' + NUM;
+    ctx.font = Math.round(15 * s) + 'px ' + DISP;   // 칸 글자 (해적 · 부활 · 최고)는 한글이라 둥근 글꼴
     const ch = 24 * s;
     let cy = mid - ch / 2;
     // 좁은 화면(세로 폰): 칸들은 거리 아래 둘째 줄에
@@ -2436,7 +2490,7 @@
     if (W.eff.boost > 0) items.push([String(Math.ceil(W.eff.boost)), ITEM.boost.color, 'boost']);
     if (W.revives > W.revived) items.push(['부활', '#ffd24a']);   // 불사조: 아직 다시 살아날 수 있다
     if (W.pir) items.push(['해적 ' + Math.max(0, Math.ceil(W.pir.t)), '#ff9a3d']);   // 해적선이 물러갈 때까지 남은 초
-    if (v.w >= 700 && v.best > 0) items.push(['BEST ' + Math.max(v.best || 0, Math.floor(W.dist)).toLocaleString() + 'm', '#bcd3e2']);
+    if (v.w >= 700 && v.best > 0) items.push(['최고 ' + Math.max(v.best || 0, Math.floor(W.dist)).toLocaleString() + 'm', '#bcd3e2']);
     for (const [txt, col, icon, hearts] of items) {
       if (x - chipW(ctx, ch, txt, s, icon, hearts) < (narrow ? 8 : v.hudLeft)) continue;   // 버튼 묶음과 겹치면 생략
       x -= chip(ctx, x, cy, ch, txt, col, s, icon, hearts) + 6 * s;
@@ -2453,9 +2507,9 @@
       const go = W.wait <= 0, k = go ? 1 - W.runT / 0.6 : 1;
       ctx.globalAlpha = k;
       glow(ctx, go ? 'rgba(255,230,109,0.45)' : 'rgba(94,231,255,0.4)', cx, cy, fs * 1.8, 0.9);
-      ctx.font = go ? fs + 'px ' + DISP : 'italic 700 ' + fs + 'px ' + NUM;
+      ctx.font = fs + 'px ' + DISP;
       ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(5,7,12,0.8)';
-      const t = go ? '출발!' : 'READY';
+      const t = go ? '출발!' : '준비!';
       ctx.strokeText(t, cx, cy);
       ctx.fillStyle = go ? '#ffe66d' : '#e8f7ff'; ctx.fillText(t, cx, cy);
       ctx.globalAlpha = 1;
@@ -2490,7 +2544,7 @@
     const txt = lane ? (v.touch ? '옆으로 밀어서 줄 바꾸기' : '← → 키로 줄 바꾸기')
       : down ? (v.touch ? '아래로 밀어서 미끄러지기!' : '↓ 키로 미끄러지기!')
       : (v.touch ? '위로 밀어서 점프!' : '↑ 키나 스페이스로 점프!');
-    const sub = lane ? '빨간 운석은 피해요' : down ? '보라 막대 밑으로 쏙' : '바닥 레이저 문을 넘어요';
+    const sub = lane ? '별을 따라가 봐요' : down ? '보라 막대 밑으로 쏙' : '바닥 레이저 문을 넘어요';
     ctx.font = fs + 'px ' + DISP;
     const tw = Math.max(ctx.measureText(txt).width, fs * 6) + fs * 1.6, th = fs * 3.9;
     const x0 = cx - tw / 2, y0 = cy - th / 2;
@@ -2525,8 +2579,9 @@
     if (!b) return;
     const k = b.t / b.max, a = Math.min(1, b.t / 0.2, (b.max - b.t) / 0.5);
     const pop = v.calm ? 1 : 1 + Math.max(0, 0.25 - b.t) * 1.2;
-    const fs = Math.round(Math.max(26, Math.min(b.small ? 52 : 64, v.w / (b.small ? 16 : 13))) * pop);
-    const cx = v.w / 2, cy = L.hy * (b.small ? 0.62 : 0.55) - (v.calm ? 0 : k * 10);
+    const fs = Math.round(Math.max(26, Math.min(b.small ? 52 : b.low ? 44 : 64, v.w / (b.small ? 16 : b.low ? 20 : 13))) * pop);
+    // low: 지평선 바로 위 (해적선처럼 하늘 가운데 있는 것을 가리지 않게)
+    const cx = v.w / 2, cy = (b.low ? L.hy - fs * 0.35 : L.hy * (b.small ? 0.62 : 0.55)) - (v.calm ? 0 : k * 10);
     ctx.globalAlpha = Math.max(0, a);
     glow(ctx, b.color, cx, cy, fs * 3, 0.25);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';

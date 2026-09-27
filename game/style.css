@@ -916,3 +916,127 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
 
 /* 한글 이름 로고 (뿅뿅 우주선, 2026-09-27): 굵은 한글 서체, 기울임 */
 .logo.ko { font-family: var(--disp); font-weight: normal; font-style: normal; letter-spacing: 2px; transform: skewX(-8deg); white-space: nowrap; margin-bottom: 12px; }
+
+/* ═══ 아이 눈높이 점검 (2026-09-27) ═══════════════════════════════ */
+/* 게임 고르기로 가는 집 버튼: 시작 화면에서만 (게임 중엔 일시정지 → 게임 고르기로) */
+#topbar .hub-btn { display: none; }
+body.at-title #topbar .hub-btn { display: grid; }
+.hub-btn .i { color: #ffe66d; }
+.text-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; }
+.text-row .text-btn { display: inline-flex; align-items: center; gap: 6px; }
+.text-btn .i { width: 16px; height: 16px; }
+
+/* 도움말: 두 줄, 글자는 크게 */
+.tpanel .help, #scr-title .tpanel .help { font-size: 15px; gap: 4px; line-height: 1.35; }
+.tpanel .help b { font-weight: normal; font-family: var(--disp); }
+.sc-txt em { font-size: 13px; }
+.mrow { font-size: 14px; }
+@media (max-height: 600px) and (orientation: landscape) {
+  #scr-title .tpanel .help { font-size: 14px; gap: 2px; margin-top: 8px; }
+  .sc-txt em { font-size: 12.5px; }
+  .mrow { font-size: 13.5px; }
+  .tpanel .seg button small { font-size: 11px; }
+}
+
+/* 대시·필살기 버튼 글자 (한글) */
+#btn-dash span { font: normal 18px var(--disp); letter-spacing: 0; }
+#btn-ult span { font: normal 17px var(--disp); letter-spacing: 0; }
+@media (min-width: 900px) { #btn-dash span { font-size: 21px; } #btn-ult span { font-size: 19px; } }
+
+/* 게임 중 메달 알림: 아래 가운데(내 기체를 가릴 수 있었다) → 위 가운데에 작게 */
+#medal-toast {
+  top: max(8px, env(safe-area-inset-top)); bottom: auto;
+  flex-direction: row; gap: 8px; padding: 4px 10px 4px 12px; border-radius: 999px;
+  transform: translate(-50%, -140%); max-width: min(360px, calc(100vw - 32px));
+}
+#medal-toast.on { transform: translate(-50%, 0); }
+#medal-toast .mt-head { font: normal 13px var(--disp); letter-spacing: 0; white-space: nowrap; }
+#medal-toast .medal { padding: 0; gap: 6px; }
+#medal-toast .medal .coin { width: 30px; height: 30px; }
+#medal-toast .medal .coin i { font-size: 11px; }
+#medal-toast .medal small { display: none; }
+#medal-toast .medal b { font-size: 14px; white-space: nowrap; }
+/* 짧은 알림(시작 아이템·미션 완료)은 아래 가운데에 작게 */
+#toast { bottom: max(14px, env(safe-area-inset-bottom)); font-size: 15px; padding: 6px 14px; }
+
+/* 카드: 큰 그림 + 아이 말, 수치는 아래 작게 */
+.card-icon { font-size: 40px; font-family: "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", system-ui, sans-serif; }
+.card-name { font-size: 22px; line-height: 1.2; word-break: keep-all; }
+.card-desc { font-size: 11px; opacity: .7; min-height: 0; }
+.card.pick-me { border-color: #3aff9a; box-shadow: 0 0 22px rgba(58, 255, 154, .28); }
+.card.pick-me::before { background: linear-gradient(90deg, transparent, #3aff9a, transparent); }
+.card-rec {
+  position: absolute; top: 8px; right: 10px; padding: 2px 10px; border-radius: 999px;
+  font: normal 14px var(--disp); color: #06301a; background: linear-gradient(180deg, #b6ffd2, #3aff9a);
+}
+@media (max-height: 600px) and (orientation: landscape) {
+  .card-icon { width: 60px; height: 60px; font-size: 34px; }
+  .card-name { font-size: 20px; }
+}
+@media (max-width: 600px) { .card-desc { padding-left: 46px; } }
+
+/* 한 번 더!: 큰 둥근 버튼, 둘레 고리가 REVIVE.wait초 동안 줄어든다 */
+#scr-continue { background: rgba(7, 8, 13, .45); }
+.panel.cpanel { max-width: 360px; padding: 20px 20px 14px; }
+.cpanel h2 { font-size: 26px; margin-bottom: 10px; }
+.again-btn {
+  --wait: 5s;
+  position: relative; display: grid; place-items: center; width: 190px; height: 190px; margin: 4px auto 6px; padding: 0;
+  border: none; border-radius: 50%; cursor: pointer; color: #2a1c00;
+  background: radial-gradient(circle at 40% 30%, #fff4c2 0%, #ffd23f 45%, #f08c00 100%);
+  box-shadow: 0 7px 0 #8a5200, 0 0 34px rgba(255, 207, 58, .55);
+}
+.again-btn:active { transform: translateY(4px); box-shadow: 0 3px 0 #8a5200, 0 0 24px rgba(255, 207, 58, .5); }
+.again-btn .ring { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px); transform: rotate(-90deg); pointer-events: none; }
+.again-btn .ring-bg { fill: none; stroke: rgba(255, 255, 255, .12); stroke-width: 5; }
+.again-btn .ring-fg { fill: none; stroke: #ffe66d; stroke-width: 5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; animation: ringDown var(--wait) linear forwards; }
+@keyframes ringDown { to { stroke-dashoffset: 100; } }
+.again-txt { font: normal 38px var(--disp); letter-spacing: 1px; }
+.again-num { position: absolute; bottom: 26px; font: 700 22px var(--num); color: #6a3c00; }
+@media (max-height: 600px) and (orientation: landscape) {
+  .again-btn { width: 160px; height: 160px; }
+  .again-txt { font-size: 32px; }
+  .again-num { bottom: 20px; }
+}
+
+/* 보스 스티커 창: 위쪽 가운데에 가로로 작게 (내 기체·HUD를 덜 가리게), 누를 수 없고 잠깐 뒤 사라진다 */
+#sticker {
+  --sc: #ffe66d;
+  position: fixed; left: 50%; top: max(52px, calc(env(safe-area-inset-top) + 44px)); z-index: 22; pointer-events: none;
+  display: grid; grid-template-columns: auto auto; grid-template-areas: "cv head" "cv name" "cv count"; column-gap: 12px; align-items: center;
+  padding: 6px 18px 6px 8px;
+  border-radius: 18px; border: 2px solid var(--sc);
+  background: radial-gradient(circle at 20% 50%, rgba(40, 44, 70, .96), rgba(10, 13, 22, .96));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55), 0 0 30px color-mix(in srgb, var(--sc) 40%, transparent);
+  transform: translate(-50%, -20px) scale(.6); opacity: 0; visibility: hidden;
+  transition: transform .45s var(--back), opacity .25s, visibility 0s .45s;
+}
+#sticker.on { transform: translate(-50%, 0) scale(1); opacity: 1; visibility: visible; transition: transform .45s var(--back), opacity .25s; }
+#sticker .st-head { grid-area: head; margin: 0; font: normal 20px var(--disp); color: #ffe66d; white-space: nowrap; }
+#sticker canvas { grid-area: cv; width: 76px; height: 76px; }
+#sticker b { grid-area: name; font: normal 18px var(--disp); white-space: nowrap; }
+#sticker small { grid-area: count; font: normal 14px var(--disp); color: var(--muted); white-space: nowrap; }
+@media (max-height: 600px) and (orientation: landscape) {
+  #sticker canvas { width: 64px; height: 64px; }
+  #sticker .st-head { font-size: 18px; }
+}
+/* 결과 화면: 메달이 많으면 동그라미만 한 줄로 (다시 하기 버튼이 늘 보이게) */
+.new-medals.strip { gap: 4px; }
+.new-medals .medal.mini { padding: 0; border: none; background: none; }
+.new-medals .medal.mini .coin { width: 34px; height: 34px; }
+.new-medals .medal.mini .coin i { font-size: 11px; }
+.new-medals .medal.mini .coin.long i { font-size: 9px; }
+.new-medals .medal.mini .mname { display: none; }
+@media (max-height: 600px) and (orientation: landscape) {
+  #scr-over .o-right .mcard { gap: 3px; padding: 5px 10px 6px; }
+  #scr-over .o-right .mrow { font-size: 13px; }
+  .new-medals .medal.mini .coin { width: 30px; height: 30px; }
+  #scr-over .o-right .new-medals { margin-top: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .again-btn .ring-fg { animation: none; }
+  #sticker, #sticker.on { transition: none; }
+  .card.pick-me { box-shadow: none; }
+}
+/* 시작 화면에서는 윗줄 버튼(집·소리·전체 화면)이 화면 덮개 위에 와야 누를 수 있다 */
+body.at-title #topbar { z-index: 11; }

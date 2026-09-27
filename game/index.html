@@ -29,6 +29,7 @@
     <symbol id="i-again" viewBox="0 0 24 24"><path d="M12 4V1.5a.5.5 0 0 0-.8-.4L6.6 4.6a.5.5 0 0 0 0 .8l4.6 3.5a.5.5 0 0 0 .8-.4V6a6 6 0 1 1-6 6 1 1 0 1 0-2 0 8 8 0 1 0 8-8z"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
     <symbol id="i-cart" viewBox="0 0 24 24"><path d="M2 3h3.2l.7 3H21a1 1 0 0 1 1 1.2l-1.4 7A2 2 0 0 1 18.6 16H8.4a2 2 0 0 1-2-1.6L4.4 5H2zm7 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 3.2a1 1 0 0 1 .7.3l8.6 8a1 1 0 0 1-1.4 1.5L19 12.2V20a1 1 0 0 1-1 1h-4v-6h-4v6H6a1 1 0 0 1-1-1v-7.8l-.9.8a1 1 0 1 1-1.4-1.5l8.6-8a1 1 0 0 1 .7-.3z"/></symbol>
     <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 15v3h3v3H8v-3h3v-3a5 5 0 0 1-3.7-3H7a4 4 0 0 1-4-4V6a1 1 0 0 1 1-1h3zm10 4v3a2 2 0 0 0 2-2V7zM5 7v1a2 2 0 0 0 2 2V7z"/></symbol>
   </svg>
 
@@ -36,12 +37,14 @@
     <button id="btn-pause" class="icon-btn" aria-label="일시정지"><svg class="i" aria-hidden="true"><use href="#i-pause"/></svg></button>
     <button id="btn-mute" class="icon-btn" aria-label="소리 켜기/끄기"><svg class="i on" aria-hidden="true"><use href="#i-sound"/></svg><svg class="i off" aria-hidden="true"><use href="#i-mute"/></svg></button>
     <button id="btn-fs" class="icon-btn" aria-label="전체 화면"><svg class="i" aria-hidden="true"><use href="#i-fs"/></svg></button>
+    <!-- 게임 고르기(첫 화면)로: 시작 화면에서만 보인다 -->
+    <button id="btn-hub" class="icon-btn hub-btn" aria-label="게임 고르기로"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg></button>
   </div>
   <!-- 터치 조작부: 손가락 입력은 캔버스가 받고, 이 요소들은 보여 주기만 한다 -->
   <div id="stick-move" class="stick" aria-hidden="true"><div class="stick-knob"></div></div>
   <div id="stick-aim" class="stick aim" aria-hidden="true"><div class="stick-knob"></div></div>
-  <button id="btn-dash" aria-label="대시"><span>DASH</span></button>
-  <button id="btn-ult" aria-label="필살기 N-버스트"><span>N<small>BURST</small></span></button>
+  <button id="btn-dash" aria-label="대시"><span>대시</span></button>
+  <button id="btn-ult" aria-label="필살기"><span>필살기</span></button>
   <div id="toast" role="status"></div>
   <div id="medal-toast" role="status" aria-live="polite"></div>
 
@@ -78,12 +81,8 @@
           <button id="btn-medals" class="medal-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달 <b id="medal-count">0/0</b></span><span class="sep">·</span><span>기록</span></button>
         </div>
         <ul class="help">
-          <li><b>왼쪽 스틱</b> 엄지로 밀어서 이동</li>
-          <li><b>오른쪽</b> 드래그로 조준 · 떼면 자동 조준</li>
-          <li><b>대시</b> 버튼으로 잠깐 무적 돌진</li>
-          <li><b>N-버스트</b> 게이지가 가득 차면 화면 전체 충격파</li>
-          <li><b>아이템</b> 코인·방패·과열·자석·폭탄을 주워라</li>
-          <li><b>카드</b> 웨이브마다 1장 골라 총을 키운다 · 5웨이브마다 보스</li>
+          <li><b>왼쪽</b> 엄지로 밀어서 움직여요 · 총은 저절로 쏴요</li>
+          <li><b>대시</b> 버튼으로 휙 피하고, <b>필살기</b>가 차면 펑!</li>
         </ul>
         <p class="pc-line only-pc">PC: <kbd>WASD</kbd> 이동 · 마우스 조준 · <kbd>Space</kbd> 대시 · <kbd>Q</kbd> 필살기 · <kbd>P</kbd> 일시정지</p>
       </div>
@@ -127,8 +126,8 @@
   <!-- 카드 선택 -->
   <section id="scr-cards" class="screen">
     <div class="panel wide">
-      <h2 id="cards-title">WAVE 1 클리어</h2>
-      <p class="sub">강화 카드 1장을 고르세요</p>
+      <h2 id="cards-title">웨이브 1 끝!</h2>
+      <p class="sub">카드 한 장을 골라요</p>
       <div id="card-list"></div>
     </div>
   </section>
@@ -143,9 +142,33 @@
         <button type="button" class="toggle" data-audio="sfx" aria-pressed="true"><svg class="i" aria-hidden="true"><use href="#i-boom"/></svg> 효과음 <span class="state">켬</span></button>
       </div>
       <button id="btn-resume" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>계속하기</span></button>
-      <button id="btn-quit" class="text-btn">처음 화면으로</button>
+      <div class="text-row">
+        <button id="btn-quit" class="text-btn">처음 화면으로</button>
+        <button id="btn-quit-hub" class="text-btn"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg> 게임 고르기로</button>
+      </div>
     </div>
   </section>
+
+  <!-- 한 번 더!: 지면 한 판에 한 번. 고리가 다 줄면 결과 화면으로 -->
+  <section id="scr-continue" class="screen">
+    <div class="panel cpanel">
+      <h2>앗, 맞았어요!</h2>
+      <button id="btn-again" class="again-btn" type="button">
+        <svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="ring-bg" cx="50" cy="50" r="46"/><circle id="cont-ring" class="ring-fg" cx="50" cy="50" r="46" pathLength="100"/></svg>
+        <span class="again-txt">한 번 더!</span>
+        <span id="cont-num" class="again-num" aria-hidden="true">5</span>
+      </button>
+      <button id="btn-giveup" class="text-btn" type="button">그만하기</button>
+    </div>
+  </section>
+
+  <!-- 보스 스티커: 처음 이긴 보스 종류마다 잠깐 (게임을 막지 않는다) -->
+  <div id="sticker" aria-live="polite">
+    <p class="st-head">보스 스티커 받았다!</p>
+    <canvas id="sticker-cv" width="160" height="160" aria-hidden="true"></canvas>
+    <b id="sticker-name"></b>
+    <small id="sticker-count"></small>
+  </div>
 
   <!-- 게임 오버: 왼쪽 점수·기록 / 오른쪽 코인·미션·메달·버튼 -->
   <section id="scr-over" class="screen">
@@ -160,7 +183,7 @@
           <div data-rec="kills"><dt>처치</dt><dd id="over-kills">0</dd></div>
           <div data-rec="time"><dt>생존</dt><dd id="over-time">0:00</dd></div>
           <div data-rec="combo"><dt>최고 콤보</dt><dd id="over-combo">0</dd></div>
-          <div><dt>총열 N</dt><dd id="over-n">1</dd></div>
+          <div><dt>대포</dt><dd id="over-n">1</dd></div>
         </dl>
         <div id="over-picks" class="picks"></div>
       </div>
@@ -173,7 +196,10 @@
         <div id="over-missions" class="mcard"></div>
         <div id="over-medals" class="new-medals"></div>
         <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
-        <button id="btn-home" class="text-btn">처음 화면으로</button>
+        <div class="text-row">
+          <button id="btn-home" class="text-btn">처음 화면으로</button>
+          <button id="btn-over-hub" class="text-btn"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg> 게임 고르기로</button>
+        </div>
       </div>
     </div>
   </section>

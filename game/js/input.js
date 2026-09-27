@@ -2,6 +2,9 @@
 // 키보드·마우스·터치 입력을 게임 입력 {moveX, moveY, aimAngle, dash, ult}로 바꾼다.
 (function (NG) {
   const STICK_R = 60;
+  // 손바닥 무시: 닿은 면이 이보다 크면(지름 px) 손가락이 아니라 손바닥으로 본다 (CLAUDE.md 성능 원칙)
+  const PALM = 70;
+  const isPalm = t => Math.max(t.radiusX || 0, t.radiusY || 0) * 2 > PALM;
 
   function createInput(canvas) {
     const keys = new Set();
@@ -62,6 +65,7 @@
       touch.used = true;
       const w = canvas.getBoundingClientRect().width;
       for (const t of e.changedTouches) {
+        if (isPalm(t)) continue;
         const s = stickFrom(t);
         if (s.ox < w / 2) {
           if (touch.move) continue;
@@ -140,6 +144,12 @@
     S.reset = function () {
       touch.move = null; touch.aim = null; dashQueued = false; ultQueued = false; keys.clear();
     };
+    // 카드 고르기·계속하기 뒤: 눌러 둔 대시·필살기·키만 지운다. 화면에 댄 엄지(이동·조준 스틱)는 그대로 둬서
+    // 손을 떼지 않고 바로 이어 움직일 수 있다 (예전엔 reset()이 스틱까지 지워 엄지를 뗐다 다시 대야 움직였다)
+    S.clearButtons = function () {
+      dashQueued = false; ultQueued = false; keys.clear();
+    };
+    S.isPalm = isPalm;
 
     return S;
   }

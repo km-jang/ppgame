@@ -446,12 +446,22 @@
     W.pendDash = W.pendUlt = false;
     addFx(W, { ring: true, x: p.x, y: p.y, r: R.clearR * 0.6, life: 0.6, max: 0.6, color: '#ffe66d' });
     addFx(W, { pop: true, x: p.x, y: p.y, r: 40, life: 0.2, max: 0.2, color: '#ffffff' });
-    W.texts.push({ x: p.x, y: p.y - 30, txt: '한 번 더!', life: 1.2, col: '#ffe66d' });
+    playerSay(W, '한 번 더!', '#ffe66d', false, 1.2);
     W.events.push('revive');
     return true;
   }
   // 한 번 더!를 안 쓰기로 함 (그만하기·시간 끝). 이 판은 그대로 끝
   function giveUp(W) { W.canRevive = false; }
+
+  // 내 기체 위에 뜨는 짧은 글 (+1·방패·한 번 더! …): 기체를 가리지 않게 조금 위에서, 방금 뜬 글이 있으면 그 위로 한 칸 올려 겹치지 않게
+  function playerSay(W, txt, col, heal, life) {
+    const p = W.player;
+    let n = 0;
+    for (const t of W.texts) if (t.mine && t.life > (t.max || 0.9) - 0.5) n++;
+    const lf = life || (heal ? 0.8 : 0.9);
+    W.texts.push({ x: p.x, y: p.y - p.r * 2.4 - 12 - n * 18, txt, life: lf, max: lf, col: col || undefined, heal: !!heal, mine: true });
+    if (W.texts.length > 40) W.texts.shift();
+  }
 
   // ─── 전투 공통 ─────────────────────────────────────────────
   function burst(W, x, y, color, n, speed, size) {
@@ -500,7 +510,7 @@
     e.hp -= amount;
     e.flash = 0.08;
     if (crit) {
-      W.texts.push({ x: e.x, y: e.y - e.r, txt: Math.round(amount * 10) / 10 + '!', life: 0.7 });
+      W.texts.push({ x: e.x, y: e.y - e.r, txt: Math.max(1, Math.round(amount)) + '!', life: 0.7 }); // 아이가 읽기 쉽게 소수점 없이
       if (W.texts.length > 40) W.texts.shift();
     }
     if (e.hp <= 0) killEnemy(W, e, dx || 0, dy || 0);
@@ -562,7 +572,7 @@
     }
     if (p.vamp > 0 && p.hp < p.maxHp && W.rand() < p.vamp) {
       p.hp += 1;
-      W.texts.push({ x: p.x, y: p.y - 20, txt: '+1', life: 0.8, heal: true });
+      playerSay(W, '+1', null, true);
     }
   }
 
@@ -652,7 +662,7 @@
 
   function pickItem(W, d) {
     const p = W.player, I = D.ITEMS;
-    const say = (txt, col) => { W.texts.push({ x: p.x, y: p.y - 22, txt, life: 0.9, col }); if (W.texts.length > 40) W.texts.shift(); };
+    const say = (txt, col) => playerSay(W, txt, col);
     d.life = 0;
     if (d.type === 'coin') {
       W.stats.coinPicks += 1;
@@ -707,7 +717,7 @@
         if (heal) {
           p.hp += 1;
           d.life = 0;
-          W.texts.push({ x: p.x, y: p.y - 20, txt: '+1', life: 0.8, heal: true });
+          playerSay(W, '+1', null, true);
           W.events.push('heal');
         } else pickItem(W, d);
       }
@@ -828,6 +838,7 @@
     p.x = NG.clamp(p.x + (p.vx + gx) * dt, p.r, W.w - p.r);
     p.y = NG.clamp(p.y + (p.vy + gy) * dt, p.r, W.h - p.r);
     p.iframe = Math.max(0, p.iframe - dt);
+    if (p.reviveT > 0) p.reviveT = Math.max(0, p.reviveT - dt);
     p.muzzle = Math.max(0, p.muzzle - dt);
 
     // 조준: 입력이 있으면 그 방향, 없으면 가장 가까운 적

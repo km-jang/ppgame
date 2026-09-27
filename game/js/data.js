@@ -277,17 +277,17 @@
   const MEDALS = [
     { id: 'boss1',   tier: 1, icon: 'B',   name: '첫 보스 격파',   desc: '보스를 처음으로 쓰러뜨린다',            check: (r, L) => L.bosses >= 1 },
     { id: 'boss3',   tier: 3, icon: 'B3',  name: '보스 사냥꾼',    desc: '한 판에 보스 3마리 격파',               check: r => r.bossKills >= 3 },
-    { id: 'ultBoss', tier: 2, icon: 'N!',  name: '마무리 일격',    desc: 'N-버스트로 보스의 숨통을 끊는다',       check: r => r.ultBoss >= 1 },
-    { id: 'n3',      tier: 1, icon: 'N3',  name: '세 갈래',        desc: '한 판에 총열 N 3',                      check: r => r.maxN >= 3 },
-    { id: 'n5',      tier: 2, icon: 'N5',  name: '다섯 갈래',      desc: '한 판에 총열 N 5',                      check: r => r.maxN >= 5 },
-    { id: 'n8',      tier: 3, icon: 'N8',  name: '여덟 갈래',      desc: '한 판에 총열 N 8',                      check: r => r.maxN >= 8 },
+    { id: 'ultBoss', tier: 2, icon: 'N!',  name: '마무리 일격',    desc: '필살기로 보스를 마무리',                check: r => r.ultBoss >= 1 },
+    { id: 'n3',      tier: 1, icon: 'N3',  name: '세 갈래',        desc: '한 판에 대포 3개',                      check: r => r.maxN >= 3 },
+    { id: 'n5',      tier: 2, icon: 'N5',  name: '다섯 갈래',      desc: '한 판에 대포 5개',                      check: r => r.maxN >= 5 },
+    { id: 'n8',      tier: 3, icon: 'N8',  name: '여덟 갈래',      desc: '한 판에 대포 8개',                      check: r => r.maxN >= 8 },
     { id: 'k100',    tier: 1, icon: '100', name: '백 처치',        desc: '한 판에 적 100마리',                    check: r => r.kills >= 100 },
     { id: 'k500',    tier: 2, icon: '500', name: '오백 처치',      desc: '한 판에 적 500마리',                    check: r => r.kills >= 500 },
     { id: 'c10',     tier: 1, icon: 'x10', name: '연쇄 반응',      desc: '10콤보',                                check: r => r.bestCombo >= 10 },
     { id: 'c25',     tier: 2, icon: 'x25', name: '폭주',           desc: '25콤보',                                check: r => r.bestCombo >= 25 },
     { id: 'c50',     tier: 3, icon: 'x50', name: '멈출 수 없다',   desc: '50콤보',                                check: r => r.bestCombo >= 50 },
-    { id: 'ult3',    tier: 1, icon: 'Q3',  name: '필살 3연발',     desc: '한 판에 N-버스트 3번',                  check: r => r.ults >= 3 },
-    { id: 'ultMass', tier: 2, icon: 'Q15', name: '한 방 청소',     desc: 'N-버스트 한 번에 적 15마리',            check: r => r.ultBest >= 15 },
+    { id: 'ult3',    tier: 1, icon: '★3',  name: '필살 3연발',     desc: '한 판에 필살기 3번',                    check: r => r.ults >= 3 },
+    { id: 'ultMass', tier: 2, icon: '★15', name: '한 방 청소',     desc: '필살기 한 번에 적 15마리',              check: r => r.ultBest >= 15 },
     { id: 'clean',   tier: 3, icon: '0',   name: '무결점',         desc: '보스 웨이브를 한 대도 안 맞고 클리어',  check: r => r.cleanBoss >= 1 },
     { id: 'w10',     tier: 1, icon: '10',  name: '10웨이브',       desc: '아무 난이도로 10웨이브 도달',           check: r => r.wave >= 10 },
     { id: 'w10n',    tier: 2, icon: '10',  name: '보통 10웨이브',  desc: '보통 이상으로 10웨이브 도달',           check: r => r.wave >= 10 && r.diff !== 'easy' },
@@ -370,7 +370,7 @@
     { id: 'c20',    kind: 'run',  stat: 'bestCombo', goal: 20,   reward: 120, text: '한 판에 20콤보' },
     { id: 'w10',    kind: 'run',  stat: 'wave',      goal: 10,   reward: 200, text: '한 판에 웨이브 10 도달' },
     { id: 'clean3', kind: 'run',  stat: 'cleanWaves', goal: 3,   reward: 120, text: '한 판에 안 맞고 웨이브 3번 클리어' },
-    { id: 'n4',     kind: 'run',  stat: 'maxN',      goal: 4,    reward: 150, text: '한 판에 총열 N 4' },
+    { id: 'n4',     kind: 'run',  stat: 'maxN',      goal: 4,    reward: 150, text: '한 판에 대포 4개' },
     { id: 's5000',  kind: 'run',  stat: 'score',     goal: 5000, reward: 150, text: '한 판에 5,000점' },
     { id: 't300',   kind: 'run',  stat: 'time',      goal: 300,  reward: 120, text: '한 판에 5분 버티기' },
     { id: 'viper6', kind: 'run',  stat: 'wave',      goal: 6,    reward: 130, text: '바이퍼로 웨이브 6 도달', ship: 'viper' },
@@ -436,11 +436,14 @@
   // 화면 (그림만, 규칙과 무관)
   // particles: 파편·불꽃 최대 수 (가득 차면 가장 오래된 것 자리에 덮어쓴다) · shipScale: 내 기체를 그릴 때 크기 배율 (맞는 판정 r은 그대로)
   // planetDim: 웨이브 중 배경 행성 밝기 (도착 알림 동안은 1) · hudSafe: 보스·이름표가 HUD 밑으로 들어가지 않게 위에서 비워 두는 px
-  const VIEW = { particles: 420, shipScale: 1.5, planetDim: 0.55, hudSafe: 96 };
+  const VIEW = { particles: 420, shipScale: 1.5, planetDim: 0.55, hudSafe: 140 };
 
   // 그만두기: 판을 시작하고 refundSec초 안에 그만두면 이번 판에 쓴 시작 아이템을 돌려준다 (판 기록은 그대로 남긴다)
   // adaptMin: 이보다 짧은 판은 알아서 맞춰 주는 난이도에 알리지 않는다 (실수로 시작한 판이 난이도를 흔들지 않게)
   const QUIT = { refundSec: 5, adaptMin: 30 };
 
-  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS, GIFT, FEVER, WINGMAN, REVIVE, RECOMMEND, STICKER, VIEW, QUIT });
+  // 처음 켠 기기(저장된 난이도 없음)의 난이도. 이미 고른 난이도는 그대로 둔다 (main.js)
+  const DEFAULT_DIFF = 'easy';
+
+  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS, GIFT, FEVER, WINGMAN, REVIVE, RECOMMEND, STICKER, VIEW, QUIT, DEFAULT_DIFF });
 })(NG);
