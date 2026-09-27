@@ -6,7 +6,7 @@ const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
 for (const f of ['data.js', 'park.js']) {
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'robocar', 'js', f), 'utf8'), ctx, { filename: f });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 }
 const RC = vm.runInContext('RC', ctx);
 const { create, step, PK, colDist } = RC.Park;

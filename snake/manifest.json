@@ -1,7 +1,7 @@
 {
-  "name": "N-SNAKE",
-  "short_name": "N-SNAKE",
-  "description": "에너지 구슬을 먹을수록 길어지는 네온 뱀 게임",
+  "name": "냠냠 뱀",
+  "short_name": "냠냠 뱀",
+  "description": "반짝 구슬을 냠냠 먹을수록 쭉쭉 길어지는 뱀 게임",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
@@ -10,6 +10,11 @@
   "theme_color": "#07080d",
   "lang": "ko",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }

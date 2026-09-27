@@ -328,3 +328,6 @@ body.touch .text-btn { padding: 10px 16px; }
 
 /* 시작 화면 도움말: 피해야 할 것 */
 .help b.danger { color: #ff6b7a; }
+
+/* 한글 이름 로고 (냠냠 뱀, 2026-09-27): 굵은 한글 서체, 기울임 */
+.logo.ko { font-family: var(--disp); font-weight: normal; font-style: normal; letter-spacing: 3px; transform: skewX(-8deg); }

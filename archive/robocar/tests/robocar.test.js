@@ -1,12 +1,12 @@
 'use strict';
-// 뚝딱 로봇카 달리기 규칙 테스트. 실행: node tests/robocar.test.js
+// 뚝딱 로봇카 달리기 규칙 테스트. 실행: node archive/robocar/tests/robocar.test.js
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
 for (const f of ['data.js', 'run.js']) {
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'robocar', 'js', f), 'utf8'), ctx, { filename: f });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 }
 const RC = vm.runInContext('RC', ctx);
 const { createRun, stepRun } = RC.Run;

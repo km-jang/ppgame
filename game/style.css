@@ -913,3 +913,6 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
   .claim, .mrow.fresh, #over-coins.done, .coin-pop { animation: none; }
   .m-bar i { transition: none; }
 }
+
+/* 한글 이름 로고 (뿅뿅 우주선, 2026-09-27): 굵은 한글 서체, 기울임 */
+.logo.ko { font-family: var(--disp); font-weight: normal; font-style: normal; letter-spacing: 2px; transform: skewX(-8deg); white-space: nowrap; margin-bottom: 12px; }

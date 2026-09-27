@@ -2,12 +2,13 @@
 
 | 폴더 | 게임 |
 |---|---|
-| [`robocar/`](robocar/) | **뚝딱 로봇카** · 5~6세용. 부품을 끼워 변신 로봇카를 만들고 도시·공사장을 달린다. 하루 타이머·보호자 설정 ([기획서](robocar/PLAN.md)) |
-| [`game/`](game/) | **N-GUN** · 아레나 슈팅 (아래 설명) |
+| [`game/`](game/) | **뿅뿅 우주선** (옛 이름 N-GUN) · 대포가 늘어나는 우주선 슈팅 (아래 설명) |
+| [`snake/`](snake/) | **냠냠 뱀** (옛 이름 N-SNAKE) · 화면을 밀어 구슬을 먹는 뱀 게임 ([기획서](snake/PLAN.md)) |
+| [`archive/robocar/`](archive/robocar/) | **뚝딱 로봇카** · 보류 (2026-09-27). 첫 화면에서 뺐고, 코드와 테스트는 그대로 보관 |
 
 저장소 첫 화면(`index.html`)에서 둘 중 하나를 고른다.
 
-## N-GUN
+## 뿅뿅 우주선 (`game/`)
 
 총열이 N개로 늘어나는 총을 들고 몰려오는 적을 웨이브 단위로 버티는 아레나 슈팅 게임.
 웨이브를 넘길 때마다 카드 3장 중 1장을 골라 총을 키운다. 5웨이브마다 보스.
@@ -33,9 +34,10 @@
 ## 테스트
 
 ```
-node tests/sim.test.js       # N-GUN 규칙
-node tests/robocar.test.js   # 뚝딱 로봇카 규칙
+node tests/sim.test.js       # 뿅뿅 우주선 규칙
+node tests/snake.test.js     # 냠냠 뱀 규칙
 node tests/flow.test.js      # 두 게임 화면 흐름 (Playwright 크로미움, 없으면 건너뜀)
+# 보류 중인 뚝딱 로봇카: node archive/robocar/tests/robocar.test.js · park.test.js · flow.test.js
 ```
 
 게임 규칙(`game/js/world.js`)을 브라우저 없이 수천 프레임 돌려서 웨이브 진행·카드·보스·게임 오버·관통·도탄을 확인한다.
@@ -58,7 +60,7 @@ main에 합친 것만 이 주소에 나온다.
 
 ## 소리 출처
 
-두 게임의 소리 파일(`robocar/sounds/`, `game/sounds/`)은 Kenney(kenney.nl)의 무료 스타터 키트에서 가져왔다 (MIT 라이선스, 각 폴더 `LICENSE.md`).
+소리 파일(`game/sounds/`, 보류 중인 `archive/robocar/sounds/`)은 Kenney(kenney.nl)의 무료 스타터 키트에서 가져왔다 (MIT 라이선스, 각 폴더 `LICENSE.md`).
 
 ## 이전 작업물
 
