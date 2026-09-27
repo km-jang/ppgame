@@ -223,6 +223,18 @@
         ring(p.x, p.y, c * 1.8, RIVAL_PURPLE, 0.45);
         burst(p.x, p.y, 14, [RIVAL_ORANGE, RIVAL_PURPLE, '#ffffff'], c * 7, c * 0.16);
         text(p.x, p.y - c, f.scared ? '으악! 도망!' : '뿅! 다시 올게', '#ffcf9a', c * 0.62);
+      } else if (f.kind === 'bite' || f.kind === 'biteAll') {
+        // 라이벌 냠냠: 주황·보라 조각이 튀고 "라이벌 냠냠! +N"
+        const all = f.kind === 'biteAll';
+        ring(p.x, p.y, c * (all ? 3 : 1.8), RIVAL_ORANGE, all ? 0.7 : 0.45);
+        burst(p.x, p.y, all ? 40 : 20, [RIVAL_ORANGE, RIVAL_PURPLE, '#ffe66d', '#ffffff'], c * (all ? 13 : 9), c * 0.24);
+        text(p.x, p.y - c, '냠! +' + f.n, '#ffe66d', c * 0.8);
+        banner(all ? '라이벌을 통째로 냠냠!' : '라이벌 냠냠! +' + f.n, all ? '#ffb35c' : '#ffe66d', all ? 1.8 : 1.1);
+        if (all && !v.calm) R.shake = D.FX.shake * 0.5;
+      } else if (f.kind === 'headbump') {
+        ring(p.x, p.y, c * 1.5, '#ffe66d', 0.4);
+        burst(p.x, p.y, 12, ['#ffe66d', '#ffffff'], c * 7, c * 0.16);
+        text(p.x, p.y - c, '쿵!', '#ffe66d', c * 0.75);
       } else if (f.kind === 'giftIn') {
         ring(p.x, p.y, c * 2, '#ff9ad5', 0.6);
         text(p.x, p.y - c, '선물 상자!', '#ffc8e8', c * 0.62);
@@ -1126,7 +1138,7 @@
     const ch = 22 * s, cy = mid - ch / 2;
     const items = [];
     // 라이벌과 겨루기: 나 : 라이벌 먹은 구슬 (라이벌이 나온 뒤부터)
-    if (W.rival && W.rival.met) items.push(['나 ' + W.eaten + ' : ' + W.rival.eaten + ' 라이벌', W.eaten >= W.rival.eaten ? '#8ff6ff' : '#ffb35c', Math.round(15 * s) + 'px ' + DISP]);
+    if (W.rival && W.rival.met) items.push(['나 ' + (W.eaten + (W.rivalCells || 0)) + ' : ' + W.rival.eaten + ' 라이벌', W.eaten + (W.rivalCells || 0) >= W.rival.eaten ? '#8ff6ff' : '#ffb35c', Math.round(15 * s) + 'px ' + DISP]);
     if (W.feverT > 0) items.push(['FEVER ' + Math.ceil(W.feverT), v.calm ? '#ffd84a' : 'hsl(' + ((W.t * 200) % 360) + ',100%,70%)']);
     else if (W.fun && W.fever > 0.05) items.push(['FEVER ' + Math.floor(W.fever * 100) + '%', '#ff9ad5']);
     if (W.eff && W.eff.giant > 0) items.push(['거대 ' + Math.ceil(W.eff.giant), '#ffe66d', Math.round(15 * s) + 'px ' + DISP]);

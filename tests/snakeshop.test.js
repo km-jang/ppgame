@@ -45,7 +45,7 @@ test('수치: 캐릭터 5종(기본 무료, 값이 오름) · 강화 5단계 · 
   assert(D.SKINS === undefined, 'old skins removed');
   for (const u of D.UPGRADES) assert(u.prices.length === D.UPGRADE_MAX && u.prices.every((p, i) => !i || p > u.prices[i - 1]), 'upgrade prices rise ' + u.id);
   for (const it of D.START_ITEMS) assert(it.max === 3 && D.ITEM.kinds[it.eff], 'start item ' + it.id);
-  assert(D.MISSIONS.length >= 14 && D.MISSIONS.length <= 18, 'missions count ' + D.MISSIONS.length);
+  assert(D.MISSIONS.length >= 14 && D.MISSIONS.length <= 20, 'missions count ' + D.MISSIONS.length);
   const ids = new Set(D.MISSIONS.map(m => m.id));
   assert(ids.size === D.MISSIONS.length, 'mission ids unique');
   // 미션이 읽는 칸은 모두 판 요약에 있다
@@ -362,8 +362,8 @@ test('놀이 본부: 판 값(hubStats)으로 스티커가 붙고, 알아서 맞�
   assert(H.stickers().find(t => t.id === 'sn_stage').got, 'stage sticker');
   // 오늘의 미션 값 이름도 맞다 (len · golds · orbs)
   for (const m of H.DAILY.snake) assert(m.stat === 'games' || m.stat in W2.hubStats(W), 'daily stat ' + m.stat);
-  // 판 값 이름: len · golds · orbs · level · rivalWin · planet · gifts · fevers · giants
-  assert(JSON.stringify(Object.keys(W2.hubStats(W)).sort()) === JSON.stringify(['fevers', 'giants', 'gifts', 'golds', 'len', 'level', 'orbs', 'planet', 'rivalWin']), 'hub stat keys');
+  // 판 값 이름: len · golds · orbs · level · rivalWin · planet · gifts · fevers · giants · rivalBites
+  assert(JSON.stringify(Object.keys(W2.hubStats(W)).sort()) === JSON.stringify(['fevers', 'giants', 'gifts', 'golds', 'len', 'level', 'orbs', 'planet', 'rivalBites', 'rivalWin']), 'hub stat keys');
   assert(W2.hubStats(W).planet === 1, 'planet starts at mercury');
   // 알아서 맞추기: 처음 두 판은 1, 잘하면 올라가고 판 옵션으로 들어간다
   assert(H.adaptMul('snake', 'normal') === 1, 'warm');

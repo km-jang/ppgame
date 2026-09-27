@@ -98,7 +98,8 @@ test('코인 크기: 아이 흉내 봇의 한 판은 20 ~ 60코인쯤 (숫자를
   };
   const out = avg(KID), hum = avg(HUMAN);
   console.log('       한 판 평균 코인 (강화 없음, 5분 상한): 아이 흉내 ' + JSON.stringify(out) + ', 사람 닮은 봇 ' + JSON.stringify(hum));
-  assert(out.easy >= 20 && out.easy <= 80, 'easy ' + out.easy);
+  // 2026-09-27 몬스터 밟기·비밀 방 별·피버 별·깜짝 선물 코인으로 한 판이 길고 알차져 쉬움은 60에서 80 안팎이 됐다 (상한 100)
+  assert(out.easy >= 20 && out.easy <= 100, 'easy ' + out.easy);
   assert(out.normal >= 5 && out.normal <= out.easy && out.hard <= out.normal, 'order ' + JSON.stringify(out));
 });
 

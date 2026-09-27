@@ -785,7 +785,12 @@
       } else {
         const s = q.size * (q.conf ? 1 : 0.5 + a * 0.5);
         ctx.fillStyle = q.color;
-        if (q.conf) { ctx.globalAlpha = Math.min(1, a * 2); ctx.fillRect(q.x - s / 2, q.y - s * 0.3, s, s * 0.6); }
+        if (q.conf) {
+          // 색종이는 섞이지 않은 또렷한 색으로
+          ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = Math.min(1, a * 2);
+          ctx.fillRect(q.x - s / 2, q.y - s * 0.3, s, s * 0.6);
+          ctx.globalCompositeOperation = 'lighter';
+        }
         else ctx.fillRect(q.x - s / 2, q.y - s / 2, s, s);
       }
     }
@@ -1245,7 +1250,7 @@
   // 선물 상자: 둥실 떠서 천천히 돈다. 높이 뜬 것은 바닥에서 빛기둥, 막대 밑은 낮게 (움직임 줄이기면 가만히)
   function drawGift(ctx, W, L, o, rel, fade, v) {
     const bob = v.calm ? 0 : Math.sin(W.t * 4 + o.z) * 0.1;
-    const q = proj(L, o.x, rel, o.y + bob), size = q.s * (o.need === 'slide' ? 1.1 : 1.45);
+    const q = proj(L, o.x, rel, o.y + bob), size = q.s * (o.need === 'slide' ? 1.2 : 1.75);
     ctx.globalAlpha = fade;
     if (o.need === 'jump') {
       const b = proj(L, o.x, rel, 0);
@@ -1274,7 +1279,7 @@
     ctx.globalAlpha = fade * 0.45;
     ctx.fillStyle = '#5ee7ff';
     floorQuad(ctx, L, o.x, rel, 0.45, 0.6); ctx.fill();
-    const q = proj(L, o.x, rel, 1.15), hgt = q.s * 2.3, wid = hgt * WARP_W / WARP_H;
+    const q = proj(L, o.x, rel, 1.35), hgt = q.s * 2.75, wid = hgt * WARP_W / WARP_H;
     const pulse = v.calm ? 1 : 1 + Math.sin(W.t * 6) * 0.04;
     ctx.globalAlpha = fade;
     ctx.globalCompositeOperation = 'lighter';
@@ -1298,13 +1303,13 @@
     const near = -CAMZ + 1.2, far = D.VIEW;
     const t = performance.now() / 1000;
     for (const lx of [-0.5, 2.5]) {
-      const a = proj(L, lx, near), b = proj(L, lx, far);
+      const a = proj(L, lx, near), b = proj(L, lx, far), g0 = proj(L, lx, -2);   // 무지개는 화면에 보이는 부분(우주선 조금 뒤부터)에 펼친다
       let col;
       if (v.calm) col = '#ffd24a';
       else {
-        col = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-        const sh = (t * 0.6) % 1;
-        for (let i = 0; i <= 6; i++) col.addColorStop(i / 6, rainbowAt(i / 7 + sh));
+        col = ctx.createLinearGradient(g0.x, g0.y, b.x, b.y);
+        const sh = (t * 0.8) % 1;
+        for (let i = 0; i <= 13; i++) col.addColorStop(i / 13, rainbowAt(i / 7 - sh));
       }
       ctx.strokeStyle = col;
       ctx.globalAlpha = 0.28 * k; ctx.lineWidth = Math.max(10, L.lane * 0.09);

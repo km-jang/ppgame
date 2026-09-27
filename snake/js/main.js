@@ -513,7 +513,8 @@
     const rr = SN.World.rivalResult(W), rl = $('over-rival');
     if (rr) {
       rl.textContent = rr.diff > 0 ? '라이벌보다 ' + rr.diff + '개 더 먹었어요!' : rr.diff === 0 ? '라이벌과 똑같이 먹었어요! 아깝다' : '라이벌이 ' + (-rr.diff) + '개 더 먹었어요. 다음엔 이길 수 있어요!';
-      if (rr.bumps > 0) rl.textContent += ' (라이벌 멈칫 ' + rr.bumps + '번)';
+      if (rr.bites > 0) rl.textContent += ' 라이벌을 ' + rr.bites + '번 냠냠했어요!';
+      else if (rr.bumps > 0) rl.textContent += ' (라이벌 멈칫 ' + rr.bumps + '번)';
       rl.className = 'rival-line' + (rr.diff > 0 ? ' win' : '');
       rl.hidden = false;
     } else rl.hidden = true;
@@ -533,7 +534,9 @@
       if (ev === 'eat') SN.Audio.play('eat', { k: (world.eaten - 1) % D.FOOD.goldEvery });
       else SN.Audio.play(ev);
       if (ev === 'rival') { toast(rivalToast ? '라이벌이 다시 왔어요' : '라이벌 뱀 등장! 구슬을 먼저 먹어요'); rivalToast = true; }
-      else if (ev === 'bump') vibrate([15, 20, 15]);
+      else if (ev === 'bump' || ev === 'headbump') vibrate([15, 20, 15]);
+      else if (ev === 'bite') vibrate(30);
+      else if (ev === 'biteall') vibrate([30, 30, 60]);
       else if (ev === 'giftopen' || ev === 'fever') vibrate([20, 30, 20]);
       else if (ev === 'giant') vibrate(60);
       else if (ev === 'smash') vibrate(25);
