@@ -793,7 +793,7 @@
     }
     ctx.globalAlpha = 1;
     // 행성 날씨: 장면이 바뀌면 새 날씨로 (흐려지는 동안 천천히 나타난다)
-    if (wx.id !== id || wx.key !== v.w + 'x' + v.h + ':' + (v.calm ? 1 : 0)) wxSetup(id, v);
+    if (wx.id !== id || wx.key !== wxKey(v)) wxSetup(id, v);
     wxUpdate(v, Math.min(0.1, dt || 0));
     wxDraw(ctx, v, 1 - k);
   }
@@ -804,6 +804,7 @@
   // 도감(common/worlds.js)의 kind·amount·wind·color대로. 판 뒤 하늘에 그려서 판의 어두운 유리 아래로 흐리게 비친다.
   // 입자 수: 1280×800에서 최대 WX_MAX개 (작은 화면은 비율대로 줄되 최소 60%), 움직임 줄이기면 40%로 줄고 절반 속도, 깜빡임·번개 없음.
   const WX_MAX = 84;
+  const wxKey = v => v.w + 'x' + v.h + ':' + (v.calm ? 1 : 0) + (v.low ? 'L' : '');
   const wx = { id: '', key: '', cfg: null, parts: [], t: 0, bolt: null, boltT: 3, extra: null };
   const weatherOf = id => (WL && WL.weatherOf(id)) || null;
 
@@ -912,7 +913,7 @@
 
   function wxSetup(id, v) {
     const cfg = weatherOf(id);
-    wx.id = id; wx.key = v.w + 'x' + v.h + ':' + (v.calm ? 1 : 0); wx.cfg = cfg; wx.parts = []; wx.bolt = null; wx.boltT = 2 + Math.random() * 2; wx.extra = null;
+    wx.id = id; wx.key = wxKey(v); wx.cfg = cfg; wx.parts = []; wx.bolt = null; wx.boltT = 2 + Math.random() * 2; wx.extra = null;
     if (!cfg) return;
     const w = v.w, h = v.h, area = Math.max(0.6, Math.min(1, (w * h) / (1280 * 800)));
     const kind = cfg.kind;
@@ -920,6 +921,7 @@
     if (kind === 'bolt') n = Math.round(n * 0.35);        // 폭풍: 번개가 주인공, 바람 알갱이는 조금
     if (kind === 'haze' || kind === 'aurora') n = Math.round(n * 0.3);   // 안개·오로라는 큰 그림이 주인공, 작은 반짝이만 조금
     if (v.calm) n = Math.round(n * 0.4);
+    if (v.low) n = Math.round(n * 0.5);   // 느린 기기 절약 모드 (main.js가 켠다)
     n = Math.min(90, n);
     const cols = cfg.color.map(rgbOf);
     for (let i = 0; i < n; i++) wx.parts.push(wxSpawn({}, v, true, i));

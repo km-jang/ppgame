@@ -119,6 +119,9 @@
     deny: { gap: 0.15, fn(t) { tone(t, 'square', 220, 180, 0.14, 0.08); tone(t + 0.12, 'square', 180, 150, 0.12, 0.06); } },
     claim: { gap: 0.2, fn(t) { [1047, 1319, 1568, 2093].forEach((f, i) => tone(t + i * 0.06, 'square', f, f, 0.12, 0.08)); noise(t + 0.2, 'highpass', 6000, 9000, 0.3, 0.06); } },
     pick: { gap: 0.05, fn(t) { [523, 659, 784].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.1, 0.12)); } },
+    // 한 번 더!(되살아남: 위로 휘익 + 반짝) · 대왕 뱀 쓰러뜨림(큰 팡파르)
+    revive: { gap: 0.5, fn(t) { tone(t, 'sine', 300, 1200, 0.3, 0.1); [784, 1047, 1319].forEach((f, i) => tone(t + 0.2 + i * 0.06, 'triangle', f, f, 0.18, 0.1)); } },
+    bossdown: { gap: 0.5, fn(t) { noise(t, 'bandpass', 2600, 600, 0.25, 0.25); [392, 523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(t + 0.12 + i * 0.07, 'square', f, f, 0.16, 0.08)); } },
     win: { gap: 0.5, fn(t) {
       [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(t + i * 0.08, 'triangle', f, f, 0.4, 0.14));
     } },

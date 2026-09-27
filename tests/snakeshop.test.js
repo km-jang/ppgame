@@ -82,7 +82,13 @@ test('보통 한 판은 코인 20~60개쯤 (봇으로 확인)', () => {
   for (const seed of [3, 9, 21]) {
     const W = WD.create(24, 15, seed, { mode: 'endless', easy: true });
     W.wait = 0;
-    for (let i = 0; i < 60 * 60 && W.phase === 'play'; i++) { if (!W.queue.length) WD.turn(W, WD.botDir(W)); WD.step(W, 1 / 60); }
+    // 아이 흉내 봇 (늦게 반응하고 가끔 딴 데로). 봇이 벽을 돌아가는 길을 알게 된 뒤(2026-09-27)로는 그냥 봇은 아이보다 한참 잘해서
+    const rr = SN.rng(seed * 7 + 3);
+    let lag = 0;
+    for (let i = 0; i < 60 * 60 && W.phase === 'play'; i++) {
+      if ((lag -= 1 / 60) <= 0) { lag = 0.25; WD.turn(W, rr() < 0.3 ? ['up', 'down', 'left', 'right'][Math.floor(rr() * 4)] : WD.botDir(W)); }
+      WD.step(W, 1 / 60);
+    }
     got.push(SH.coinsFor(SH.runOf(W), null).total);
   }
   const avg = got.reduce((a, b) => a + b, 0) / got.length;
@@ -362,8 +368,9 @@ test('놀이 본부: 판 값(hubStats)으로 스티커가 붙고, 알아서 맞�
   assert(H.stickers().find(t => t.id === 'sn_stage').got, 'stage sticker');
   // 오늘의 미션 값 이름도 맞다 (len · golds · orbs)
   for (const m of H.DAILY.snake) assert(m.stat === 'games' || m.stat in W2.hubStats(W), 'daily stat ' + m.stat);
-  // 판 값 이름: len · golds · orbs · level · rivalWin · planet · gifts · fevers · giants · rivalBites
-  assert(JSON.stringify(Object.keys(W2.hubStats(W)).sort()) === JSON.stringify(['fevers', 'giants', 'gifts', 'golds', 'len', 'level', 'orbs', 'planet', 'rivalBites', 'rivalWin']), 'hub stat keys');
+  // 판 값 이름: len · golds · orbs · level · rivalWin · planet · gifts · fevers · giants · rivalBites · bossWins (대왕 뱀, 2026-09-27)
+  // (단계 별 합계 stageStars는 이 기기 기록이라 main.js가 덧붙인다)
+  assert(JSON.stringify(Object.keys(W2.hubStats(W)).sort()) === JSON.stringify(['bossWins', 'fevers', 'giants', 'gifts', 'golds', 'len', 'level', 'orbs', 'planet', 'rivalBites', 'rivalWin']), 'hub stat keys');
   assert(W2.hubStats(W).planet === 1, 'planet starts at mercury');
   // 알아서 맞추기: 처음 두 판은 1, 잘하면 올라가고 판 옵션으로 들어간다
   assert(H.adaptMul('snake', 'normal') === 1, 'warm');
@@ -394,8 +401,12 @@ test('난이도별 최고 기록: 고른 난이도만 오르고 다른 난이도
   assert(best.easy.score === 0 && best.normal.score === 0, 'others untouched');
   r = SH.recordBest(best, 'hard', 200, 15);
   assert(!r.score && r.len && best.hard.score === 300 && best.hard.len === 15, 'only len');
-  r = SH.recordBest(best, 'normal', 0, 3);
+  r = SH.recordBest(best, 'normal', 0, D.START.len + 1);
   assert(!r.score && r.len, 'zero score is no record');
+  // 첫 판을 처음 길이 그대로 끝내면 (구슬 0개) 길이 신기록이 아니다 (예전엔 "신기록"이 떴다)
+  const fresh = { easy: { score: 0, len: 0 } };
+  r = SH.recordBest(fresh, 'easy', 0, D.START.len);
+  assert(!r.score && !r.len && fresh.easy.len === 0, 'start length is no record');
   // 알아서 맞추기 열쇠도 난이도별 (어려움 따로)
   const ctx = load(true), H = vm.runInContext('HUB', ctx);
   for (let i = 0; i < 4; i++) H.adaptRun('snake', 'hard', 2);

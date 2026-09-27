@@ -152,20 +152,40 @@
   const ITEM = D.ITEM.kinds;
   // 라이벌 뱀 색: 주황·보라 줄무늬 (어느 캐릭터와도 헷갈리지 않게) + 보라 가면
   const RIVAL_ORANGE = '#ff8a1f', RIVAL_PURPLE = '#8b4dff';
-  // 떠오르는 글자 (+30 ×3, 아이템 이름)
-  function text(x, y, txt, color, size) {
+  // 떠오르는 글자 (+30 ×3, 아이템 이름). 뱀 머리·앞길을 가리지 않게 머리 뒤쪽(몸 쪽)에서 뒤로 흘러가고,
+  // 다른 글자와 겹치면 비켜 놓고, 판 밖으로 잘리지 않게 판 안에 넣는다 (그릴 때 폭을 재서 맞춘다)
+  function text(x, y, txt, color, size, dir) {
     if (R.texts.length > 12) R.texts.shift();
-    R.texts.push({ x, y, txt, color, size, life: 0.9, max: 0.9 });
+    const d = dir || [0, 1];
+    const q = { x, y, txt, color, size, life: 0.9, max: 0.9, vx: -d[0] * 26, vy: d[1] !== 0 ? -d[1] * 26 : -26 };
+    for (let k = 0; k < 4; k++) {
+      const hit = R.texts.find(o => Math.abs(o.x - q.x) < size * 3 && Math.abs(o.y - q.y) < size * 1.05);
+      if (!hit) break;
+      q.y += (q.y > hit.y ? 1 : -1) * size * 1.1;
+    }
+    R.texts.push(q);
+  }
+  // 머리 뒤쪽 칸 (먹은 자리에서 몸 쪽으로 한 칸 반)
+  function behind(W, p, c) {
+    const d = SN.World.DIRS[W.dir] || [1, 0];
+    return { x: p.x - d[0] * c * 1.5, y: p.y - d[1] * c * 1.5 - (d[1] === 0 ? c * 0.9 : 0), d };
   }
 
-  // 판 가운데 큰 글자 (선물 · FEVER · 거대 뱀). 하나만, 새로 오면 바꾼다
+  // 큰 글자 (선물 · 피버 · 거대 뱀 · 대왕 뱀). 하나만, 새로 오면 바꾼다.
+  // 뱀을 가리지 않게 판 위쪽에 짧게, 머리가 그 줄 가까이 있으면 판 아래쪽으로 옮기고 흐리게
   function banner(txt, color, life) { R.banner = { txt, color, life, max: life }; }
-  function drawBanner(ctx, v) {
+  function drawBanner(ctx, v, W) {
     const B = R.banner;
     if (!B || B.life <= 0) return;
-    const k = B.life / B.max, a = Math.min(1, k * 3, (1 - k) * 8 + 0.2);
-    const fs = Math.round(Math.max(24, Math.min(58, v.bw / 13)));
-    const x = v.bx + v.bw / 2, y = v.by + v.bh * 0.4 - (v.calm ? 0 : (1 - k) * 20);
+    const k = B.life / B.max;
+    let a = Math.min(1, k * 3, (1 - k) * 8 + 0.2) * 0.92;
+    const fs = Math.round(Math.max(22, Math.min(48, v.bw / 15)));
+    const x = v.bx + v.bw / 2;
+    // 알림(토스트)이 판 위쪽에 떠 있으면 그 아래로
+    let y = v.by + fs * 1.1 - (v.calm ? 0 : (1 - k) * 8) + (v.toastUntil && performance.now() < v.toastUntil ? 52 : 0);
+    const h = W && W.snake && W.snake[0] ? v.by + (W.snake[0].y + 0.5) * v.cell : -1e9;
+    if (Math.abs(h - y) < fs * 1.6) { y = v.by + v.bh - fs * 1.6; a *= 0.6; }
+    if (Math.abs(h - y) < fs * 1.2) a *= 0.5;
     ctx.globalAlpha = a;
     ctx.font = fs + 'px ' + DISP; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(5,7,12,0.9)'; ctx.strokeText(B.txt, x, y);
@@ -175,8 +195,11 @@
 
   function toPx(v, gx, gy) { return { x: v.bx + (gx + 0.5) * v.cell, y: v.by + (gy + 0.5) * v.cell }; }
 
+  // 절약 모드(view.low, 느린 기기)면 입자 절반
+  const low = n => (R.low ? Math.ceil(n / 2) : n);
   function burst(x, y, n, colors, speed, size) {
     const P = R.parts;
+    n = low(n);
     for (let i = 0; i < n; i++) {
       if (P.length >= D.FX.maxParticles) P.shift();
       const a = Math.random() * TAU, sp = speed * (0.35 + Math.random() * 0.65), life = 0.35 + Math.random() * 0.4;
@@ -189,11 +212,13 @@
 
   // 규칙이 남긴 연출 요청(W.fx)을 입자로 바꾼다
   function takeFx(W, v) {
+    R.low = !!v.low;
     if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; R.banner = null; }
     for (const f of W.fx) {
       const p = toPx(v, f.x, f.y), c = v.cell;
       if (W.fun && f.pts && (f.kind === 'eat' || f.kind === 'gold') && (W.mult > 1 || (W.eff && W.eff.double > 0) || f.kind === 'gold')) {
-        text(p.x, p.y - c * 0.8, '+' + f.pts + (W.mult > 1 ? ' ×' + W.mult : ''), f.kind === 'gold' ? '#ffe66d' : W.mult >= 3 ? '#ff9f43' : '#ffd6e8', c * 0.7);
+        const b = behind(W, p, c);
+        text(b.x, b.y, '+' + f.pts + (W.mult > 1 ? ' ×' + W.mult : ''), f.kind === 'gold' ? '#ffe66d' : W.mult >= 3 ? '#ff9f43' : '#ffd6e8', c * 0.7, b.d);
       }
       if (f.kind === 'eat') {
         ring(p.x, p.y, c * 1.3, '#ff2e88', 0.35);
@@ -205,17 +230,31 @@
         const K = ITEM[f.item];
         ring(p.x, p.y, c * 2.2, K.color, 0.5);
         burst(p.x, p.y, 22, [K.color, '#ffffff'], c * 9, c * 0.18);
-        text(p.x, p.y - c, K.name + '!', K.color, c * 0.8);
+        { const b = behind(W, p, c); text(b.x, b.y, K.name + '!', K.color, c * 0.8, b.d); }
       } else if (f.kind === 'cut') {
         ring(p.x, p.y, c * 2, '#3dff8b', 0.45);
         burst(p.x, p.y, 20, ['#3dff8b', '#ffffff'], c * 9, c * 0.18);
-        text(p.x, p.y - c, '싹둑! -' + f.n, '#3dff8b', c * 0.8);
+        { const b = behind(W, p, c); text(b.x, b.y, '싹둑! -' + f.n, '#3dff8b', c * 0.8, b.d); }
       } else if (f.kind === 'cool') {
         ring(p.x, p.y, c * 1.2, '#8aa4b8', 0.4);
       } else if (f.kind === 'gold') {
         ring(p.x, p.y, c * 1.6, '#ffe66d', 0.45);
         ring(p.x, p.y, c * 2.6, '#fff4c2', 0.6);
         burst(p.x, p.y, D.FX.goldSparks, ['#ffe66d', '#fff4c2', '#ffcf3a'], c * 10, c * 0.2);
+      } else if (f.kind === 'bossIn') {
+        ring(p.x, p.y, c * 3, RIVAL_ORANGE, 0.8);
+        ring(p.x, p.y, c * 4.4, RIVAL_PURPLE, 1);
+        banner('대왕 뱀 등장!', '#ffb35c', 1.4);
+      } else if (f.kind === 'bossDown') {
+        ring(p.x, p.y, c * 4, '#ffe66d', 0.9);
+        burst(p.x, p.y, low(60), [RIVAL_ORANGE, RIVAL_PURPLE, '#ffe66d', '#ffffff', '#5ee7ff'], c * 15, c * 0.28);
+        banner('대왕 뱀을 쓰러뜨렸어요!', '#ffe66d', 1.8);
+        if (!v.calm) R.shake = D.FX.shake * 0.6;
+      } else if (f.kind === 'revive') {
+        ring(p.x, p.y, c * 2.6, '#5ee7ff', 0.7);
+        ring(p.x, p.y, c * 4, '#c7a6ff', 0.9);
+        burst(p.x, p.y, low(28), ['#5ee7ff', '#c7a6ff', '#ffffff'], c * 10, c * 0.2);
+        banner('한 번 더! 잠깐 유령이에요', '#8ff6ff', 1.4);
       } else if (f.kind === 'rivalIn') {
         ring(p.x, p.y, c * 2.4, RIVAL_ORANGE, 0.6);
         ring(p.x, p.y, c * 3.4, RIVAL_PURPLE, 0.8);
@@ -228,8 +267,11 @@
         const all = f.kind === 'biteAll';
         ring(p.x, p.y, c * (all ? 3 : 1.8), RIVAL_ORANGE, all ? 0.7 : 0.45);
         burst(p.x, p.y, all ? 40 : 20, [RIVAL_ORANGE, RIVAL_PURPLE, '#ffe66d', '#ffffff'], c * (all ? 13 : 9), c * 0.24);
-        text(p.x, p.y - c, '냠! +' + f.n, '#ffe66d', c * 0.8);
-        banner(all ? '라이벌을 통째로 냠냠!' : '라이벌 냠냠! +' + f.n, all ? '#ffb35c' : '#ffe66d', all ? 1.8 : 1.1);
+        // 잇달아 물면(대왕 뱀을 따라가며) 글자 하나로 모아 센다
+        const last = R.texts[R.texts.length - 1];
+        if (last && last.bite && last.life > 0.45) { last.bite += f.n; last.txt = '냠! +' + last.bite; last.life = last.max; }
+        else { const b = behind(W, p, c); text(b.x, b.y, '냠! +' + f.n, '#ffe66d', c * 0.8, b.d); R.texts[R.texts.length - 1].bite = f.n; }
+        banner(f.boss ? (all ? '대왕 뱀이 도망갔다! 곧 다시 와요' : '대왕 뱀 냠냠!') : all ? '라이벌을 통째로 냠냠!' : '라이벌 냠냠! +' + f.n, all ? '#ffb35c' : '#ffe66d', all ? 1.4 : 0.9);
         if (all && !v.calm) R.shake = D.FX.shake * 0.5;
       } else if (f.kind === 'headbump') {
         ring(p.x, p.y, c * 1.5, '#ffe66d', 0.4);
@@ -245,11 +287,11 @@
         banner(f.text, '#ffe66d', 1.8);
       } else if (f.kind === 'fever') {
         burst(p.x, p.y, 30, ['#ff5fa8', '#ffe66d', '#5ee7ff', '#7dff6a'], c * 12, c * 0.2);
-        banner('FEVER! 점수 두 배', '#ff9ad5', 1.4);
+        banner('피버! 점수 두 배', '#ff9ad5', 1.2);
       } else if (f.kind === 'giant') {
         ring(p.x, p.y, c * 3.2, '#ffe66d', 0.7);
         burst(p.x, p.y, 30, ['#ffe66d', '#ffffff', '#ff9f43'], c * 12, c * 0.24);
-        banner('거대 뱀 변신!', '#ffe66d', 1.4);
+        banner('거대 뱀 변신!', '#ffe66d', 1.2);
         if (!v.calm) R.shake = D.FX.shake * 0.6;
       } else if (f.kind === 'smash') {
         ring(p.x, p.y, c * 1.6, '#ff9f43', 0.4);
@@ -291,13 +333,13 @@
       if (q.life <= 0) { P.splice(i, 1); continue; }
       if (!q.ring) { q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= 0.9; q.vy *= 0.9; }
     }
-    for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y -= 28 * dt; if (q.life <= 0) R.texts.splice(i, 1); }
+    for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.x += (q.vx || 0) * dt; q.y += (q.vy == null ? -28 : q.vy) * dt; if (q.life <= 0) R.texts.splice(i, 1); }
     R.shake = Math.max(0, R.shake - dt * 40);
     if (R.banner) { R.banner.life -= dt; if (R.banner.life <= 0) R.banner = null; }
     R.flash = Math.max(0, R.flash - dt);
   }
 
-  function drawFx(ctx) {
+  function drawFx(ctx, v) {
     ctx.globalCompositeOperation = 'lighter';
     for (const q of R.parts) {
       const a = q.life / q.max;
@@ -317,9 +359,13 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const q of R.texts) {
       ctx.globalAlpha = Math.min(1, q.life / q.max * 2);
-      ctx.font = Math.round(Math.max(12, q.size)) + 'px ' + DISP;
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.strokeText(q.txt, q.x, q.y);
-      ctx.fillStyle = q.color; ctx.fillText(q.txt, q.x, q.y);
+      const fs = Math.round(Math.max(14, q.size));
+      ctx.font = fs + 'px ' + DISP;
+      const hw = ctx.measureText(q.txt).width / 2 + 4;
+      const x = v ? Math.max(v.bx + hw, Math.min(v.bx + v.bw - hw, q.x)) : q.x;
+      const y = v ? Math.max(v.by + fs * 0.6, Math.min(v.by + v.bh - fs * 0.6, q.y)) : q.y;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.strokeText(q.txt, x, y);
+      ctx.fillStyle = q.color; ctx.fillText(q.txt, x, y);
     }
     ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
   }
@@ -1074,8 +1120,11 @@
     else if (dizzy) ctx.globalAlpha = 0.8;
     const far = i => Math.abs(B[i].x - B[i - 1].x) + Math.abs(B[i].y - B[i - 1].y) > 1;
     const d = SN.World.DIRS[V.dir];
-    paintBody(ctx, pts, far, c, RIVAL_LOOK, tm, false, d, v.calm);
-    paintRivalHead(ctx, pts[0], d, c, tm, dizzy);
+    // 대왕 뱀: 마디가 더 크고 머리에 금빛 왕관 (규칙은 한 칸 그대로)
+    const bc = V.boss ? c * D.BOSS.cellMul : c;
+    paintBody(ctx, pts, far, bc, RIVAL_LOOK, tm, false, d, v.calm);
+    paintRivalHead(ctx, pts[0], d, bc, tm, dizzy);
+    if (V.boss) paintCrown(ctx, pts[0].x, pts[0].y - bc * 0.55, bc * 0.9);
     ctx.globalAlpha = 1;
     R.rivalHead = pts[0];
   }
@@ -1088,9 +1137,10 @@
       const fs = Math.round(Math.max(13, Math.min(22, c * 0.52)));
       ctx.font = fs + 'px ' + DISP;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const txt = V.phase === 'warn' ? '라이벌 등장!' : dizzy ? '멈칫!' : '라이벌';
+      const nm = V.boss ? D.BOSS.name : '라이벌';
+      const txt = V.phase === 'warn' ? nm + ' 등장!' : dizzy ? '멈칫!' : nm;
       const tx = Math.max(v.bx + fs * 2.5, Math.min(v.bx + v.bw - fs * 2.5, pts[0].x));
-      let ty = pts[0].y - c * (dizzy ? 1.35 : 1.05);
+      let ty = pts[0].y - c * (dizzy ? 1.35 : 1.05) - (V.boss ? c * 0.6 : 0);
       if (ty - fs < v.by) ty = pts[0].y + c * 1.1;
       ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.9)'; ctx.strokeText(txt, tx, ty);
       ctx.fillStyle = '#ffb35c'; ctx.fillText(txt, tx, ty);
@@ -1113,8 +1163,10 @@
   }
 
   // ─── HUD: 위쪽 한 줄. 오른쪽 끝에 점수, 그 왼쪽에 작은 칸들 ─────
-  function chip(ctx, x, y, h, txt, color, s) {
-    const w = ctx.measureText(txt).width + 16 * s;
+  // gauge(0~1)가 있으면 글자 오른쪽에 작은 막대 (피버 모으기 · 대왕 뱀 남은 몸)
+  function chip(ctx, x, y, h, txt, color, s, gauge, gcol) {
+    const gw = gauge != null ? 52 * s : 0;
+    const w = ctx.measureText(txt).width + 16 * s + gw;
     ctx.fillStyle = 'rgba(12,16,26,0.72)';
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x - w, y, w, h, 6 * s); else ctx.rect(x - w, y, w, h);
@@ -1122,8 +1174,13 @@
     ctx.strokeStyle = 'rgba(94,231,255,0.22)';
     ctx.lineWidth = 1;
     ctx.stroke();
+    if (gauge != null) {
+      const bx = x - 8 * s - gw + 6 * s, bw = gw - 10 * s, bh = Math.max(5, h * 0.28), by = y + (h - bh) / 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = gcol || color; ctx.fillRect(bx, by, bw * Math.max(0, Math.min(1, gauge)), bh);
+    }
     ctx.fillStyle = color;
-    ctx.fillText(txt, x - 8 * s, y + h / 2 + 1);
+    ctx.fillText(txt, x - 8 * s - gw, y + h / 2 + 1);
     return w;
   }
 
@@ -1140,28 +1197,34 @@
     const ch = 22 * s, cy = mid - ch / 2;
     const items = [];
     // 라이벌과 겨루기: 나 : 라이벌 먹은 구슬 (라이벌이 나온 뒤부터)
-    if (W.rival && W.rival.met) items.push(['나 ' + (W.eaten + (W.rivalCells || 0)) + ' : ' + W.rival.eaten + ' 라이벌', W.eaten + (W.rivalCells || 0) >= W.rival.eaten ? '#8ff6ff' : '#ffb35c', Math.round(15 * s) + 'px ' + DISP]);
-    if (W.feverT > 0) items.push(['FEVER ' + Math.ceil(W.feverT), v.calm ? '#ffd84a' : 'hsl(' + ((W.t * 200) % 360) + ',100%,70%)']);
-    else if (W.fun && W.fever > 0.05) items.push(['FEVER ' + Math.floor(W.fever * 100) + '%', '#ff9ad5']);
+    if (W.rival && W.rival.met && !W.rival.boss) items.push(['나 ' + (W.eaten + (W.rivalCells || 0)) + ' : ' + W.rival.eaten + ' 라이벌', W.eaten + (W.rivalCells || 0) >= W.rival.eaten ? '#8ff6ff' : '#ffb35c', Math.round(15 * s) + 'px ' + DISP]);
+    const KO = Math.round(15 * s) + 'px ' + DISP;
+    // 피버: 도는 동안 남은 초, 모으는 동안은 작은 막대 (숫자 % 대신)
+    if (W.feverT > 0) items.push(['피버 ' + Math.ceil(W.feverT), v.calm ? '#ffd84a' : 'hsl(' + ((W.t * 200) % 360) + ',100%,70%)', KO]);
+    else if (W.fun && W.fever > 0.05) items.push(['피버', '#ff9ad5', KO, W.fever]);
     if (W.eff && W.eff.giant > 0) items.push(['거대 ' + Math.ceil(W.eff.giant), '#ffe66d', Math.round(15 * s) + 'px ' + DISP]);
     if (W.hard) items.push(['어려움', '#ff8a96', Math.round(15 * s) + 'px ' + DISP]);
-    if (W.mode === 'stage') items.push(['LV ' + W.level + '  ' + Math.min(W.got, W.goal) + '/' + W.goal, '#5ee7ff']);
-    if (W.fun && W.mult > 1 && W.time - W.lastEat <= (W.comboWindow || D.COMBO.window)) items.push(['COMBO ×' + W.mult, W.mult >= 3 ? '#ff9f43' : '#ffd6e8']);
+    // 스테이지: "3단계 5/10", 대왕 뱀 단계는 남은 대왕 뱀 막대
+    const bl = SN.World.bossLeft ? SN.World.bossLeft(W) : null;
+    if (W.mode === 'stage' && bl != null) items.push([W.level + '단계 대왕 뱀', '#ffb35c', KO, bl, '#ff8a1f']);
+    else if (W.mode === 'stage') items.push([W.level + '단계 ' + Math.min(W.got, W.goal) + '/' + W.goal, '#5ee7ff', KO]);
+    if (W.fun && W.mult > 1 && W.time - W.lastEat <= (W.comboWindow || D.COMBO.window)) items.push(['콤보 ×' + W.mult, W.mult >= 3 ? '#ff9f43' : '#ffd6e8', KO]);
     if (W.eff) for (const k of ['double', 'slow', 'ghost']) if (W.eff[k] > 0) items.push([ITEM[k].glyph + ' ' + Math.ceil(W.eff[k]), ITEM[k].color]);
-    items.push(['LEN ' + W.snake.length, '#ffe66d'], ['BEST ' + Math.max(v.best || 0, W.score).toLocaleString(), '#bcd3e2']);
-    if (v.w >= 560 && W.mode !== 'stage') items.push([SN.fmtTime(W.time), '#8aa4b8']);
+    items.push(['길이 ' + W.snake.length, '#ffe66d', KO], ['최고 ' + Math.max(v.best || 0, W.score).toLocaleString(), '#bcd3e2', KO]);
+    if (v.w >= 1000 && W.mode !== 'stage') items.push([SN.fmtTime(W.time), '#8aa4b8']);   // 작은 탭은 칸을 줄인다
     const numFont = ctx.font;
-    for (const [txt, col, font] of items) {
-      if (x - 90 * s < v.hudLeft) break; // 버튼 묶음과 겹치면 생략
+    for (const [txt, col, font, gauge, gcol] of items) {
       ctx.font = font || numFont;
-      x -= chip(ctx, x, cy, ch, txt, col, s) + 6 * s;
+      const need = ctx.measureText(txt).width + (gauge != null ? 56 * s : 0) + 22 * s;
+      if (x - need < v.hudLeft) break; // 버튼 묶음과 겹치면 생략
+      x -= chip(ctx, x, cy, ch, txt, col, s, gauge, gcol) + 6 * s;
     }
     ctx.textBaseline = 'alphabetic';
-    // 새 하늘 알림 ("화성 도착!"): 버튼 묶음과 칸들 사이 빈 곳에 (판을 가리지 않게)
-    if (SN.Space) SN.Space.drawBanner(ctx, W, v, v.hudLeft, x);
+    // 새 하늘 알림 ("화성 도착!"): 버튼 묶음과 칸들 사이 빈 곳에 (판을 가리지 않게). 알림(토스트)이 떠 있으면 쉰다
+    if (SN.Space && !(v.toastUntil && performance.now() < v.toastUntil)) SN.Space.drawBanner(ctx, W, v, v.hudLeft, x);
   }
 
-  // 출발 대기(READY)와 처음 몇 초 조작 안내
+  // 출발 대기("준비")와 처음 몇 초 조작 안내
   function drawIntro(ctx, W, v) {
     const cx = v.bx + v.bw / 2, cy = v.by + v.bh * 0.3;
     // 스테이지: 레벨을 깼을 때 큰 글자, 레벨 시작 때 이름과 목표
@@ -1170,27 +1233,48 @@
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.globalAlpha = k;
       glow(ctx, 'rgba(94,231,255,0.4)', cx, v.by + v.bh * 0.42, fs * 2, 0.9);
-      ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
+      ctx.font = Math.round(fs * 0.9) + 'px ' + DISP;
+      ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(5,7,12,0.9)';
+      ctx.strokeText(W.level + '단계 성공!', cx + (1 - k) * 40, v.by + v.bh * 0.34);
       ctx.fillStyle = '#e8f7ff';
-      ctx.fillText('LEVEL ' + W.level + ' CLEAR', cx + (1 - k) * 40, v.by + v.bh * 0.4);
-      ctx.font = Math.round(fs * 0.36) + 'px ' + DISP;
+      ctx.fillText(W.level + '단계 성공!', cx + (1 - k) * 40, v.by + v.bh * 0.34);
+      // 별 (하나씩 톡톡 나타난다)
+      const ls = W.lastStars, n = ls ? ls.stars : 1, sr = fs * 0.34;
+      for (let i = 0; i < D.STARS.max; i++) {
+        const sk = v.calm ? 1 : Math.max(0, Math.min(1, (W.clearT - 0.25 - i * 0.22) * 5));
+        const sx = cx + (i - 1) * sr * 2.6, sy = v.by + v.bh * 0.34 + fs * 0.95;
+        ctx.save(); ctx.translate(sx, sy); ctx.scale(sk || 0.001, sk || 0.001);
+        ctx.fillStyle = i < n ? '#ffd23f' : 'rgba(255,255,255,0.18)';
+        ctx.beginPath();
+        for (let j = 0; j < 10; j++) { const r = j % 2 ? sr * 0.45 : sr, a = -Math.PI / 2 + j * Math.PI / 5; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+        ctx.closePath(); ctx.fill();
+        if (i < n) { ctx.strokeStyle = '#fff4c2'; ctx.lineWidth = 2; ctx.stroke(); }
+        ctx.restore();
+      }
+      ctx.font = Math.round(fs * 0.34) + 'px ' + DISP;
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(5,7,12,0.9)';
+      const bt = '보너스 +' + (D.STAGE.clearBonus * W.level + (W.boss ? D.BOSS.bonus : 0)) + (n < 2 ? ' · 빨리 깨면 별이 더!' : n < 3 ? ' · 황금 구슬도 먹으면 별 셋!' : '');
+      ctx.strokeText(bt, cx, v.by + v.bh * 0.34 + fs * 1.7);
       ctx.fillStyle = '#ffe66d';
-      ctx.fillText('보너스 +' + (D.STAGE.clearBonus * W.level), cx, v.by + v.bh * 0.4 + fs * 0.75);
+      ctx.fillText(bt, cx, v.by + v.bh * 0.34 + fs * 1.7);
       ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
       return;
     }
-    if (W.mode === 'stage' && W.wait > 0) {
+    if (W.mode === 'stage' && W.wait > 0 && !W.justRevived) {
       const fs = Math.round(Math.min(56, v.bw / 9));
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       glow(ctx, 'rgba(94,231,255,0.35)', cx, cy, fs * 1.8, 0.8);
-      ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
+      ctx.font = fs + 'px ' + DISP;
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(5,7,12,0.9)';
+      ctx.strokeText(W.level + '단계', cx, cy - fs * 0.2);
       ctx.fillStyle = '#e8f7ff';
-      ctx.fillText('LEVEL ' + W.level, cx, cy - fs * 0.2);
+      ctx.fillText(W.level + '단계', cx, cy - fs * 0.2);
       ctx.font = Math.round(fs * 0.42) + 'px ' + DISP;
       ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(5,7,12,0.9)';
-      ctx.strokeText(W.lv.name + ' · 구슬 ' + W.goal + '개' + (W.portals.length ? ' · 포털 조심' : ''), cx, cy + fs * 0.55);
-      ctx.fillStyle = '#5ee7ff';
-      ctx.fillText(W.lv.name + ' · 구슬 ' + W.goal + '개' + (W.portals.length ? ' · 포털 조심' : ''), cx, cy + fs * 0.55);
+      const goalTxt = W.lv.name + ' · ' + (W.boss ? '대왕 뱀을 냠냠!' : '구슬 ' + W.goal + '개');
+      ctx.strokeText(goalTxt, cx, cy + fs * 0.55);
+      ctx.fillStyle = W.boss ? '#ffb35c' : '#5ee7ff';
+      ctx.fillText(goalTxt, cx, cy + fs * 0.55);
       if (W.walls && W.walls.some(Boolean)) {
         const wt = '빨간 줄무늬 벽은 피해요!', ww = ctx.measureText(wt).width + fs * 0.8, wy = cy + fs * 1.85;
         ctx.fillStyle = 'rgba(30,4,10,0.9)';
@@ -1217,10 +1301,10 @@
     ctx.textBaseline = 'middle';
     if (W.wait > 0) {
       const fs = Math.round(Math.min(64, v.bw / 8));
-      ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
+      ctx.font = fs + 'px ' + DISP;
       ctx.fillStyle = '#e8f7ff';
       glow(ctx, 'rgba(94,231,255,0.35)', cx, cy, fs * 1.6, 0.8);
-      ctx.fillText('READY', cx, cy);
+      ctx.fillText(W.justRevived ? '한 번 더!' : '준비', cx, cy);
     }
     ctx.globalAlpha = W.easy && W.wait > 0 ? 0.75 + (v.calm ? 0 : Math.sin(W.t * 5) * 0.25) : hintA * 0.85;
     ctx.font = Math.round(Math.max(16, Math.min(26, v.cell * 0.7))) + 'px ' + DISP;
@@ -1251,9 +1335,9 @@
     drawSnake(ctx, W, v);
     drawRivalTag(ctx, W, v);
     if (v.hud !== false) drawDanger(ctx, W, v);
-    drawFx(ctx);
+    drawFx(ctx, v);
     drawFeverBorder(ctx, W, v);
-    if (v.hud !== false) drawBanner(ctx, v);
+    if (v.hud !== false) drawBanner(ctx, v, W);
     ctx.restore();
     if (R.flash > 0) {
       ctx.fillStyle = 'rgba(255,77,109,' + (R.flash * 0.7).toFixed(3) + ')';

@@ -17,7 +17,7 @@
     DIFFS: [
       { id: 'easy',   name: '쉬움',   sub: '느리게 · 벽 통과' },
       { id: 'normal', name: '보통',   sub: '빠르게 · 벽 조심' },
-      { id: 'hard',   name: '어려움', sub: '더 빠르게 · 센 라이벌' },
+      { id: 'hard',   name: '어려움', sub: '더 빠르게' },
     ],
 
     // 시작: 길이 4칸, 1초 숨 고르고 출발 (그 전에 방향을 넣으면 바로 출발)
@@ -46,21 +46,22 @@
     },
 
     // 스테이지: 레벨마다 벽 모양·포털 수·목표 구슬·속도가 다르다. 12를 넘으면 모양을 다시 돌며 더 빠르게
-    // par: 별 두 개 기준 시간(초, 쉬움 기준. 보통·어려움은 STARS.parMul을 곱한다). 쉬움 아이 흉내 봇 중간값의 약 2배 (tests/snake.test.js)
+    // par: 별 두 개 기준 시간(초, 쉬움 기준. 보통·어려움은 STARS.parMul을 곱하고, 두 번째 바퀴는 목표가 는 만큼 길게).
+    // 쉬움 아이 흉내 봇(tests/snake.test.js) 중간값 17~30초의 약 2배
     // boss: 대왕 뱀 단계 (구슬 목표 대신 대왕 뱀을 물어 줄이면 성공, BOSS)
     LEVELS: [
       { name: '첫 걸음',     goal: 8,  speed: 7,    walls: 'none', par: 40 },
-      { name: '기둥 숲',     goal: 10, speed: 7.5,  walls: 'pillars', par: 50 },
-      { name: '가운데 벽',   goal: 10, speed: 8,    walls: 'bar', items: true, par: 50 },
-      { name: '대왕 뱀 등장', goal: 12, speed: 8,    walls: 'none', portals: 1, items: true, boss: true, par: 70 },
-      { name: '십자로',      goal: 12, speed: 8.5,  walls: 'cross', items: true, par: 60 },
-      { name: '네 개의 방',  goal: 14, speed: 9,    walls: 'rooms', items: true, par: 70 },
-      { name: '줄무늬',      goal: 14, speed: 9,    walls: 'stripes', portals: 1, items: true, par: 70 },
-      { name: '상자 속 대왕 뱀', goal: 15, speed: 9.5,  walls: 'box', items: true, boss: true, par: 80 },
-      { name: '포털 미로',   goal: 16, speed: 10,   walls: 'pillars', portals: 2, items: true, par: 80 },
-      { name: '나선',        goal: 16, speed: 10,   walls: 'spiral', items: true, par: 80 },
-      { name: '요새',        goal: 18, speed: 10.5, walls: 'fort', portals: 1, items: true, par: 90 },
-      { name: '마지막 대왕 뱀', goal: 20, speed: 11,   walls: 'rooms', portals: 2, items: true, boss: true, par: 90 },
+      { name: '기둥 숲',     goal: 10, speed: 7.5,  walls: 'pillars', par: 45 },
+      { name: '가운데 벽',   goal: 10, speed: 8,    walls: 'bar', items: true, par: 45 },
+      { name: '대왕 뱀 등장', goal: 12, speed: 8,    walls: 'none', portals: 1, items: true, boss: true, par: 45 },
+      { name: '십자로',      goal: 12, speed: 8.5,  walls: 'cross', items: true, par: 55 },
+      { name: '네 개의 방',  goal: 14, speed: 9,    walls: 'rooms', items: true, par: 60 },
+      { name: '줄무늬',      goal: 14, speed: 9,    walls: 'stripes', portals: 1, items: true, par: 65 },
+      { name: '상자 속 대왕 뱀', goal: 15, speed: 9.5,  walls: 'box', items: true, boss: true, par: 50 },
+      { name: '포털 미로',   goal: 16, speed: 10,   walls: 'pillars', portals: 2, items: true, par: 65 },
+      { name: '나선',        goal: 16, speed: 10,   walls: 'spiral', items: true, par: 75 },
+      { name: '요새',        goal: 18, speed: 10.5, walls: 'fort', portals: 1, items: true, par: 75 },
+      { name: '마지막 대왕 뱀', goal: 20, speed: 11,   walls: 'rooms', portals: 2, items: true, boss: true, par: 55 },
     ],
     // 두 번째 바퀴(13~24단계, 외계 행성 하늘) 이름. 모양은 1~12단계를 다시 돈다. 그다음 바퀴는 이름 뒤에 바퀴 수
     LEVEL_NAMES2: ['얼음 첫 걸음', '용암 기둥 숲', '바다 가운데 벽', '유리비 대왕 뱀', '보석 십자로', '사막 네 개의 방',
@@ -72,12 +73,13 @@
     STARS: { parMul: { easy: 1, normal: 0.85, hard: 0.75 }, max: 3 },
 
     // 대왕 뱀 (2026-09-27, 4·8·12단계와 두 번째 바퀴 16·20·24단계): 라이벌 뱀 규칙을 그대로 쓰는 큰 뱀.
-    // 나를 끝내는 일은 없다 (라이벌과 같다). 몸을 물면 그 칸부터 꼬리까지 먹고, 길이가 finish칸 이하일 때 머리 쪽(앞 minLen칸)을 물면 쓰러진다.
-    // 길이가 finish보다 길 때 머리 쪽을 물면 minLen칸만 남는다. 쉬는 동안 regrow초마다 한 칸씩 다시 자란다 (len까지).
+    // 나를 끝내는 일은 없다 (라이벌과 같다). 몸을 물면 그 칸부터 꼬리까지 먹고, 머리 쪽(앞 minLen칸)을 물면 머리부터 문 칸까지.
+    // 몸이 finish칸 이하일 때 머리 쪽을 물면 통째로 (잠깐 사라졌다가 작게 다시). 물어 먹은 칸이 모두 len + needPlus칸이면 쓰러진다.
+    // 쉬는 동안 regrow초마다 한 칸씩 다시 자란다 (len까지, 먹은 칸 게이지는 줄지 않는다). 내 뱀은 한 번 물 때 growMax칸까지만 길어진다.
     // 처음엔 짧게(start칸) 나와서 금방 len까지 자란다. len: 단계 차례(몇 번째 대왕 뱀)마다 lenPer씩 길다
     // levels: 난이도별 속도 등 (라이벌 levels와 같은 뜻). cellMul: 그릴 때 마디 크기 배율 (규칙은 한 칸)
     BOSS: {
-      name: '대왕 뱀', intro: 1.5, start: 5, len: 12, lenPer: 2, maxLen: 20, minLen: 3, finish: 6,
+      name: '대왕 뱀', intro: 1.5, start: 5, len: 12, lenPer: 1, maxLen: 20, minLen: 3, finish: 4, needPlus: 0, growMax: 2,
       regrow: 2.4, biteStun: 1.2, cellMul: 1.35, bonus: 100,
       levels: {
         easy:   { speed: 3.2, react: 1.4, smart: 0.5, wander: 0.15, clumsy: 0.2, keepAway: 2, flee: 0.05, fleeDist: 2 },

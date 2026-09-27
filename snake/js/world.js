@@ -12,10 +12,26 @@
 
   // ─── 레벨 ──────────────────────────────────────────────────
   // n번째 레벨의 설정. 12를 넘으면 모양을 처음부터 다시 돌고, 한 바퀴마다 빨라지고 목표가 늘어난다
+  // 두 번째 바퀴(13~24)는 제 이름 (외계 행성 하늘), 그다음은 이름 뒤에 바퀴 수. 대왕 뱀 단계는 몇 번째 대왕 뱀인지(bossNo)도
   function levelDef(n) {
     const L = D.LEVELS, i = (n - 1) % L.length, loop = Math.floor((n - 1) / L.length);
-    const b = L[i];
-    return Object.assign({}, b, { n, speed: b.speed + loop * D.STAGE.loopSpeed, goal: b.goal + loop * 4 });
+    const b = L[i], N2 = D.LEVEL_NAMES2 || [];
+    const name = loop === 0 ? b.name : loop === 1 && N2[i] ? N2[i] : (N2[i] || b.name) + ' ' + (loop + 1);
+    const out = Object.assign({}, b, { n, name, speed: b.speed + loop * D.STAGE.loopSpeed, goal: b.goal + loop * 4 });
+    if (b.boss) {
+      let k = 0;
+      for (let m = 1; m <= n; m++) if (L[(m - 1) % L.length].boss) k++;
+      out.bossNo = k;
+    }
+    return out;
+  }
+  // 별 두 개 기준 시간 (초). 난이도마다 조금 짧게
+  function parOf(lv, diff) {
+    const m = (D.STARS && D.STARS.parMul && D.STARS.parMul[diff]) || 1;
+    const base = lv ? D.LEVELS[(lv.n - 1) % D.LEVELS.length] : null;
+    // 두 번째 바퀴부터는 목표가 늘어난 만큼 길게
+    const g = base && !lv.boss && base.goal ? lv.goal / base.goal : 1;
+    return (lv && lv.par ? lv.par : 60) * m * g;
   }
 
   // 벽 모양. 판 크기(가로·세로 화면)가 달라도 비율로 놓는다
@@ -62,10 +78,13 @@
         v(x0, y0, y1); v(x1, y0, y1);
         break;
       }
-      case 'spiral':
-        ring(3, { right: near(cy, 1) });
-        ring(6, { left: near(cy, 1) });
+      case 'spiral': {
+        // 작은 판(쉬움 24×15)에서도 안쪽 고리가 한 줄 막다른 길이 되지 않게 판 크기에 맞춘다 (20칸 판은 예전과 같은 3·6)
+        const m = Math.min(C, R);
+        ring(Math.max(2, Math.round(m * 0.15)), { right: near(cy, 1) });
+        ring(Math.max(4, Math.round(m * 0.3)), { left: near(cy, 1) });
         break;
+      }
       case 'fort':
         ring(2, { top: near(cx, 1), bottom: near(cx, 1), left: near(cy, 1), right: near(cy, 1) });
         for (let x = cx - 2; x <= cx + 1; x++) for (let y = cy - 1; y <= cy; y++) set(x, y);
@@ -181,7 +200,7 @@
     W.fx.push({ kind: 'giant', x: h.x, y: h.y });
     // 라이벌은 겁먹고 도망간다 (사라졌다가 조금 뒤 다른 자리에서)
     const V = W.rival;
-    if (V && (V.phase === 'play' || V.phase === 'warn') && V.body.length) {
+    if (V && !V.boss && (V.phase === 'play' || V.phase === 'warn') && V.body.length) {
       W.fx.push({ kind: 'rivalOut', x: V.body[0].x, y: V.body[0].y, scared: true });
       V.phase = 'gone'; V.t = D.GIANT.time + D.GIANT.back; V.body = []; V.prev = [];
     }
@@ -251,6 +270,12 @@
       W.lv = levelDef(W.level);
       W.walls = buildWalls(W.lv.walls, C, R);
       W.goal = W.lv.goal; W.got = 0;
+      // 단계 별: 이 단계에서 움직인 시간 · 먹은 황금 구슬
+      W.lvT = 0; W.lvGolds = 0;
+      // 대왕 뱀 단계: 구슬 목표 대신 대왕 뱀 (라이벌 규칙을 그대로 쓴다)
+      W.boss = !!W.lv.boss;
+      if (W.boss) { W.goal = 1; W.rival = makeBoss(W); }
+      else W.rival = null;
     }
     const s = startSpot(W);
     if (W.lv && W.lv.portals) placePortals(W, W.lv.portals, s.y);
@@ -269,6 +294,7 @@
     // 캐릭터 특기: 판(레벨)마다 처음 몇 초 유령
     if (W.startGhost > 0) W.eff.ghost = W.startGhost;
     W.lastEat = -99; W.combo = 0; W.mult = 1;
+    W.justRevived = false;
     W.food = null;
     if (W.rival) resetRival(W);
     if (W.mode === 'stage') spaceStage(W);
@@ -347,18 +373,14 @@
     W.gifts = 0; W.giftCoins = 0; W.giftStart = []; W.lastGift = null; W.giftT = 0;
     W.fever = 0; W.fevers = 0; W.giants = 0; W.smashed = 0;
     W.rivalBites = 0; W.rivalWholes = 0; W.rivalCells = 0; W.hold = 0;   // 라이벌 냠냠 · 머리끼리 쿵 멈춤
+    W.bossWins = 0; W.boss = false; W.stars = []; W.lastStars = null;   // 대왕 뱀 · 단계 별 [{level, stars}]
+    W.continued = false; W.revives = 0;   // 한 번 더! (한 판에 한 번)
     // 라이벌 뱀: 무한 모드에만. 규칙용 난수는 따로 써서 내 판(먹이 자리)의 흐름을 흔들지 않는다
     W.rival = null;
+    W.rivalSeed = seed0;
     if (mode === 'endless' && opts.rival !== false) {
       const lvId = D.RIVAL.levels[opts.rivalLevel] ? opts.rivalLevel : W.diff;
-      const L = D.RIVAL.levels[lvId];
-      W.rival = {
-        level: lvId, rng: SN.rng(((seed0 >>> 0) * 2654435761 + 97) >>> 0),
-        speed: L.speed * adaptPow(W, 'rivalSpeed'), react: L.react * adaptPow(W, 'rivalReact'),
-        smart: Math.min(1, L.smart * adaptPow(W, 'rivalSmart')), wander: L.wander, clumsy: L.clumsy,
-        keepAway: L.keepAway, maxLen: L.maxLen, flee: L.flee || 0, fleeDist: L.fleeDist || 0,
-        met: false, eaten: 0, golds: 0, bumps: 0, passes: 0,
-      };
+      W.rival = makeRival(W, D.RIVAL.levels[lvId], lvId, 97);
     }
     setup(W);
     // 시작 아이템: 첫 레벨에만 효과를 켜 둔다 (출발 대기 동안은 줄지 않는다)
@@ -370,6 +392,26 @@
       W.startItems.push(it.id);
     }
     return W;
+  }
+
+  // 라이벌 뱀 하나 만들기 (무한 라이벌 · 스테이지 대왕 뱀이 같이 쓴다). L: 난이도별 수치
+  function makeRival(W, L, lvId, salt) {
+    return {
+      level: lvId, rng: SN.rng(((W.rivalSeed >>> 0) * 2654435761 + salt) >>> 0),
+      speed: L.speed * adaptPow(W, 'rivalSpeed'), react: L.react * adaptPow(W, 'rivalReact'),
+      smart: Math.min(1, L.smart * adaptPow(W, 'rivalSmart')), wander: L.wander, clumsy: L.clumsy,
+      keepAway: L.keepAway, maxLen: L.maxLen || 99, flee: L.flee || 0, fleeDist: L.fleeDist || 0,
+      met: false, eaten: 0, golds: 0, bumps: 0, passes: 0,
+    };
+  }
+  // 대왕 뱀: 라이벌 규칙 + 큰 몸 (full: 다 자란 길이, hp: 지금 자라야 할 길이)
+  function makeBoss(W) {
+    const B = D.BOSS, V = makeRival(W, B.levels[W.diff] || B.levels.normal, W.diff, 1000 + W.level);
+    V.boss = true; V.name = B.name;
+    V.full = Math.min(B.maxLen, B.len + ((W.lv.bossNo || 1) - 1) * B.lenPer);
+    V.maxLen = V.full; V.hp = V.full; V.regrowT = B.regrow; V.down = false;
+    V.need = V.full + B.needPlus; V.bitten = 0;   // 물어 먹어야 할 칸 수 (게이지)
+    return V;
   }
 
   // 초당 칸 수. 길어질수록 빨라지고 상한에서 멈춘다. 느린 시계를 먹으면 잠깐 느려진다
@@ -426,14 +468,26 @@
   // 방향 넣기. 같은 방향·정반대(내 몸으로 들어가기)·줄이 가득 찬 경우는 무시한다
   function turn(W, dir) {
     if (!DIRS[dir] || W.phase !== 'play') return false;
-    // 쉬움: 출발 전이면 지금 방향을 눌러도 출발 (옆 방향은 아래에서 꺾으며 출발, 정반대는 무시)
-    if (W.easy && W.wait > 0 && dir === W.dir) { W.wait = 0; return true; }
+    // 쉬움: 출발 전이면 지금 방향을 눌러도 출발 (옆 방향은 아래에서 꺾으며 출발).
+    // 정반대로 밀면 뱀을 앞뒤로 뒤집어 그쪽으로 출발한다 (처음 한 번은 어느 쪽으로 밀어도 간다)
+    if (W.easy && W.wait > 0 && !W.queue.length) {
+      if (dir === OPP[W.dir]) flipSnake(W);
+      if (dir === W.dir) { W.wait = 0; return true; }
+    }
     const last = W.queue.length ? W.queue[W.queue.length - 1] : W.dir;
     if (dir === last || dir === OPP[last]) return false;
     if (W.queue.length >= D.TURN_QUEUE) return false;
     W.queue.push(dir);
     W.wait = 0; // 방향을 넣으면 기다리지 않고 바로 출발
     return true;
+  }
+
+  // 뱀 앞뒤 뒤집기 (꼬리가 머리가 된다). 새 방향은 둘째 마디에서 머리 쪽 (판 끝을 넘은 마디도 맞게)
+  function flipSnake(W) {
+    W.snake.reverse(); W.prev = copy(W.snake);
+    const a = W.snake[0], b = W.snake[1];
+    W.dir = (b && stepDir(W, b, a)) || OPP[W.dir];
+    W.queue = [];
   }
 
   function die(W, cause) {
@@ -543,25 +597,18 @@
       }
       W.score += pts;
       W.lastPts = pts;
-      if (gold) W.golds++;
+      if (gold) { W.golds++; W.lvGolds = (W.lvGolds || 0) + 1; }
       if (W.mode !== 'stage') spaceAdvance(W);
       W.events.push(gold ? 'gold' : 'eat');
       W.fx.push({ kind: gold ? 'gold' : 'eat', x: nx, y: ny, pts });
-      if (W.mode === 'stage') W.got++;
+      if (W.mode === 'stage' && !W.boss) W.got++;
     }
     if (W.grow > 0) W.grow--; else W.snake.pop();
     W.maxLen = Math.max(W.maxLen, W.snake.length);
     if (W.item && W.item.x === nx && W.item.y === ny) { const it = W.item; W.item = null; usePower(W, it); }
     if (W.gift && W.gift.x === nx && W.gift.y === ny) openGift(W);
     if (eatBonus) { W.bonus = null; if (W.feverT > 0) spawnBonus(W); }
-    if (W.mode === 'stage' && W.got >= W.goal) {
-      // 레벨 깸: 잠깐 멈추고 다음 레벨로 (main.js가 clearTime 뒤 nextLevel을 부른다)
-      W.phase = 'clear'; W.clearT = 0; W.levelsCleared++;
-      W.score += D.STAGE.clearBonus * W.level;
-      W.prev = copy(W.snake); W.alpha = 0;
-      W.events.push('clear');
-      return;
-    }
+    if (W.mode === 'stage' && W.got >= W.goal) { clearLevel(W); return; }
     if (eatMain && !spawnFood(W)) {
       // 판을 가득 채웠다: 이긴 것으로 끝낸다
       W.phase = 'over';
@@ -569,6 +616,18 @@
       W.prev = copy(W.snake);
       W.events.push('win');
     }
+  }
+
+  // 레벨 깸: 잠깐 멈추고 다음 레벨로 (main.js가 clearTime 뒤 nextLevel을 부른다). 별도 여기서 센다
+  function clearLevel(W) {
+    W.phase = 'clear'; W.clearT = 0; W.levelsCleared++;
+    W.score += D.STAGE.clearBonus * W.level + (W.boss ? D.BOSS.bonus : 0);
+    W.prev = copy(W.snake); W.alpha = 0;
+    const par = parOf(W.lv, W.diff), fast = W.lvT <= par;
+    const stars = 1 + (fast ? 1 : 0) + (fast && W.lvGolds > 0 ? 1 : 0);
+    W.lastStars = { level: W.level, stars, time: W.lvT, par, golds: W.lvGolds };
+    W.stars.push({ level: W.level, stars });
+    W.events.push('clear');
   }
 
   // 스테이지: 다음 레벨 (점수·기록은 그대로, 뱀은 처음 길이로)
@@ -589,7 +648,10 @@
       W.fx.push({ kind: 'cool', x: W.food.x, y: W.food.y });
       W.events.push('cool');
     }
+    const hadGhost = W.eff.ghost > 0;
     for (const k in W.eff) W.eff[k] = Math.max(0, W.eff[k] - dt);
+    // 유령이 벽·내 몸 안에서 끝나면 바로 끝나 버린다: 머리가 나올 때까지 유령을 조금씩 잇는다
+    if (hadGhost && W.eff.ghost <= 0 && ghostStuck(W)) { W.eff.ghost = 0.05; W.ghostHeld = (W.ghostHeld || 0) + 1; }
     // 피버: 도는 동안 줄고, 끝나면 보너스 구슬도 사라진다. 쉬는 동안 게이지가 천천히 준다
     if (W.feverT > 0) { W.feverT -= dt; if (W.feverT <= 0) { W.feverT = 0; W.bonus = null; W.events.push('feverend'); } }
     else W.fever = Math.max(0, W.fever - D.FEVER.decay * dt);
@@ -612,6 +674,60 @@
     }
   }
 
+  // 머리가 벽 칸이나 내 몸 위에 있는가 (유령으로 들어간 채)
+  function ghostStuck(W) {
+    const h = W.snake[0], C = W.cols;
+    if (W.walls && W.walls[h.y * C + h.x]) return true;
+    for (let i = 1; i < W.snake.length; i++) if (W.snake[i].x === h.x && W.snake[i].y === h.y) return true;
+    return false;
+  }
+
+  // ─── 한 번 더! (한 판에 한 번) ──────────────────────────────
+  // 끝난 판을 되살릴 수 있나: 졌을 때(판을 다 채워 이긴 것 말고), 이번 판에 아직 안 썼으면
+  function canContinue(W) { return !!W && W.phase === 'over' && !W.won && !W.continued && W.mode !== 'classic'; }
+  // 되살리기: 길이 그대로, 잠깐 유령, 벽·판 끝·몸을 보지 않는 방향. 막혀 있으면 앞뒤를 뒤집어 본다
+  function revive(W) {
+    if (!canContinue(W)) return false;
+    W.continued = true; W.revives++;
+    W.phase = 'play'; W.cause = null;
+    W.queue = []; W.acc = 0; W.alpha = 0; W.hold = 0;
+    let dir = safeDir(W);
+    if (!dir) { flipSnake(W); dir = safeDir(W) || W.dir; }
+    W.dir = dir;
+    W.prev = copy(W.snake);
+    W.eff.ghost = Math.max(W.eff.ghost || 0, D.CONTINUE.ghost);
+    W.wait = W.easy ? Infinity : D.CONTINUE.wait;
+    W.justRevived = true;   // 출발 대기 글자를 "한 번 더!"로 (다음 단계 준비에서 지운다)
+    if (!W.food) spawnFood(W);
+    W.events.push('revive');
+    const h = W.snake[0];
+    W.fx.push({ kind: 'revive', x: h.x, y: h.y });
+    return true;
+  }
+  // 한 칸 앞이 안전하고(벽·판 끝·몸 아님) 갈 곳이 가장 넓은 방향. 지금 방향의 정반대는 빼고. 없으면 null
+  function safeDir(W) {
+    const C = W.cols, R = W.rows, h = W.snake[0];
+    const block = new Uint8Array(C * R);
+    for (let i = 1; i < W.snake.length; i++) block[W.snake[i].y * C + W.snake[i].x] = 1;
+    if (W.walls) for (let i = 0; i < block.length; i++) if (W.walls[i]) block[i] = 1;
+    const at = (x, y) => {
+      if (x < 0 || y < 0 || x >= C || y >= R) { if (!W.easy) return -1; x = (x + C) % C; y = (y + R) % R; }
+      return block[y * C + x] ? -1 : y * C + x;
+    };
+    let best = null, bestN = -1;
+    for (const k of ['right', 'left', 'down', 'up']) {
+      if (k === OPP[W.dir] && W.snake.length > 1) continue;
+      const c = at(h.x + DIRS[k][0], h.y + DIRS[k][1]);
+      if (c < 0) continue;
+      // 그 칸에서 막히지 않고 몇 칸 곧게 갈 수 있나 + 넓은 곳
+      let run = 0, x = h.x, y = h.y;
+      for (let j = 1; j <= 6; j++) { x += DIRS[k][0]; y += DIRS[k][1]; if (at(x, y) < 0) break; run++; if (!W.easy && (x < 0 || y < 0 || x >= C || y >= R)) break; x = (x + C) % C; y = (y + R) % R; }
+      const n = run * 10 + (k === W.dir ? 1 : 0);
+      if (n > bestN) { bestN = n; best = k; }
+    }
+    return best;
+  }
+
   // ─── 라이벌 뱀 (무한 모드) ─────────────────────────────────
   // W.rival: {phase: wait(아직) | warn(나오기 전 깜빡임) | play | gone(사라졌다가 다시 나올 때까지),
   //           body, prev, dir, acc, alpha, stun, t, target, eaten, golds, bumps(내게 부딪혀 멈칫), passes(쉬움: 내가 지나감), met(한 번이라도 나옴)}
@@ -623,6 +739,7 @@
     const V = W.rival;
     V.phase = 'wait'; V.body = []; V.prev = []; V.dir = 'right'; V.acc = 0; V.alpha = 0;
     V.stun = 0; V.t = 0; V.grow = 0; V.target = null; V.blocked = false;
+    V.since = W.time;   // 나오는 시각은 이 판(레벨)을 시작한 뒤로 센다
   }
 
   // (x, y)가 라이벌 몸인가. skipTail: 곧 빠질 꼬리 끝 칸은 빼고 (자랄 때·멈칫할 때는 꼬리가 안 빠진다)
@@ -637,7 +754,8 @@
 
   // 나올 자리 찾기: 몸 모든 칸이 비어 있고 내 머리에서 멀며, 앞 3칸도 비어 있고, 내게서 멀어지는 방향
   function spawnRival(W) {
-    const V = W.rival, C = W.cols, R = W.rows, len = D.RIVAL.len, h = W.snake[0];
+    const V = W.rival, C = W.cols, R = W.rows, h = W.snake[0];
+    const len = V.boss ? Math.min(V.hp, D.BOSS.start) : D.RIVAL.len;
     const used = new Uint8Array(C * R);
     for (const p of W.snake) used[p.y * C + p.x] = 1;
     if (W.walls) for (let i = 0; i < used.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) used[i] = 1;
@@ -659,7 +777,7 @@
       for (let i = 0; i < len; i++) V.body.push({ x: x - dx * i, y: y - dy * i });
       V.prev = copy(V.body); V.dir = dir; V.acc = 0; V.alpha = 0; V.stun = 0; V.grow = 0; V.target = null; V.blocked = false;
       V.phase = 'warn'; V.t = D.RIVAL.appear; V.met = true;
-      W.fx.push({ kind: 'rivalIn', x, y });
+      W.fx.push({ kind: V.boss ? 'bossIn' : 'rivalIn', x, y });
       W.events.push('rivalwarn');
       return true;
     }
@@ -687,6 +805,7 @@
       W.fx.push({ kind: 'headbump', x, y });
       return 'head';
     }
+    if (V.boss) return biteBoss(W, idx);
     const whole = idx < RV.minLen;
     const cells = whole ? B.length : B.length - idx;
     const gain = Math.min(RV.biteMax, cells);
@@ -708,9 +827,60 @@
     return 'bite';
   }
 
+  // 대왕 뱀 물기: 몸 가운데·꼬리 쪽(앞 minLen칸 뒤)을 물면 그 칸부터 꼬리까지 먹는다.
+  // 머리 쪽(앞 minLen칸)을 물면 머리부터 문 칸까지 먹고 다음 마디가 새 머리. 몸이 finish칸 이하면 통째로 (잠깐 사라졌다가 작게 다시).
+  // 물어 먹은 칸을 모두 더해 need칸이 되면 쓰러진다 (게이지). 쉬는 동안 몸이 다시 자라지만 먹은 칸은 줄지 않는다
+  function biteBoss(W, idx) {
+    const V = W.rival, B = V.body, BS = D.BOSS, RV = D.RIVAL;
+    const x = B[idx].x, y = B[idx].y;
+    const head = idx < BS.minLen, whole = head && B.length <= BS.finish;
+    const cells = whole ? B.length : head ? idx + 1 : B.length - idx;
+    const gain = Math.min(BS.growMax || RV.biteMax, Math.max(1, cells));   // 너무 길어져 방에 갇히지 않게 한 번에 조금만 길어진다
+    W.grow += gain;
+    W.rivalBites++; W.rivalCells += gain;
+    V.bitten = (V.bitten || 0) + cells;
+    const pts = gain * RV.bitePts * (W.feverT > 0 ? D.FEVER.mul : 1) * (W.eff && W.eff.double > 0 ? 2 : 1);
+    W.score += pts;
+    if (V.bitten >= V.need) {
+      V.down = true; V.phase = 'gone'; V.t = Infinity; V.body = []; V.prev = []; V.stun = 0; V.hp = 0;
+      W.bossWins++; W.got = W.goal;
+      W.events.push('bossdown');
+      W.fx.push({ kind: 'bossDown', x, y, n: gain, pts });
+      return 'whole';
+    }
+    if (whole) {
+      V.phase = 'gone'; V.t = D.RIVAL.back; V.body = []; V.prev = []; V.stun = 0; V.hp = BS.start;
+      W.events.push('biteall');
+      W.fx.push({ kind: 'biteAll', x, y, n: gain, pts, boss: true });
+      return 'whole';
+    }
+    if (head) {
+      V.body = B.slice(idx + 1); V.prev = V.prev.slice(idx + 1);
+      V.dir = stepDir(W, V.body[1] || V.body[0], V.body[0]) || V.dir;
+    } else { V.body = B.slice(0, idx); V.prev = V.prev.slice(0, idx); }
+    V.hp = V.body.length; V.grow = 0; V.regrowT = BS.regrow; V.target = null;
+    V.stun = Math.max(V.stun, BS.biteStun);
+    W.events.push('bite');
+    W.fx.push({ kind: 'bite', x, y, n: gain, pts, boss: true });
+    return 'bite';
+  }
+  // 대왕 뱀이 얼마나 남았나 (1 = 하나도 안 먹음, 0 = 쓰러짐). 대왕 뱀 단계가 아니면 null
+  function bossLeft(W) {
+    const V = W.rival;
+    if (!V || !V.boss) return null;
+    return V.down ? 0 : Math.max(0, 1 - (V.bitten || 0) / V.need);
+  }
+  // a에서 b로 한 칸 가는 방향 (판 끝을 넘은 칸도). 같은 칸이면 null
+  function stepDir(W, a, b) {
+    let dx = b.x - a.x, dy = b.y - a.y;
+    if (Math.abs(dx) > 1) dx = -Math.sign(dx);
+    if (Math.abs(dy) > 1) dy = -Math.sign(dy);
+    return dx > 0 ? 'right' : dx < 0 ? 'left' : dy > 0 ? 'down' : dy < 0 ? 'up' : null;
+  }
   // 한 칸 전진: 갈 수 있는 방향 중 (구슬 쪽 / 그냥 앞 / 아무 데) 하나. 내 머리 둘레는 피하고, 빈 곳이 넉넉한 쪽
   function rivalTick(W) {
     const V = W.rival, C = W.cols, R = W.rows, B = V.body, h = B[0];
+    if (V.boss) V.grow = Math.max(0, V.hp - B.length);   // 대왕 뱀: 자라야 할 길이까지 꼬리를 남긴다
     // 새 구슬은 react초 뒤에야 알아챈다 (그동안 아이가 먼저 갈 수 있다). 옛 자리에 닿으면 잊는다
     if (W.food && W.t - W.food.born >= V.react) V.target = { x: W.food.x, y: W.food.y };
     if (V.target && V.target.x === h.x && V.target.y === h.y) V.target = null;
@@ -790,6 +960,7 @@
       const cut = Math.max(0, Math.min(D.RIVAL.bumpShrink, B.length - D.RIVAL.minLen));
       for (let i = 0; i < cut; i++) B.pop();
       V.grow = 0; V.prev = copy(B);
+      if (V.boss) V.hp = B.length;
       W.events.push('bump');
       W.fx.push({ kind: 'bump', x: c.x, y: c.y, hx: h.x, hy: h.y, n: cut });
       return;
@@ -799,7 +970,8 @@
     if (eat) {
       V.eaten++;
       if (W.food.gold) V.golds++;
-      if (B.length < V.maxLen) V.grow++;
+      if (V.boss) V.hp = Math.min(V.full, V.hp + 1);
+      else if (B.length < V.maxLen) V.grow++;
       V.target = null;
       W.events.push('rivaleat');
       W.fx.push({ kind: 'rivalEat', x: c.x, y: c.y, gold: W.food.gold });
@@ -812,7 +984,12 @@
   function rivalStep(W, dt) {
     const V = W.rival;
     if (!V || W.phase !== 'play') return;
-    if (V.phase === 'wait') { if (W.time >= D.RIVAL.intro) spawnRival(W); return; }
+    if (V.phase === 'wait') { if (W.time - (V.since || 0) >= (V.boss ? D.BOSS.intro : D.RIVAL.intro)) spawnRival(W); return; }
+    if (V.boss && V.phase === 'play' && V.hp < V.full && !(V.stun > 0)) {
+      // 대왕 뱀은 쉬는 동안 천천히 다시 자란다
+      V.regrowT -= dt;
+      if (V.regrowT <= 0) { V.hp++; V.regrowT = D.BOSS.regrow; }
+    }
     if (V.phase === 'gone') { V.t -= dt; if (V.t <= 0) spawnRival(W); return; }
     if (V.phase === 'warn') { V.t -= dt; if (V.t <= 0) { V.phase = 'play'; V.acc = 0; V.shownAt = W.time; W.events.push('rival'); } return; }
     if (V.stun > 0) {
@@ -833,7 +1010,7 @@
 
   // 판이 끝났을 때 라이벌과 비교 (라이벌이 한 번도 안 나왔으면 null). diff > 0 이면 내가 더 먹었다
   function rivalResult(W) {
-    if (!W.rival || !W.rival.met) return null;
+    if (!W.rival || !W.rival.met || W.rival.boss) return null;
     // 내가 먹은 것 = 구슬 + 라이벌에게서 물어 먹은 칸 (rivalWin도 이것으로)
     const me = W.eaten + (W.rivalCells || 0);
     return { me, rival: W.rival.eaten, diff: me - W.rival.eaten, bumps: W.rival.bumps, bites: W.rivalBites || 0, wholes: W.rivalWholes || 0 };
@@ -846,7 +1023,7 @@
       len: W.maxLen, golds: W.golds, orbs: W.eaten, planet: W.space.max,
       level: W.mode === 'stage' && W.levelsCleared > 0 ? W.startLevel + W.levelsCleared - 1 : 0,
       rivalWin: r && r.diff > 0 ? 1 : 0,
-      gifts: W.gifts, fevers: W.fevers, giants: W.giants, rivalBites: W.rivalBites,
+      gifts: W.gifts, fevers: W.fevers, giants: W.giants, rivalBites: W.rivalBites, bossWins: W.bossWins || 0,
     };
   }
   // 알아서 맞춰 주는 난이도: 이번 판이 그 난이도 기준으로 얼마나 잘했나 (1이 보통, HUB.adaptRun이 0~3으로 자른다)
@@ -867,6 +1044,9 @@
       W.wait = 0;
     }
     W.time += dt;
+    if (W.mode === 'stage') W.lvT = (W.lvT || 0) + dt;
+    // 먹이를 놓을 빈 칸이 없었으면 (라이벌이 먹은 뒤 등) 자리가 날 때마다 다시 놓아 본다
+    if (!W.food && !W.won) spawnFood(W);
     timers(W, dt);
     W.acc += dt;
     if (W.hold > 0) { W.hold = Math.max(0, W.hold - dt); W.acc = 0; }   // 머리끼리 쿵: 잠깐 멈춤
@@ -896,8 +1076,8 @@
         const c = st.pop(); n++;
         const x = c % cols, y = (c - x) / cols;
         for (const k in DIRS) {
-          const ax = x + DIRS[k][0], ay = y + DIRS[k][1];
-          if (ax < 0 || ay < 0 || ax >= cols || ay >= rows) continue;
+          let ax = x + DIRS[k][0], ay = y + DIRS[k][1];
+          if (ax < 0 || ay < 0 || ax >= cols || ay >= rows) { if (!W.easy) continue; ax = (ax + cols) % cols; ay = (ay + rows) % rows; }   // 쉬움은 판 끝을 넘는다
           const j = ay * cols + ax;
           if (!seen[j] && !block[j]) { seen[j] = 1; st.push(j); }
         }
@@ -905,13 +1085,32 @@
       return n;
     };
     const need = W.snake.length + 2;
+    // 대왕 뱀 단계: 구슬 대신 대왕 뱀 꼬리를 쫓는다
+    const V = W.rival, goal = V && V.boss && V.phase === 'play' && V.body.length ? V.body[V.body.length - 1] : W.food;
+    // 목표까지 벽을 돌아가는 길이 (막힌 칸은 못 지나감). 못 가면 곧은 거리 + 큰 값
+    const dist = new Int16Array(cols * rows).fill(-1);
+    if (goal) {
+      const q = [goal.y * cols + goal.x];
+      dist[q[0]] = 0;
+      for (let qi = 0; qi < q.length; qi++) {
+        const c = q[qi], x = c % cols, y = (c - x) / cols;
+        for (const k in DIRS) {
+          let ax = x + DIRS[k][0], ay = y + DIRS[k][1];
+          if (ax < 0 || ay < 0 || ax >= cols || ay >= rows) { if (!W.easy) continue; ax = (ax + cols) % cols; ay = (ay + rows) % rows; }
+          const j = ay * cols + ax;
+          if (dist[j] < 0 && !block[j]) { dist[j] = dist[c] + 1; q.push(j); }
+        }
+      }
+    }
     let best = null, bestScore = -Infinity;
     for (const k in DIRS) {
       if (k === OPP[W.dir]) continue;
-      const nx = h.x + DIRS[k][0], ny = h.y + DIRS[k][1];
-      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows || block[ny * cols + nx]) continue;
+      let nx = h.x + DIRS[k][0], ny = h.y + DIRS[k][1];
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) { if (!W.easy) continue; nx = (nx + cols) % cols; ny = (ny + rows) % rows; }
+      if (block[ny * cols + nx]) continue;
       const room = reach(nx, ny, need);
-      const f = W.food ? Math.abs(W.food.x - nx) + Math.abs(W.food.y - ny) : 0;
+      const dj = dist[ny * cols + nx];
+      const f = !goal ? 0 : dj >= 0 ? dj : 200 + Math.abs(goal.x - nx) + Math.abs(goal.y - ny);
       const s = (room >= need ? 1000 : room * 10) - f + (k === W.dir ? 0.5 : 0);
       if (s > bestScore) { bestScore = s; best = k; }
     }
@@ -921,8 +1120,11 @@
   // 앞길 위험 살피기 (그리기용 경고): 지금 방향(줄 선 방향이 있으면 그 방향)으로 max칸 안에
   // 부딪히면 끝나는 칸(벽·판 끝·내 몸)이 있으면 (라이벌 몸은 물어 먹는 것이라 위험이 아니다) {dist, x, y, cause}, 없으면 null.
   // 몸은 그 칸에 닿을 때쯤 꼬리가 빠져 있으면 위험이 아니다. 유령일 때는 늘 null
+  // 유령이 곧 끝나면(GHOST_WARN초 안) 다시 살핀다 (ghostEnd: true). 포털로 들어가면 나오는 쪽에서 이어 살핀다
   function dangerAhead(W, max) {
-    if (!W || W.phase !== 'play' || (W.eff && W.eff.ghost > 0)) return null;
+    if (!W || W.phase !== 'play') return null;
+    const gh = W.eff && W.eff.ghost > 0 ? W.eff.ghost : 0;
+    if (gh > (D.GHOST_WARN || 0)) return null;
     let dir = W.dir;
     if (W.queue.length && W.queue[0] !== OPP[W.dir]) dir = W.queue[0];
     const [dx, dy] = DIRS[dir], C = W.cols, R = W.rows, n = W.snake.length;
@@ -930,12 +1132,14 @@
     for (let k = 1; k <= (max || 3); k++) {
       x += dx; y += dy;
       if (x < 0 || y < 0 || x >= C || y >= R) {
-        if (!W.easy) return { dist: k, x: Math.max(0, Math.min(C - 1, x)), y: Math.max(0, Math.min(R - 1, y)), cause: 'edge' };
+        if (!W.easy) return Object.assign({ dist: k, x: Math.max(0, Math.min(C - 1, x)), y: Math.max(0, Math.min(R - 1, y)), cause: 'edge' }, gh > 0 ? { ghostEnd: true } : {});
         x = (x + C) % C; y = (y + R) % R;
       }
-      if (W.walls && W.walls[y * C + x] && !(W.eff && W.eff.giant > 0)) return { dist: k, x, y, cause: 'wall' };
-      if (W.portalAt && W.portalAt[y * C + x] >= 0) return null;   // 포털 너머는 살피지 않는다
-      for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return { dist: k, x, y, cause: 'self' };
+      const out = cause => (gh > 0 ? { dist: k, x, y, cause, ghostEnd: true } : { dist: k, x, y, cause });
+      if (W.walls && W.walls[y * C + x] && !(W.eff && W.eff.giant > 0)) return out('wall');
+      const pid = W.portalAt ? W.portalAt[y * C + x] : -1;
+      if (pid >= 0) { const P = W.portals[pid]; const to = P.a.x === x && P.a.y === y ? P.b : P.a; x = to.x; y = to.y; }
+      for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return out('self');
     }
     return null;
   }
@@ -954,9 +1158,11 @@
       // 재미 셋: 선물 상자 · 선물 코인 · 다음 판 시작 아이템 선물 · 피버 · 거대 뱀
       rivalBites: W.rivalBites, rivalWholes: W.rivalWholes, rivalCells: W.rivalCells,
       gifts: W.gifts, giftCoins: W.giftCoins, giftStart: W.giftStart.slice(), fevers: W.fevers, giants: W.giants,
-      rivalMet: !!(W.rival && W.rival.met), rivalEaten: W.rival ? W.rival.eaten : 0,
+      rivalMet: !!(W.rival && W.rival.met && !W.rival.boss), rivalEaten: W.rival && !W.rival.boss ? W.rival.eaten : 0,
+      // 대왕 뱀 · 단계 별 · 한 번 더
+      bossWins: W.bossWins || 0, stars: (W.stars || []).slice(), revives: W.revives || 0,
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, skyStartOf, skyNext, diffOf, spawnGift, openGift, startFever, startGiant, biteRival, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, parOf, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, skyStartOf, skyNext, diffOf, spawnGift, openGift, startFever, startGiant, biteRival, bossLeft, canContinue, revive, safeDir, ghostStuck, flipSnake, DIRS, OPP };
 })(SN);

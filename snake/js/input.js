@@ -32,18 +32,25 @@
       S.swipe = { dir, x, y, t: performance.now() };
       if (S.onDir) S.onDir(dir, touch);
     }
+    // 손바닥 무시: 닿은 면적이 크면(SN.DATA.SWIPE.palm px 넘게) 손바닥이나 쥔 손으로 보고 따라가지 않는다
+    const SW = (SN.DATA && SN.DATA.SWIPE) || {};
+    const palm = e => e.pointerType === 'touch' && SW.palm > 0 && ((e.width || 0) > SW.palm || (e.height || 0) > SW.palm);
     el.addEventListener('pointerdown', e => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (palm(e)) return;
       S.used = S.used || e.pointerType !== 'mouse';
       const p = local(e);
-      ptrs.set(e.pointerId, { ox: p.x, oy: p.y, sx: p.x, sy: p.y, last: null, turned: false, touch: e.pointerType !== 'mouse' });
+      ptrs.set(e.pointerId, { ox: p.x, oy: p.y, sx: p.x, sy: p.y, last: null, turned: false, touch: e.pointerType !== 'mouse', t0: performance.now() });
       try { el.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
     });
     el.addEventListener('pointermove', e => {
       const s = ptrs.get(e.pointerId);
       if (!s) return;
+      if (palm(e)) { ptrs.delete(e.pointerId); return; }   // 누르다가 손바닥이 닿으면 그 손가락은 그만 본다
       const p = local(e), dx = p.x - s.ox, dy = p.y - s.oy;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < S.threshold) return;
+      // 다른 손가락이 함께 화면에 있고 이 손가락이 한참 가만히 있었으면(쥔 손) 조금 더 밀어야 꺾인다. 한 손가락으로 미는 것은 그대로
+      const rest = ptrs.size > 1 && !s.turned && performance.now() - s.t0 > (SW.restAfter || 0.5) * 1000;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < S.threshold * (rest ? SW.restMul || 1 : 1)) return;
       s.ox = p.x; s.oy = p.y;
       fire(s, axis(dx, dy), p.x, p.y, s.touch);
     });
