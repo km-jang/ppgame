@@ -1021,7 +1021,7 @@
     }
     // 부스트: 화면 가장자리가 노랗게
     if (W.eff.boost > 0) { ctx.fillStyle = 'rgba(255,230,109,' + (0.05 + Math.min(1, W.eff.boost) * 0.04).toFixed(3) + ')'; ctx.fillRect(0, 0, v.w, v.h); }
-    if (v.hud !== false) { drawBanner(ctx, v, L); drawHud(ctx, W, v); drawIntro(ctx, W, v, L); drawSwipe(ctx, W, v); }
+    if (v.hud !== false) { if (W.phase === 'play') drawBanner(ctx, v, L); drawHud(ctx, W, v); drawIntro(ctx, W, v, L); drawSwipe(ctx, W, v); }
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)

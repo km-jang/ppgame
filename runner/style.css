@@ -288,18 +288,6 @@ body.touch .text-btn { padding: 10px 16px; }
 /* 낮은 가로 화면(작은 탭·가로 폰): 시작 화면을 두 칸으로 */
 @media (max-height: 600px) and (orientation: landscape) {
   .screen { padding: 10px 16px; }
-  #scr-title .panel {
-    max-width: 760px;
-    display: grid; grid-template-columns: 1fr 1fr; column-gap: 26px;
-    align-items: center; text-align: left;
-    padding: 20px 24px;
-  }
-  #scr-title .logo { font-size: 46px; grid-column: 1; grid-row: 1; }
-  #scr-title .tagline { grid-column: 1; grid-row: 2; margin-bottom: 6px; }
-  #scr-title .best { grid-column: 1; grid-row: 3; margin-bottom: 10px; }
-  #scr-title .level-seg { grid-column: 1; grid-row: 4; margin-bottom: 10px; }
-  #scr-title .modes { grid-column: 1; grid-row: 5; gap: 10px; }
-  #scr-title .help { grid-column: 2; grid-row: 1 / span 5; margin: 0; }
   .level-seg button { min-height: 48px; padding: 4px; } .level-seg b { font-size: 18px; }
   .modes .big-btn { padding: 11px; font-size: 21px; }
   #medal-list { gap: 6px; margin-bottom: 8px; }
@@ -308,7 +296,6 @@ body.touch .text-btn { padding: 10px 16px; }
   #scr-medals .sub { margin-bottom: 8px; font-size: 13px; } #scr-medals h2 { font-size: 24px; }
   #scr-medals .big-btn { padding: 9px; font-size: 18px; }
   .panel.wide { padding: 16px 20px; }
-  #scr-title .pc-line { display: none; }
   .score-big { font-size: 48px; }
   .stats { margin: 12px 0 14px; }
 }
@@ -332,3 +319,197 @@ body.touch .text-btn { padding: 10px 16px; }
 @media (max-width: 420px) { .logo .space { display: none; } }
 .help .glyphs { gap: 2px; }
 .help .glyphs .i { width: 16px; height: 16px; }
+
+
+/* ═══ 상점 · 미션 · 코인 (2026-09-27, 뿅뿅 우주선과 같은 모양) ═══════════ */
+.cn {
+  display: inline-block; flex: none; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px;
+  background: radial-gradient(circle at 38% 32%, #fff4c2 0%, #ffd23f 45%, #b37a00 100%);
+  box-shadow: 0 0 6px rgba(255, 210, 63, .55), inset 0 0 0 1.5px rgba(120, 70, 0, .35);
+}
+.coin-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px; background: rgba(255, 210, 63, .12); font: 700 18px var(--num); color: #ffd23f; letter-spacing: .5px; }
+.coin-pill.big { font-size: 24px; padding: 4px 14px; }
+.coin-pill.big .cn { width: 16px; height: 16px; }
+
+/* 시작 화면: 두 칸 */
+#scr-title .panel.tpanel { max-width: 900px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 26px; align-items: start; text-align: left; }
+.t-left, .t-right { min-width: 0; display: flex; flex-direction: column; }
+.tpanel .tagline { margin-bottom: 8px; }
+.tpanel .best { margin-bottom: 12px; }
+.tpanel .level-seg { margin-bottom: 10px; }
+.tpanel .help { margin: 14px 0 0; gap: 5px; font-size: 13px; }
+.loadout-line { margin: 0 0 8px; font-size: 13px; color: #9dffcb; }
+.loadout-line:empty { display: none; }
+.t-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.t-row .mini-btn { min-height: 48px; padding: 6px 8px; font-size: 15px; }
+.shop-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 8px 10px;
+  border: 1px solid rgba(94, 231, 255, .5); border-radius: 12px; cursor: pointer; color: var(--text);
+  background: linear-gradient(180deg, rgba(94, 231, 255, .16), rgba(94, 231, 255, .04));
+  font: normal 17px var(--disp); letter-spacing: .5px; transition: transform .08s, border-color .15s;
+}
+.shop-btn .i { width: 20px; height: 20px; color: var(--cyan); }
+.shop-btn .coin-pill { font-size: 16px; padding: 1px 8px; }
+.shop-btn:active, .ship-card:active { transform: scale(.97); }
+.shop-btn:focus-visible, .ship-card:focus-visible, .tabs button:focus-visible, .buy:focus-visible, .use:focus-visible, .claim:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+/* 내 우주선 칸 */
+.ship-card {
+  display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 10px;
+  min-height: 64px; margin: 0 0 10px; padding: 6px 10px 6px 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 14px; background: rgba(94, 231, 255, .05);
+  color: var(--text); font: inherit; text-align: left; transition: transform .08s, border-color .15s;
+}
+.ship-card:hover { border-color: var(--cyan); }
+.ship-cv { width: 64px; height: 64px; display: block; }
+.sc-txt { min-width: 0; }
+.sc-txt small { display: block; font-size: 11px; color: var(--muted); }
+.sc-txt b { display: block; font: normal 21px/1.15 var(--disp); letter-spacing: .5px; }
+.sc-txt em { display: block; font-style: normal; font-size: 12px; line-height: 1.3; color: var(--muted); word-break: keep-all; }
+.sc-go { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font: normal 14px var(--disp); color: var(--cyan); white-space: nowrap; }
+
+/* 미션 카드 (시작 화면·게임 오버) */
+.mcard { display: flex; flex-direction: column; gap: 7px; padding: 8px 12px 10px; border: 1px solid rgba(255, 210, 63, .3); border-radius: 14px; background: rgba(255, 210, 63, .04); text-align: left; }
+.mc-head { margin: 0; font: normal 14px var(--disp); letter-spacing: .5px; color: #ffd23f; }
+.mrow { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "txt rew" "bar num"; column-gap: 10px; row-gap: 3px; align-items: center; font-size: 13px; }
+.m-txt { grid-area: txt; min-width: 0; word-break: keep-all; line-height: 1.3; }
+.m-rew { grid-area: rew; display: inline-flex; align-items: center; gap: 4px; font: 700 15px var(--num); color: #ffd23f; }
+.m-bar { grid-area: bar; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.m-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ffb703, #ffd23f); transition: width .6s var(--ease); }
+.m-num { grid-area: num; font: 600 12px var(--num); color: var(--muted); white-space: nowrap; }
+.mrow.done .m-bar i { background: linear-gradient(90deg, #3dff8b, #b6ff5c); }
+.mrow.done .m-txt { color: #b6ffd2; }
+.claim {
+  grid-area: rew; display: inline-flex; align-items: center; gap: 5px; min-height: 44px; padding: 4px 14px; cursor: pointer;
+  border: none; border-radius: 10px; font: normal 15px var(--disp); color: #2a1c00;
+  background: linear-gradient(180deg, #fff1a8, #ffcf3a); box-shadow: 0 3px 0 #9a6a00, 0 0 16px rgba(255, 207, 58, .55);
+  animation: claimGlow 1s ease-in-out infinite alternate;
+}
+.claim:active { transform: translateY(2px); box-shadow: 0 1px 0 #9a6a00; }
+@keyframes claimGlow { to { box-shadow: 0 3px 0 #9a6a00, 0 0 26px rgba(255, 207, 58, .9); } }
+.mrow.fresh { animation: pop .55s var(--back) both; }
+.coin-pop {
+  position: fixed; z-index: 30; transform: translate(-50%, 0); pointer-events: none;
+  font: 700 26px var(--num); color: #ffd23f; text-shadow: 0 0 12px rgba(255, 210, 63, .8);
+  animation: coinUp 1s var(--ease) forwards;
+}
+@keyframes coinUp { from { opacity: 1; transform: translate(-50%, 0) scale(1.2); } to { opacity: 0; transform: translate(-50%, -60px) scale(1); } }
+
+/* 상점 */
+.panel.spanel { max-width: 1000px; }
+.shop-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.shop-head h2 { margin: 0; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+.tabs button {
+  min-height: 48px; padding: 8px; cursor: pointer; border: 1px solid var(--line); border-radius: 12px;
+  background: transparent; color: var(--muted); font: normal 17px var(--disp); letter-spacing: .5px;
+}
+.tabs button[aria-selected="true"] { color: var(--cyan); border-color: var(--cyan); background: rgba(94, 231, 255, .14); }
+.shop-sub { margin: 0 0 10px; font-size: 13px; }
+.shop-list { display: grid; gap: 10px; margin-bottom: 14px; text-align: left; }
+.shop-list.t-skins { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.shop-list.t-up, .shop-list.t-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sitem { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(94, 231, 255, .04); min-width: 0; }
+.sitem.skin { --sc: var(--cyan); display: grid; grid-template-columns: 64px 1fr; grid-template-areas: "cv name" "cv desc" "btn btn"; column-gap: 10px; row-gap: 4px; align-items: start; }
+.sitem.skin .ship-cv { grid-area: cv; }
+.sitem.skin .s-name { grid-area: name; color: var(--sc); }
+.sitem.skin .s-desc { grid-area: desc; }
+.sitem.skin > button, .sitem.skin > .maxed { grid-area: btn; }
+.sitem.cur { border-color: var(--sc); box-shadow: 0 0 18px color-mix(in srgb, var(--sc) 35%, transparent); background: color-mix(in srgb, var(--sc) 8%, transparent); }
+.sitem.locked .ship-cv { filter: saturate(.35) brightness(.7); }
+.s-name { font: normal 18px var(--disp); letter-spacing: .5px; }
+.s-name small { font: 700 13px var(--num); color: var(--muted); margin-left: 4px; }
+.s-desc { font-size: 12px; color: var(--muted); line-height: 1.35; word-break: keep-all; }
+.sitem.row { flex-direction: row; align-items: center; gap: 12px; }
+.s-icon {
+  flex: none; display: grid; place-items: center; width: 48px; height: 48px; color: var(--cyan);
+  clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%);
+  background: radial-gradient(circle at 50% 35%, rgba(94, 231, 255, .3), rgba(94, 231, 255, .06));
+}
+.s-icon .i { width: 24px; height: 24px; }
+.s-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pips { display: flex; gap: 3px; margin-top: 2px; }
+.pips i { width: 16px; height: 6px; border-radius: 2px; background: rgba(255, 255, 255, .12); transform: skewX(-20deg); }
+.pips i.on { background: var(--cyan); box-shadow: 0 0 6px rgba(94, 231, 255, .6); }
+.buy, .use {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 96px; padding: 6px 14px; cursor: pointer;
+  border: none; border-radius: 10px; font: 700 18px var(--num); letter-spacing: .5px; color: #2a1c00;
+  background: linear-gradient(180deg, #fff1a8, #ffcf3a); box-shadow: 0 3px 0 #9a6a00;
+}
+.buy .cn { box-shadow: none; }
+.buy.poor { color: #8a7a55; background: linear-gradient(180deg, #4a4330, #2f2a1e); box-shadow: 0 3px 0 #1a170f; }
+.use { font: normal 16px var(--disp); color: #06303a; background: linear-gradient(180deg, #b8f7ff, #4fdcf5); box-shadow: 0 3px 0 #0a5566; }
+.buy:active, .use:active { transform: translateY(2px); box-shadow: none; }
+.maxed { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 96px; padding: 6px 12px; border-radius: 10px; border: 1px dashed var(--line); font: normal 15px var(--disp); color: var(--muted); }
+.maxed:empty { display: none; }
+.maxed.on { border-style: solid; border-color: var(--sc); color: var(--sc); }
+#scr-shop .big-btn { max-width: 360px; margin: 0 auto; }
+
+/* 게임 오버: 두 칸 */
+#scr-over .panel.opanel { max-width: 860px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; align-items: center; }
+.o-left, .o-right { min-width: 0; }
+.o-right { display: flex; flex-direction: column; }
+.o-right .new-medals { margin: 10px 0 0; }
+.o-right .big-btn { margin-top: 12px; }
+.o-left .chips { margin: 0; }
+.coin-earn { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 12px; margin-bottom: 10px; padding: 10px 14px; border: 1px solid rgba(255, 210, 63, .45); border-radius: 14px; background: linear-gradient(180deg, rgba(255, 210, 63, .12), rgba(255, 210, 63, .03)); text-align: left; }
+.ce-head { display: inline-flex; align-items: center; gap: 6px; font: normal 15px var(--disp); color: #ffe9a8; }
+#over-coins { justify-self: end; font: 700 40px/1 var(--num); color: #ffd23f; text-shadow: 0 0 14px rgba(255, 210, 63, .5); }
+#over-coins.done { animation: pop .45s var(--back); }
+.ce-parts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--muted); }
+.ce-parts b { font: 700 14px var(--num); color: #ffe9a8; }
+
+/* 좁은 화면 (세로 폰): 한 칸으로 */
+@media (max-width: 700px) {
+  #scr-title .panel.tpanel, #scr-over .panel.opanel { grid-template-columns: 1fr; }
+  .o-right { margin-top: 12px; }
+  .shop-list.t-skins, .shop-list.t-up, .shop-list.t-items { grid-template-columns: 1fr; }
+}
+@media (min-width: 701px) and (max-width: 900px) {
+  .shop-list.t-skins { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 낮은 가로 화면 (탭 A 계열 893×533 · 가로 폰): 촘촘하게 */
+@media (max-height: 600px) and (orientation: landscape) {
+  #scr-title .panel.tpanel { column-gap: 20px; padding: 14px 18px; }
+  #scr-title .tpanel .logo { font-size: 42px; margin-bottom: 2px; }
+  .tpanel .tagline { font-size: 15px; margin-bottom: 2px; }
+  .tpanel .best { font-size: 15px; margin-bottom: 6px; }
+  .ship-card { grid-template-columns: 48px 1fr auto; min-height: 52px; padding: 4px 8px 4px 4px; margin-bottom: 6px; }
+  .ship-card .ship-cv { width: 48px; height: 48px; }
+  .sc-txt b { font-size: 18px; }
+  .sc-txt em { font-size: 11px; }
+  .mcard { gap: 4px; padding: 6px 10px 8px; }
+  .mrow { font-size: 12px; row-gap: 2px; }
+  .mc-head { font-size: 13px; }
+  .tpanel .level-seg { margin-bottom: 6px; }
+  #scr-title .tpanel .big-btn { padding: 10px; font-size: 20px; }
+  .t-row { margin-top: 8px; }
+  .t-row .mini-btn, .shop-btn { min-height: 44px; font-size: 15px; padding: 4px 8px; }
+  #scr-title .tpanel .help { margin: 8px 0 0; font-size: 12px; gap: 2px; }
+  #scr-title .pc-line { display: none; }
+  .panel.spanel { padding: 12px 16px; }
+  .shop-head { margin-bottom: 6px; }
+  .shop-head h2 { font-size: 24px; }
+  .coin-pill.big { font-size: 20px; }
+  .tabs button { min-height: 44px; padding: 4px; font-size: 15px; }
+  .shop-sub { margin-bottom: 6px; font-size: 12px; }
+  .shop-list { gap: 6px; margin-bottom: 8px; }
+  .sitem { padding: 6px 8px; gap: 4px; }
+  .sitem.skin { grid-template-columns: 44px 1fr auto; grid-template-areas: "cv name btn" "cv desc btn"; column-gap: 8px; row-gap: 2px; align-items: center; }
+  .sitem.skin .ship-cv { width: 44px; height: 44px; }
+  .buy, .use, .maxed { min-width: 76px; font-size: 16px; padding: 4px 10px; }
+  .s-name { font-size: 16px; }
+  .s-desc { font-size: 11px; line-height: 1.25; }
+  .s-icon { width: 40px; height: 40px; }
+  #scr-shop .big-btn { padding: 8px; font-size: 18px; }
+  #scr-over .panel.opanel { padding: 12px 16px; column-gap: 16px; }
+  #scr-over h2 { font-size: 28px; }
+  .coin-earn { padding: 6px 10px; margin-bottom: 6px; }
+  #over-coins { font-size: 30px; }
+  .o-right .big-btn { margin-top: 8px; padding: 10px; font-size: 20px; }
+  #scr-over .text-btn { margin-top: 4px; padding: 6px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .claim, .mrow.fresh, .coin-pop, #over-coins.done { animation: none !important; }
+}
