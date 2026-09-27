@@ -32,6 +32,7 @@
     <symbol id="i-wall" viewBox="0 0 24 24"><path d="M3 5h18v4H3zm0 5h8v4H3zm9 0h9v4h-9zM3 15h18v4H3z"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
     <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 2h2v20H5zm3 1h11l-2.5 4L19 11H8z"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M2 3h3.2l.7 3H21a1 1 0 0 1 1 1.2l-1.4 7A2 2 0 0 1 18.6 16H8.4a2 2 0 0 1-2-1.6L4.4 5H2zm7 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></symbol>
   </svg>
 
@@ -42,29 +43,56 @@
   </div>
   <div id="toast" role="status"></div>
 
-  <!-- 시작 화면 -->
+  <!-- 시작 화면: 가로 화면은 두 칸 (왼쪽 로고·난이도·시작·상점 / 오른쪽 미션·도움말) -->
   <section id="scr-title" class="screen">
-    <div class="panel">
-      <h1 class="logo ko">냠냠 <span>뱀</span></h1>
-      <p class="tagline">구슬을 먹으면 쭉쭉 길어져요</p>
-      <p id="best" class="best"></p>
-      <div class="level-seg" role="group" aria-label="난이도">
-        <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>느리게 · 벽 통과</small></button>
-        <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>빠르게 · 벽 조심</small></button>
+    <div class="panel tpanel">
+      <div class="t-left">
+        <h1 class="logo ko">냠냠 <span>뱀</span></h1>
+        <p class="tagline">구슬을 먹으면 쭉쭉 길어져요</p>
+        <p id="best" class="best"></p>
+        <div class="level-seg" role="group" aria-label="난이도">
+          <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>느리게 · 벽 통과</small></button>
+          <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>빠르게 · 벽 조심</small></button>
+        </div>
+        <div class="modes">
+          <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>그냥 놀기</span> <kbd class="only-pc">Enter</kbd></button>
+          <button id="btn-stage" class="big-btn pink"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg><span>스테이지</span> <b id="stage-tag" class="tag"></b></button>
+        </div>
+        <p id="loadout-line" class="loadout-line"></p>
+        <div class="t-row">
+          <button id="btn-shop" type="button" class="shop-btn"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg><span>상점</span><span class="coin-pill"><i class="cn" aria-hidden="true"></i><b id="coin-count">0</b></span></button>
+          <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
+        </div>
       </div>
-      <div class="modes">
-        <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>그냥 놀기</span> <kbd class="only-pc">Enter</kbd></button>
-        <button id="btn-stage" class="big-btn pink"><svg class="i" aria-hidden="true"><use href="#i-flag"/></svg><span>스테이지</span> <b id="stage-tag" class="tag"></b></button>
-        <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
+      <div class="t-right">
+        <div id="title-missions" class="mcard"></div>
+        <ul class="help">
+          <li><svg class="i" aria-hidden="true"><use href="#i-swipe"/></svg><span><b class="only-touch">화면을 밀어서</b><b class="only-pc">방향키로</b> 방향 바꾸기</span></li>
+          <li><svg class="i pink" aria-hidden="true"><use href="#i-orb"/></svg><span><b>구슬</b> 먹으면 길어져요</span></li>
+          <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>황금 구슬</b> 빨리 먹으면 큰 점수</span></li>
+          <li><svg class="i red" aria-hidden="true"><use href="#i-wall"/></svg><span><b class="danger">위험! 피해요</b> 빨간 줄무늬 벽 · 내 몸 · (보통) 빨간 테두리</span></li>
+          <li><span class="glyphs"><i style="color:#7fd3ff">◷</i><i style="color:#ffe66d">×2</i><i style="color:#c7a6ff">◌</i><i style="color:#3dff8b">✂</i></span><span><b>아이템</b> 모두 좋은 것, 먹어도 돼요</span></li>
+        </ul>
+        <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
       </div>
-      <ul class="help">
-        <li><svg class="i" aria-hidden="true"><use href="#i-swipe"/></svg><span><b class="only-touch">화면을 밀어서</b><b class="only-pc">방향키로</b> 방향 바꾸기</span></li>
-        <li><svg class="i pink" aria-hidden="true"><use href="#i-orb"/></svg><span><b>구슬</b> 먹으면 길어져요</span></li>
-        <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>황금 구슬</b> 빨리 먹으면 큰 점수</span></li>
-        <li><svg class="i red" aria-hidden="true"><use href="#i-wall"/></svg><span><b class="danger">위험! 피해요</b> 빨간 줄무늬 벽 · 내 몸 · (보통) 빨간 테두리</span></li>
-        <li><span class="glyphs"><i style="color:#7fd3ff">◷</i><i style="color:#ffe66d">×2</i><i style="color:#c7a6ff">◌</i><i style="color:#3dff8b">✂</i></span><span><b>아이템</b> 모두 좋은 것, 먹어도 돼요</span></li>
-      </ul>
-      <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
+    </div>
+  </section>
+
+  <!-- 상점: 꾸미기 · 강화 · 시작 아이템 -->
+  <section id="scr-shop" class="screen">
+    <div class="panel wide spanel">
+      <div class="shop-head">
+        <h2>상점</h2>
+        <span class="coin-pill big"><i class="cn" aria-hidden="true"></i><b id="shop-coins">0</b></span>
+      </div>
+      <div class="tabs" role="tablist" aria-label="상점 칸">
+        <button type="button" role="tab" data-tab="skins" aria-selected="true">꾸미기</button>
+        <button type="button" role="tab" data-tab="up" aria-selected="false">강화</button>
+        <button type="button" role="tab" data-tab="items" aria-selected="false">시작 아이템</button>
+      </div>
+      <p id="shop-sub" class="sub shop-sub"></p>
+      <div id="shop-list" class="shop-list"></div>
+      <button id="btn-shop-back" class="big-btn"><span>닫기</span></button>
     </div>
   </section>
 
@@ -99,27 +127,39 @@
     </div>
   </section>
 
-  <!-- 게임 오버 -->
+  <!-- 게임 오버: 가로 화면은 두 칸 (왼쪽 점수·기록 / 오른쪽 코인·미션·메달·버튼) -->
   <section id="scr-over" class="screen">
-    <div class="panel">
-      <h2 id="over-title">벽에 부딪혔다</h2>
-      <p class="score-big"><span id="over-score">0</span><small>점</small></p>
-      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 기록 경신</p>
-      <dl class="stats">
-        <div><dt>길이</dt><dd id="over-len">4</dd></div>
-        <div><dt>먹은 구슬</dt><dd id="over-eaten">0</dd></div>
-        <div><dt id="over-t3">시간</dt><dd id="over-time">0:00</dd></div>
-      </dl>
-      <div id="over-records" class="chips"></div>
-      <div id="over-medals" class="new-medals"></div>
-      <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
-      <button id="btn-home" class="text-btn">처음 화면으로</button>
+    <div class="panel opanel">
+      <div class="o-left">
+        <h2 id="over-title">벽에 부딪혔다</h2>
+        <p class="score-big"><span id="over-score">0</span><small>점</small></p>
+        <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 기록 경신</p>
+        <dl class="stats">
+          <div><dt>길이</dt><dd id="over-len">4</dd></div>
+          <div><dt>먹은 구슬</dt><dd id="over-eaten">0</dd></div>
+          <div><dt id="over-t3">시간</dt><dd id="over-time">0:00</dd></div>
+        </dl>
+        <div id="over-records" class="chips"></div>
+        <div id="over-medals" class="new-medals"></div>
+      </div>
+      <div class="o-right">
+        <div class="coin-earn">
+          <span class="ce-head"><i class="cn" aria-hidden="true"></i>얻은 코인</span>
+          <b id="over-coins">+0</b>
+          <span id="over-coin-parts" class="ce-parts"></span>
+        </div>
+        <div id="over-missions" class="mcard"></div>
+        <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
+        <button id="btn-home" class="text-btn">처음 화면으로</button>
+      </div>
     </div>
   </section>
 
+  <script src="../common/hub.js"></script>
   <script src="js/util.js"></script>
   <script src="js/data.js"></script>
   <script src="js/world.js"></script>
+  <script src="js/shop.js"></script>
   <script src="js/render.js"></script>
   <script src="js/input.js"></script>
   <script src="js/audio.js"></script>

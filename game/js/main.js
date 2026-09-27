@@ -181,7 +181,26 @@
     REC.save(rec);
     lastEarn = SH.finishRun(shop, SH.runOf(W));
     SH.save(shop);
+    reportHub(run);
     return broken;
+  }
+
+  // 놀이 본부(common/hub.js)에 알린다: 기록실 요약과 오늘의 미션
+  function reportSummary() {
+    if (typeof HUB === 'undefined' || !HUB.report) return;
+    try {
+      let best = 0;
+      for (const d of Object.keys(rec.best)) best = Math.max(best, rec.best[d].score || 0);
+      HUB.report('ngun', { best, bestText: best ? '최고 ' + best.toLocaleString() + '점' : '', medals: REC.count(rec), medalMax: NG.DATA.MEDALS.length, games: rec.life.games });
+    } catch (e) { /* 무시 */ }
+  }
+  function reportHub(run) {
+    if (typeof HUB === 'undefined' || !HUB.report) return;
+    reportSummary();
+    try {
+      const fresh = HUB.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills }, W.stats.time);
+      if (fresh.length) toast('오늘의 미션 완료: ' + fresh[0]);
+    } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
 
   function setDiff(d) {
@@ -742,6 +761,7 @@
   setDiff(diff);
   resize();
   toTitle();
+  reportSummary();
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
   // 오프라인 실행 (홈 화면에 추가했을 때). 미리보기 창 안에서는 조용히 건너뛴다
   try {

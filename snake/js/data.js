@@ -72,6 +72,60 @@
       { id: 'orbs500',  tier: 2, name: '구슬 500',      desc: '모두 합쳐 구슬 500개',           check: (r, R) => R.total.orbs >= 500 },
     ],
 
+    // ─── 코인 · 상점 · 미션 (2026-09-27, shop.js) ─────────────────
+    // 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js)에 들어간다.
+    // 한 판 코인 = 점수/perScore + 황금 구슬 × perGold + 스테이지 깬 레벨 × perLevel (+ 코인 보너스 강화 %)
+    // 아이가 보통 한 판 하면 20~60개쯤
+    COINS: { perScore: 20, perGold: 3, perLevel: 15 },
+
+    // 꾸미기: 뱀 몸·머리 색 (render.js가 그린다). price 0 = 처음부터 가짐
+    SKINS: [
+      { id: 'neon',    name: '기본 네온', price: 0,    color: '#5ee7ff', desc: '청록에서 파랑으로 흐르는 처음 뱀' },
+      { id: 'rainbow', name: '무지개',    price: 300,  color: '#ff7ad9', desc: '마디마다 색이 바뀌며 흘러가요' },
+      { id: 'fire',    name: '불꽃',      price: 500,  color: '#ff9f43', desc: '노랑에서 빨강으로 이글이글' },
+      { id: 'star',    name: '별빛',      price: 700,  color: '#c7a6ff', desc: '밤하늘 몸에 별이 반짝반짝' },
+      { id: 'ice',     name: '얼음',      price: 900,  color: '#bff8ff', desc: '하얗게 빛나는 차가운 얼음 뱀' },
+      { id: 'gold',    name: '황금',      price: 1400, color: '#ffd23f', desc: '번쩍번쩍 빛나는 황금 뱀' },
+    ],
+
+    // 강화: 한 번 사면 모든 판에 계속 (5단계). per: 한 단계마다 늘어나는 양. world.js create()의 opts.up으로 들어간다
+    UPGRADES: [
+      { id: 'goldTime',  icon: '★',  name: '황금 시간',     desc: '황금 구슬이 1초 더 오래 남아요',       per: 1,    prices: [60, 120, 200, 320, 480] },
+      { id: 'itemFreq',  icon: '◷',  name: '아이템 자주',   desc: '아이템이 8% 더 자주 나와요',           per: 0.08, prices: [80, 160, 260, 400, 600] },
+      { id: 'comboTime', icon: '×',  name: '콤보 시간',     desc: '콤보가 0.4초 더 이어져요',             per: 0.4,  prices: [80, 160, 260, 400, 600] },
+      { id: 'coin',      icon: '+',  name: '코인 보너스',   desc: '판마다 받는 코인 +10%',               per: 0.1,  prices: [100, 200, 350, 550, 800] },
+    ],
+    UPGRADE_MAX: 5,
+
+    // 시작 아이템: 사 두면 다음 판 시작할 때 하나씩 자동으로 쓴다 (종류마다 max개까지). eff: 켜지는 아이템 효과, time: 초
+    START_ITEMS: [
+      { id: 'ghost',  icon: '◌',  eff: 'ghost',  time: 5,  name: '유령 시작',     desc: '처음 5초 동안 벽·몸 통과',   price: 60, max: 3 },
+      { id: 'slow',   icon: '◷',  eff: 'slow',   time: 8,  name: '느린 시계 시작', desc: '처음 8초 동안 천천히',       price: 50, max: 3 },
+      { id: 'double', icon: '×2', eff: 'double', time: 10, name: '점수 두 배 시작', desc: '처음 10초 동안 점수 두 배', price: 70, max: 3 },
+    ],
+
+    // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름
+    // 다 채우면 받기 버튼 → reward 코인, 새 미션으로 바뀜
+    MISSIONS: [
+      { id: 'gold5',    kind: 'life', stat: 'golds',         goal: 5,    reward: 60,  text: '황금 구슬 5개 먹기 (누적)' },
+      { id: 'orbs200',  kind: 'life', stat: 'eaten',         goal: 200,  reward: 100, text: '구슬 200개 먹기 (누적)' },
+      { id: 'games5',   kind: 'life', stat: 'games',         goal: 5,    reward: 60,  text: '5판 놀기 (누적)' },
+      { id: 'power10',  kind: 'life', stat: 'powers',        goal: 10,   reward: 80,  text: '아이템 10개 먹기 (누적)' },
+      { id: 'portal5',  kind: 'life', stat: 'portals',       goal: 5,    reward: 60,  text: '포털 5번 지나가기 (누적)' },
+      { id: 'lvl6',     kind: 'life', stat: 'levelsCleared', goal: 6,    reward: 100, text: '스테이지 레벨 6번 깨기 (누적)' },
+      { id: 'len25',    kind: 'run',  stat: 'maxLen',        goal: 25,   reward: 80,  text: '한 판에 길이 25' },
+      { id: 'len40',    kind: 'run',  stat: 'maxLen',        goal: 40,   reward: 150, text: '한 판에 길이 40' },
+      { id: 'combo8',   kind: 'run',  stat: 'maxCombo',      goal: 8,    reward: 100, text: '한 판에 콤보 8' },
+      { id: 's1000',    kind: 'run',  stat: 'score',         goal: 1000, reward: 120, text: '한 판에 1,000점' },
+      { id: 'item3',    kind: 'run',  stat: 'powers',        goal: 3,    reward: 80,  text: '한 판에 아이템 3개' },
+      { id: 'gold3',    kind: 'run',  stat: 'golds',         goal: 3,    reward: 80,  text: '한 판에 황금 구슬 3개' },
+      { id: 'stage4',   kind: 'run',  stat: 'lvlTop',        goal: 4,    reward: 120, text: '스테이지 레벨 4 깨기' },
+      { id: 'normal15', kind: 'run',  stat: 'normalLen',     goal: 15,   reward: 120, text: '보통으로 한 판에 길이 15' },
+      { id: 't120',     kind: 'run',  stat: 'time',          goal: 120,  reward: 100, text: '한 판에 2분 버티기' },
+      { id: 'ghost2',   kind: 'run',  stat: 'wraps',         goal: 2,    reward: 80,  text: '유령으로 벽 2번 통과' },
+    ],
+    MISSION_SLOTS: 3,
+
     // 빠르게 두 번 밀어도 잃지 않게 방향을 2개까지 줄 세운다
     TURN_QUEUE: 2,
 

@@ -279,7 +279,7 @@
       glow(ctx, 'rgba(255,230,109,0.75)', p.x, p.y, c * 1.7, 0.85 * k);
       if (W.fun) {
         // 남은 시간 고리: 줄어들수록 급하다
-        const left = Math.max(0, 1 - age / D.FOOD.goldLife);
+        const left = Math.max(0, 1 - age / (W.goldLife || D.FOOD.goldLife));
         ctx.strokeStyle = left < 0.3 && Math.floor(W.t * 8) % 2 ? '#ff4d6d' : '#ffe66d';
         ctx.lineWidth = Math.max(2, c * 0.1);
         ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.72, -Math.PI / 2, -Math.PI / 2 + TAU * left); ctx.stroke();
@@ -420,31 +420,41 @@
   }
 
   // ─── 뱀 ───────────────────────────────────────────────────
-  // 머리(밝은 청록) → 꼬리(푸른 보라)로 색이 흐르고 굵기가 가늘어진다. 칸 사이는 보간해서 미끄러지듯
-  const HEAD = [94, 231, 255], TAIL = [52, 96, 255];
-  function drawSnake(ctx, W, v) {
-    const S = W.snake, P = W.prev, n = S.length, c = v.cell;
-    const a = W.phase === 'play' ? W.alpha : 0;
-    const dead = W.phase === 'over' && !W.won;
-    const pts = new Array(n);
-    for (let i = 0; i < n; i++) {
-      const s = S[i];
-      let q = P[i] || s;
-      if (Math.abs(q.x - s.x) + Math.abs(q.y - s.y) > 1) q = s;   // 포털·벽 넘기: 건너뛴 칸은 이어 그리지 않는다
-      pts[i] = { x: v.bx + (q.x + (s.x - q.x) * a + 0.5) * c, y: v.by + (q.y + (s.y - q.y) * a + 0.5) * c };
-    }
-    const ghost = W.eff && W.eff.ghost > 0;
-    if (ghost) ctx.globalAlpha = 0.45 + (v.calm ? 0 : Math.sin(W.t * 12) * 0.12);
+  // 꾸미기(상점 SKINS): 마디 색(t: 머리 0 → 꼬리 1, i: 마디 번호, tm: 시간)과 발광·머리 색, 꾸밈(deco)
+  // 기본 네온은 머리(밝은 청록) → 꼬리(푸른 보라)
+  const mix = (a, b, t) => [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)];
+  const rgb = c => 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  const SKINS = {
+    neon:    { glow: 'rgba(94,231,255,0.45)',  head: '#5ee7ff', headGlow: 'rgba(94,231,255,0.7)',  gloss: 0.22, col: t => mix([94, 231, 255], [52, 96, 255], t) },
+    rainbow: { glow: 'rgba(255,122,217,0.4)',  head: null,      headGlow: 'rgba(255,200,255,0.6)', gloss: 0.25,
+      col: (t, i, tm) => 'hsl(' + (((i * 24 - tm * 90) % 360) + 360) % 360 + ',100%,62%)' },
+    fire:    { glow: 'rgba(255,130,40,0.5)',   head: '#ffd23f', headGlow: 'rgba(255,170,60,0.75)', gloss: 0.2,
+      col: (t, i, tm) => { const f = 0.84 + 0.16 * Math.sin(tm * 14 + i * 1.3); const c = mix([255, 226, 90], [230, 40, 30], t); return [Math.round(c[0] * f), Math.round(c[1] * f), Math.round(c[2] * f)]; } },
+    star:    { glow: 'rgba(170,130,255,0.45)', head: '#c7a6ff', headGlow: 'rgba(199,166,255,0.7)', gloss: 0.18, col: t => mix([120, 80, 220], [34, 30, 110], t), deco: 'twinkle' },
+    ice:     { glow: 'rgba(191,248,255,0.5)',  head: '#e9fdff', headGlow: 'rgba(191,248,255,0.75)', gloss: 0.5, col: t => mix([236, 252, 255], [110, 190, 240], t), deco: 'frost' },
+    gold:    { glow: 'rgba(255,210,63,0.5)',   head: '#ffd23f', headGlow: 'rgba(255,220,90,0.8)',  gloss: 0.4, col: t => mix([255, 238, 150], [196, 124, 0], t), deco: 'shine' },
+  };
+  const skinOf = id => SKINS[id] || SKINS.neon;
+  const cssCol = c => (typeof c === 'string' ? c : rgb(c));
+
+  // 작은 네 갈래 반짝이 (별빛·황금 꾸밈)
+  function sparkle(ctx, x, y, r) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.25, y - r * 0.25); ctx.lineTo(x + r, y); ctx.lineTo(x + r * 0.25, y + r * 0.25);
+    ctx.lineTo(x, y + r); ctx.lineTo(x - r * 0.25, y + r * 0.25); ctx.lineTo(x - r, y); ctx.lineTo(x - r * 0.25, y - r * 0.25);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // 몸 그리기. pts: 화면 좌표(머리가 0), far(i): i와 i-1 사이를 잇지 않을지, tm: 시간(움직임 줄이기면 고정)
+  function paintBody(ctx, pts, far, c, sk, tm, dead) {
+    const n = pts.length;
     // 바닥 발광 (미리 그린 스프라이트를 겹쳐 찍기)
     ctx.globalCompositeOperation = 'lighter';
     const gr = c * 1.05, step = n > 120 ? 2 : 1;
-    for (let i = n - 1; i >= 0; i -= step) glow(ctx, dead ? 'rgba(255,77,109,0.5)' : 'rgba(94,231,255,0.45)', pts[i].x, pts[i].y, gr, 0.42 * (1 - i / n * 0.6));
+    for (let i = n - 1; i >= 0; i -= step) glow(ctx, dead ? 'rgba(255,77,109,0.5)' : sk.glow, pts[i].x, pts[i].y, gr, 0.42 * (1 - i / n * 0.6));
     ctx.globalCompositeOperation = 'source-over';
-
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    // 포털·벽 넘기로 떨어진 마디 사이는 잇지 않는다
-    const far = i => Math.abs(S[i].x - S[i - 1].x) + Math.abs(S[i].y - S[i - 1].y) > 1;
     const path = () => {
       ctx.beginPath();
       ctx.moveTo(pts[n - 1].x, pts[n - 1].y);
@@ -458,41 +468,96 @@
     // 마디마다 색·굵기
     for (let i = n - 1; i >= 1; i--) {
       const t = i / Math.max(1, n - 1);
-      let r = Math.round(HEAD[0] + (TAIL[0] - HEAD[0]) * t), g = Math.round(HEAD[1] + (TAIL[1] - HEAD[1]) * t), b = Math.round(HEAD[2] + (TAIL[2] - HEAD[2]) * t);
-      if (dead) { r = Math.round(r * 0.5 + 128); g = Math.round(g * 0.35); b = Math.round(b * 0.45); }
-      ctx.strokeStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+      if (dead) {
+        const q = SKINS.neon.col(t);
+        ctx.strokeStyle = rgb([Math.round(q[0] * 0.5 + 128), Math.round(q[1] * 0.35), Math.round(q[2] * 0.45)]);
+      } else ctx.strokeStyle = cssCol(sk.col(t, i, tm));
       ctx.lineWidth = c * (0.74 - 0.26 * t);
       if (far(i)) continue;
       ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
     }
     // 광택 줄
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.strokeStyle = 'rgba(255,255,255,' + (dead ? 0.22 : sk.gloss) + ')';
     ctx.lineWidth = Math.max(1, c * 0.12);
     path();
     ctx.stroke();
+    if (dead || !sk.deco) return;
+    // 꾸밈: 별빛은 마디에 별이 반짝, 얼음은 하얀 서리 점, 황금은 빛이 몸을 따라 흐른다
+    if (sk.deco === 'twinkle') {
+      ctx.fillStyle = '#ffffff';
+      for (let i = 1; i < n; i += 2) {
+        const a = 0.35 + 0.65 * Math.abs(Math.sin(tm * 3 + i * 1.7));
+        ctx.globalAlpha = a;
+        sparkle(ctx, pts[i].x + ((i * 7) % 5 - 2) * c * 0.06, pts[i].y + ((i * 3) % 5 - 2) * c * 0.06, c * (0.14 + 0.08 * a));
+      }
+      ctx.globalAlpha = 1;
+    } else if (sk.deco === 'frost') {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      for (let i = 1; i < n; i += 3) ctx.fillRect(pts[i].x - c * 0.16, pts[i].y - c * 0.16, Math.max(2, c * 0.1), Math.max(2, c * 0.1));
+    } else if (sk.deco === 'shine') {
+      const k = Math.floor(tm * 9) % (n + 6);
+      if (k < n) { glow(ctx, 'rgba(255,255,255,0.9)', pts[k].x, pts[k].y, c * 0.9, 0.8); ctx.fillStyle = '#ffffff'; sparkle(ctx, pts[k].x, pts[k].y, c * 0.28); }
+    }
+  }
 
-    // 머리: N-GUN 주인공처럼 둥근 몸에 숫자(길이), 앞쪽에 노란 총열
-    const h = pts[0], d = SN.World.DIRS[W.dir];
-    if (W.eff && W.eff.double > 0) glow(ctx, 'rgba(255,230,109,0.8)', h.x, h.y, c * 2.2, 0.7);
-    glow(ctx, dead ? 'rgba(255,77,109,0.8)' : 'rgba(94,231,255,0.7)', h.x, h.y, c * 1.5, 0.9);
+  // 머리: 뿅뿅 우주선 주인공처럼 둥근 몸에 숫자(길이), 앞쪽에 노란 총열
+  function paintHead(ctx, h, d, c, sk, tm, dead, txt, dbl) {
+    if (dbl) glow(ctx, 'rgba(255,230,109,0.8)', h.x, h.y, c * 2.2, 0.7);
+    glow(ctx, dead ? 'rgba(255,77,109,0.8)' : sk.headGlow, h.x, h.y, c * 1.5, 0.9);
+    ctx.lineCap = 'round';
     ctx.strokeStyle = '#ffe66d';
     ctx.lineWidth = Math.max(2, c * 0.16);
     ctx.beginPath();
     ctx.moveTo(h.x + d[0] * c * 0.25, h.y + d[1] * c * 0.25);
     ctx.lineTo(h.x + d[0] * c * 0.7, h.y + d[1] * c * 0.7);
     ctx.stroke();
-    ctx.fillStyle = dead ? '#ff4d6d' : '#5ee7ff';
+    ctx.fillStyle = dead ? '#ff4d6d' : sk.head || cssCol(sk.col(0, 0, tm));
     ctx.beginPath(); ctx.arc(h.x, h.y, c * 0.46, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.beginPath(); ctx.arc(h.x - c * 0.12, h.y - c * 0.14, c * 0.14, 0, TAU); ctx.fill();
-    const txt = String(n);
     ctx.fillStyle = '#07080d';
     ctx.font = '700 ' + Math.round(c * (txt.length > 2 ? 0.44 : 0.58)) + 'px ' + NUM;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(txt, h.x, h.y + c * 0.04);
+    ctx.textBaseline = 'alphabetic';
     ctx.lineCap = 'butt';
+  }
+
+  function drawSnake(ctx, W, v) {
+    const S = W.snake, P = W.prev, n = S.length, c = v.cell;
+    const a = W.phase === 'play' ? W.alpha : 0;
+    const dead = W.phase === 'over' && !W.won;
+    const pts = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const s = S[i];
+      let q = P[i] || s;
+      if (Math.abs(q.x - s.x) + Math.abs(q.y - s.y) > 1) q = s;   // 포털·벽 넘기: 건너뛴 칸은 이어 그리지 않는다
+      pts[i] = { x: v.bx + (q.x + (s.x - q.x) * a + 0.5) * c, y: v.by + (q.y + (s.y - q.y) * a + 0.5) * c };
+    }
+    const ghost = W.eff && W.eff.ghost > 0;
+    if (ghost) ctx.globalAlpha = 0.45 + (v.calm ? 0 : Math.sin(W.t * 12) * 0.12);
+    const sk = skinOf(v.skin), tm = v.calm ? 0 : W.t;
+    // 포털·벽 넘기로 떨어진 마디 사이는 잇지 않는다
+    const far = i => Math.abs(S[i].x - S[i - 1].x) + Math.abs(S[i].y - S[i - 1].y) > 1;
+    paintBody(ctx, pts, far, c, sk, tm, dead);
+    if (ghost) ctx.globalAlpha = 0.45 + (v.calm ? 0 : Math.sin(W.t * 12) * 0.12);
+    paintHead(ctx, pts[0], SN.World.DIRS[W.dir], c, sk, tm, dead, String(n), W.eff && W.eff.double > 0);
     ctx.globalAlpha = 1;
+  }
+
+  // 상점 미리보기: 작은 캔버스에 꾸미기를 입힌 짧은 뱀 (칸 7×3, 머리가 오른쪽)
+  const PREVIEW = [[6, 1], [5, 1], [4, 1], [4, 2], [3, 2], [2, 2], [2, 1], [1, 1], [1, 0], [0, 0]];
+  function drawSkinPreview(cv, id, tm) {
+    const g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, cv.width, cv.height);
+    const c = Math.min(cv.width / 7.6, cv.height / 3.4);
+    const ox = (cv.width - c * 7) / 2, oy = (cv.height - c * 3) / 2;
+    const pts = PREVIEW.map(([x, y]) => ({ x: ox + (x + 0.5) * c, y: oy + (y + 0.5) * c }));
+    const sk = skinOf(id);
+    paintBody(g, pts, () => false, c, sk, tm == null ? 1.3 : tm, false);
+    paintHead(g, pts[0], [1, 0], c, sk, tm == null ? 1.3 : tm, false, String(PREVIEW.length), false);
   }
 
   // ─── HUD: 위쪽 한 줄. 오른쪽 끝에 점수, 그 왼쪽에 작은 칸들 ─────
@@ -523,7 +588,7 @@
     const ch = 22 * s, cy = mid - ch / 2;
     const items = [];
     if (W.mode === 'stage') items.push(['LV ' + W.level + '  ' + Math.min(W.got, W.goal) + '/' + W.goal, '#5ee7ff']);
-    if (W.fun && W.mult > 1 && W.time - W.lastEat <= D.COMBO.window) items.push(['COMBO ×' + W.mult, W.mult >= 3 ? '#ff9f43' : '#ffd6e8']);
+    if (W.fun && W.mult > 1 && W.time - W.lastEat <= (W.comboWindow || D.COMBO.window)) items.push(['COMBO ×' + W.mult, W.mult >= 3 ? '#ff9f43' : '#ffd6e8']);
     if (W.eff) for (const k of ['double', 'slow', 'ghost']) if (W.eff[k] > 0) items.push([ITEM[k].glyph + ' ' + Math.ceil(W.eff[k]), ITEM[k].color]);
     items.push(['LEN ' + W.snake.length, '#ffe66d'], ['BEST ' + Math.max(v.best || 0, W.score).toLocaleString(), '#bcd3e2']);
     if (v.w >= 560 && W.mode !== 'stage') items.push([SN.fmtTime(W.time), '#8aa4b8']);
@@ -634,5 +699,5 @@
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
   const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0;
 
-  SN.Render = { draw, layout, busy };
+  SN.Render = { draw, layout, busy, drawSkinPreview, SKIN_IDS: Object.keys(SKINS) };
 })(SN);

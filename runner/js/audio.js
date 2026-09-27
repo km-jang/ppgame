@@ -6,6 +6,7 @@
   let muted = false;
   const last = {};   // 같은 소리 과다 재생 방지
   const VOL = 0.45;
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];   // 5음계 (반음 수)
 
   function unlock() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
@@ -61,12 +62,31 @@
     land: { gap: 0.08, fn(t) { tone(t, 'sine', 180, 90, 0.08, 0.1); } },
     // 레이저 문을 넘음: 짧은 두 음
     gate: { gap: 0.1, fn(t) { tone(t, 'triangle', 880, 880, 0.06, 0.08); tone(t + 0.06, 'triangle', 1320, 1320, 0.08, 0.08); } },
-    // 별: 띵. 이어 먹을수록(8개 묶음 안에서) 음이 한 계단씩 오른다
+    // 별: 띵. 이어 먹을수록(10개 묶음 안에서) 5음계로 한 계단씩 오른다 (어떤 순서로 겹쳐도 듣기 좋게)
     star: { gap: 0.025, fn(t, o) {
-      const k = Math.pow(2, ((o && o.k) || 0) * 2 / 12);
-      tone(t, 'square', 880 * k, 1320 * k, 0.07, 0.07);
-      tone(t, 'triangle', 1760 * k, 1760 * k, 0.12, 0.08);
+      const k = Math.pow(2, PENTA[((o && o.k) || 0) % PENTA.length] / 12);
+      tone(t, 'triangle', 880 * k, 1320 * k, 0.07, 0.08);
+      tone(t, 'sine', 1760 * k, 1760 * k, 0.14, 0.07);
     } },
+    // 별 한 줄을 모두 먹음: 반짝이는 올라가는 화음
+    perfect: { gap: 0.2, fn(t) { [1047, 1319, 1568, 2093].forEach((f, i) => tone(t + 0.05 + i * 0.055, 'triangle', f, f, 0.22, 0.09)); noise(t + 0.05, 'highpass', 6000, 9000, 0.25, 0.04); } },
+    // 아슬아슬: 휙 지나가는 바람 + 짧은 높은 음
+    near: { gap: 0.3, fn(t) { noise(t, 'bandpass', 3000, 700, 0.22, 0.12); tone(t + 0.05, 'sine', 1400, 1900, 0.1, 0.05); } },
+    // 기념 아치: 딩동 두 음
+    milestone: { gap: 0.3, fn(t) { tone(t, 'triangle', 1175, 1175, 0.18, 0.1); tone(t + 0.14, 'triangle', 1568, 1568, 0.3, 0.1); tone(t + 0.14, 'sine', 784, 784, 0.3, 0.06); } },
+    // 새 구역 도착: 작은 팡파르 (구역마다 조가 다르다)
+    zone: { gap: 0.5, fn(t, o) {
+      const k = Math.pow(2, [0, 2, 4, 7][((o && o.i) || 0) % 4] / 12);
+      [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.11, 'square', f * k, f * k, i === 3 ? 0.45 : 0.12, 0.07));
+      [523, 659, 784].forEach(f => tone(t + 0.33, 'triangle', f * k, f * k, 0.6, 0.07));
+      noise(t + 0.33, 'highpass', 5000, 9000, 0.5, 0.04);
+    } },
+    // 하트 채움: 따뜻한 두 음
+    heal: { gap: 0.2, fn(t) { tone(t, 'sine', 523, 523, 0.2, 0.12); tone(t + 0.12, 'sine', 784, 784, 0.35, 0.12); tone(t + 0.12, 'triangle', 1568, 1568, 0.25, 0.04); } },
+    // 처음 안내: 다음 단계 · 잘했어요 · 괜찮아요
+    tutStep: { gap: 0.2, fn(t) { tone(t, 'sine', 880, 880, 0.1, 0.08); tone(t + 0.09, 'sine', 1175, 1175, 0.16, 0.08); } },
+    tutDone: { gap: 0.3, fn(t) { [784, 988, 1175, 1568].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.25, 0.1)); } },
+    tutMiss: { gap: 0.3, fn(t) { tone(t, 'sine', 660, 520, 0.2, 0.08); tone(t + 0.16, 'sine', 660, 660, 0.18, 0.06); } },
     // 아이템이 멀리서 나타남 · 먹음
     item: { gap: 0.3, fn(t) { tone(t, 'sine', 660, 990, 0.18, 0.07); tone(t + 0.1, 'sine', 990, 1320, 0.16, 0.05); } },
     power: { gap: 0.1, fn(t) { tone(t, 'sawtooth', 300, 1200, 0.25, 0.09); [1047, 1319, 1568].forEach((f, i) => tone(t + 0.1 + i * 0.05, 'triangle', f, f, 0.2, 0.1)); } },
@@ -77,12 +97,18 @@
     } },
     // 부스트로 부숨: 퍽
     smash: { gap: 0.06, fn(t) { noise(t, 'lowpass', 3000, 200, 0.2, 0.25); tone(t, 'square', 220, 80, 0.12, 0.08); } },
-    // 부딪힘 (하트 하나): 쿵 + 내려가는 소리
-    hit: { gap: 0.3, fn(t) { tone(t, 'sawtooth', 330, 90, 0.35, 0.18); tone(t, 'sine', 140, 50, 0.3, 0.35); noise(t, 'lowpass', 2000, 150, 0.35, 0.28); } },
+    // 부딪힘 (하트 하나): 둥근 쿵 + 뾰로롱 내려가는 소리 (무섭지 않게, 거친 톱니파 없이)
+    hit: { gap: 0.3, fn(t) { tone(t, 'sine', 200, 70, 0.28, 0.32); noise(t, 'lowpass', 1500, 150, 0.25, 0.2); tone(t + 0.05, 'triangle', 660, 330, 0.25, 0.08); } },
     // 방패가 깨짐: 유리 깨지는 반짝
     shield: { gap: 0.2, fn(t) { noise(t, 'highpass', 3000, 8000, 0.35, 0.18); [1568, 1175, 1568].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.14, 0.08)); } },
     // 끝: 아래로 떨어지는 톱니파 + 쿵
     over: { gap: 0.3, fn(t) { tone(t, 'sawtooth', 440, 50, 0.7, 0.2); tone(t, 'sine', 160, 40, 0.4, 0.4); noise(t, 'lowpass', 2400, 120, 0.5, 0.35); } },
+    // 상점: 샀다 · 못 산다 · 골랐다 · 미션 보상 · 코인 세기
+    buy: { gap: 0.1, fn(t) { [988, 1319, 1976].forEach((f, i) => tone(t + i * 0.06, 'triangle', f, f, 0.16, 0.1)); } },
+    deny: { gap: 0.2, fn(t) { tone(t, 'square', 220, 180, 0.12, 0.06); tone(t + 0.1, 'square', 180, 150, 0.14, 0.06); } },
+    pick: { gap: 0.1, fn(t) { tone(t, 'sine', 880, 1175, 0.1, 0.09); } },
+    claim: { gap: 0.2, fn(t) { [1047, 1319, 1568, 2093].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.2, 0.1)); noise(t, 'highpass', 6000, 9000, 0.3, 0.05); } },
+    coin: { gap: 0.06, fn(t) { tone(t, 'square', 1976, 1976, 0.04, 0.04); tone(t + 0.04, 'square', 2637, 2637, 0.06, 0.04); } },
     start: { gap: 0.2, fn(t) { tone(t, 'square', 392, 392, 0.08, 0.1); tone(t + 0.09, 'square', 523, 523, 0.08, 0.1); tone(t + 0.18, 'square', 784, 784, 0.14, 0.1); } },
     medal: { gap: 0.3, fn(t) { [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.35, 0.14)); noise(t, 'highpass', 5000, 9000, 0.4, 0.06); } },
   };

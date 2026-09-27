@@ -1,9 +1,9 @@
 'use strict';
 // 오프라인 실행: 게임 파일을 기기에 저장해 두고 인터넷 없이도 연다.
 // 파일이 바뀌면 VERSION을 올린다. 옛 저장본은 jump- 로 시작하는 것만 지운다 (다른 게임 것은 건드리지 않음).
-const VERSION = 'jump-v1';
-const FILES = ['./', 'index.html', 'style.css', 'manifest.json', 'icon.svg',
-  'js/util.js', 'js/data.js', 'js/world.js', 'js/render.js', 'js/input.js', 'js/audio.js', 'js/main.js'];
+const VERSION = 'jump-v3';
+const FILES = ['./', 'index.html', '../common/hub.js', 'style.css', 'manifest.json', 'icon.svg',
+  'js/util.js', 'js/data.js', 'js/world.js', 'js/records.js', 'js/shop.js', 'js/render.js', 'js/input.js', 'js/audio.js', 'js/main.js'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -16,8 +16,9 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   const isFont = /fonts\.(googleapis|gstatic)\.com$/.test(url.hostname);
   if (e.request.method !== 'GET' || (url.origin !== location.origin && !isFont)) return;
-  // 같은 주소의 다른 게임 파일은 그 게임의 저장본이 맡는다 (이 폴더 것만)
-  if (!isFont && !url.pathname.startsWith(new URL('./', self.registration.scope).pathname)) return;
+  // 같은 주소의 다른 게임 파일은 그 게임의 저장본이 맡는다 (이 폴더 것과 네 게임이 같이 쓰는 common/hub.js만)
+  const isHub = url.pathname === new URL('../common/hub.js', self.registration.scope).pathname;
+  if (!isFont && !isHub && !url.pathname.startsWith(new URL('./', self.registration.scope).pathname)) return;
   e.respondWith(caches.open(VERSION).then(async cache => {
     const hit = await cache.match(e.request, { ignoreSearch: true });
     const net = fetch(e.request).then(r => { if (r.ok || r.type === 'opaque') cache.put(e.request, r.clone()); return r; }).catch(() => hit);

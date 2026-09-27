@@ -41,6 +41,14 @@
   let rec = loadRec();
   const saveRec = () => SN.store.set(REC_KEY, rec);
   let lastOpts = { mode: 'endless' };
+  // 코인·상점·미션 (shop.js). 저장 키 snake.shop1, 코인은 네 게임이 같이 쓰는 지갑(common/hub.js)
+  const SH = SN.Shop;
+  let shop = SH.load();
+  let shopTab = 'skins';
+  let lastEarn = null;   // 이번 판에 받은 코인 {coins, parts, done}
+  view.skin = shop.skin;
+  const fmt = n => Math.floor(n).toLocaleString();
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let medalCheckT = 0;
   let lastTs = 0;
   let frozenDrawn = false; // 일시정지 화면에선 한 번만 그리고 쉰다 (배터리)
@@ -97,7 +105,7 @@
   window.addEventListener('resize', resize);
 
   // ─── 오버레이 ──────────────────────────────────────────────
-  const screens = ['scr-title', 'scr-pause', 'scr-over', 'scr-stage', 'scr-medals'];
+  const screens = ['scr-title', 'scr-pause', 'scr-over', 'scr-stage', 'scr-medals', 'scr-shop'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('on', s === id);
     document.body.classList.toggle('playing', mode === 'play');
@@ -121,6 +129,183 @@
     $('best').textContent = parts.length ? parts.join(' · ') : '첫 도전을 시작하세요';
     $('stage-tag').textContent = rec.stage.max > 0 ? 'LV ' + (rec.stage.max + 1) : '';
     $('medal-count').textContent = Object.keys(rec.medals).length + '/' + D.MEDALS.length;
+    renderTitleShop();
+  }
+
+  // ─── 코인 · 상점 · 미션 ───────────────────────────────────
+  function missionsHtml(head) {
+    const ms = SH.missionView(shop);
+    return '<p class="mc-head">' + head + '</p>' + ms.map((m, i) =>
+      '<div class="mrow' + (m.done ? ' done' : '') + '" data-mid="' + m.id + '">' +
+        '<span class="m-txt">' + esc(m.text) + '</span>' +
+        (m.done
+          ? '<button type="button" class="claim" data-claim="' + i + '">받기 <i class="cn" aria-hidden="true"></i>' + m.reward + '</button>'
+          : '<span class="m-rew"><i class="cn" aria-hidden="true"></i>' + m.reward + '</span>') +
+        '<span class="m-bar"><i style="width:' + Math.round(m.pct * 100) + '%"></i></span>' +
+        '<span class="m-num">' + fmt(m.prog) + ' / ' + fmt(m.goal) + (m.kind === 'life' ? ' 누적' : ' 한 판') + '</span>' +
+      '</div>').join('');
+  }
+
+  function renderTitleShop() {
+    $('coin-count').textContent = fmt(SH.coins());
+    $('title-missions').innerHTML = missionsHtml('미션');
+    const lo = D.START_ITEMS.filter(it => shop.items[it.id] > 0).map(it => it.name + (shop.items[it.id] > 1 ? ' ×' + shop.items[it.id] : ''));
+    $('loadout-line').textContent = lo.length ? '다음 판 시작 아이템: ' + lo.join(' · ') : '';
+    view.skin = shop.skin;
+  }
+
+  function priceBtn(id, label) {
+    const cost = SH.price(shop, id);
+    if (cost == null) return '<span class="maxed">' + label + '</span>';
+    return '<button type="button" class="buy' + (SH.coins() < cost ? ' poor' : '') + '" data-buy="' + id + '"><i class="cn" aria-hidden="true"></i>' + fmt(cost) + '</button>';
+  }
+
+  function renderShop() {
+    $('shop-coins').textContent = fmt(SH.coins());
+    for (const b of document.querySelectorAll('[data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === shopTab));
+    const list = $('shop-list');
+    list.className = 'shop-list t-' + shopTab;
+    let h = '';
+    if (shopTab === 'skins') {
+      $('shop-sub').textContent = '뱀 몸 색을 바꿔요. 산 것은 눌러서 고르세요';
+      h = D.SKINS.map(s => {
+        const own = !!shop.skins[s.id], cur = shop.skin === s.id;
+        return '<div class="sitem skin' + (cur ? ' cur' : '') + (own ? '' : ' locked') + '" style="--sc:' + s.color + '">' +
+          '<canvas class="skin-cv" width="168" height="72" data-skin="' + s.id + '" aria-hidden="true"></canvas>' +
+          '<b class="s-name">' + esc(s.name) + '</b>' +
+          '<span class="s-desc">' + esc(s.desc) + '</span>' +
+          (cur ? '<span class="maxed on">사용 중</span>' : own ? '<button type="button" class="use" data-use="' + s.id + '">고르기</button>' : priceBtn(s.id, '')) +
+        '</div>';
+      }).join('');
+    } else if (shopTab === 'up') {
+      $('shop-sub').textContent = '한 번 사면 모든 판에 계속 적용돼요 (5단계)';
+      h = D.UPGRADES.map(u => {
+        const lv = shop.up[u.id] || 0;
+        let pips = '';
+        for (let k = 0; k < D.UPGRADE_MAX; k++) pips += '<i class="' + (k < lv ? 'on' : '') + '"></i>';
+        return '<div class="sitem row"><span class="s-icon">' + esc(u.icon) + '</span>' +
+          '<span class="s-mid"><b class="s-name">' + esc(u.name) + ' <small>Lv ' + lv + '</small></b><span class="s-desc">' + esc(u.desc) + '</span><span class="pips">' + pips + '</span></span>' +
+          priceBtn(u.id, '최대') + '</div>';
+      }).join('');
+    } else {
+      $('shop-sub').textContent = '사 두면 다음 판 시작할 때 하나씩 저절로 써요 (종류마다 3개까지)';
+      h = D.START_ITEMS.map(it => {
+        const n = shop.items[it.id] || 0;
+        return '<div class="sitem row"><span class="s-icon">' + esc(it.icon) + '</span>' +
+          '<span class="s-mid"><b class="s-name">' + esc(it.name) + ' <small>' + n + '/' + it.max + '개</small></b><span class="s-desc">' + esc(it.desc) + '</span></span>' +
+          priceBtn(it.id, '가득') + '</div>';
+      }).join('');
+    }
+    list.innerHTML = h;
+    for (const cv of list.querySelectorAll('canvas[data-skin]')) SN.Render.drawSkinPreview(cv, cv.dataset.skin);
+  }
+
+  function openShop(tab) {
+    if (mode !== 'title') return;
+    mode = 'shop';
+    if (tab) shopTab = tab;
+    renderShop();
+    show('scr-shop');
+  }
+  function closeShop() {
+    if (mode !== 'shop') return;
+    mode = 'title';
+    renderBest();
+    show('scr-title');
+  }
+
+  const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 꾸미기예요', max: '더는 살 수 없어요' };
+  function buyThing(id) {
+    const r = SH.buy(shop, id);
+    if (r.ok) {
+      SH.save(shop);
+      SN.Audio.play('buy');
+      vibrate(20);
+      if (SH.skinDef(id)) toast(SH.skinDef(id).name + ' 뱀으로 바꿨어요!');
+    } else {
+      SN.Audio.play('deny');
+      toast(NAMES[r.reason] || '살 수 없어요');
+    }
+    if (mode === 'shop') renderShop();
+    renderTitleShop();
+    return r;
+  }
+  function useSkin(id) {
+    const ok = SH.selectSkin(shop, id);
+    if (ok) { SH.save(shop); SN.Audio.play('pick'); }
+    if (mode === 'shop') renderShop();
+    renderTitleShop();
+    return ok;
+  }
+
+  // 미션 보상 받기: 코인 +, 소리, 버튼 자리에서 "+120"이 튀어 오른다
+  function claimMission(i, btn) {
+    const got = SH.claim(shop, i);
+    if (!got) return 0;
+    SH.save(shop);
+    SN.Audio.play('claim');
+    vibrate([15, 30, 15]);
+    if (btn && !view.calm) {
+      const r = btn.getBoundingClientRect();
+      const pop = document.createElement('span');
+      pop.className = 'coin-pop';
+      pop.textContent = '+' + got;
+      pop.style.left = (r.left + r.width / 2) + 'px';
+      pop.style.top = r.top + 'px';
+      document.body.appendChild(pop);
+      setTimeout(() => pop.remove(), 1000);
+    }
+    renderTitleShop();
+    if (mode === 'over') { $('over-missions').innerHTML = missionsHtml('미션'); markNew('over-missions', i); }
+    else markNew('title-missions', i);
+    return got;
+  }
+  function markNew(id, i) {
+    const row = $(id).querySelectorAll('.mrow')[i];
+    if (row) row.classList.add('fresh');
+  }
+
+  // 게임 오버: 받은 코인 (부분별) + 미션 진행
+  function renderEarn() {
+    const e = lastEarn || { coins: 0, parts: { score: 0, gold: 0, level: 0, bonus: 0 }, done: [] };
+    $('over-coins').textContent = '+0';
+    const P = e.parts, bits = [['점수', P.score], ['황금 구슬', P.gold], ['깬 레벨', P.level], ['강화 보너스', P.bonus]];
+    $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
+    $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
+    for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
+  }
+  function countCoins() {
+    const el = $('over-coins'), total = lastEarn ? lastEarn.coins : 0;
+    if (view.calm || total <= 0) { el.textContent = '+' + fmt(total); return; }
+    const t0 = performance.now(), dur = 1100;
+    let lastTick = -1;
+    const tick = now => {
+      const k = Math.min(1, (now - t0) / dur), v = Math.round(total * (1 - Math.pow(1 - k, 3)));
+      el.textContent = '+' + fmt(v);
+      const step = Math.floor(k * 12);
+      if (step !== lastTick) { lastTick = step; SN.Audio.play('coin'); }
+      if (k < 1 && mode === 'over') requestAnimationFrame(tick);
+      else { el.textContent = '+' + fmt(total); el.classList.add('done'); }
+    };
+    el.classList.remove('done');
+    requestAnimationFrame(tick);
+  }
+
+  // 놀이 본부(common/hub.js)에 알린다: 기록실 요약과 오늘의 미션
+  function reportSummary() {
+    if (typeof HUB === 'undefined' || !HUB.report) return;
+    try {
+      const b = rec.endless.score;
+      HUB.report('snake', { best: b, bestText: b ? '최고 ' + b.toLocaleString() + '점' : '', medals: Object.keys(rec.medals).length, medalMax: D.MEDALS.length, games: rec.total.games });
+    } catch (e) { /* 무시 */ }
+  }
+  function reportHub() {
+    if (typeof HUB === 'undefined' || !HUB.reportRun) return;
+    reportSummary();
+    try {
+      const fresh = HUB.reportRun('snake', { len: W.maxLen, golds: W.golds, orbs: W.eaten, games: 1 }, W.time);
+      if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1000);
+    } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
 
   // ─── 메달 ──────────────────────────────────────────────────
@@ -177,7 +362,14 @@
     SN.Audio.unlock();
     if (opts) lastOpts = Object.assign({}, opts, { easy });
     const [cols, rows] = lastOpts.easy ? (size().h > size().w * 1.1 ? D.EASY.board.port : D.EASY.board.land) : (size().h > size().w * 1.1 ? D.BOARD.port : D.BOARD.land);
-    W = SN.World.create(cols, rows, seed, lastOpts);
+    // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다. 강화는 늘 적용
+    const lo = SH.takeLoadout(shop);
+    SH.save(shop);
+    W = SN.World.create(cols, rows, seed, SH.worldOpts(shop, lo, lastOpts));
+    lastEarn = null;
+    view.skin = shop.skin;
+    const used = D.START_ITEMS.filter(it => lo[it.id]).map(it => it.name);
+    if (used.length) setTimeout(() => { if (mode === 'play') toast('시작 아이템: ' + used.join(' · ')); }, 300);
     view.best = W.mode === 'stage' ? rec.stage.score : rec.endless.score;
     medalCheckT = 0;
     input.reset();
@@ -235,6 +427,11 @@
     // 스테이지는 다시 하기를 누르면 죽은 레벨부터
     if (W.mode === 'stage') lastOpts = { mode: 'stage', level: W.level };
     const fresh = checkMedals(false);
+    // 코인 · 미션 · 놀이 본부
+    lastEarn = SH.finishRun(shop, SH.runOf(W));
+    SH.save(shop);
+    reportHub();
+    renderEarn();
     $('over-records').innerHTML = newRec.filter(x => !(isBest && x.indexOf('최고 점수') >= 0)).map(x => '<span>신기록 · ' + x + '</span>').join('');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     if (fresh.length) setTimeout(() => { if (mode === 'over') SN.Audio.play('medal'); }, 900);
@@ -247,7 +444,7 @@
     $('over-time').textContent = W.mode === 'stage' ? 'LV ' + W.level : SN.fmtTime(W.time);
     wakeLock(false);
     // 충돌 연출을 잠깐 보여 준 뒤 결과 화면
-    setTimeout(() => { if (mode === 'over') show('scr-over'); }, 800);
+    setTimeout(() => { if (mode === 'over') { show('scr-over'); countCoins(); } }, 800);
   }
 
   function drainEvents(world, sound) {
@@ -284,6 +481,7 @@
   input.onKey = code => {
     SN.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
+    if (mode === 'shop') { if (code === 'Escape') closeShop(); return; }
     if (mode === 'title' && (code === 'Enter' || code === 'Space')) return newGame(undefined, { mode: 'endless' });
     if (mode === 'over' && (code === 'Enter' || code === 'Space')) return newGame();
     if (code === 'KeyP' || code === 'Escape' || code === 'Space') return mode === 'play' ? pause() : resume();
@@ -306,6 +504,17 @@
   $('btn-start').addEventListener('click', () => { keep(); newGame(undefined, { mode: 'endless' }); });
   $('btn-stage').addEventListener('click', () => { SN.Audio.unlock(); openStage(); });
   $('btn-medals').addEventListener('click', () => { SN.Audio.unlock(); openMedals(); });
+  $('btn-shop').addEventListener('click', () => { SN.Audio.unlock(); openShop(); });
+  $('btn-shop-back').addEventListener('click', closeShop);
+  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); });
+  $('shop-list').addEventListener('click', e => {
+    const b = e.target.closest('[data-buy],[data-use]');
+    if (!b) return;
+    if (b.dataset.buy) buyThing(b.dataset.buy); else useSkin(b.dataset.use);
+  });
+  for (const id of ['title-missions', 'over-missions']) {
+    $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) claimMission(+b.dataset.claim, b); });
+  }
   $('btn-stage-back').addEventListener('click', toTitle);
   $('btn-medals-back').addEventListener('click', toTitle);
   $('btn-retry').addEventListener('click', () => newGame());
@@ -351,7 +560,7 @@
     const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
     lastTs = ts;
 
-    if (mode === 'title') {
+    if (mode === 'title' || mode === 'shop') {
       // 시연: 자동 운전 뱀이 시작 화면 뒤에서 돈다. 끝나면 잠시 뒤 새로
       if (!demo) { const [c, r] = boardFor(size()); demo = SN.World.create(c, r, 777); demo.wait = 0; demoRest = 0; }
       if (demo.phase === 'play') { drive(demo); SN.World.step(demo, dt); }
@@ -395,6 +604,7 @@
   $('btn-mute').classList.toggle('muted', SN.Audio.muted);
   resize();
   toTitle();
+  reportSummary();
   requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
   // 오프라인 실행 (홈 화면에 추가했을 때). 미리보기 창 안에서는 조용히 건너뛴다
   try {
@@ -418,5 +628,13 @@
     turn(dir) { return W ? SN.World.turn(W, dir) : false; },
     autopilot(on) { auto = on !== false; return auto; },
     get pad() { return input; }, get view() { return view; },
+    // 상점·미션 (shop.js)
+    get shop() { return shop; }, get missions() { return SH.missionView(shop); }, get lastEarn() { return lastEarn; },
+    get coins() { return SH.coins(); },
+    giveCoins(n) { SH.getWallet().add(n); renderTitleShop(); if (mode === 'shop') renderShop(); return SH.coins(); },
+    openShop, closeShop, claim: i => claimMission(i),
+    buy: id => buyThing(id), selectSkin: id => useSkin(id),
+    // 저장소를 바꾼 뒤 다시 읽기 (테스트용)
+    reload() { shop = SH.load(); renderBest(); },
   };
 })(SN);

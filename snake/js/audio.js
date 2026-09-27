@@ -94,6 +94,12 @@
     clear: { gap: 0.5, fn(t) { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(t + i * 0.09, 'square', f, f, 0.16, 0.09)); } },
     level: { gap: 0.3, fn(t) { tone(t, 'square', 392, 784, 0.2, 0.08); } },
     medal: { gap: 0.3, fn(t) { [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.35, 0.14)); noise(t, 'highpass', 5000, 9000, 0.4, 0.06); } },
+    // 상점·코인: 코인 세기(짤랑) · 사기 · 못 삼 · 미션 보상 받기
+    coin: { gap: 0.04, fn(t) { tone(t, 'square', 1319, 1319, 0.05, 0.07); tone(t + 0.045, 'square', 1976, 1976, 0.09, 0.07); } },
+    buy: { gap: 0.15, fn(t) { tone(t, 'square', 988, 988, 0.06, 0.08); tone(t + 0.07, 'square', 1480, 1480, 0.14, 0.08); noise(t + 0.05, 'highpass', 6000, 9000, 0.15, 0.04); } },
+    deny: { gap: 0.15, fn(t) { tone(t, 'square', 220, 180, 0.14, 0.08); tone(t + 0.12, 'square', 180, 150, 0.12, 0.06); } },
+    claim: { gap: 0.2, fn(t) { [1047, 1319, 1568, 2093].forEach((f, i) => tone(t + i * 0.06, 'square', f, f, 0.12, 0.08)); noise(t + 0.2, 'highpass', 6000, 9000, 0.3, 0.06); } },
+    pick: { gap: 0.05, fn(t) { [523, 659, 784].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.1, 0.12)); } },
     win: { gap: 0.5, fn(t) {
       [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(t + i * 0.08, 'triangle', f, f, 0.4, 0.14));
     } },

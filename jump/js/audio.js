@@ -6,6 +6,9 @@
   let muted = false;
   const last = {}; // 같은 소리 과다 재생 방지
   const VOL = 0.45;
+  // 통 소리 음계 (반음 수): 도레미솔라 두 옥타브
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+  let flip = false;
 
   function unlock() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
@@ -54,12 +57,29 @@
 
   // gap: 같은 소리 최소 간격(초)
   const SFX = {
-    // 통: 이어서 더 높은 발판을 밟을수록(콤보) 음이 조금씩 오른다 (한 옥타브까지)
+    // 통: 이어서 더 높은 발판을 밟을수록(콤보) 5음계를 따라 한 칸씩 오른다 (두 옥타브에서 다시 처음으로).
+    // 매번 똑같지 않게 음높이를 아주 조금 흔들고, 두 가지 울림을 번갈아 쓴다
     bounce: { gap: 0.04, fn(t, o) {
-      const k = Math.pow(2, Math.min(12, ((o && o.k) || 0)) / 12);
-      tone(t, 'sine', 300 * k, 620 * k, 0.12, 0.2);
-      tone(t, 'triangle', 620 * k, 900 * k, 0.07, 0.07);
+      const c = (o && o.k) || 0, step = PENTA[c % PENTA.length];
+      const k = Math.pow(2, step / 12) * (1 + (Math.random() - 0.5) * 0.03);
+      tone(t, 'sine', 290 * k, 600 * k, 0.12, 0.19);
+      if ((flip = !flip)) tone(t, 'triangle', 600 * k, 880 * k, 0.07, 0.06);
+      else tone(t + 0.01, 'sine', 870 * k, 1180 * k, 0.06, 0.045);
     } },
+    // 구역 도착: 반짝이는 오르는 화음 + 부드러운 바람
+    zone: { gap: 0.5, fn(t) {
+      noise(t, 'bandpass', 800, 3200, 0.9, 0.07);
+      [523, 659, 784, 1047, 1319].forEach((f, i) => tone(t + i * 0.08, 'triangle', f, f, 0.45, 0.12));
+      tone(t + 0.42, 'sine', 1568, 2093, 0.5, 0.08);
+    } },
+    // 100m 눈금: 딩동 두 음
+    mile: { gap: 0.4, fn(t) {
+      tone(t, 'sine', 1047, 1047, 0.3, 0.13);
+      tone(t + 0.11, 'sine', 1568, 1568, 0.45, 0.13);
+      tone(t + 0.11, 'triangle', 3136, 3136, 0.2, 0.03);
+    } },
+    // 처음 안내를 다 해 냈을 때
+    tut: { gap: 0.4, fn(t) { [659, 784, 1047].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.25, 0.12)); } },
     // 스프링: 뿌잉 하고 떨리며 올라간다
     spring: { gap: 0.1, fn(t) {
       const o = ac.createOscillator(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
@@ -112,6 +132,12 @@
       tone(t, 'square', 392, 392, 0.08, 0.1);
       tone(t + 0.09, 'square', 784, 784, 0.12, 0.1);
     } },
+    // 상점·미션: 코인 딸깍 · 사기 · 안 됨 · 고르기 · 보상 받기
+    coin: { gap: 0.05, fn(t) { tone(t, 'square', 1568, 1568, 0.04, 0.05); tone(t + 0.035, 'triangle', 2093, 2093, 0.07, 0.06); } },
+    buy: { gap: 0.2, fn(t) { [784, 1047, 1319].forEach((f, i) => tone(t + i * 0.06, 'triangle', f, f, 0.2, 0.12)); } },
+    deny: { gap: 0.2, fn(t) { tone(t, 'square', 220, 180, 0.12, 0.07); tone(t + 0.1, 'square', 180, 150, 0.14, 0.06); } },
+    pick: { gap: 0.1, fn(t) { tone(t, 'sine', 880, 1320, 0.12, 0.1); } },
+    claim: { gap: 0.2, fn(t) { [1047, 1319, 1568, 2093].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.22, 0.11)); noise(t, 'highpass', 5000, 9000, 0.25, 0.05); } },
     medal: { gap: 0.3, fn(t) { [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.35, 0.14)); noise(t, 'highpass', 5000, 9000, 0.4, 0.06); } },
   };
 

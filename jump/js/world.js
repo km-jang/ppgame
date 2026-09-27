@@ -17,11 +17,30 @@
     return d;
   }
 
-  // 높이(점)에 따른 어려움 0 ~ 1
-  const diffAt = y => Math.max(0, Math.min(1, y / D.METER / D.DIFF.full));
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  // 난이도 표 고르기: opts.diff가 먼저, 없으면 예전 방식 opts.easy (true 쉬움 · 그 밖 보통)
+  function levelOf(opts) {
+    opts = opts || {};
+    if (opts.diff && D.DIFFICULTY[opts.diff]) return D.DIFFICULTY[opts.diff];
+    return D.DIFFICULTY[opts.easy ? 'easy' : 'normal'];
+  }
+  // 높이(점)에 따른 어려움 0 ~ 1: 몸풀기(warm)까지 0, full에서 1, 그 사이는 곧게 이어진다
+  const diffAt = (y, L) => { L = L || D.DIFFICULTY.normal; return clamp01((y / D.METER - L.warm) / Math.max(1, L.full - L.warm)); };
+  // 몸풀기가 얼마나 끝났는지 0 ~ 1 (몸풀기 간격·폭에서 본 값으로 부드럽게 넘어간다)
+  const warmAt = (y, L) => (L.warm > 0 ? clamp01(y / D.METER / L.warm) : 1);
+  // 높이(m)에 있는 구역 번호 (D.ZONES)
+  function zoneAt(m) {
+    let z = 0;
+    for (let i = 0; i < D.ZONES.length; i++) if (m >= D.ZONES[i].from) z = i;
+    return z;
+  }
+  // 콤보에 따른 별 점수 배율 (step번마다 add씩, max까지)
+  const comboMul = c => { const C = D.COMBO; return Math.min(C.max, 1 + Math.floor(Math.max(0, c) / C.step) * C.add); };
 
-  function pickKind(table, d, rand) {
-    const items = Object.keys(table).map(k => ({ k, w: lerp(table[k][0], table[k][1], d) }));
+  // 가중치 표에서 하나 뽑기. mix: 구역별 배율, only: 이 종류들만 (몸풀기)
+  function pickKind(table, d, rand, mix, only) {
+    const items = Object.keys(table).filter(k => !only || only.includes(k))
+      .map(k => ({ k, w: lerp(table[k][0], table[k][1], d) * ((mix && mix[k]) || 1) }));
     return JP.weighted(items, rand).k;
   }
 
@@ -29,7 +48,7 @@
   function addPlat(W, kind, x, y, w) {
     const p = { id: ++W.ids, kind, x, y, w, px: x, vx: 0, broken: false, bt: 0, on: true, t: 0, hit: -9 };
     if (kind === 'moving') {
-      const S = W.easy ? D.EASY.moveSpeed : D.PLAT.moveSpeed, d = diffAt(y);
+      const S = W.L.moveSpeed, d = diffAt(y, W.L);
       p.vx = lerp(S[0], S[1], d) * (W.rand() < 0.5 ? -1 : 1);
     }
     if (kind === 'cloud') p.t = W.rand() * (D.CLOUD.on + D.CLOUD.off);   // 구름마다 박자가 다르다
@@ -39,31 +58,33 @@
 
   // 한 줄: 길을 이루는 발판 하나 + 가끔 곁 발판·별·아이템·가시 폭탄
   function row(W) {
-    const rand = W.rand, d = diffAt(W.genY);
-    const G = W.easy ? D.EASY.gap : D.GAP;
-    const gMin = lerp(G[0], G[2], d), gMax = lerp(G[1], G[3], d);
+    const rand = W.rand, L = W.L, d = diffAt(W.genY, L), k = warmAt(W.genY, L), warm = k < 1;
+    const Z = D.ZONES[zoneAt(W.genY / D.METER)], mix = Z.mix;
+    const G = L.gap;
+    const gMin = lerp(L.warmGap[0], lerp(G[0], G[2], d), k), gMax = lerp(L.warmGap[1], lerp(G[1], G[3], d), k);
     const y = W.genY + gMin + rand() * (gMax - gMin);
-    const w = W.easy ? D.EASY.w : D.PLAT.w;
-    const kind = pickKind(D.PLAT.main, d, rand);
+    const w = Math.round(lerp(L.warmW, lerp(L.w[0], L.w[1], d), k));
+    // 몸풀기에는 보통 발판과 스프링만
+    const kind = pickKind(L.main, d, rand, mix, warm ? ['normal', 'spring'] : null);
     const pw = kind === 'spring' ? w * 0.85 : w;
     const x = pw / 2 + rand() * (WW - pw);
     const main = addPlat(W, kind, x, y, pw);
     const xs = [x];
     // 곁 발판: 길 발판과 겹치지 않는 자리에
-    const EC = W.easy ? D.EASY.extraChance : D.PLAT.extraChance;
+    const EC = L.extraChance;
     if (rand() < lerp(EC[0], EC[1], d)) {
       for (let k = 0; k < 6; k++) {
         const ex = w / 2 + rand() * (WW - w);
         if (Math.abs(wrapDelta(ex, x)) < w + 24) continue;
         // 길 발판이 움직이면 그 발판이 지나다니는 줄을 비우고 앞 줄과의 가운데 높이에
         const ey = kind === 'moving' ? (W.genY + y) / 2 + 8 : y + (rand() - 0.5) * 30;
-        addPlat(W, pickKind(D.PLAT.extra, d, rand), ex, ey, w);
+        addPlat(W, pickKind(L.extra, d, rand, mix, warm ? ['normal'] : null), ex, ey, w);
         xs.push(ex);
         break;
       }
     }
     // 별: 발판 위에 하나, 가끔 세로로 줄지어
-    if (rand() < D.STAR.chance) {
+    if (rand() < D.STAR.chance + (mix.star || 0)) {
       const n = rand() < D.STAR.lineChance ? D.STAR.line : 1;
       const sx = kind === 'moving' ? WW / 2 + (rand() - 0.5) * WW * 0.6 : x;
       for (let i = 0; i < n; i++) W.stars.push({ id: ++W.ids, x: sx, y: y + 70 + i * 55, got: false });
@@ -72,12 +93,12 @@
     if (y >= W.nextItem) {
       const kinds = Object.keys(D.ITEM.kinds).map(k => ({ k, w: D.ITEM.kinds[k].w }));
       W.items.push({ id: ++W.ids, kind: JP.weighted(kinds, rand).k, x: main.kind === 'moving' ? WW / 2 : x, y: y + 60, got: false, seen: -1 });
-      const IG = W.easy ? D.EASY.itemGap : [D.ITEM.gapMin, D.ITEM.gapMax];
+      const IG = L.itemGap;
       W.nextItem = y + (IG[0] + rand() * (IG[1] - IG[0])) * D.METER;
     }
-    // 가시 폭탄 (보통만): 이번 줄과 앞 줄 사이, 두 발판에서 가로로 멀리
-    const M = D.MINE;
-    if (!W.easy && y / D.METER >= M.from && rand() < lerp(M.chance[0], M.chance[1], d)) {
+    // 가시 폭탄 (보통·어려움): 이번 줄과 앞 줄 사이, 두 발판에서 가로로 멀리
+    const M = D.MINE, LM = L.mine;
+    if (LM && y / D.METER >= LM.from && rand() < lerp(LM.chance[0], LM.chance[1], d)) {
       const my = (W.genY + y) / 2, reach = P0.jump + P0.r * 2 + M.r + 20;
       for (let k = 0; k < 6; k++) {
         const mx = 30 + rand() * (WW - 60);
@@ -92,7 +113,7 @@
       }
     }
     W.prevXs = xs;
-    W.recent.push({ y, xs });
+    W.recent.push({ y, xs, w: pw, kind });
     if (W.recent.length > 4) W.recent.shift();
     W.genY = y;
   }
@@ -110,14 +131,28 @@
     if (W.mines.length && W.mines[0].y <= low) W.mines = W.mines.filter(o => keep(o) && !o.gone);
   }
 
-  // opts: {easy, viewH}
+  // 상점 강화를 적용한 값 (upgrades: {speed, rocket, cloud: 0~5}). 없으면 강화 없음
+  function applyUpgrades(L, up) {
+    up = up || {};
+    const U = id => { const d = D.UPGRADES.find(u => u.id === id); const lv = Math.max(0, Math.min(D.UPGRADE_MAX, Math.floor(Number(up[id]) || 0))); return d ? lv * d.per : 0; };
+    return {
+      ctl: Object.assign({}, L.ctl, { maxVx: L.ctl.maxVx * (1 + U('speed')) }),
+      rocketTime: D.ROCKET.time * (1 + U('rocket')),
+      rescues: L.rescues > 0 ? L.rescues + Math.round(U('cloud')) : 0,   // 구조 구름 강화는 쉬움만
+    };
+  }
+
+  // opts: {diff: 'easy'|'normal'|'hard', easy (예전 방식), viewH, tutorial,
+  //        upgrades: {speed, rocket, cloud} (상점 강화), loadout: {rocket, shield} (시작 아이템)}
   function create(seed, opts) {
     opts = opts || {};
     const rand = JP.rng(seed == null ? (Date.now() ^ 0x5bd1e995) : seed);
-    const easy = !!opts.easy;
+    const L = levelOf(opts);
+    const easy = L.id === 'easy';
     const viewH = opts.viewH || 600;
+    const UP = applyUpgrades(L, opts.upgrades);
     const W = {
-      rand, easy, viewH, ids: 0,
+      rand, easy, diff: L.id, L, ctl: UP.ctl, rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
       p: { x: WW / 2, y: P0.r, vx: 0, vy: 0, px: WW / 2, py: P0.r, face: 1, land: -9 },
       input: { dir: 0 },          // -1 왼쪽 · 0 · 1 오른쪽 (main.js·봇이 채운다)
       cam: -viewH * D.CAM.start, pcam: 0,
@@ -126,19 +161,26 @@
       phase: 'play',              // play | over
       cause: null,                // fall | mine
       t: 0, acc: 0, alpha: 0, ticks: 0,
-      maxY: 0, height: 0, score: 0,
-      rescues: easy ? D.EASY.rescues : 0, rescued: 0,
+      maxY: 0, height: 0, score: 0, starPts: 0,
+      zone: 0, mile: 0,           // 지금 구역 번호 · 지나간 100m 눈금 수
+      // 처음 해 보는 판: 왼쪽·오른쪽을 한 번씩 눌러 볼 때까지 큰 안내 (main.js가 기억한다)
+      tut: opts.tutorial ? { left: false, right: false, done: false, at: 0 } : null,
+      rescues: UP.rescues, rescued: 0,
       shield: false, rocket: 0,
       // 기록·메달용
-      starsGot: 0, springs: 0, rockets: 0, saves: 0, bounces: 0, combo: 0, maxCombo: 0, lastLand: 0,
+      starsGot: 0, springs: 0, rockets: 0, saves: 0, bounces: 0, crumbles: 0, combo: 0, maxCombo: 0, lastLand: 0,
       botT: null,
-      events: [],   // 소리·진동용: bounce spring star item rocket shield save crumble rescue over
+      events: [],   // 소리·진동용: bounce spring star item rocket shield save crumble rescue over zone mile tut
       fx: [],       // 그리기 연출용: {kind, x, y}
     };
     W.pcam = W.cam;
     // 바닥: 기둥 가로 전체를 덮는 첫 발판
     addPlat(W, 'ground', WW / 2, 0, WW);
     generate(W);
+    // 시작 아이템: 로켓 출발 · 방패 방울
+    const lo = opts.loadout || {};
+    if (lo.shield) { W.shield = true; W.events.push('shield'); }
+    if (lo.rocket) { W.rocket = W.rocketTime; W.rockets++; W.events.push('rocket'); }
     return W;
   }
 
@@ -154,7 +196,7 @@
   function throwUp(W, kind) {
     const P = W.p;
     P.y = W.cam + P0.r; P.py = P.y;
-    P.vy = jumpV(Math.min(W.viewH * D.EASY.rescueJump, 520));
+    P.vy = jumpV(Math.min(W.viewH * D.RESCUE.jump, D.RESCUE.max));
     W.combo = 0; W.lastLand = -Infinity;
     W.fx.push({ kind, x: P.x, y: W.cam });
   }
@@ -171,9 +213,9 @@
     W.maxCombo = Math.max(W.maxCombo, W.combo);
     W.lastLand = p.y;
     if (spring) { W.springs++; W.events.push('spring'); W.fx.push({ kind: 'spring', x: P.x, y: p.y }); }
-    else { W.events.push('bounce'); W.fx.push({ kind: 'bounce', x: P.x, y: p.y }); }
+    else { W.events.push('bounce'); W.fx.push({ kind: 'bounce', x: P.x, y: p.y, combo: W.combo }); }
     if (p.kind === 'crumble') {
-      p.broken = true; p.bt = W.t;
+      p.broken = true; p.bt = W.t; W.crumbles++;
       W.events.push('crumble'); W.fx.push({ kind: 'crumble', x: p.x, y: p.y });
     }
   }
@@ -199,10 +241,17 @@
 
     // 좌우: 누르는 쪽으로 빠르게 붙고, 떼면 곧 멈춘다
     const dir = W.input.dir > 0 ? 1 : W.input.dir < 0 ? -1 : 0;
-    const target = dir * P0.maxVx;
-    const a = (dir === 0 || Math.sign(target) !== Math.sign(P.vx) && P.vx !== 0 ? P0.decel : 0) + (dir ? P0.accel : 0);
+    const C = W.ctl;
+    const target = dir * C.maxVx;
+    const a = (dir === 0 || Math.sign(target) !== Math.sign(P.vx) && P.vx !== 0 ? C.decel : 0) + (dir ? C.accel : 0);
     if (P.vx < target) P.vx = Math.min(target, P.vx + a * H); else if (P.vx > target) P.vx = Math.max(target, P.vx - a * H);
     if (dir) P.face = dir;
+    // 처음 해 보는 판: 양쪽을 다 눌러 보면 안내 끝
+    const T = W.tut;
+    if (T && !T.done && dir) {
+      if (dir < 0) T.left = true; else T.right = true;
+      if (T.left && T.right) { T.done = true; T.at = W.t; W.events.push('tut'); }
+    }
     P.x += P.vx * H;
     // 한쪽 끝으로 나가면 반대쪽에서 들어온다
     if (P.x < 0) { P.x += WW; P.px += WW; } else if (P.x >= WW) { P.x -= WW; P.px -= WW; }
@@ -237,7 +286,10 @@
       const dx = wrapDelta(P.x, s.x), dy = s.y - P.y;
       if (dx * dx + dy * dy < sr) {
         s.got = true; W.starsGot++;
-        W.events.push('star'); W.fx.push({ kind: 'star', x: s.x, y: s.y });
+        // 콤보 중이면 별 점수가 조금 더 (배율 상한 D.COMBO.max)
+        const pts = Math.round(D.STAR.points * comboMul(W.combo));
+        W.starPts += pts;
+        W.events.push('star'); W.fx.push({ kind: 'star', x: s.x, y: s.y, pts });
       }
     }
     // 아이템
@@ -248,7 +300,7 @@
       const dx = wrapDelta(P.x, it.x), dy = it.y - P.y;
       if (dx * dx + dy * dy < ir) {
         it.got = true;
-        if (it.kind === 'rocket') { W.rocket = D.ROCKET.time; W.rockets++; W.events.push('rocket'); }
+        if (it.kind === 'rocket') { W.rocket = W.rocketTime; W.rockets++; W.events.push('rocket'); }
         else { W.shield = true; W.events.push('shield'); }
         W.fx.push({ kind: 'item', item: it.kind, x: it.x, y: it.y });
       }
@@ -274,8 +326,15 @@
     // 높이 · 점수 · 카메라 (카메라는 올라가기만 한다)
     if (P.y > W.maxY) W.maxY = P.y;
     W.height = Math.floor(W.maxY / D.METER);
-    W.score = W.height + W.starsGot * D.STAR.points;
-    W.cam = Math.max(W.cam, P.y - W.viewH * D.CAM.focus);
+    W.score = W.height + W.starPts;
+    // 구역이 바뀌면 배너, 100m마다 축하 (한 번씩만)
+    const zi = zoneAt(W.height);
+    if (zi > W.zone) { W.zone = zi; W.events.push('zone'); W.fx.push({ kind: 'zone', zone: zi, x: P.x, y: P.y }); }
+    const mb = Math.floor(W.height / D.MILE.big);
+    if (mb > W.mile) { W.mile = mb; W.events.push('mile'); W.fx.push({ kind: 'mile', m: mb * D.MILE.big, x: P.x, y: mb * D.MILE.big * D.METER }); }
+    // 카메라: 부드럽게 따라 올라가되(ease), 주인공이 화면 위쪽으로 너무 가지 않게(lead). 내려가지는 않는다
+    const want = P.y - W.viewH * D.CAM.focus;
+    if (want > W.cam) W.cam = Math.max(W.cam + (want - W.cam) * Math.min(1, D.CAM.ease * H), want - W.viewH * D.CAM.lead);
 
     // 화면 아래로 떨어짐: 방패 → 구조 구름(쉬움) → 끝
     if (P.y < W.cam - r * 1.5) {
@@ -311,7 +370,7 @@
   // ─── 자동 운전 (시작 화면 시연·테스트용) ─────────────────────
   // 닿을 수 있는 발판 중 가장 높은 것(스프링은 더 좋게, 가시 폭탄 근처는 빼고)을 골라 그쪽으로 간다
   function botDir(W) {
-    const P = W.p, g = P0.gravity;
+    const P = W.p, g = P0.gravity, C = W.ctl;
     if (W.phase !== 'play') return 0;
     if (W.rocket > 0) return 0;
     const apex = P.y + (P.vy > 0 ? P.vy * P.vy / (2 * g) : 0);
@@ -333,7 +392,7 @@
         if (tt < 0) continue;
         const px = p.x + p.vx * tt;
         const need = Math.max(0, Math.abs(wrapDelta(P.x, px)) - p.w * 0.35);
-        if (need > P0.maxVx * tt * 0.8 + 4) continue;
+        if (need > C.maxVx * tt * 0.8 + 4) continue;
         if (p.kind === 'cloud') {
           const C = D.CLOUD, c = (p.t + tt) % (C.on + C.off);
           if (c > C.on - 0.25) continue;
@@ -354,7 +413,7 @@
     const tx = t.x + t.vx * tt;
     const dx = wrapDelta(P.x, tx);
     // 가까우면 멈춘다 (멈추는 데 드는 거리만큼 미리)
-    const brake = P.vx * P.vx / (2 * P0.decel);
+    const brake = P.vx * P.vx / (2 * C.decel);
     if (Math.abs(dx) < Math.max(6, t.w * 0.2) + (Math.sign(dx) === Math.sign(P.vx) ? brake * 0.5 : 0)) {
       return dodge(W, Math.abs(P.vx) > 60 ? -Math.sign(P.vx) : 0);
     }
@@ -367,7 +426,7 @@
     const P = W.p, g = P0.gravity, lim = (P0.r + D.MINE.r + 10) * (P0.r + D.MINE.r + 10);
     const hits = dir => {
       for (let k = 1; k <= 8; k++) {
-        const t = k * 0.05, x = P.x + (dir ? dir * P0.maxVx : P.vx * 0.3) * t, y = P.y + P.vy * t - g * t * t / 2;
+        const t = k * 0.05, x = P.x + (dir ? dir * W.ctl.maxVx : P.vx * 0.3) * t, y = P.y + P.vy * t - g * t * t / 2;
         for (const m of W.mines) {
           if (m.gone) continue;
           const dx = wrapDelta(x, m.x), dy = m.y - y;
@@ -383,10 +442,11 @@
   // 이번 판 기록 (메달 확인용)
   function runStats(W) {
     return {
-      easy: W.easy, height: W.height, score: W.score, stars: W.starsGot, springs: W.springs,
+      diff: W.diff, easy: W.easy, height: W.height, score: W.score, stars: W.starsGot, springs: W.springs,
       rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo, rescued: W.rescued, bounces: W.bounces, time: W.t,
+      zone: W.zone, crumbles: W.crumbles,
     };
   }
 
-  JP.World = { create, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, jumpV };
+  JP.World = { create, applyUpgrades, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV };
 })(JP);

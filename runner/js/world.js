@@ -6,66 +6,122 @@
   const D = RN.DATA;
   const TICK = D.TICK;
   const P = D.PLAYER;
-  const G = 8 * P.jumpH / (P.jumpT * P.jumpT);   // 점프 중력: jumpT초 동안 jumpH까지 올랐다 내려온다
-  const V0 = 4 * P.jumpH / P.jumpT;
   const ITEM_KINDS = Object.keys(D.ITEM.kinds);
+  const ROW_KINDS = ['one', 'two', 'gate', 'mg', 'gg', 'mover', 'stars'];
 
-  const cfg = W => (W.easy ? D.EASY : D.NORMAL);
+  // 난이도 이름 고르기: 'easy' | 'normal' | 'hard'. 옛 방식 { easy: false }는 보통
+  function diffId(opts) {
+    if (opts && D.DIFFICULTY[opts.diff]) return opts.diff;
+    if (opts && opts.easy === false) return 'normal';
+    return 'easy';
+  }
+  const cfg = W => D.DIFFICULTY[W.diff] || D.DIFFICULTY.easy;
+  const smooth = u => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 
-  // 지금 속도(초당 m): 천천히 빨라지고 상한에서 멈춘다. 부스트 중엔 더 빠르다
+  // 얼마나 어려워졌나 (0 → 1): 몸풀기 동안 0, 그 뒤 ramp초에 걸쳐 부드럽게 1까지
+  function level(C, t) { return smooth((t - C.speed.warm) / C.speed.ramp); }
+  function baseSpeed(C, t) { const S = C.speed; return S.base + (S.max - S.base) * level(C, t); }
+
+  // 지금 속도(초당 m). 부스트 중엔 더 빠르고, 처음 안내 중엔 잠깐 느리다
   function speed(W) {
-    const S = cfg(W).speed;
-    const v = Math.min(S.max, S.base + S.accel * W.runT);
+    const v = baseSpeed(cfg(W), W.runT) * (W.slow == null ? 1 : W.slow);
     return W.eff && W.eff.boost > 0 ? v * D.ITEM.boostMul : v;
   }
 
-  // opts: { easy (기본 true), auto (자동 운전), wait (출발 대기 초) }
+  // 몇 번째 우주 구역인가 (0부터)
+  function zoneAt(dist) {
+    let i = 0;
+    while (i + 1 < D.ZONES.length && dist >= D.ZONES[i + 1].at) i++;
+    return i;
+  }
+
+  // 상점 강화 한 단계 효과 (data.js UPGRADES)
+  const upPer = id => { const u = (D.UPGRADES || []).find(x => x.id === id); return u ? u.per : 0; };
+
+  // opts: { diff ('easy'|'normal'|'hard') 또는 easy (옛 방식, 기본 true), auto (자동 운전), wait (출발 대기 초),
+  //         tutorial (처음 한 번 안내), up (상점 강화 단계 {magnet, shield, boost, coin}),
+  //         loadout (시작 아이템 {shield, boost, heart}), skin (꾸미기 id, 그리기만) }
   function create(seed, opts) {
     opts = opts || {};
-    const easy = opts.easy !== false;
+    const diff = diffId(opts), C = D.DIFFICULTY[diff];
     const W = {
-      seed, easy, rand: RN.rng(seed == null ? (Date.now() >>> 0) : seed),
+      seed, diff, easy: diff === 'easy', rand: RN.rng(seed == null ? (Date.now() >>> 0) : seed),
       phase: 'play', t: 0, runT: 0, overT: 0, ticks: 0, acc: 0, alpha: 0,
       wait: opts.wait != null ? opts.wait : D.START.wait,
-      dist: 0, pdist: 0, stars: 0, score: 0,
-      hearts: (easy ? D.EASY : D.NORMAL).hearts,
+      dist: 0, pdist: 0, stars: 0, score: 0, bonus: 0, slow: 1,
+      hearts: C.hearts,
       shield: false, inv: 0, eff: { magnet: 0, boost: 0 }, rainT: 0,
-      p: { lane: 1, x: 1, px: 1, y: 0, py: 0, vy: 0, buf: 0 },
-      obs: [], nextZ: D.START.firstRow, rowId: 0, itemT: D.ITEM.first, itemReady: false,
-      chain: 0, lastStar: -9,
+      p: { lane: 1, x: 1, px: 1, y: 0, py: 0, vy: 0, buf: 0, from: 1, lt: 1, jt: -1, fromLane: 1, fromT: -9 },
+      obs: [], nextZ: D.START.firstRow, rowId: 0, itemT: C.item.first, itemReady: false,
+      nextArch: D.MILESTONE.every, zone: 0,
+      chain: 0, lastStar: -9, lastNear: -9,
       // 이번 판 기록 (메달·결과 화면)
       jumps: 0, gates: 0, hits: 0, blocks: 0, boosts: 0, smashes: 0, items: 0, kinds: {}, laneMoves: 0,
+      nears: 0, perfects: 0, milestones: 0, heals: 0,
       cause: '', auto: !!opts.auto,
+      tut: opts.tutorial ? { step: 'lane', tries: 0, want: false, show: '', rows: 0 } : null,
       events: [],   // 소리·진동 (main.js가 비운다)
       fx: [],       // 입자·글자 연출 (render.js가 비운다)
     };
+    // 상점 강화: 자석·부스트 시간, 방패가 막은 뒤 깜빡이는 시간
+    const up = opts.up || {};
+    W.skin = opts.skin || 'basic';
+    W.magnetTime = D.ITEM.kinds.magnet.time + Math.min(5, up.magnet || 0) * upPer('magnet');
+    W.boostTime = D.ITEM.kinds.boost.time + Math.min(5, up.boost || 0) * upPer('boost');
+    W.shieldInv = D.HIT.shieldInv + Math.min(5, up.shield || 0) * upPer('shield');
+    // 시작 아이템
+    const lo = opts.loadout || {};
+    if (lo.shield) W.shield = true;
+    if (lo.heart && diff !== 'hard') W.hearts += 1;
+    if (lo.boost) { W.eff.boost = W.boostTime; W.events.push('boost'); }
+    W.loadout = Object.keys(lo).filter(k => lo[k]);
     W.maxHearts = W.hearts;
+    W.hitAt = 0; W.clean = 0;   // 안 부딪히고 간 가장 긴 거리 (미션)
     fill(W);
     return W;
   }
 
   // ─── 줄 만들기 ─────────────────────────────────────────────
   // 한 줄 = 같은 z에 놓인 장애물 묶음. 어떤 줄이든 장애물이 전혀 없는 줄이 하나 이상 남는다.
-  // 줄 사이 간격은 지금 속도 × gap초라서, 빨라져도 피할 시간은 같다
+  // 줄 사이 간격은 그 줄에 닿을 때의 속도 × gap초라서, 빨라져도 피할 시간은 같다
   function shuffle3(r) {
     const a = [0, 1, 2];
     for (let i = 2; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
 
+  // 지금 난이도에서 줄 모양 가중치 (몸풀기 → 시작 → 끝으로 부드럽게)
+  function rowWeights(W, t) {
+    const C = cfg(W);
+    if (C.warmRows && t < C.speed.warm) return C.warmRows;
+    const k = level(C, t), a = C.rows.start, b = C.rows.end;
+    return ROW_KINDS.map(kk => ({ k: kk, w: (a[kk] || 0) + ((b[kk] || 0) - (a[kk] || 0)) * k })).filter(x => x.w > 0);
+  }
+  function gapSec(C, t, r) {
+    const k = level(C, t), g0 = C.gap.start, g1 = C.gap.end;
+    const lo = g0[0] + (g1[0] - g0[0]) * k, hi = g0[1] + (g1[1] - g0[1]) * k;
+    return lo + (hi - lo) * r;
+  }
+
   function makeRow(W) {
     const C = cfg(W), r = W.rand, z = W.nextZ, id = ++W.rowId;
-    const pat = RN.weighted(C.rows, r).k;
+    // 이 줄에 닿을 때쯤의 시간으로 모양·간격을 정한다 (빨라지는 중에도 피할 시간이 줄지 않게)
+    const vNow = Math.max(1, baseSpeed(C, W.runT));
+    const tArrive = W.runT + Math.max(0, z - W.dist) / vNow;
+    let pat = RN.weighted(rowWeights(W, tArrive), r).k;
+    const tut = W.tut;
+    if (tut && tut.step === 'jump' && tut.want) { pat = 'tut'; tut.want = false; }
     const L = shuffle3(r);
     const row = { id, z, pat, lanes: [null, null, null], mover: null };
     const meteor = l => { row.lanes[l] = 'meteor'; W.obs.push({ kind: 'meteor', x: l, z, row: id }); };
-    const gate = l => { row.lanes[l] = 'gate'; W.obs.push({ kind: 'gate', x: l, z, row: id }); };
+    const gate = (l, extra) => { row.lanes[l] = 'gate'; W.obs.push(Object.assign({ kind: 'gate', x: l, z, row: id }, extra)); };
     switch (pat) {
       case 'one': meteor(L[0]); break;
       case 'two': meteor(L[0]); meteor(L[1]); break;
       case 'gate': gate(L[0]); break;
       case 'mg': meteor(L[0]); gate(L[1]); break;
       case 'gg': gate(L[0]); gate(L[1]); break;
+      case 'tut': for (let l = 0; l < 3; l++) gate(l, { tut: true }); break;   // 처음 안내: 모두 막지만 부딪혀도 괜찮다
       case 'mover': {
         // 가운데 줄에서 출발하면 양옆 중 하나로, 가장자리면 가운데로 미끄러진다. 나머지 한 줄은 늘 비어 있다
         const from = L[0], to = from === 1 ? (r() < 0.5 ? 0 : 2) : 1;
@@ -75,38 +131,50 @@
       }
     }
     row.free = [0, 1, 2].filter(l => !row.lanes[l]);
-    const guide = row.free[Math.floor(r() * row.free.length)];
-    const gapM = Math.max(D.GEN.minGap, speed(W) * (C.gap[0] + (C.gap[1] - C.gap[0]) * r()));
-    // 별: 안전한 줄에 한 줄로 늘어서서 길을 알려 준다. 별만 있는 줄은 옆 줄로 비스듬히 건너간다
+    const guide = row.free.length ? row.free[Math.floor(r() * row.free.length)] : 1;
+    const vArrive = Math.max(1, baseSpeed(C, tArrive));
+    const gapM = Math.max(D.GEN.minGap, vArrive * gapSec(C, tArrive, r()));
+    // 별: 안전한 줄에 한 줄로 늘어서서 길을 알려 준다. 별만 있는 줄은 옆 줄로 비스듬히 건너간다.
+    // 같은 줄의 별은 line을 함께 들고 있어, 모두 먹으면 "완벽!"
     const n = D.STAR.lineN, span = Math.min(gapM * 0.55, 12);
     if (pat === 'stars') {
-      const a = guide, b = a === 1 ? (r() < 0.5 ? 0 : 2) : 1;
-      for (let i = 0; i < n * 2; i++) W.obs.push({ kind: 'star', x: i < n ? a : b, y: 0.5, z: z - span + (span * 2) * i / (n * 2 - 1), row: id });
-    } else if (r() < C.starLine) {
-      for (let i = 0; i < n; i++) W.obs.push({ kind: 'star', x: guide, y: 0.5, z: z - span + span * i / (n - 1) - 1.5, row: id });
+      const a = guide, b = a === 1 ? (r() < 0.5 ? 0 : 2) : 1, line = { n: n * 2, got: 0 };
+      for (let i = 0; i < n * 2; i++) W.obs.push({ kind: 'star', x: i < n ? a : b, y: 0.5, z: z - span + (span * 2) * i / (n * 2 - 1), row: id, line });
+    } else if (pat !== 'tut' && r() < C.starLine) {
+      const line = { n, got: 0 };
+      for (let i = 0; i < n; i++) W.obs.push({ kind: 'star', x: guide, y: 0.5, z: z - span + span * i / (n - 1) - 1.5, row: id, line });
     }
     // 레이저 문 위에는 가끔 무지개 모양 별: 뛰어넘으면 먹는다
     for (let l = 0; l < 3; l++) {
-      if (row.lanes[l] !== 'gate' || r() < 0.5) continue;
-      for (const [dz, y] of [[-3, 1.2], [0, 1.9], [3, 1.2]]) W.obs.push({ kind: 'star', x: l, y, z: z + dz, row: id });
+      if (row.lanes[l] !== 'gate' || (pat !== 'tut' && r() < 0.5)) continue;
+      const line = { n: 3, got: 0 };
+      for (const [dz, y] of [[-3, 1.2], [0, 1.9], [3, 1.2]]) W.obs.push({ kind: 'star', x: l, y, z: z + dz, row: id, line });
     }
     // 아이템: 때가 됐으면 안전한 줄, 장애물과 같은 자리에 (피하면 선물)
-    if (W.itemReady) {
+    if (W.itemReady && pat !== 'tut') {
       W.itemReady = false;
-      const ks = ITEM_KINDS.filter(k => !(k === 'shield' && W.shield)).map(k => ({ k, w: D.ITEM.kinds[k].w }));
-      const item = RN.weighted(ks, r).k;
-      W.obs.push({ kind: 'item', item, x: guide, y: 0.7, z, row: id });
-      row.item = item;
-      W.events.push('item');
+      const ws = C.item.w;
+      const ks = ITEM_KINDS.filter(k => (ws[k] || 0) > 0 && !(k === 'shield' && W.shield) && !(k === 'heart' && W.hearts >= W.maxHearts))
+        .map(k => ({ k, w: ws[k] }));
+      if (ks.length) {
+        const item = RN.weighted(ks, r).k;
+        W.obs.push({ kind: 'item', item, x: guide, y: 0.7, z, row: id });
+        row.item = item;
+        W.events.push('item');
+      }
     }
     W.nextZ = z + gapM;
     W.lastRow = row;
     return row;
   }
 
-  // 앞쪽 VIEW m까지 줄을 채운다
+  // 앞쪽 VIEW m까지 줄과 기념 아치를 채운다
   function fill(W) {
     while (W.nextZ < W.dist + D.VIEW) makeRow(W);
+    while (W.nextArch < W.dist + D.VIEW) {
+      W.obs.push({ kind: 'arch', x: 1, z: W.nextArch, m: W.nextArch, zone: zoneAt(W.nextArch + 1) });
+      W.nextArch += D.MILESTONE.every;
+    }
   }
 
   // ─── 조작 ─────────────────────────────────────────────────
@@ -117,9 +185,11 @@
     if (dir === 'jump' || dir === 'up') return jump(W);
     const to = dir === 'left' ? p.lane - 1 : dir === 'right' ? p.lane + 1 : p.lane;
     if (to < 0 || to > 2 || to === p.lane) return false;
-    p.lane = to;
+    p.fromLane = p.lane; p.fromT = W.t;
+    p.lane = to; p.from = p.x; p.lt = 0;
     W.laneMoves++;
     W.events.push('lane');
+    if (W.tut && W.tut.step === 'lane') { W.tut.step = 'jump'; W.tut.want = true; W.events.push('tutStep'); }
     return true;
   }
 
@@ -127,17 +197,30 @@
   function jump(W) {
     if (W.phase !== 'play') return false;
     const p = W.p;
-    if (p.y <= 0 && p.vy <= 0) {
-      p.vy = V0; p.buf = 0; W.jumps++;
+    if (p.jt < 0) {
+      p.jt = 0; p.buf = 0; W.jumps++;
       W.events.push('jump');
       return true;
     }
     p.buf = P.buffer;
     return false;
   }
+  // 점프 높이: 빨리 오르고 꼭대기에서 잠깐 머물다 내려온다 (u = 0 → 1)
+  const jumpY = u => P.jumpH * Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, u))), P.arc);
+  // 줄 바꾸기 곡선: 처음 빠르고 끝이 부드럽게 멈춘다
+  const laneEase = u => 1 - Math.pow(1 - u, 3);
 
   // ─── 부딪힘 · 줍기 ─────────────────────────────────────────
   function hit(W, o) {
+    if (o.tut) {
+      // 처음 안내용 문: 부딪혀도 괜찮다. 다시 한 번 기회
+      o.done = true;
+      const T = W.tut;
+      if (T && T.step === 'jump') { T.tries++; if (T.tries >= D.TUTORIAL.tries) finishTut(W, false); else T.want = true; }
+      W.fx.push({ kind: 'tutmiss', x: o.x, z: o.z });
+      W.events.push('tutMiss');
+      return;
+    }
     if (W.eff.boost > 0) {
       // 부스트: 부딪히는 것을 모두 부순다
       o.done = true; W.smashes++;
@@ -148,12 +231,12 @@
     if (W.inv > 0) return;   // 깜빡이는 동안은 그냥 지나간다
     o.done = true;
     if (W.shield) {
-      W.shield = false; W.blocks++; W.inv = D.HIT.shieldInv;
+      W.shield = false; W.blocks++; W.inv = W.shieldInv; W.hitAt = W.dist;
       W.fx.push({ kind: 'shield', x: o.x, z: o.z, what: o.kind });
       W.events.push('shield');
       return;
     }
-    W.hearts--; W.hits++; W.inv = D.HIT.inv; W.chain = 0;
+    W.hearts--; W.hits++; W.inv = cfg(W).inv; W.chain = 0; W.hitAt = W.dist;
     W.fx.push({ kind: 'hit', x: o.x, z: o.z, what: o.kind });
     if (W.hearts <= 0) {
       W.hearts = 0; W.phase = 'over'; W.cause = o.kind; W.inv = 0;
@@ -162,12 +245,21 @@
     } else W.events.push('hit');
   }
 
+  function finishTut(W, ok) {
+    const T = W.tut;
+    if (!T || T.step === 'done') return;
+    T.step = 'done'; T.show = ''; T.ok = ok;
+    W.events.push('tutDone');
+    if (ok) W.fx.push({ kind: 'tutok', x: W.p.x, z: W.dist });
+  }
+
   function usePower(W, o) {
     const K = D.ITEM.kinds[o.item];
     o.done = true; W.items++; W.kinds[o.item] = true;
     if (o.item === 'shield') W.shield = true;
-    else W.eff[o.item] = K.time;
-    if (o.item === 'boost') { W.boosts++; W.events.push('boost'); } else W.events.push('power');
+    else if (o.item === 'heart') { W.hearts = Math.min(W.maxHearts, W.hearts + 1); W.heals++; }
+    else W.eff[o.item] = o.item === 'magnet' ? W.magnetTime : o.item === 'boost' ? W.boostTime : K.time;
+    if (o.item === 'boost') { W.boosts++; W.events.push('boost'); } else if (o.item === 'heart') W.events.push('heal'); else W.events.push('power');
     W.fx.push({ kind: 'power', x: o.x, z: o.z, y: o.y, item: o.item });
   }
 
@@ -177,6 +269,12 @@
     W.lastStar = W.t;
     W.events.push('star');
     W.fx.push({ kind: 'star', x: o.x, z: o.z, y: o.y });
+    const line = o.line;
+    if (line && ++line.got === line.n) {
+      W.perfects++; W.bonus += D.STAR.perfect;
+      W.events.push('perfect');
+      W.fx.push({ kind: 'perfect', x: o.x, z: o.z, y: o.y, pts: D.STAR.perfect });
+    }
   }
 
   // ─── 한 칸(1/120초) ───────────────────────────────────────
@@ -187,17 +285,21 @@
     if (W.phase !== 'play') { W.overT += dt; return; }
     if (W.auto) bot(W);
 
-    // 줄 바꾸기: 목표 줄까지 일정한 빠르기로 미끄러진다
-    const dx = p.lane - p.x, sx = P.laneSpeed * dt;
-    p.x = Math.abs(dx) <= sx ? p.lane : p.x + Math.sign(dx) * sx;
+    // 줄 바꾸기: laneT초 동안 곡선을 따라 미끄러진다 (도중에 또 바꾸면 지금 자리에서 다시)
+    if (p.lt < 1) {
+      p.lt = Math.min(1, p.lt + dt / P.laneT);
+      p.x = p.from + (p.lane - p.from) * laneEase(p.lt);
+      if (p.lt >= 1) p.x = p.lane;
+    }
     // 점프
-    if (p.y > 0 || p.vy > 0) {
-      p.vy -= G * dt; p.y += p.vy * dt;
-      if (p.y <= 0) {
-        p.y = 0; p.vy = 0;
+    if (p.jt >= 0) {
+      p.jt += dt;
+      const u = p.jt / P.jumpT, y0 = p.y;
+      if (u >= 1) {
+        p.y = 0; p.vy = 0; p.jt = -1;
         W.events.push('land');
         if (p.buf > 0) jump(W);
-      }
+      } else { p.y = jumpY(u); p.vy = (p.y - y0) / dt; }
     }
     p.buf = Math.max(0, p.buf - dt);
 
@@ -216,10 +318,32 @@
         W.obs.push({ kind: 'star', x: Math.floor(W.rand() * 3), y: 0.5, z: W.dist + 25 + W.rand() * 20, rain: true });
       }
     }
-    if ((W.itemT -= dt) <= 0) { W.itemReady = true; W.itemT = D.ITEM.gapMin + (D.ITEM.gapMax - D.ITEM.gapMin) * W.rand(); }
+    const IC = cfg(W).item;
+    if ((W.itemT -= dt) <= 0) { W.itemReady = true; W.itemT = IC.gap[0] + (IC.gap[1] - IC.gap[0]) * W.rand(); }
+
+    // 처음 안내: 안내용 문이 다가오면 "위로 밀어서 점프"를 띄우고 천천히
+    const T = W.tut;
+    let slowTo = 1;
+    if (T && T.step !== 'done') {
+      T.show = T.step === 'lane' ? 'lane' : '';
+      if (T.step === 'jump') {
+        const v0 = baseSpeed(cfg(W), W.runT);
+        for (const o of W.obs) {
+          if (!o.tut || o.done || o.x !== 1) continue;
+          const rel = o.z - W.dist;
+          if (rel > -P.hitZ && rel < v0 * D.TUTORIAL.showSec) { T.show = 'jump'; slowTo = D.TUTORIAL.slow; }
+        }
+      }
+    }
+    W.slow += (slowTo - W.slow) * Math.min(1, dt * 4);
 
     const v = speed(W);
     W.dist += v * dt;
+    if (W.dist - W.hitAt > W.clean) W.clean = W.dist - W.hitAt;
+
+    // 우주 구역
+    const zi = zoneAt(W.dist);
+    if (zi !== W.zone) { W.zone = zi; W.events.push('zone'); W.fx.push({ kind: 'zone', i: zi }); }
 
     const mag = W.eff.magnet > 0, cy = p.y + 0.5;
     for (let i = W.obs.length - 1; i >= 0; i--) {
@@ -227,6 +351,15 @@
       let rel = o.z - W.dist;
       if (rel < -D.GEN.behind) { W.obs.splice(i, 1); continue; }
       if (o.done) continue;
+      if (o.kind === 'arch') {
+        // 기념 아치를 지나감
+        if (rel <= 0 && !o.got) {
+          o.got = true; W.milestones++; W.bonus += D.MILESTONE.bonus;
+          W.events.push('milestone');
+          W.fx.push({ kind: 'milestone', m: o.m, pts: D.MILESTONE.bonus });
+        }
+        continue;
+      }
       if (o.kind === 'star' || o.kind === 'item') {
         // 자석: 가까운 별을 모든 줄에서 끌어온다
         if (mag && o.kind === 'star' && rel < D.ITEM.magnetRange && rel > -1.5) {
@@ -251,14 +384,29 @@
           else { hit(W, o); if (W.phase !== 'play') break; }
         }
       }
-      // 레이저 문을 무사히 넘었다
-      if (o.kind === 'gate' && o.over && !o.done && !o.counted && rel < -P.hitZ) {
-        o.counted = true; W.gates++;
-        W.events.push('gate');
+      if (rel < -P.hitZ && !o.passed && !o.done) {
+        o.passed = true;
+        // 레이저 문을 무사히 넘었다
+        if (o.kind === 'gate' && o.over) {
+          o.counted = true; W.gates++;
+          W.events.push('gate');
+          if (o.tut) finishTut(W, true);
+        } else if (!o.tut) nearMiss(W, o);
       }
     }
-    W.score = Math.floor(W.dist) + W.stars * D.STAR.value;
+    W.score = Math.floor(W.dist) + W.stars * D.STAR.value + W.bonus;
     fill(W);
+  }
+
+  // 아슬아슬: 이 장애물이 있던 줄에서 방금(window초 안) 옆 줄로 비켜 지나갔다
+  function nearMiss(W, o) {
+    const p = W.p, N = D.NEAR, side = Math.abs(o.x - p.x);
+    if (W.eff.boost > 0 || W.inv > 0 || side < P.hitW || side > N.side) return false;
+    if (Math.round(o.x) !== p.fromLane || W.t - p.fromT > N.window || W.t - W.lastNear < N.cool) return false;
+    W.lastNear = W.t; W.nears++; W.bonus += N.bonus;
+    W.events.push('near');
+    W.fx.push({ kind: 'near', x: p.x, z: W.dist, pts: N.bonus });
+    return true;
   }
 
   // 화면 한 번 사이에 흐른 시간만큼 1/120초 칸을 돌린다. 남은 시간 비율(W.alpha)은 그리기 보간용
@@ -320,9 +468,10 @@
     return {
       dist: Math.floor(W.dist), stars: W.stars, score: W.score, gates: W.gates, blocks: W.blocks,
       boosts: W.boosts, hits: W.hits, smashes: W.smashes, items: W.items, kinds: Object.keys(W.kinds).length,
-      jumps: W.jumps, easy: W.easy, time: W.runT,
+      jumps: W.jumps, easy: W.diff === 'easy', diff: W.diff, time: W.runT,
+      zone: zoneAt(W.dist), nears: W.nears, perfects: W.perfects, milestones: W.milestones, heals: W.heals,
     };
   }
 
-  RN.World = { create, step, tick, move, jump, speed, makeRow, fill, bot, dangerAhead, runStats, G, V0 };
+  RN.World = { create, step, tick, move, jump, speed, baseSpeed, level, rowWeights, makeRow, fill, bot, dangerAhead, runStats, zoneAt, diffId, cfg, jumpY };
 })(RN);

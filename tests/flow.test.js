@@ -42,6 +42,39 @@ async function until(page, fn, arg, ms) {
 
 (async () => {
   const browser = await pw.chromium.launch();
+  console.log('놀이 본부 (게임 고르기)');
+  const hb = await open(browser, ROOT + '/index.html');
+  const HB = hb.page;
+  await test('게임 고르기: 네 게임 카드, 별코인, 오늘의 미션 3개, 기록실', async () => {
+    await HB.evaluate(() => { localStorage.clear(); location.reload(); });
+    await HB.waitForTimeout(400);
+    assert(await HB.evaluate(() => document.querySelectorAll('.pick a').length === 4), '카드 수');
+    assert(await HB.evaluate(() => document.getElementById('hub-coins').textContent === '0'), '처음 코인 0');
+    assert(await HB.evaluate(() => document.querySelectorAll('#daily .dm').length === 3), '오늘의 미션 3개');
+    await HB.tap('#rec-open');
+    assert(await HB.evaluate(() => document.getElementById('records').classList.contains('on') && document.querySelectorAll('#rec-rows .grow').length === 4), '기록실');
+    await HB.tap('#rec-close');
+    assert(await HB.evaluate(() => !document.getElementById('records').classList.contains('on')), '기록실 닫기');
+  });
+  await test('오늘의 미션을 채우면 받기 버튼 → 누르면 별코인이 는다', async () => {
+    await HB.evaluate(() => { const m = HUB.daily()[0]; const d = HUB.DAILY[m.game].find(x => x.text === m.text); HUB.reportRun(m.game, { [d.stat]: m.goal }, 10); renderHub(); });
+    assert(await HB.evaluate(() => !!document.querySelector('#daily [data-claim="0"]')), '받기 버튼 없음');
+    const want = await HB.evaluate(() => HUB.daily()[0].reward);
+    await HB.tap('#daily [data-claim="0"]', { force: true });   // 버튼이 톡톡 튀고 있어서 기다리지 않고 누른다
+    assert(await until(HB, w => document.getElementById('hub-coins').textContent === String(w), want), '코인이 안 늘어남');
+  });
+  await test('별코인은 네 게임이 같이 쓴다: 뿅뿅 우주선에서 번 코인이 게임 고르기에 보인다', async () => {
+    const before = await HB.evaluate(() => HUB.coins());
+    await HB.goto(ROOT + '/game/index.html');
+    assert(await until(HB, () => typeof NG !== 'undefined' && NG.debug && NG.debug.shop), '뿅뿅 우주선이 안 열림');
+    assert(await HB.evaluate(b => NG.debug.shop.coins === b, before), '게임 상점이 지갑 잔액을 못 읽음');
+    await HB.evaluate(() => NG.debug.giveCoins(250));
+    await HB.goto(ROOT + '/index.html');
+    assert(await until(HB, b => document.getElementById('hub-coins').textContent === (b + 250).toLocaleString(), before), '게임 고르기에 코인이 안 보임');
+  });
+  await test('게임 고르기 콘솔 오류 없음', async () => { assert(!hb.errors.length, hb.errors.join(' | ')); });
+  await hb.ctx.close();
+
   console.log('N-GUN');
   const ng = await open(browser, ROOT + '/game/index.html');
   const G = ng.page;
