@@ -208,7 +208,7 @@
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
-      // planet: 가 본 가장 먼 행성 (1 수성 … 9 명왕성, 2바퀴는 10부터) · blackholes: 깬 블랙홀 웨이브 수 (스티커북)
+      // planet: 가 본 가장 먼 행성 (1 수성 … 9 명왕성, 10 얼음 … 17 떠돌이 외계 행성, 2바퀴는 18부터) · blackholes: 깬 블랙홀 웨이브 수 (스티커북)
       // gifts: 연 선물 상자 · fevers: 피버 타임 횟수 · wingmen: 구한 동료 우주선 (2026-09-27)
       const fresh = HUB.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills, planet: W.stats.planet, blackholes: W.stats.holesCleared,
         gifts: W.stats.gifts, fevers: W.stats.fevers, wingmen: W.stats.wingmen }, W.stats.time);

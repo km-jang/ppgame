@@ -162,7 +162,7 @@
   }
 
   // ─── 태양계 여행 ───────────────────────────────────────────
-  // n웨이브가 어느 행성인지. i: PLANETS 차례(0 수성 … 8 명왕성), lap: 몇 바퀴째(1부터), first: 그 행성의 첫 웨이브
+  // n웨이브가 어느 행성인지. i: PLANETS 차례(0 수성 … 8 명왕성, 9 얼음 … 16 떠돌이), lap: 몇 바퀴째(1부터), first: 그 행성의 첫 웨이브
   function placeOf(n) {
     const per = D.JOURNEY.perPlanet, k = Math.floor(Math.max(0, n - 1) / per), N = D.PLANETS.length;
     return { i: k % N, planet: D.PLANETS[k % N], lap: Math.floor(k / N) + 1, first: (Math.max(1, n) - 1) % per === 0 };

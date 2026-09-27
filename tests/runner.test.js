@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 우주 여행 도감(외계 행성·날씨)을 브라우저와 같은 차례로 먼저 불러온다 (index.html: hub.js 다음 worlds.js)
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'runner', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -514,21 +516,26 @@ test('옛 키 옮기기: runner.easy → runner.diff, 옛 최고 기록 → 그�
   assert(Pf.rec(mem({ 'runner.rec': 'garbage' })).best.hard.dist === 0, 'broken record');
 });
 
-test('태양계 여행: 거리에 따라 수성 → 금성 → 지구 → 화성 → 목성 → 토성 → 천왕성 → 해왕성 → 명왕성 → 은하 너머 → 다시 수성', () => {
+test('우주 여행: 수성 → … → 명왕성 → 외계 행성 여덟(도감 차례) → 은하 너머 → 다시 수성 (바퀴를 돌아도 같은 차례)', () => {
   const Z = D.ZONES, leg = D.ROUTE.leg, zoneAt = RN.World.zoneAt, placeOf = RN.World.placeOf;
-  const names = ['수성', '금성', '지구', '화성', '목성', '토성', '천왕성', '해왕성', '명왕성', '은하 너머'];
-  assert(Z.length === 10 && Z.map(z => z.name).join() === names.join(), 'order ' + Z.map(z => z.name).join());
+  const WX = vm.runInContext('WORLDS', ctx);
+  const solar = ['수성', '금성', '지구', '화성', '목성', '토성', '천왕성', '해왕성', '명왕성'];
+  const names = solar.concat(WX.EXO.map(e => e.name), ['은하 너머']);
+  const N = names.length;
+  assert(N === 18 && Z.length === N && Z.map(z => z.name).join() === names.join(), 'order ' + Z.map(z => z.name).join());
+  assert(Z.slice(9, 17).map(z => z.id).join() === WX.EXO.map(e => e.id).join() && Z.slice(9, 17).every(z => z.exo), 'exo after pluto');
   assert(Z.every((z, i) => z.at === i * leg && z.line && !/[\u2014\u2013]/.test(z.name + z.line)), 'at and lines');
+  assert(new Set(Z.map(z => z.id)).size === N, 'ids unique');
   assert(leg >= 300 && leg <= 400 && Z[8].at >= 2800 && Z[8].at <= 3200, 'pluto at ' + Z[8].at);
   // 짝수 번째 도착은 기념 아치 자리와 겹친다 (아치에 이름이 적힌다)
   assert(Z[2].at % D.MILESTONE.every === 0 && Z[8].at % D.MILESTONE.every === 0, 'arches line up');
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < N * 2 + 5; i++) {
     const d = i * leg;
     assert(zoneAt(d) === i && zoneAt(d - 0.1) === Math.max(0, i - 1) && zoneAt(d + leg - 0.1) === i, 'threshold ' + i);
     const pl = placeOf(i);
-    assert(pl.name === names[i % 10] && pl.stop === i % 10 && pl.lap === Math.floor(i / 10) + 1, 'place ' + i + ' ' + pl.name);
+    assert(pl.name === names[i % N] && pl.stop === i % N && pl.lap === Math.floor(i / N) + 1, 'place ' + i + ' ' + pl.name);
   }
-  assert(zoneAt(0) === 0 && placeOf(10).name === '수성' && placeOf(10).lap === 2, 'second lap');
+  assert(zoneAt(0) === 0 && placeOf(N).name === '수성' && placeOf(N).lap === 2 && placeOf(N + 9).name === WX.EXO[0].name, 'second lap');
   const W = empty();
   W.dist = leg - 1;
   run(W, 0.5);
@@ -539,8 +546,34 @@ test('태양계 여행: 거리에 따라 수성 → 금성 → 지구 → 화성
   assert(runStats(W).zone === 1, 'run stats zone');
   // 한 판에 여러 바퀴도: 거리와 도착 수가 함께 는다
   const V = empty();
-  V.dist = 10 * leg + 5; run(V, 0.1);
-  assert(runStats(V).zone === 10 && runStats(V).lap === 2, 'lap 2 stats');
+  V.dist = N * leg + 5; run(V, 0.1);
+  assert(runStats(V).zone === N && runStats(V).lap === 2, 'lap 2 stats');
+  // 외계 행성 구간에서도 도착 글자가 한 번씩 (명왕성 → 꽁꽁 얼음 행성)
+  const X = empty();
+  X.dist = 9 * leg - 1; run(X, 0.5);
+  assert(X.zone === 9 && placeOf(X.zone).id === WX.EXO[0].id && X.fx.some(f => f.kind === 'zone' && f.i === 9), 'exo arrival');
+});
+
+test('행성 날씨: 태양계 아홉·외계 여덟 모두 도감의 날씨, 은하 너머는 없음 (그림 전용이라 규칙은 그대로)', () => {
+  const Z = D.ZONES, WX = vm.runInContext('WORLDS', ctx);
+  for (const z of Z) {
+    if (z.id === 'beyond') { assert(z.weather === null, 'beyond has none'); continue; }
+    assert(z.weather && z.weather === WX.weatherOf(z.id) && WX.KINDS.indexOf(z.weather.kind) >= 0, 'weather ' + z.id);
+    assert(z.weather.amount > 0 && z.weather.amount <= 1 && Math.abs(z.weather.wind) <= 1, 'amount/wind ' + z.id);
+  }
+  const kinds = new Set(Z.filter(z => z.weather).map(z => z.weather.kind));
+  for (const k of ['snow', 'ember', 'rain', 'glass', 'sparkle', 'sand', 'spore', 'aurora', 'bolt', 'haze']) assert(kinds.has(k), 'kind used ' + k);
+  // 얼음 행성은 눈, 불 행성은 불씨
+  assert(Z.find(z => z.id === 'neptune').weather.kind === 'snow' && Z.find(z => z.id === 'frost').weather.kind === 'snow', 'ice -> snow');
+  assert(Z.find(z => z.id === 'mercury').weather.kind === 'ember' && Z.find(z => z.id === 'lava').weather.kind === 'ember', 'fire -> ember');
+  assert(D.WEATHER.max >= 60 && D.WEATHER.max <= 90 && D.WEATHER.calm < 1, 'particle cap');
+  // 날씨는 길을 바꾸지 않는다: 같은 씨앗이면 날씨 정보를 지워도 같은 줄
+  const a = create(7, { wait: 0 }), saved = Z.map(z => z.weather);
+  Z.forEach(z => { z.weather = null; });
+  const b = create(7, { wait: 0 });
+  Z.forEach((z, i) => { z.weather = saved[i]; });
+  run(a, 20); run(b, 20);
+  assert(a.dist === b.dist && a.obs.length === b.obs.length && a.obs.every((o, i) => o.kind === b.obs[i].kind && o.x === b.obs[i].x), 'same road');
 });
 
 test('기념 아치: 250m마다 지나가면 작은 보너스', () => {

@@ -154,22 +154,57 @@
     // ─── 높이 구역 ─────────────────────────────────────────────
     // 오를수록 배경이 바뀐다 (from m부터). mix: 발판·별 섞임을 살짝 바꾼다 (가중치 배율 · 별 확률 더하기)
     // sky/glow/far: 그리기 색 (render.js가 구역마다 미리 그려 둔다), stars: 배경 별 밝기 0 ~ 1, clouds: 구름 층 진하기 0 ~ 1
+    // 2026-09-27 외계 행성 여덟이 명왕성 다음(700m)에 이어지면서, 700m 구역은 "외계 행성", 별나라(은하)는 그 위 1100m로 옮겼다.
+    // 700m 구역의 발판 섞임은 예전 별나라 그대로라 700m까지의 놀이는 바뀌지 않는다
     ZONES: [
       { id: 'sky',   name: '하늘',    from: 0,   color: '#ffb36b', banner: '',
-        sky: ['#1b2a5c', '#5a3a7a', '#e0765a'], glow: ['#ff9d5c', '#7a4bd0'], stars: 0.25, clouds: 1, mix: {} },
+        sky: ['#1a3570', '#3d5fa8', '#e08a64'], glow: ['#ffb070', '#6a8ae0'], stars: 0.08, clouds: 1, mix: {} },
       { id: 'cloud', name: '구름 위', from: 100, color: '#bfe9ff', banner: '구름 위 도착!',
-        sky: ['#0f2150', '#2c4f9a', '#7fb2e6'], glow: ['#9fd8ff', '#5d7bff'], stars: 0.35, clouds: 0.85, mix: { cloud: 1.5 } },
+        sky: ['#10265e', '#2c56a8', '#8fc2f0'], glow: ['#bfe6ff', '#5d7bff'], stars: 0.15, clouds: 0.85, mix: { cloud: 1.5 } },
       { id: 'space', name: '우주',    from: 250, color: '#b388ff', banner: '우주 도착!',
         sky: ['#05070f', '#0d1633', '#1c1446'], glow: ['#3a2a8a', '#0d6a8a'], stars: 0.85, clouds: 0, mix: { moving: 1.3, star: 0.05, monster: 1.2 } },
-      { id: 'stars', name: '별나라',  from: 700, color: '#ffe66d', banner: '별나라 도착!',
+      { id: 'exo',   name: '외계 행성', from: 700, color: '#7dffcf', banner: '외계 행성 도착!',
+        sky: ['#060414', '#140c34', '#241046'], glow: ['#6affc8', '#9a7dff'], stars: 0.9, clouds: 0, mix: { spring: 1.3, star: 0.12, monster: 1.3 } },
+      { id: 'stars', name: '별나라',  from: 1100, color: '#ffe66d', banner: '별나라 도착!',
         sky: ['#0b0418', '#2a0c42', '#40104a'], glow: ['#ff5ec8', '#ffe66d'], stars: 1, clouds: 0, mix: { spring: 1.3, star: 0.12, monster: 1.3 } },
     ],
     // 구역이 바뀔 때 배경이 섞여 넘어가는 높이 (m, 경계 앞쪽). 행성 사이는 PLANET_FADE
     ZONE_FADE: 25,
 
+    // ─── 땅에서 우주까지 (2026-09-27, 소유자: "땅에서 시작해 구름·대기권을 지나 우주로") ───
+    // 그림과 배너만 바뀌는 여정 (놀이 규칙은 위 ZONES 그대로). 높이는 m.
+    //   legs: 지나갈 때 배너를 한 번 띄우는 곳 (world.js가 fx 'leg'로 알린다). 100m 구름 위·250m 우주는 ZONES 배너가 맡는다
+    //   ground: 땅(동네 지붕·발사대)이 보이는 높이 · cloud: 구름 층 [아래, 위] (그 사이에서는 앞에도 구름이 흘러 지나간다)
+    //   high: 어두워지는 높은 하늘(성층권) 시작 · edge: 대기권 끝 빛나는 선 높이 · scenes: 배경 장면(하늘색) 추가
+    //   deco: 배경 소품 {kind, at(m), side(-1 왼쪽·1 오른쪽), size} (새·열기구·연·비행기·기상 풍선·인공위성·달)
+    SKY: {
+      ground: 12,
+      cloud: [70, 104],
+      edge: 232,
+      legs: [
+        { id: 'cloudIn', at: 70,  banner: '구름 속으로 쏙!', sub: '구름을 뚫고 올라가요', color: '#e8f4ff' },
+        { id: 'high',    at: 150, banner: '높은 하늘!',     sub: '비행기보다 높이 왔어요', color: '#7fb2ff' },
+        { id: 'edge',    at: 232, banner: '대기권 돌파!',   sub: '하늘 끝을 지나 곧 우주예요', color: '#6ad8ff' },
+      ],
+      scenes: [
+        { id: 'high', name: '높은 하늘', from: 150, color: '#7fb2ff', sky: ['#030a26', '#0a2360', '#2d5fb8'], glow: ['#3d7bff', '#6ad8ff'], stars: 0.3, clouds: 0 },
+        { id: 'edge', name: '대기권 끝', from: 212, color: '#6ad8ff', sky: ['#02030c', '#060d2a', '#0b2a6a'], glow: ['#1a5aff', '#6ad8ff'], stars: 0.6, clouds: 0 },
+      ],
+      deco: [
+        { kind: 'kite',     at: 16,  side: -1, size: 1 },
+        { kind: 'birds',    at: 28,  side: 1,  size: 1 },
+        { kind: 'balloon',  at: 44,  side: -1, size: 1 },
+        { kind: 'birds',    at: 58,  side: -1, size: 0.8 },
+        { kind: 'plane',    at: 168, side: 1,  size: 0.8 },
+        { kind: 'wballoon', at: 196, side: -1, size: 1 },
+        { kind: 'sat',      at: 240, side: -1, size: 0.9 },
+        { kind: 'moon',     at: 262, side: -1, size: 0.6 },
+      ],
+    },
+
     // ─── 태양계 여행 (2026-09-27, 소유자: "다른 게임도 우주배경 반영", 뿅뿅 우주선과 같은 행성) ───
     // 우주 구역(250m)부터 50m마다 행성 하나씩 지나 오른다: 수성 250 · 금성 300 · 지구 350 · 화성 400 · 목성 450 ·
-    // 토성 500 · 천왕성 550 · 해왕성 600 · 명왕성 650, 그 위 700m부터 별나라(은하).
+    // 토성 500 · 천왕성 550 · 해왕성 600 · 명왕성 650, 그 뒤 외계 행성 여덟(700 ~ 1050, EXO_PLANETS), 1100m부터 별나라(은하).
     // 50m 간격: 쉬움 아이 흉내 봇이 한 판에 평균 450 ~ 500m를 올라 행성 너덧 개를 보고, 쉬움이 가장 어려워지는 700m에서 은하에 닿는다.
     //   at: 도착 높이(m) · side: 행성이 떠 가는 쪽(기둥 왼쪽·오른쪽 번갈아) · size: 크기 배율 · line: 도착 배너 한 줄
     //   sky: 그 행성 구간 하늘 [위, 가운데, 아래] · glow: 하늘 빛 덩어리 두 색 (render.js가 한 번 그려 둔다)
@@ -194,6 +229,21 @@
         sky: ['#05050a', '#10141e', '#1a1a2a'], glow: ['#e8d2b8', '#3a3a5a'] },
     ],
     PLANET_FADE: 14,
+    // 외계 행성 여덟 (2026-09-27, 소유자: "얼음 행성이면 눈, 불의 행성이면 그에 맞게"). 이름·한 줄·색·날씨는 공용 도감
+    // common/worlds.js (WORLDS.EXO)에서 가져와 아래에서 PLANETS 뒤에 붙인다. 여기에는 높이·쪽·크기만.
+    EXO_PLANETS: [
+      { id: 'frost',  at: 700,  side: -1, size: 1 },
+      { id: 'lava',   at: 750,  side: 1,  size: 0.95 },
+      { id: 'ocean',  at: 800,  side: -1, size: 1.05 },
+      { id: 'glass',  at: 850,  side: 1,  size: 1.1 },
+      { id: 'gem',    at: 900,  side: -1, size: 0.85 },
+      { id: 'twin',   at: 950,  side: 1,  size: 1 },
+      { id: 'shroom', at: 1000, side: -1, size: 0.95 },
+      { id: 'rogue',  at: 1050, side: 1,  size: 1 },
+    ],
+    // 행성 날씨 (그리기 전용, 놀이에는 영향 없음): 입자 수 상한 max (움직임 줄이기면 calm배), 카메라가 오를 때 입자가
+    // 화면에서 흘러내리는 정도 depth (1 = 발판과 같은 빠르기), 행성 도착 앞뒤 fade m 동안 입자 수가 부드럽게 바뀐다
+    WEATHER: { max: 72, calm: 0.4, calmSpeed: 0.45, depth: 0.35, fade: 12 },
 
     // ─── 블랙홀 구간 (2026-09-27) ────────────────────────────────
     // 가끔 len(m) 동안 기둥 한쪽에 블랙홀이 나타나 주인공을 그쪽으로 살짝 끈다 (좌우로 늘 pull 점/초씩 밀림).
@@ -226,8 +276,10 @@
       // 2026-09-27 높이 구역·콤보와 함께
       { id: 'cloudz',   tier: 1, name: '구름 위 도착',  desc: '100m 구름 위까지',             check: r => r.height >= 100 },
       { id: 'spacez',   tier: 2, name: '우주 도착',     desc: '250m 우주까지',                check: r => r.height >= 250 },
-      // 2026-09-27 태양계 여행으로 별나라가 500m에서 700m(명왕성 다음)로 옮겨 갔다. 이미 딴 메달은 그대로
-      { id: 'starz',    tier: 3, name: '별나라 도착',   desc: '700m 별나라까지',              check: r => r.height >= 700 },
+      // 2026-09-27 태양계 여행으로 별나라가 500m에서 700m(명왕성 다음)로 옮겨 갔다. 이미 딴 메달은 그대로.
+      // 같은 날 700m에 외계 행성이 들어와 별나라는 1100m로 한 번 더 옮겼다. 이 메달(700m)은 이름만 "외계 행성 도착"으로
+      { id: 'starz',    tier: 3, name: '외계 행성 도착', desc: '700m 외계 행성까지',           check: r => r.height >= 700 },
+      { id: 'galaxy',   tier: 3, name: '별나라 도착',   desc: '1100m 별나라까지',             check: r => r.height >= 1100 },
       { id: 'combo20',  tier: 3, name: '콤보 20',       desc: '콤보 20 만들기',               check: r => r.maxCombo >= 20 },
       { id: 'hard100',  tier: 3, name: '어려움 100',    desc: '어려움으로 100m',              check: r => r.diff === 'hard' && r.height >= 100 },
       // 2026-09-27 밟는 몬스터와 함께
@@ -238,7 +290,7 @@
     // 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js)에 들어간다.
     // 판이 끝나면 = 높이 ÷ perMeter + 별 ÷ perStars + 도착한 구역 보너스(zone[구역 번호]까지 모두 더함).
     // 그 합에 난이도 배율(level: 보통·어려움이 더 많이), 그 뒤 코인 보너스 강화만큼 더
-    COINS: { perMeter: 20, perStars: 6, zone: [0, 4, 8, 12], level: { easy: 1, normal: 1.6, hard: 2.2 } },
+    COINS: { perMeter: 20, perStars: 6, zone: [0, 4, 8, 12, 16], level: { easy: 1, normal: 1.6, hard: 2.2 } },
 
     // 캐릭터 다섯 (2026-09-27 소유자 요청: 게임마다 고를 수 있는 캐릭터 5종).
     // 모두 한 가지씩 작은 장점이 있고 단점은 없다. 저마다 다른 쪽이 좋아서 어느 하나가 모든 면에서 앞서지 않는다.
@@ -318,4 +370,17 @@
     // 처음 몇 초 조작 안내를 보여 준다 (처음 해 보는 판은 양쪽을 다 눌러 볼 때까지 큰 안내)
     HINT_TIME: 4,
   };
+
+  // 외계 행성을 태양계 행성 뒤에 붙인다 (공용 도감이 없으면 태양계 아홉만)
+  const WX = (typeof WORLDS !== 'undefined' && WORLDS && WORLDS.exo) ? WORLDS : null;
+  if (WX) {
+    for (const e of JP.DATA.EXO_PLANETS) {
+      const X = WX.exo(e.id);
+      if (!X) continue;
+      JP.DATA.PLANETS.push({ id: e.id, name: X.name, at: e.at, side: e.side, size: e.size, color: X.color, line: X.line,
+        sky: X.sky, glow: X.glow, body: X.body, accent: X.accent, exo: true });
+    }
+  }
+  // 행성마다 날씨 (WORLDS.weatherOf). 없으면 null
+  JP.DATA.weatherOf = id => (WX && WX.weatherOf ? WX.weatherOf(id) : null);
 })(JP);

@@ -410,7 +410,7 @@
     $('over-height').textContent = W.height + 'm';
     $('over-combo').textContent = W.maxCombo;
     $('over-diff').textContent = D.DIFFICULTY[W.diff].name;
-    $('over-zone').textContent = W.zone === 2 && W.planet > 0 ? D.PLANETS[W.planet - 1].name + ' 근처' : D.ZONES[W.zone].name + ' 구역';
+    { const pl = JP.Render.placeOf(W); $('over-zone').textContent = pl.name + (pl.planet ? ' 근처' : ' 구역'); }
     $('over-new-txt').textContent = D.DIFFICULTY[W.diff].name + ' 최고 점수 경신';
     $('over-stars').textContent = W.starsGot;
     $('over-time').textContent = JP.fmtTime(W.t);
@@ -426,6 +426,7 @@
       if (ev === 'tut') { tutNeed = false; RC.tutorialDone(JP.store); }
       if (ev === 'mile' && (zoneNow || planetNow)) continue;   // 구역·행성 축하와 겹치면 그 소리만
       if (ev === 'zone' && planetNow) continue;
+      if (ev === 'leg' && (zoneNow || planetNow)) continue;
       if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo + (world.feverT > 0 ? 5 : 0), fever: world.feverT > 0 });
       else if (ev === 'over') {
         JP.Audio.play((world.cause === 'fall' || world.cause === 'storm') && !world.easy ? 'fall' : 'over', { soft: world.easy });

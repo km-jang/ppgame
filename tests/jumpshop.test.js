@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 공용 우주 여행 도감 (외계 행성 이름·날씨). 게임 index.html도 data.js보다 먼저 불러온다
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'records.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', f), 'utf8'), ctx, { filename: f });
 }

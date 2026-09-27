@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 우주 여행 도감 (외계 행성 여덟, 날씨). index.html처럼 data.js보다 먼저
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -951,9 +953,10 @@ test('미션 목록: 15개 안팎, id 중복 없음, 누적·한 판이 섞이�
 // 다음 웨이브로 바로 넘긴다 (카드 화면을 거쳐 startWave가 불린다)
 function nextWave(W) { W.phase = 'cards'; W.cards = drawCards(W, 3); pickCard(W, 0); }
 
-test('태양계 여행: 웨이브 2개마다 수성 → 금성 → … → 명왕성, 그다음은 2바퀴 수성', () => {
+test('태양계 여행: 웨이브 2개마다 수성 → 금성 → … → 명왕성 → 외계 행성 여덟, 그다음은 2바퀴 수성', () => {
   const P = DA.PLANETS, per = DA.JOURNEY.perPlanet;
-  assert(P.map(p => p.name).join('') === '수성금성지구화성목성토성천왕성해왕성명왕성', 'order ' + P.map(p => p.name).join(','));
+  assert(P.slice(0, 9).map(p => p.name).join('') === '수성금성지구화성목성토성천왕성해왕성명왕성', 'order ' + P.map(p => p.name).join(','));
+  assert(P.length === 17, 'seventeen stops ' + P.length);
   for (const p of P) assert(p.id && p.fact && /^#[0-9a-f]{6}$/i.test(p.color), 'shape ' + p.id);
   for (let n = 1; n <= per * P.length; n++) {
     const pl = NG.World.placeOf(n);
@@ -1220,14 +1223,15 @@ function foeRun(W, sec, input, onFrame) {
 const STILL = { moveX: 0, moveY: 0, aimAngle: 0, dash: false };
 
 test('행성 적: 행성마다 하나씩 9종, 이름·색·모양이 모두 다르고 그 행성 웨이브에만 섞여 나온다', () => {
-  const foes = DA.PLANETS.map(p => p.foe);
+  // 태양계 아홉 행성은 적이 모두 다르다 (외계 행성은 이 아홉 가운데 어울리는 것을 다시 쓴다, 다음 테스트)
+  const foes = DA.PLANETS.slice(0, 9).map(p => p.foe);
   assert(foes.length === 9 && new Set(foes).size === 9, '9 distinct');
   for (const f of foes) assert(DA.ENEMIES[f] && DA.ENEMIES[f].name && DA.ENEMIES[f].color, f);
   assert(new Set(foes.map(f => DA.ENEMIES[f].color)).size === 9 && new Set(foes.map(f => DA.ENEMIES[f].shape)).size === 9, 'looks differ');
   const rand = NG.rng(5);
-  for (let n = 1; n <= 36; n++) {
+  for (let n = 1; n <= 70; n++) {
     const q = buildWave(n, rand, DA.DIFFICULTY.normal), foe = NG.World.foeOf(n);
-    assert(foe === DA.PLANETS[Math.floor((n - 1) / 2) % 9].foe, 'foe of ' + n);
+    assert(foe === DA.PLANETS[Math.floor((n - 1) / 2) % DA.PLANETS.length].foe, 'foe of ' + n);
     const k = q.filter(t => t === foe).length;
     if (n % 5 === 0) assert(q[0] === 'boss' && k === DA.PLANET_FOE.boss, 'boss wave ' + n + ' k ' + k);
     else assert(k >= DA.PLANET_FOE.min && k >= Math.round((q.length) * DA.PLANET_FOE.share) - 1, 'share ' + n + ' k ' + k + '/' + q.length);
@@ -1450,6 +1454,69 @@ test('행성 적: 아홉 행성을 모두 지나는 긴 판도 값이 망가지�
   assert(seen.has('iceBit'), 'ice split in play');
 });
 
+// ─── 태양계 밖 외계 행성 (2026-09-27) ─────────────────────────
+test('외계 행성: 명왕성 다음 도감(WORLDS.EXO) 순서대로 여덟, 이름·한 줄·색은 도감 것, 17곳을 돌면 2바퀴 수성', () => {
+  const WL = vm.runInContext('WORLDS', ctx), P = DA.PLANETS, per = DA.JOURNEY.perPlanet;
+  const exo = P.slice(9);
+  assert(exo.length === 8 && exo.every(p => p.exo), 'eight exo');
+  assert(exo.map(p => p.id).join() === WL.EXO.map(e => e.id).join(), 'order ' + exo.map(p => p.id).join());
+  for (const p of exo) {
+    const e = WL.exo(p.id);
+    assert(p.name === e.name && p.fact === e.line && p.color === e.color, 'from catalogue ' + p.id);
+    assert(WL.weatherOf(p.id), 'weather ' + p.id);
+  }
+  for (const p of P.slice(0, 9)) assert(!p.exo && WL.weatherOf(p.id), 'solar weather ' + p.id);
+  assert(new Set(P.map(p => p.id)).size === 17, 'ids unique');
+  // 웨이브 19 = 첫 외계 행성, 34 = 떠돌이, 35 = 2바퀴 수성, 69 = 3바퀴 수성
+  const at = n => NG.World.placeOf(n);
+  assert(at(18).planet.id === 'pluto' && at(19).planet.id === 'frost' && at(19).first && at(19).lap === 1, 'after pluto');
+  assert(at(34).planet.id === 'rogue' && !at(34).first && at(34).lap === 1, 'last stop');
+  assert(at(35).planet.id === 'mercury' && at(35).lap === 2 && at(35).first, 'lap 2');
+  assert(at(per * 17 * 2 + 1).planet.id === 'mercury' && at(per * 17 * 2 + 1).lap === 3, 'lap 3');
+  for (let n = 1; n <= 102; n++) {
+    const k = Math.floor((n - 1) / per);
+    assert(at(n).i === k % 17 && at(n).planet === P[k % 17] && at(n).lap === Math.floor(k / 17) + 1, 'place ' + n);
+  }
+});
+
+test('외계 행성 적: 새 적 없이 어울리는 태양계 적을 다시 쓴다 (얼음=얼음 결정, 용암=불씨, 사막=모래 벌레 …)', () => {
+  const want = { frost: 'ice', lava: 'ember', ocean: 'acid', glass: 'storm', gem: 'shard', twin: 'worm', shroom: 'ghost', rogue: 'zap' };
+  const solarFoes = new Set(DA.PLANETS.slice(0, 9).map(p => p.foe));
+  for (const p of DA.PLANETS.slice(9)) {
+    assert(p.foe === want[p.id], 'foe ' + p.id + ' ' + p.foe);
+    assert(solarFoes.has(p.foe) && DA.ENEMIES[p.foe], 'reuses a solar foe ' + p.id);
+  }
+  assert(new Set(DA.PLANETS.slice(9).map(p => p.foe)).size === 8, 'eight different foes');
+  // 판 안: 외계 행성 웨이브엔 그 적만 섞이고, 이름표는 처음 만난 태양계 행성 이름 그대로 한 번만
+  const W = createWorld(1280, 800, 501);
+  while (W.wave < 19) nextWave(W);
+  assert(W.place.planet.id === 'frost' && NG.World.foeOf(W.wave) === 'ice', 'frost wave has ice');
+  assert(W.spawnQueue.includes('ice') && !W.spawnQueue.includes('storm'), 'queue ' + W.spawnQueue.join());
+});
+
+test('외계 행성: 도감(worlds.js)이 없어도 태양계 아홉만으로 돈다', () => {
+  const c2 = vm.createContext({ console, Math, Date, JSON });
+  for (const f of ['util.js', 'data.js', 'world.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game', 'js', f), 'utf8'), c2, { filename: f });
+  const N2 = vm.runInContext('NG', c2);
+  assert(N2.DATA.PLANETS.length === 9, 'nine ' + N2.DATA.PLANETS.length);
+  assert(N2.World.placeOf(19).planet.id === 'mercury' && N2.World.placeOf(19).lap === 2, 'loops after pluto');
+});
+
+test('외계 행성: 쉬움 봇이 34웨이브(떠돌이 행성)까지 가도 값이 멀쩡하고 17곳을 모두 지난다', () => {
+  const W = createWorld(1280, 800, 88, 'easy');
+  const visited = new Set();
+  for (let i = 0; i < 60 * 60 * 30 && W.wave < 35; i++) {
+    if (W.phase === 'cards') pickCard(W, 0);
+    W.player.hp = W.player.maxHp;
+    W.player.gun.dmg = Math.max(W.player.gun.dmg, 3 + W.wave);
+    step(W, dodgeBot(W), DT);
+    visited.add(W.place.planet.id);
+    W.events.length = 0;
+    if (!finite(W)) throw new Error('NaN at ' + i);
+  }
+  assert(W.wave >= 35 && visited.size === 17, 'wave ' + W.wave + ' visited ' + visited.size);
+});
+
 // ─── 알아서 맞춰 주는 난이도 ─────────────────────────────────
 test('알아서 맞춰 주는 난이도: 배율이 적 수·적이 나오는 간격·운석 간격·적 연사를 살짝 바꾸고, 1이면 그대로', () => {
   const A = DA.ADAPT;
@@ -1486,7 +1553,7 @@ test('알아서 맞춰 주는 난이도: 판 성적 perf는 버틴 시간 ÷ 난
 });
 
 // ─── 스티커북 통계 ────────────────────────────────────────────
-test('스티커 통계: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10)과 깬 블랙홀 웨이브 수', () => {
+test('스티커 통계: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 10~17 외계 행성, 2바퀴 수성 18)과 깬 블랙홀 웨이브 수', () => {
   const W = createWorld(1280, 800, 94);
   assert(W.stats.planet === 1 && W.stats.holesCleared === 0, 'start at mercury');
   while (W.wave < 7) nextWave(W);
@@ -1494,7 +1561,9 @@ test('스티커 통계: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바
   while (W.wave < 17) nextWave(W);
   assert(W.stats.planet === 9, 'pluto ' + W.stats.planet);
   while (W.wave < 19) nextWave(W);
-  assert(W.stats.planet === 10, 'lap 2 mercury ' + W.stats.planet);
+  assert(W.stats.planet === 10, 'first exoplanet ' + W.stats.planet);
+  while (W.wave < 35) nextWave(W);
+  assert(W.stats.planet === 18 && W.place.planet.id === 'mercury' && W.place.lap === 2, 'lap 2 mercury ' + W.stats.planet);
   // 블랙홀 웨이브를 깨면 하나 는다 (카드 화면이 열릴 때)
   clearArena(W);
   W.hole = { fx: 0.5, fy: 0.5, x: 640, y: 400 };

@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 공용 우주 여행 도감 (외계 행성 이름·날씨). 게임 index.html도 data.js보다 먼저 불러온다
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'records.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -636,23 +638,28 @@ test('메달 확인 함수: 이번 판 기록과 평생 기록으로 판정', ()
   for (const k of ['diff', 'easy', 'height', 'score', 'stars', 'springs', 'rockets', 'saves', 'maxCombo', 'zone']) assert(k in s, 'runStats has ' + k);
 });
 
-test('높이 구역: 0 하늘 · 100 구름 위 · 250 우주(행성들) · 700 별나라, 넘을 때 한 번씩 알린다', () => {
-  assert(zoneAt(0) === 0 && zoneAt(99) === 0 && zoneAt(100) === 1 && zoneAt(249) === 1 && zoneAt(250) === 2 && zoneAt(699) === 2 && zoneAt(700) === 3 && zoneAt(9999) === 3, 'zoneAt');
-  assert(D.ZONES.map(z => z.id).join() === 'sky,cloud,space,stars', 'zone ids');
+// 2026-09-27 외계 행성 여덟이 700m(명왕성 다음)에 들어와 700m 구역이 "외계 행성"이 되고 별나라는 1100m로 옮겼다
+test('높이 구역: 0 하늘 · 100 구름 위 · 250 우주(행성들) · 700 외계 행성 · 1100 별나라, 넘을 때 한 번씩 알린다', () => {
+  assert(zoneAt(0) === 0 && zoneAt(99) === 0 && zoneAt(100) === 1 && zoneAt(249) === 1 && zoneAt(250) === 2 && zoneAt(699) === 2 && zoneAt(700) === 3 && zoneAt(1099) === 3 && zoneAt(1100) === 4 && zoneAt(9999) === 4, 'zoneAt');
+  assert(D.ZONES.map(z => z.id).join() === 'sky,cloud,space,exo,stars', 'zone ids');
   for (let i = 1; i < D.ZONES.length; i++) assert(D.ZONES[i].banner && D.ZONES[i].from > D.ZONES[i - 1].from, 'banner ' + i);
   const W = empty();
   W.storm = null;   // 높이만 옮겨 보는 시험이라 먹구름은 뺀다
-  const zones = [], miles = [], planets = [];
-  for (let m = 0; m <= 720; m += 5) {
+  const zones = [], miles = [], planets = [], legs = [];
+  for (let m = 0; m <= 1120; m += 1) {
     put(W, 200, m * D.METER + 10, 0); W.cam = m * D.METER - 100; clear(W); tick(W);
     if (W.events.includes('zone')) zones.push(W.height);
-    for (const f of W.fx) { if (f.kind === 'mile') miles.push(f.m); if (f.kind === 'planet') planets.push(W.height); }
+    for (const f of W.fx) { if (f.kind === 'mile') miles.push(f.m); if (f.kind === 'planet') planets.push(W.height); if (f.kind === 'leg') legs.push(W.height); }
   }
-  assert(JSON.stringify(zones) === JSON.stringify([100, 250, 700]), 'zones at ' + zones.join(','));
-  assert(JSON.stringify(miles) === JSON.stringify([100, 200, 300, 400, 500, 600, 700]), 'miles at ' + miles.join(','));
-  assert(JSON.stringify(planets) === JSON.stringify([250, 300, 350, 400, 450, 500, 550, 600, 650]), 'planets at ' + planets.join(','));
-  assert(W.planet === 9 && runStats(W).planet === 9, 'planet kept');
-  assert(W.zone === 3 && runStats(W).zone === 3, 'zone kept');
+  assert(JSON.stringify(zones) === JSON.stringify([100, 250, 700, 1100]), 'zones at ' + zones.join(','));
+  assert(JSON.stringify(miles) === JSON.stringify([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100]), 'miles at ' + miles.join(','));
+  assert(JSON.stringify(planets) === JSON.stringify([250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050]), 'planets at ' + planets.join(','));
+  // 땅에서 우주까지 여정 배너: 구름 속 70 · 높은 하늘 150 · 대기권 돌파 232 (100 구름 위 · 250 우주는 구역 배너)
+  assert(JSON.stringify(legs) === JSON.stringify([70, 150, 232]), 'legs at ' + legs.join(','));
+  assert(W.planet === 17 && runStats(W).planet === 17, 'planet kept');
+  assert(W.zone === 4 && runStats(W).zone === 4, 'zone kept');
+  // 700m 외계 행성 구역의 섞임은 예전 700m 별나라와 같다 (700m까지·그 위의 놀이가 바뀌지 않게)
+  assert(JSON.stringify(D.ZONES[3].mix) === JSON.stringify({ spring: 1.3, star: 0.12, monster: 1.3 }), 'exo zone mix = old stars mix');
   // 구역에 따라 발판 섞임이 조금 바뀐다 (구름 위에는 구름 발판이 더 많다 등)
   assert(Object.keys(D.ZONES[1].mix).length > 0, 'cloud zone has a mix');
 });
@@ -981,10 +988,14 @@ test('판 기록: 밟은 몬스터 수 · 맞춤 배율, 메달 꾹꾹 20 (모�
 });
 
 // ─── 태양계 여행 · 블랙홀 구간 ──────────────────────────────
-test('태양계 여행: 우주 구역부터 50m마다 수성 → 명왕성, 그 위는 별나라', () => {
+test('태양계 여행: 우주 구역부터 50m마다 수성 → 명왕성 → 외계 행성 여덟, 그 위는 별나라', () => {
   const P = D.PLANETS;
-  assert(P.map(p => p.id).join() === 'mercury,venus,earth,mars,jupiter,saturn,uranus,neptune,pluto', 'order ' + P.map(p => p.id).join());
-  assert(P.map(p => p.name).join() === '수성,금성,지구,화성,목성,토성,천왕성,해왕성,명왕성', 'names');
+  const exo = ctx.WORLDS.EXO.map(e => e.id);
+  assert(P.map(p => p.id).join() === ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'].concat(exo).join(), 'order ' + P.map(p => p.id).join());
+  assert(P.slice(0, 9).map(p => p.name).join() === '수성,금성,지구,화성,목성,토성,천왕성,해왕성,명왕성', 'names');
+  assert(P.slice(9).every((p, i) => p.exo && p.name === ctx.WORLDS.EXO[i].name && p.line === ctx.WORLDS.EXO[i].line), 'exo names from common/worlds.js');
+  const exoZ = D.ZONES.find(z => z.id === 'exo');
+  assert(P[9].at === exoZ.from, 'first exoplanet opens the exo zone');
   const space = D.ZONES.find(z => z.id === 'space'), stars = D.ZONES.find(z => z.id === 'stars');
   assert(P[0].at === space.from && P[P.length - 1].at < stars.from, 'inside the space zone');
   for (let i = 0; i < P.length; i++) {
@@ -993,7 +1004,45 @@ test('태양계 여행: 우주 구역부터 50m마다 수성 → 명왕성, 그 
     if (i) assert(P[i].side === -P[i - 1].side, 'sides alternate ' + P[i].id);
   }
   const pa = JP.World.planetAt;
-  assert(pa(0) === 0 && pa(249) === 0 && pa(250) === 1 && pa(349) === 2 && pa(350) === 3 && pa(650) === 9 && pa(5000) === 9, 'planetAt');
+  assert(pa(0) === 0 && pa(249) === 0 && pa(250) === 1 && pa(349) === 2 && pa(350) === 3 && pa(650) === 9 && pa(699) === 9 && pa(700) === 10 && pa(1050) === 17 && pa(5000) === 17, 'planetAt');
+});
+
+test('행성 날씨: 행성마다 공용 도감의 날씨가 있고 (그리기 전용), 입자 수는 상한 안', () => {
+  const kinds = ctx.WORLDS.KINDS;
+  for (const p of D.PLANETS) {
+    const w = D.weatherOf(p.id);
+    assert(w && kinds.includes(w.kind) && w.amount > 0 && w.amount <= 1 && w.color.length === 2, 'weather ' + p.id);
+  }
+  // 얼음 행성은 눈, 용암 행성은 불씨
+  assert(D.weatherOf('frost').kind === 'snow' && D.weatherOf('lava').kind === 'ember', 'frost snow · lava ember');
+  const X = D.WEATHER;
+  assert(X.max >= 60 && X.max <= 90 && X.calm > 0 && X.calm < 1 && X.calmSpeed < 1, 'particle cap and calm');
+  // 날씨는 규칙에 없다: 같은 씨앗이면 날씨가 있든 없든 발판이 같다 (world.js는 WORLDS를 읽지 않는다)
+  assert(!/WORLDS|weather/.test(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'world.js'), 'utf8')), 'world.js has no weather');
+});
+
+test('땅에서 우주까지: 땅 → 구름 층 → 높은 하늘 → 대기권 끝 → 250m 우주 순서', () => {
+  const S = D.SKY, space = D.ZONES.find(z => z.id === 'space'), cloud = D.ZONES.find(z => z.id === 'cloud');
+  assert(space.from === 250 && D.PLANETS[0].at === 250, 'space still at 250m');
+  assert(S.ground > 0 && S.ground < S.cloud[0], 'ground below the clouds');
+  assert(S.cloud[0] < cloud.from && S.cloud[1] >= cloud.from, 'cloud layer ends at the cloud zone');
+  const hi = S.scenes.find(q => q.id === 'high'), ed = S.scenes.find(q => q.id === 'edge');
+  assert(hi && ed && S.cloud[1] < hi.from && hi.from < ed.from && ed.from < S.edge && S.edge < space.from, 'high sky → edge → space');
+  for (let i = 0; i < S.legs.length; i++) {
+    const g = S.legs[i];
+    assert(g.banner && g.sub && g.at > 0 && g.at < space.from && (!i || g.at > S.legs[i - 1].at), 'leg ' + g.id);
+    assert(!D.ZONES.some(z => z.from === g.at), 'leg does not clash with a zone banner ' + g.id);
+  }
+  assert(S.legs.find(g => g.id === 'edge').at === S.edge, 'edge banner at the glowing line');
+  // 하늘이 점점 어두워진다: 배경 별 밝기가 오를수록 커진다
+  const st = [D.ZONES[0].stars, cloud.stars, hi.stars, ed.stars, space.stars];
+  for (let i = 1; i < st.length; i++) assert(st[i] > st[i - 1], 'stars brighten ' + st.join(','));
+  const ok = ['kite', 'birds', 'balloon', 'plane', 'wballoon', 'sat', 'moon'];
+  for (const d of S.deco) assert(ok.includes(d.kind) && (d.side === 1 || d.side === -1) && d.size > 0, 'deco ' + d.kind);
+  // 도착 메달: 700m는 외계 행성, 1100m는 별나라
+  const M = id => D.MEDALS.find(m => m.id === id);
+  assert(M('starz').check({ height: 700 }, {}) && M('galaxy').check({ height: 1100 }, {}) && !M('galaxy').check({ height: 1099 }, {}), 'arrival medals');
+  assert(D.COINS.zone.length === D.ZONES.length, 'zone bonus for every zone');
 });
 
 test('블랙홀 구간: 가끔(연달아 오지 않게), 쉬움은 300m 전에는 없고, 끄는 힘은 늘 약하다', () => {

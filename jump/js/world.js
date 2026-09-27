@@ -67,6 +67,12 @@
     for (const p of D.PLANETS) if (m >= p.at) n++;
     return n;
   }
+  // 높이(m)까지 지나온 여정 배너 수 (D.SKY.legs: 구름 속 · 높은 하늘 · 대기권 돌파). 그림 전용이라 놀이에는 영향 없음
+  function legAt(m) {
+    let n = 0;
+    for (const g of D.SKY.legs) if (m >= g.at) n++;
+    return n;
+  }
   // 블랙홀 구간 목록을 높이 upto(m)까지 미리 정해 둔다 (판마다 따로 도는 난수 W.hrand, 발판 자리와는 상관없다).
   // 구간 {id, from, to, side(-1 왼쪽 · 1 오른쪽)}. 두 구간 사이는 늘 gap 최소보다 멀다 (연달아 오지 않는다)
   function holesUpTo(W, upto) {
@@ -359,7 +365,8 @@
       doors: [], nextDoor: 0, room: null, rooms: 0,
       // 블랙홀 구간 (D.BLACKHOLE): 목록 · 처음 나올 수 있는 높이 · 끄는 힘 · 지금 들어 있는 구간
       holeList: [], holeFirst: D.BLACKHOLE.first[L.id] || 300, pull: D.BLACKHOLE.pull[L.id] || 0, hole: null, holes: 0,
-      planet: 0,   /* 지나온 가장 먼 행성 (1 수성 … 9 명왕성) */
+      planet: 0,   /* 지나온 가장 먼 행성 (1 수성 … 9 명왕성, 10 ~ 17 외계 행성) */
+      leg: 0,      /* 지나온 여정 배너 수 (D.SKY.legs) */
       easy, diff: L.id, L, ctl: UP.ctl, char: ch.id, phys: physOf(ch.id), rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
       p: { x: WW / 2, y: P0.r, vx: 0, vy: 0, px: WW / 2, py: P0.r, face: 1, land: -9 },
       input: { dir: 0 },          // -1 왼쪽 · 0 · 1 오른쪽 (main.js·봇이 채운다)
@@ -382,7 +389,7 @@
       // 기록·메달용
       starsGot: 0, stomps: 0, bumps: 0, springs: 0, rockets: 0, saves: 0, bounces: 0, crumbles: 0, combo: 0, maxCombo: 0, lastLand: 0,
       botT: null,
-      events: [],   // 소리·진동용: bounce spring star item rocket shield save crumble rescue over zone mile tut stomp bump storm
+      events: [],   // 소리·진동용: bounce spring star item rocket shield save crumble rescue over zone mile tut stomp bump storm leg
       fx: [],       // 그리기 연출용: {kind, x, y}
     };
     W.pcam = W.cam;
@@ -723,6 +730,9 @@
     // 행성에 닿으면 한 번씩 알린다 (구역 배너와 같은 때면 render.js가 하나로 합친다)
     const pn = planetAt(W.height);
     if (pn > W.planet) { W.planet = pn; W.events.push('planet'); W.fx.push({ kind: 'planet', i: pn - 1, x: P.x, y: P.y }); }
+    // 땅에서 우주까지 여정 배너 (구름 속 · 높은 하늘 · 대기권 돌파)
+    const lg = legAt(W.height);
+    if (lg > W.leg) { W.leg = lg; W.events.push('leg'); W.fx.push({ kind: 'leg', i: lg - 1, x: P.x, y: P.y }); }
     const mb = Math.floor(W.height / D.MILE.big);
     if (mb > W.mile) { W.mile = mb; W.events.push('mile'); W.fx.push({ kind: 'mile', m: mb * D.MILE.big, x: P.x, y: mb * D.MILE.big * D.METER }); }
     // 카메라: 부드럽게 따라 올라가되(ease), 주인공이 화면 위쪽으로 너무 가지 않게(lead). 내려가지는 않는다
@@ -912,5 +922,5 @@
   // 테스트·봇용: W에서 높이 y에 내려와 닿기까지 시간
   const timeTo = (W, y) => fallTime(W.p.y, W.p.vy, y, W.phys);
 
-  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, holeAt, holesUpTo, feverAdd, placeGift, openGift, enterRoom, leaveRoom };
+  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, legAt, holeAt, holesUpTo, feverAdd, placeGift, openGift, enterRoom, leaveRoom };
 })(JP);

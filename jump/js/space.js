@@ -1,5 +1,5 @@
 'use strict';
-// 태양계 여행 그림 (2026-09-27, 소유자: "다른 게임도 우주배경 반영").
+// 태양계 여행 그림 (2026-09-27, 외계 행성 여덟 추가, 소유자: "다른 게임도 우주배경 반영").
 // 뿅뿅 우주선(game/js/render.js)의 행성·블랙홀 그림을 그대로 옮겨 왔다: 수성 · 금성 · 지구(달) · 화성 · 목성(대적점) ·
 // 토성(고리) · 천왕성(누운 고리) · 해왕성(검은 폭풍) · 명왕성(하트), 블랙홀(강착 원반 + 소용돌이).
 // 모두 한 번만 캔버스에 그려 두고(크기·화질별) render.js가 찍기만 한다 (매 프레임 shadowBlur 없음).
@@ -87,7 +87,8 @@
     g.restore();
   }
 
-  const PLANET_K = { mercury: 1.3, venus: 1.35, earth: 1.3, mars: 1.3, jupiter: 1.14, saturn: 2.35, uranus: 1.95, neptune: 1.3, pluto: 1.4 };
+  const PLANET_K = { mercury: 1.3, venus: 1.35, earth: 1.3, mars: 1.3, jupiter: 1.14, saturn: 2.35, uranus: 1.95, neptune: 1.3, pluto: 1.4,
+    frost: 1.32, lava: 1.34, ocean: 1.3, glass: 1.3, gem: 1.36, twin: 1.3, shroom: 1.32, rogue: 1.4 };
   // 행성마다 그림. R: 반지름(px). 돌려주는 k: 그림 캔버스가 반지름의 몇 배 넓이인지(고리·빛 포함, PLANET_K와 같게)
   const PAINT = {
     mercury(g, R, rand) {
@@ -240,6 +241,164 @@
       });
       return 1.4;
     },
+    // ─── 외계 행성 여덟 (2026-09-27, 공용 도감 common/worlds.js의 look을 따라 그린다) ───
+    frost(g, R, rand) {
+      halo(g, R, '190,240,255', 1.32);
+      sphere(g, R, '#f2fcff', '#6aa6c8', '205,245,255', (g, R) => {
+        // 푸른 얼음 조각 · 금 간 무늬 · 극지 흰 모자
+        for (let i = 0; i < 10; i++) { g.fillStyle = 'rgba(120,190,230,' + (0.18 + rand() * 0.2) + ')'; blob(g, (rand() - 0.5) * 1.7 * R, (rand() - 0.5) * 1.5 * R, R * (0.12 + rand() * 0.2), rand, 7); g.fill(); }
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        for (let i = 0; i < 9; i++) {
+          let x = (rand() - 0.5) * 1.6 * R, y = (rand() - 0.5) * 1.6 * R;
+          g.strokeStyle = 'rgba(70,150,210,0.7)'; g.lineWidth = R * (0.012 + rand() * 0.014);
+          g.beginPath(); g.moveTo(x, y);
+          for (let k = 0; k < 5; k++) { x += (rand() - 0.5) * R * 0.45; y += (rand() - 0.5) * R * 0.45; g.lineTo(x, y); }
+          g.stroke();
+        }
+        g.fillStyle = 'rgba(255,255,255,0.95)';
+        g.beginPath(); g.ellipse(0, -R * 0.95, R * 0.62, R * 0.2, 0, 0, TAU); g.fill();
+        g.beginPath(); g.ellipse(0, R * 0.97, R * 0.5, R * 0.15, 0, 0, TAU); g.fill();
+      });
+      return 1.32;
+    },
+    lava(g, R, rand) {
+      halo(g, R, '255,110,50', 1.34);
+      sphere(g, R, '#4a241a', '#120604', '255,120,60', (g, R) => {
+        for (let i = 0; i < 12; i++) { g.fillStyle = 'rgba(10,4,2,' + (0.3 + rand() * 0.3) + ')'; blob(g, (rand() - 0.5) * 1.7 * R, (rand() - 0.5) * 1.6 * R, R * (0.1 + rand() * 0.2), rand, 8); g.fill(); }
+        // 빛나는 용암 갈라짐 (두 겹: 주황 바깥 · 노란 속)
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        const paths = [];
+        for (let i = 0; i < 11; i++) {
+          let x = (rand() - 0.5) * 1.7 * R, y = (rand() - 0.5) * 1.7 * R;
+          const pts = [[x, y]];
+          for (let k = 0; k < 6; k++) { x += (rand() - 0.5) * R * 0.4; y += (rand() - 0.5) * R * 0.4; pts.push([x, y]); }
+          paths.push(pts);
+        }
+        g.globalCompositeOperation = 'lighter';
+        for (const [col, w] of [['rgba(255,110,30,0.75)', 0.05], ['rgba(255,220,80,0.9)', 0.018]]) {
+          g.strokeStyle = col; g.lineWidth = R * w;
+          for (const pts of paths) { g.beginPath(); pts.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); }
+        }
+        for (let i = 0; i < 5; i++) {
+          const x = (rand() - 0.5) * 1.4 * R, y = (rand() - 0.5) * 1.4 * R, r = R * (0.08 + rand() * 0.12);
+          const lg = g.createRadialGradient(x, y, 0, x, y, r);
+          lg.addColorStop(0, 'rgba(255,230,120,0.9)'); lg.addColorStop(0.5, 'rgba(255,120,30,0.6)'); lg.addColorStop(1, 'rgba(255,60,0,0)');
+          g.fillStyle = lg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+        }
+        g.globalCompositeOperation = 'source-over';
+      });
+      return 1.34;
+    },
+    ocean(g, R, rand) {
+      halo(g, R, '90,200,255', 1.3);
+      sphere(g, R, '#3cc0ff', '#083f86', '140,215,255', (g, R) => {
+        for (let i = 0; i < 8; i++) { g.fillStyle = 'rgba(10,70,160,' + (0.2 + rand() * 0.2) + ')'; blob(g, (rand() - 0.5) * 1.7 * R, (rand() - 0.5) * 1.6 * R, R * (0.15 + rand() * 0.2), rand, 9); g.fill(); }
+        // 흰 소용돌이 구름
+        g.lineCap = 'round';
+        for (let k = 0; k < 3; k++) {
+          const cx = (rand() - 0.5) * R * 1.1, cy = (rand() - 0.5) * R * 1.1;
+          g.strokeStyle = 'rgba(240,252,255,0.75)'; g.lineWidth = R * 0.045;
+          g.beginPath();
+          for (let t = 0; t < 11; t += 0.2) { const rr = R * 0.024 * t; const x = cx + Math.cos(t) * rr, y = cy + Math.sin(t) * rr * 0.75; if (t === 0) g.moveTo(x, y); else g.lineTo(x, y); }
+          g.stroke();
+        }
+        for (let i = 0; i < 12; i++) {
+          const x = (rand() - 0.5) * 2 * R, y = (rand() - 0.5) * 1.8 * R, l = R * (0.2 + rand() * 0.4);
+          g.strokeStyle = 'rgba(255,255,255,' + (0.35 + rand() * 0.3) + ')'; g.lineWidth = R * (0.02 + rand() * 0.04);
+          g.beginPath(); g.moveTo(x - l / 2, y); g.quadraticCurveTo(x, y - R * 0.06, x + l / 2, y + R * 0.03); g.stroke();
+        }
+      });
+      return 1.3;
+    },
+    glass(g, R, rand) {
+      halo(g, R, '110,150,255', 1.3);
+      sphere(g, R, '#4a7cff', '#0c1a52', '150,190,255', (g, R) => {
+        bands(g, R, ['#3a6cff', '#2a55e0', '#4c80ff', '#2248c8', '#3f72f5', '#1d3db0', '#4a7cff'], rand, 0.18);
+        // 옆으로 쌩 흐르는 유리 줄
+        g.lineCap = 'round';
+        for (let i = 0; i < 16; i++) {
+          const y = (rand() - 0.5) * 1.8 * R, x = (rand() - 0.5) * 1.6 * R, l = R * (0.3 + rand() * 0.5);
+          g.strokeStyle = 'rgba(200,230,255,' + (0.3 + rand() * 0.4) + ')'; g.lineWidth = R * (0.008 + rand() * 0.018);
+          g.beginPath(); g.moveTo(x - l / 2, y + l * 0.12); g.lineTo(x + l / 2, y - l * 0.12); g.stroke();
+        }
+      });
+      return 1.3;
+    },
+    gem(g, R, rand) {
+      halo(g, R, '230,180,255', 1.36);
+      sphere(g, R, '#e2d0ff', '#4a2a7a', '235,205,255', (g, R) => {
+        // 각진 보석 면: 흔든 격자의 삼각형마다 밝기가 다르다
+        const n = 6, pts = [];
+        for (let j = 0; j <= n; j++) { pts.push([]); for (let i = 0; i <= n; i++) pts[j].push([-R + 2 * R * i / n + (i % n ? (rand() - 0.5) * R * 0.22 : 0), -R + 2 * R * j / n + (j % n ? (rand() - 0.5) * R * 0.22 : 0)]); }
+        const cols = ['rgba(255,255,255,', 'rgba(190,150,255,', 'rgba(120,80,200,', 'rgba(150,240,255,'];
+        for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+          const a = pts[j][i], b = pts[j][i + 1], c = pts[j + 1][i], d = pts[j + 1][i + 1];
+          for (const tri of [[a, b, d], [a, d, c]]) {
+            g.fillStyle = cols[Math.floor(rand() * cols.length)] + (0.12 + rand() * 0.28) + ')';
+            g.beginPath(); g.moveTo(tri[0][0], tri[0][1]); g.lineTo(tri[1][0], tri[1][1]); g.lineTo(tri[2][0], tri[2][1]); g.closePath(); g.fill();
+            g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = Math.max(1, R * 0.008); g.stroke();
+          }
+        }
+        // 번쩍이는 빛 몇 개
+        g.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 5; i++) {
+          const x = (rand() - 0.6) * R, y = (rand() - 0.6) * R, r = R * (0.06 + rand() * 0.06);
+          g.fillStyle = 'rgba(255,255,255,0.8)';
+          g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r * 0.2, y); g.lineTo(x, y + r); g.lineTo(x - r * 0.2, y); g.closePath(); g.fill();
+          g.beginPath(); g.moveTo(x - r, y); g.lineTo(x, y + r * 0.2); g.lineTo(x + r, y); g.lineTo(x, y - r * 0.2); g.closePath(); g.fill();
+        }
+        g.globalCompositeOperation = 'source-over';
+      });
+      return 1.36;
+    },
+    twin(g, R, rand) {
+      halo(g, R, '255,215,150', 1.3);
+      sphere(g, R, '#f6cc88', '#8a5424', '255,225,170', (g, R) => {
+        bands(g, R, ['#f0c07a', '#dca060', '#f6d49a', '#c98a48', '#ecb86e', '#d49856', '#f4cc8c', '#c08040'], rand, 0.3);
+        // 모래 언덕 물결
+        g.lineCap = 'round';
+        for (let i = 0; i < 10; i++) {
+          const y = (rand() - 0.5) * 1.7 * R, x = (rand() - 0.5) * 1.2 * R, l = R * (0.3 + rand() * 0.4);
+          g.strokeStyle = 'rgba(120,70,30,0.35)'; g.lineWidth = R * 0.02;
+          g.beginPath(); g.moveTo(x - l / 2, y); g.quadraticCurveTo(x, y - R * 0.08, x + l / 2, y); g.stroke();
+        }
+      });
+      return 1.3;
+    },
+    shroom(g, R, rand) {
+      halo(g, R, '125,255,160', 1.32);
+      sphere(g, R, '#5ee29a', '#12402a', '150,255,190', (g, R) => {
+        for (let i = 0; i < 12; i++) { g.fillStyle = 'rgba(20,80,50,' + (0.3 + rand() * 0.3) + ')'; blob(g, (rand() - 0.5) * 1.7 * R, (rand() - 0.5) * 1.6 * R, R * (0.1 + rand() * 0.18), rand, 8); g.fill(); }
+        // 빛나는 버섯 점 (분홍 · 하늘색)
+        g.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 26; i++) {
+          const x = (rand() - 0.5) * 1.8 * R, y = (rand() - 0.5) * 1.8 * R, r = R * (0.03 + rand() * 0.05);
+          const col = rand() < 0.6 ? '255,154,232' : '106,240,255';
+          const lg = g.createRadialGradient(x, y, 0, x, y, r * 2);
+          lg.addColorStop(0, 'rgba(' + col + ',0.95)'); lg.addColorStop(0.4, 'rgba(' + col + ',0.5)'); lg.addColorStop(1, 'rgba(' + col + ',0)');
+          g.fillStyle = lg; g.beginPath(); g.arc(x, y, r * 2, 0, TAU); g.fill();
+        }
+        g.globalCompositeOperation = 'source-over';
+      });
+      return 1.32;
+    },
+    rogue(g, R, rand) {
+      // 어두운 행성, 테두리만 오로라 빛 (초록 · 보라)
+      const h = g.createRadialGradient(0, 0, R * 0.85, 0, 0, R * 1.4);
+      h.addColorStop(0, 'rgba(106,255,200,0.4)'); h.addColorStop(0.35, 'rgba(154,125,255,0.22)'); h.addColorStop(1, 'rgba(154,125,255,0)');
+      g.fillStyle = h; g.beginPath(); g.arc(0, 0, R * 1.4, 0, TAU); g.fill();
+      sphere(g, R, '#44446a', '#0a0a18', '106,255,200', (g, R) => {
+        for (let i = 0; i < 8; i++) { g.fillStyle = 'rgba(5,5,15,' + (0.3 + rand() * 0.3) + ')'; blob(g, (rand() - 0.5) * 1.6 * R, (rand() - 0.5) * 1.6 * R, R * (0.12 + rand() * 0.2), rand, 8); g.fill(); }
+      });
+      g.globalCompositeOperation = 'lighter';
+      g.lineCap = 'round';
+      for (const [col, a0, a1, w] of [['rgba(106,255,200,0.7)', -2.7, -0.5, 0.05], ['rgba(179,125,255,0.6)', -2.3, -0.9, 0.035], ['rgba(106,255,200,0.35)', 0.7, 2.2, 0.03]]) {
+        g.strokeStyle = col; g.lineWidth = R * w;
+        g.beginPath(); g.arc(0, 0, R * 1.02, a0, a1); g.stroke();
+      }
+      g.globalCompositeOperation = 'source-over';
+      return 1.4;
+    },
   };
   // 작은 달 (지구의 달, 화성의 작은 달 둘, 목성의 이오, 명왕성의 카론)
   const MOONS = {
@@ -344,7 +503,8 @@
 
 
   // 행성 그림 (반지름 R px, 화질 q). 배경이라 한 겹 살짝 어둡게 덮는다 (발판·주인공이 행성 위에서도 잘 보이게)
-  const VEIL = { mercury: 0.3, venus: 0.34, earth: 0.16, mars: 0.2, jupiter: 0.36, saturn: 0.26, uranus: 0.3, neptune: 0.16, pluto: 0.12 };
+  const VEIL = { mercury: 0.3, venus: 0.34, earth: 0.16, mars: 0.2, jupiter: 0.36, saturn: 0.26, uranus: 0.3, neptune: 0.16, pluto: 0.12,
+    frost: 0.22, lava: 0.06, ocean: 0.2, glass: 0.18, gem: 0.3, twin: 0.32, shroom: 0.16, rogue: 0 };
   function planetSprite(id, R, q) {
     const key = id + ':' + Math.round(R) + ':' + q;
     if (sprites[key]) return sprites[key];
@@ -356,7 +516,7 @@
     const g = c.getContext('2d');
     g.translate(half, half);
     g.scale(q, q);
-    PAINT[id](g, R, rand);
+    (PAINT[id] || PAINT.pluto)(g, R, rand);
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-atop';
     g.fillStyle = 'rgba(4,6,14,' + (VEIL[id] || 0.2) + ')';

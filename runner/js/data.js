@@ -66,11 +66,14 @@
   };
   const DIFF_ORDER = ['easy', 'normal', 'hard'];
 
-  // ─── 태양계 여행: 달린 거리(m)에 따라 행성을 차례로 지나간다 (그리기는 render.js PLANET_ART) ───
-  // leg m마다 다음 곳에 도착한다. 수성 → … → 명왕성(3,000m) → 은하 너머 → 다시 수성(2바퀴째)
+  // ─── 우주 여행: 달린 거리(m)에 따라 행성을 차례로 지나간다 (그리기는 render.js PLANET_ART) ───
+  // leg m마다 다음 곳에 도착한다. 수성 → … → 명왕성(3,000m) → 외계 행성 여덟(common/worlds.js EXO, 3,375 ~ 6,000m)
+  // → 은하 너머(6,375m) → 다시 수성(2바퀴째, 6,750m). worlds.js가 없으면(불러오지 못하면) 외계 행성 없이 태양계만 돈다
+  // weather: 그곳 날씨 (worlds.js SOLAR_WEATHER · EXO[].weather, 그림 전용. 은하 너머는 null)
   // 기념 아치(250m마다)와 짝수 번째 도착(750·1,500·2,250·3,000m)이 겹쳐서 그 아치에는 행성 이름도 적힌다
   // line: 도착할 때 이름 아래에 뜨는 한 줄 (아이 눈높이)
   const ROUTE = { leg: 375 };
+  const WX = typeof WORLDS !== 'undefined' && WORLDS && WORLDS.EXO ? WORLDS : null;   // common/worlds.js (hub.js 다음에 불러온다)
   const ZONES = [
     { id: 'mercury', name: '수성',   line: '해가 엄청 커요! 태양과 가장 가까운 행성' },
     { id: 'venus',   name: '금성',   line: '두꺼운 노란 구름이 빙글빙글' },
@@ -81,8 +84,9 @@
     { id: 'uranus',  name: '천왕성', line: '옆으로 누운 하늘색 행성' },
     { id: 'neptune', name: '해왕성', line: '깊고 파란 바람의 행성' },
     { id: 'pluto',   name: '명왕성', line: '작은 얼음 행성, 하트 무늬가 있어요' },
-    { id: 'beyond',  name: '은하 너머', line: '태양계 밖! 반짝이는 은하' },
-  ].map((z, i) => Object.assign(z, { at: i * ROUTE.leg }));   // at: 첫 바퀴에서 도착하는 거리
+  ].concat(WX ? WX.EXO.map(e => ({ id: e.id, name: e.name, line: e.line, exo: true })) : [],
+    [{ id: 'beyond',  name: '은하 너머', line: '반짝이는 금빛 은하 소용돌이' }])
+    .map((z, i) => Object.assign(z, { at: i * ROUTE.leg, weather: (WX && WX.weatherOf(z.id)) || null }));   // at: 첫 바퀴에서 도착하는 거리
 
   // ─── 블랙홀 구간: 지구 다음 행성부터, 행성 구간마다 chance 확률로 한 번 (두 구간 연달아 없음, 처음 안내 중에는 없음) ───
   // len m 동안 하늘이 블랙홀로 바뀌고 옆으로 끌어당긴다 (세기는 난이도의 bh). from: 이 번째 곳(0 수성)부터
@@ -220,6 +224,9 @@
 
     // 연출 (그리기 전용, 규칙에는 영향 없음). 부딪힘은 분명하지만 무섭지 않게: 흔들림·번쩍임은 작게
     FX: { starSparks: 8, hitSparks: 26, smashSparks: 24, maxParticles: 160, shake: 10, flash: 0.22, zoneFade: 2.2, banner: 2.6 },
+    // 행성 날씨 (그리기 전용): 날씨 입자는 max개까지 (worlds.js amount 1일 때), 움직임 줄이기면 calm배 개수·calmSpeed배 빠르기.
+    // fade: 행성이 바뀔 때 날씨가 바뀌는 시간(초) · boltEvery: 번개 사이 (초, 범위) · bolt: 번개 빛이 남는 시간(초)
+    WEATHER: { max: 90, calm: 0.4, calmSpeed: 0.45, fade: 2.2, boltEvery: [2.8, 5.5], bolt: 0.35 },
 
     // 밀기 판정: 짧은 변 길이의 3% 또는 18px 중 큰 값 이상 움직이면 줄 바꾸기·점프
     SWIPE: { min: 18, ratio: 0.03 },

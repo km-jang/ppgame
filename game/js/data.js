@@ -112,7 +112,7 @@
   };
 
   // 태양계 여행 (2026-09-27, 소유자: "배경 행성을 수금지화목토천해명 지나가면 각 특색 있는 행성, 간혹 블랙홀 배경도")
-  // 웨이브 perPlanet개마다 다음 행성으로. 명왕성 다음은 다시 수성 (2바퀴, 3바퀴 …)
+  // 웨이브 perPlanet개마다 다음 행성으로. 명왕성 다음은 외계 행성 여덟(아래 EXO_FOE), 그다음 다시 수성 (2바퀴, 3바퀴 …)
   // 그림(색·무늬)은 render.js PLANET_ART. 여기는 이름·한 줄 설명·알림 색
   const JOURNEY = { perPlanet: 2 };
   // foe: 그 행성 웨이브에 섞여 나오는 행성 적 (ENEMIES)
@@ -127,6 +127,21 @@
     { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',   color: '#5b8cff', foe: 'storm' },
     { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',        color: '#e8d2b8', foe: 'ghost' },
   ];
+  // 태양계 밖 외계 행성 여덟 (2026-09-27, 소유자: "다른 행성 배경도 다양하게. 얼음 행성이면 눈, 불의 행성이면 그에 맞게").
+  // 명왕성 다음에 이어진다 (수성 → … → 명왕성 → 얼음 → 용암 → … → 떠돌이 → 다시 수성 2바퀴, 모두 17곳).
+  // 이름·한 줄·색·날씨는 네 게임이 함께 쓰는 도감 common/worlds.js (WORLDS.EXO)에서 가져온다. 도감이 없으면 태양계 아홉만.
+  // 행성 적은 새로 만들지 않고 그 행성에 어울리는 태양계 적을 다시 쓴다 (난이도 균형이 그대로):
+  // 얼음 → 얼음 결정 · 용암 → 태양 불씨 · 바다 → 산성 구름(물웅덩이처럼 느려짐) · 유리비 → 폭풍 드론(센 바람)
+  // 보석 → 고리 조각(반짝 조각) · 해님 둘 사막 → 모래 벌레 · 버섯 → 하트 유령(빛났다 흐려짐) · 떠돌이 → 번개 구름(깜깜한 밤 번개)
+  const EXO_FOE = { frost: 'ice', lava: 'ember', ocean: 'acid', glass: 'storm', gem: 'shard', twin: 'worm', shroom: 'ghost', rogue: 'zap' };
+  const WX = typeof WORLDS !== 'undefined' && WORLDS && Array.isArray(WORLDS.EXO) ? WORLDS : null;
+  if (WX) for (const e of WX.EXO) {
+    if (EXO_FOE[e.id]) PLANETS.push({ id: e.id, name: e.name, fact: e.line, color: e.color, foe: EXO_FOE[e.id], exo: true });
+  }
+  // 날씨 (그림만, 규칙과 무관). max: 화면에 한꺼번에 보이는 날씨 알갱이 최대 수(1280×800 기준, WORLDS 날씨 amount를 곱한다)
+  // calm: 움직임 줄이기면 알갱이 수·빠르기 배율 · low: 느린 기기(자동으로 알아챔) 알갱이 배율 · alpha: 전체 진하기 (적·탄이 잘 보이게)
+  const WEATHER = { max: 84, calmCount: 0.5, calmSpeed: 0.35, low: 0.5, alpha: 0.85 };
+
   // 행성 적 섞기: 일반 웨이브는 적 수의 share만큼(최소 min), 보스 웨이브는 boss마리를 웨이브 안에 고르게 바꿔 넣는다.
   // 처음 만나면 그 적 위에 이름표("화성 모래 벌레!")를 tag초 띄운다
   const PLANET_FOE = { share: 0.3, min: 2, boss: 2, tag: 2.4 };
@@ -274,7 +289,7 @@
     { id: 'games10', tier: 1, icon: '10판', name: '단골',          desc: '10판 플레이',                           check: (r, L) => L.games >= 10 },
   ];
 
-  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, PLANET_FOE, ADAPT, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
+  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, EXO_FOE, WEATHER, PLANET_FOE, ADAPT, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
 
   // ═══ 기체 · 상점 · 미션 · 아이템 (2026-09-26, 소유자: "캐릭터 고를 수 있게, 상점·미션·아이템") ═══
   // 기체. hp: 체력 더하기, speed·dashCd: 배율, gun: 총 바꾸기(barrels 더하기, rate·dmg·speed 배율, crit 더하기,

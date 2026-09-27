@@ -73,6 +73,8 @@
       g.restore();
       for (let i = 0; i < 6; i++) puff(rand() * w, rand() * h, Math.min(w, h) * (0.03 + rand() * 0.04), 'rgba(255,230,109,0.45)');
     }
+    // 높은 하늘 · 대기권 끝(둥근 지구) · 행성별 덧그림 (sky.js)
+    if (JP.Sky) JP.Sky.paintScene(g, Z, w, h, rand);
     const v = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.hypot(w, h) * 0.6);
     v.addColorStop(0, 'rgba(0,0,0,0)');
     v.addColorStop(1, 'rgba(0,0,0,0.55)');
@@ -369,6 +371,12 @@
         R.big = null;
         ring(f.x, f.y, 100 * s, P.color, 0.7);
         burst(f.x, f.y, 26, [P.color, '#ffffff'], 440, 5 * s);
+      } else if (f.kind === 'leg') {
+        // 땅에서 우주까지 여정 배너 (구름 속 · 높은 하늘 · 대기권 돌파)
+        const G = D.SKY.legs[f.i];
+        if (!zoneNow && !W.fx.some(q => q.kind === 'planet')) { R.banner = { title: G.banner, sub: G.sub, color: G.color, life: 2.6, max: 2.6, text: true }; R.big = null; }
+        ring(f.x, f.y, 90 * s, G.color, 0.7);
+        burst(f.x, f.y, 22, [G.color, '#ffffff'], 420, 5 * s);
       } else if (f.kind === 'gift') {
         // 깜짝 선물: 알록달록 색종이 + 무엇을 받았는지
         const title = f.reward === 'coins' ? '선물: 코인 ' + f.n + '개!' : f.reward === 'rocket' ? '선물: 로켓!' : f.reward === 'shield' ? '선물: 방패 방울!'
@@ -507,17 +515,31 @@
   }
 
   // ─── 배경 ─────────────────────────────────────────────────
-  // 배경 장면 목록: 하늘 · 구름 위 · 행성 아홉(우주 구역 안, 행성마다 하늘색이 다르다) · 별나라.
-  // 장면마다 1/4 해상도로 한 번 그려 두고, 경계 앞 fade m 동안 두 장을 섞는다
+  // 배경 장면 목록: 하늘 · 구름 위 · 높은 하늘 · 대기권 끝 · 행성 아홉(우주) · 외계 행성 여덟 · 별나라.
+  // 행성마다 하늘색이 다르다. 장면마다 1/4 해상도로 한 번 그려 두고, 경계 앞 fade m 동안 두 장을 섞는다
   const SCENES = (() => {
     const out = [];
-    for (const Z of D.ZONES) {
-      if (Z.id === 'space') {
-        for (const P of D.PLANETS) out.push({ id: 'planet', planet: P.id, from: P.at, sky: P.sky, glow: P.glow, stars: 0.85, clouds: 0, fade: P.at === Z.from ? D.ZONE_FADE : D.PLANET_FADE });
+    D.ZONES.forEach((Z, i) => {
+      const next = D.ZONES[i + 1] ? D.ZONES[i + 1].from : Infinity;
+      const P = D.PLANETS.filter(p => p.at >= Z.from && p.at < next);
+      if ((Z.id === 'space' || Z.id === 'exo') && P.length) {
+        for (const p of P) out.push({ id: 'planet', planet: p.id, from: p.at, sky: p.sky, glow: p.glow, stars: Z.stars, clouds: 0, fade: p.at === Z.from ? D.ZONE_FADE : D.PLANET_FADE });
       } else out.push(Object.assign({ fade: D.ZONE_FADE }, Z));
-    }
-    return out;
+    });
+    for (const sc of D.SKY.scenes) out.push(Object.assign({ fade: D.ZONE_FADE }, sc));
+    return out.sort((a, b) => a.from - b.from);
   })();
+  // 지금 있는 곳 이름·색 (점수판 · 결과 화면): 우주·외계에서는 가장 최근 행성, 그 전에는 구역(높은 하늘 · 대기권 끝 포함)
+  function placeOf(W) {
+    const Z = D.ZONES[W.zone];
+    if ((Z.id === 'space' || Z.id === 'exo') && W.planet > 0) { const P = D.PLANETS[W.planet - 1]; return { name: P.name, color: P.color, planet: true }; }
+    if (Z.id === 'sky' || Z.id === 'cloud') {
+      let sc = null;
+      for (const q of D.SKY.scenes) if (W.height >= q.from) sc = q;
+      if (sc) return { name: sc.name, color: sc.color || Z.color, planet: false };
+    }
+    return { name: Z.name, color: Z.color, planet: false };
+  }
   // 화면 가운데 높이(m)에서 지금 장면과 다음 장면을 얼마나 섞을지: [장면, 다음 장면, 섞는 정도 0 ~ 1]
   function zoneBlend(m) {
     const Z = SCENES;
@@ -611,9 +633,9 @@
     }
     ctx.globalAlpha = 1;
   }
-  function drawBackground(ctx, W, v) {
+  function drawBackground(ctx, W, v, dt) {
     const bk = v.w + 'x' + v.h;
-    if (R.bgKey !== bk) { R.bgKey = bk; R.zones = []; R.cloudLayer = null; R.stars = makeStars(v.w, v.h); if (JP.Space) JP.Space.clear(); }
+    if (R.bgKey !== bk) { R.bgKey = bk; R.zones = []; R.cloudLayer = null; R.stars = makeStars(v.w, v.h); if (JP.Space) JP.Space.clear(); if (JP.Sky) JP.Sky.clear(); }
     const zone = i => R.zones[i] || (R.zones[i] = paintZone(SCENES[i], v.w, v.h));
     const m = (CAM + v.viewH * 0.5) / D.METER;
     const [a, b, t] = zoneBlend(m);
@@ -646,12 +668,16 @@
       ctx.fillRect(st.x, y, st.s, st.s);
     }
     ctx.globalAlpha = 1;
+    // 땅에서 우주까지: 배경 소품(새·열기구·비행기·인공위성·달) · 구름 벽 (기둥 유리 뒤)
+    if (JP.Sky) { JP.Sky.drawDeco(ctx, v, CAM, tt); JP.Sky.drawCloudBank(ctx, v, CAM); }
     // 우주: 지나가는 행성 · 블랙홀 (기둥 유리 뒤에 그려 발판이 늘 또렷하다)
     if (m > D.PLANETS[0].at - SPAN) drawPlanets(ctx, W, v);
     drawHoles(ctx, W, v);
     const key = [v.cw, v.ch, v.w, v.dpr].join(',');
     if (R.colKey !== key) { R.colKey = key; R.col = paintColumn(v, v.dpr); }
     ctx.drawImage(R.col, v.cx - CM, v.cy - CM, v.cw + CM * 2, v.ch + CM * 2);
+    // 유리 위 · 발판 아래: 땅(동네·발사대) · 대기권 끝 빛나는 선 · 행성 날씨
+    if (JP.Sky) { JP.Sky.drawGround(ctx, v, CAM, tt); JP.Sky.drawEdge(ctx, v, CAM); JP.Sky.drawWeather(ctx, v, CAM, dt, tt); }
   }
 
   // 50m마다 빛나는 선 (100m는 금색): 기둥 폭마다 한 번 그려 두고 찍는다
@@ -1659,7 +1685,8 @@
     const sw = right - x0;
     let y = v.hudMid - 12 * s;
     // 우주에서는 뒤로 행성이 지나가므로 점수판 뒤에 어두운 유리를 깐다 (글자가 늘 또렷하게)
-    if (CAM / D.METER > D.PLANETS[0].at - SPAN) {
+    const camM = CAM / D.METER;
+    if (camM > D.PLANETS[0].at - SPAN || (camM > D.SKY.cloud[0] - 25 && camM < D.SKY.cloud[1] + 20)) {
       const px = x0 - 14 * s, pw = right - px + 8 * s, ph = Math.min(v.h * 0.62, 360 * s);
       const g = ctx.createLinearGradient(0, y - 14 * s, 0, y - 14 * s + ph);
       g.addColorStop(0, 'rgba(5,8,18,0.62)'); g.addColorStop(0.8, 'rgba(5,8,18,0.5)'); g.addColorStop(1, 'rgba(5,8,18,0)');
@@ -1668,13 +1695,13 @@
     }
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     // 난이도 · 지금 구역
-    const Z = D.ZONES[W.zone], PL = W.zone === 2 && W.planet > 0 ? D.PLANETS[W.planet - 1] : null;
+    const PL = placeOf(W);
     ctx.font = Math.round(15 * s) + 'px ' + DISP;
     ctx.fillStyle = '#8aa4b8';
     const dn = W.L.name + ' · ';
     ctx.fillText(dn, x0, y);
-    ctx.fillStyle = PL ? PL.color : Z.color;
-    ctx.fillText(PL ? PL.name + ' 근처' : Z.name, x0 + ctx.measureText(dn).width, y);
+    ctx.fillStyle = PL.color;
+    ctx.fillText(PL.planet ? PL.name + ' 근처' : PL.name, x0 + ctx.measureText(dn).width, y);
     y += 26 * s;
     const big = Math.min(54 * s, sw * 0.3);
     ctx.font = Math.round(16 * s) + 'px ' + DISP; ctx.fillStyle = '#8aa4b8';
@@ -1924,7 +1951,7 @@
     CAM = W.pcam + (W.cam - W.pcam) * a;
     takeFx(W, v);
     updateFx(dt || 0);
-    drawBackground(ctx, W, v);
+    drawBackground(ctx, W, v, dt);
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     ctx.beginPath(); ctx.rect(v.cx, v.cy, v.cw, v.ch); ctx.clip();
@@ -1943,6 +1970,8 @@
     if (!W.room) { drawStorm(ctx, W, v, a); drawBottom(ctx, W, v); }
     drawFeverEdge(ctx, W, v);
     ctx.restore();
+    // 구름 속을 지나는 동안 앞에도 구름이 흘러 지나간다
+    if (JP.Sky && !W.room) JP.Sky.drawCloudFront(ctx, v, CAM, performance.now() / 1000);
     if (R.flash > 0) {
       ctx.fillStyle = 'rgba(255,77,109,' + (R.flash * 0.6).toFixed(3) + ')';
       ctx.fillRect(0, 0, v.w, v.h);
@@ -1957,5 +1986,5 @@
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
   const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || R.clouds.length > 0 || R.squash.length > 0 || !!R.banner || !!R.big;
 
-  JP.Render = { draw, layout, busy, paintChar, paintSkin: paintChar };
+  JP.Render = { draw, layout, busy, paintChar, paintSkin: paintChar, placeOf };
 })(JP);
