@@ -1125,6 +1125,14 @@ test('옆으로만 피하는 로봇은 쉬움에서도 멀리 못 간다 (다 �
 });
 
 // ─── 블랙홀 ───
+test('도감(worlds.js)을 못 불러와도 태양계 열 곳으로 그대로 돈다', () => {
+  const c2 = vm.createContext({ console, Math, Date, JSON });
+  for (const f of ['util.js', 'data.js', 'world.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'runner', 'js', f), 'utf8'), c2, { filename: f });
+  const R2 = vm.runInContext('RN', c2), Z2 = R2.DATA.ZONES;
+  assert(Z2.length === 10 && Z2[8].id === 'pluto' && Z2[9].id === 'beyond' && Z2.every(z => z.weather === null), 'fallback ' + Z2.map(z => z.id).join());
+  assert(R2.World.placeOf(10).stop === 0 && R2.World.placeOf(10).lap === 2, 'fallback loop');
+});
+
 test('블랙홀 구간: 지구 다음부터, 행성 구간마다 약 15% (두 구간 연달아 없음), 구간 안에 알맞은 길이', () => {
   const B = D.BLACKHOLE, leg = D.ROUTE.leg;
   let eligible = 0, got = 0;

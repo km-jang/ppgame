@@ -1290,7 +1290,7 @@
       for (let k = 1; k <= 9; k++) pts.push([W2 / 2 + (cr() - 0.5) * W2 * 0.55, H * k / 9]);
       g.lineJoin = 'round'; g.lineCap = 'round';
       g.shadowColor = w.color[1]; g.shadowBlur = 16;
-      for (const [lw, col] of [[7, hexA(w.color[1], 0.5)], [3, w.color[0]], [1.2, '#ffffff']]) {
+      for (const [lw, col] of [[12, hexA(w.color[1], 0.5)], [5, w.color[0]], [2.2, '#ffffff']]) {
         g.strokeStyle = col; g.lineWidth = lw; g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
       }
       g.shadowBlur = 0;
