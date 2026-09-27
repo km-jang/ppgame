@@ -35,6 +35,9 @@
     //   main: 길을 이루는 발판 종류 가중치 [처음, 끝] · extra: 곁 발판 종류 가중치 · extraChance: 곁 발판이 나올 확률 [처음, 끝]
     //   moveSpeed: 움직이는 발판 속도 [처음, 끝] (점/초)
     //   mine: 가시 폭탄 {from: 처음 나오는 높이(m), chance: 줄마다 나올 확률 [처음, 끝]}. null이면 없음
+    //   monster: 밟는 몬스터 {from: 처음 나오는 높이(m), chance: 줄마다 나올 확률 [처음, 끝],
+    //            kinds: 종류 가중치 [처음, 끝] (MONSTER.kinds), walk: 슬라임이 발판 위를 걸어 다닐 확률 [처음, 끝]}
+    //   storm: 쫓아오는 먹구름 {from: 나오는 높이(m), speed: 오르는 빠르기 m/초 [처음, 끝], ramp: 끝 빠르기가 되는 높이(m)}. null이면 없음
     //   rescues: 떨어지면 받아 주는 구조 구름 수 · itemGap: 아이템 사이 높이(m) [최소, 최대]
     //   ctl: 좌우 움직임 {maxVx 최고 속도, accel 붙는 힘, decel 멈추는 힘}
     DIFFICULTY: {
@@ -47,6 +50,8 @@
         extra: { normal: [70, 35], cloud: [18, 38], crumble: [12, 27] },
         moveSpeed: [35, 85],
         mine: null,
+        monster: { from: 35, chance: [0.1, 0.24], kinds: { slime: [5, 3], balloon: [3, 3], bird: [0, 2] }, walk: [0.3, 0.6] },
+        storm: null,
         rescues: 3, itemGap: [40, 70],
         ctl: { maxVx: 400, accel: 2900, decel: 3000 },
       },
@@ -59,6 +64,8 @@
         extra: { normal: [60, 20], cloud: [25, 50], crumble: [15, 30] },
         moveSpeed: [50, 145],
         mine: { from: 45, chance: [0.06, 0.34] },
+        monster: { from: 20, chance: [0.1, 0.26], kinds: { slime: [5, 3], balloon: [3, 3], bird: [1, 3] }, walk: [0.4, 0.8] },
+        storm: { from: 12, speed: [1.5, 3.2], ramp: 400 },
         rescues: 0, itemGap: [55, 95],
         ctl: { maxVx: 430, accel: 3400, decel: 2800 },
       },
@@ -71,6 +78,8 @@
         extra: { normal: [45, 15], cloud: [30, 50], crumble: [25, 35] },
         moveSpeed: [85, 175],
         mine: { from: 15, chance: [0.14, 0.42] },
+        monster: { from: 10, chance: [0.12, 0.3], kinds: { slime: [4, 3], balloon: [3, 3], bird: [2, 4] }, walk: [0.5, 0.9] },
+        storm: { from: 6, speed: [1.9, 3.4], ramp: 250 },
         rescues: 0, itemGap: [70, 120],
         ctl: { maxVx: 470, accel: 3700, decel: 3100 },
       },
@@ -93,6 +102,35 @@
     // 가시 폭탄 (보통·어려움): 크기, 발판에서 가로로 떨어뜨리는 거리. 나오는 높이·확률은 난이도 mine
     MINE: { r: 15, clear: 105 },
 
+    // 밟는 몬스터 (2026-09-27): 위에서 내려와 밟으면 꾹 눌리고 크게 튀어 오른다 (한 번 튀는 높이 × stomp).
+    //   옆이나 아래에서 닿으면: 쉬움은 살짝 밀려나고(push 점/초, "앗") 다치지 않는다, 보통·어려움은 가시 폭탄처럼 끝 (방패·로켓이면 괜찮다).
+    //   r: 몸 반지름 · points: 밟으면 받는 점수(콤보 배율) · pad: 몬스터가 발판 위 튀는 길에서 떨어져 있는 거리
+    //     (발판 반폭 + pad, 주인공 몸 + 몬스터 몸 + 여유) · top: 주인공 가운데가 몬스터 가운데보다 이만큼(몸 반지름 배율) 위면 "밟기"
+    //   kinds: slime 발판 위에 앉는 슬라임(가끔 걸어 다님) · balloon 발판 사이에 둥둥 뜬 풍선 괴물 · bird 옆으로 오가는 작은 로봇 새
+    //     (range: 오가는 거리 점, speed: 점/초, float: 위아래 둥실 점)
+    MONSTER: {
+      r: 17, stomp: 1.5, points: 15, push: 260, cool: 0.6, pad: 54, top: 0.15,
+      kinds: {
+        slime:   { name: '통통 슬라임', color: '#7dff6a', top: '#eaffc2', speed: 40 },
+        balloon: { name: '풍선 괴물',   color: '#ff7ad9', top: '#ffd6f4', range: 26, speed: 22, float: 6 },
+        bird:    { name: '로봇 새',     color: '#ffb13d', top: '#fff0c2', range: 70, speed: 70, float: 4 },
+      },
+    },
+
+    // 쫓아오는 먹구름 (보통·어려움, 2026-09-27): 아래에서 올라온다. 닿으면 떨어진 것과 같다 (방패 방울이 막아 주면 뒤로 물러난다).
+    //   빠르기는 난이도 storm.speed, 늘 사람 닮은 봇이 오르는 평균보다 느리다 (tests/jump.test.js가 잰다).
+    //   lag: 화면 아래 끝에서 이만큼(화면 높이 배율)보다 더 멀리 처지지는 않는다 (너무 멀어 잊히지 않게)
+    //   rest: 로켓이 끝난 뒤·방울이 막아 준 뒤 쉬는 시간(초) · back: 방울이 막아 주면 물러나는 거리(화면 높이 배율)
+    //   warn: 이만큼(m) 가까우면 HUD가 빨갛게 · hint: 처음 보일 때 "구름이 쫓아와요!" 보여 주는 시간(초)
+    STORM: { lag: 0.62, rest: 2.5, back: 0.5, warn: 4, hint: 2.8 },
+
+    // 알아서 맞춰 주는 난이도 (common/hub.js adaptMul, 0.85 ~ 1.12, 처음 두 판은 1). World.create opts.adapt로 받는다.
+    //   배율 mul을 이 지수만큼 거듭제곱해 곱한다 (1보다 작으면 쉽게):
+    //   ramp: 가장 어려운 높이 full을 mul^ramp로 나눔 (어려워지는 빠르기. 간격의 끝값은 그대로라 "닿지 못하는 틈이 없다"는 늘 성립)
+    //   mix: 움직이는·부서지는·구름 발판 가중치 · monster: 몬스터 나올 확률 · storm: 먹구름 빠르기
+    //   target: 판이 끝날 때 adaptRun에 주는 perf = 오른 높이 ÷ target (1 = 잘하는 아이의 보통 판. 아이 흉내 봇으로 정함)
+    ADAPT: { ramp: 1, mix: 1.5, monster: 1.5, storm: 1, target: { easy: 350, normal: 150, hard: 70 } },
+
     // 구조 구름·방패 방울이 던져 올리는 높이 (화면 높이 배율, 상한 520점)
     RESCUE: { jump: 0.75, max: 520 },
 
@@ -105,9 +143,9 @@
       { id: 'cloud', name: '구름 위', from: 100, color: '#bfe9ff', banner: '구름 위 도착!',
         sky: ['#0f2150', '#2c4f9a', '#7fb2e6'], glow: ['#9fd8ff', '#5d7bff'], stars: 0.35, clouds: 0.85, mix: { cloud: 1.5 } },
       { id: 'space', name: '우주',    from: 250, color: '#b388ff', banner: '우주 도착!',
-        sky: ['#05070f', '#0d1633', '#1c1446'], glow: ['#3a2a8a', '#0d6a8a'], stars: 0.85, clouds: 0, mix: { moving: 1.3, star: 0.05 } },
+        sky: ['#05070f', '#0d1633', '#1c1446'], glow: ['#3a2a8a', '#0d6a8a'], stars: 0.85, clouds: 0, mix: { moving: 1.3, star: 0.05, monster: 1.2 } },
       { id: 'stars', name: '별나라',  from: 500, color: '#ffe66d', banner: '별나라 도착!',
-        sky: ['#0b0418', '#2a0c42', '#40104a'], glow: ['#ff5ec8', '#ffe66d'], stars: 1, clouds: 0, mix: { spring: 1.3, star: 0.12 } },
+        sky: ['#0b0418', '#2a0c42', '#40104a'], glow: ['#ff5ec8', '#ffe66d'], stars: 1, clouds: 0, mix: { spring: 1.3, star: 0.12, monster: 1.3 } },
     ],
     // 구역이 바뀔 때 배경이 섞여 넘어가는 높이 (m, 경계 앞쪽)
     ZONE_FADE: 25,
@@ -139,6 +177,8 @@
       { id: 'starz',    tier: 3, name: '별나라 도착',   desc: '500m 별나라까지',              check: r => r.height >= 500 },
       { id: 'combo20',  tier: 3, name: '콤보 20',       desc: '콤보 20 만들기',               check: r => r.maxCombo >= 20 },
       { id: 'hard100',  tier: 3, name: '어려움 100',    desc: '어려움으로 100m',              check: r => r.diff === 'hard' && r.height >= 100 },
+      // 2026-09-27 밟는 몬스터와 함께
+      { id: 'stomp20',  tier: 2, name: '꾹꾹 20',       desc: '모두 합쳐 몬스터 20마리 밟기', check: (r, R) => (R.total.stomps || 0) >= 20 },
     ],
 
     // ─── 코인 · 상점 · 미션 (shop.js) ───────────────────────────
@@ -206,10 +246,12 @@
       { id: 'crumb30',  kind: 'life', stat: 'crumbles', goal: 30,   reward: 80,  text: '금 간 발판 30번 밟기 (누적)' },
       { id: 'bnc300',   kind: 'life', stat: 'bounces',  goal: 300,  reward: 90,  text: '발판 300번 밟기 (누적)' },
       { id: 'games5',   kind: 'life', stat: 'games',    goal: 5,    reward: 70,  text: '5판 하기 (누적)' },
+      { id: 'stomp15',  kind: 'life', stat: 'stomps',   goal: 15,   reward: 90,  text: '몬스터 15마리 밟기 (누적)' },
       { id: 'h100',     kind: 'run',  stat: 'height',   goal: 100,  reward: 80,  text: '한 판에 100m 오르기' },
       { id: 'h250',     kind: 'run',  stat: 'height',   goal: 250,  reward: 150, text: '한 판에 250m (우주 도착)' },
       { id: 'h500',     kind: 'run',  stat: 'height',   goal: 500,  reward: 250, text: '한 판에 500m (별나라 도착)' },
       { id: 'star30',   kind: 'run',  stat: 'stars',    goal: 30,   reward: 100, text: '한 판에 별 30개' },
+      { id: 'stomp5',   kind: 'run',  stat: 'stomps',   goal: 5,    reward: 110, text: '한 판에 몬스터 5마리 밟기' },
       { id: 'combo12',  kind: 'run',  stat: 'maxCombo', goal: 12,   reward: 120, text: '한 판에 콤보 12' },
       { id: 't120',     kind: 'run',  stat: 'time',     goal: 120,  reward: 100, text: '한 판에 2분 동안 오르기' },
       { id: 'n150',     kind: 'run',  stat: 'height',   goal: 150,  reward: 150, text: '보통으로 150m', diff: 'normal' },

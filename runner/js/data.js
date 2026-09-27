@@ -17,6 +17,8 @@
   // item: first초 뒤 처음, 그 뒤 gap초마다 안전한 줄에 하나. w: 종류별 가중치 (heart 0이면 하트 아이템 없음)
   // bh: 블랙홀 구간에서 옆으로 끌어당기기. every초마다(범위) warn초 동안 화살표로 알리고, 반대로 밀지 않으면 한 줄 끌려간다.
   //     끌려갈 줄에 safe초 안에 닿는 장애물이 있으면 끌지 않는다 (안전한 줄 약속)
+  // pirate: 우주 해적선. first초(범위) 뒤 처음, 그 뒤 every초마다 (처음 1분·처음 안내·블랙홀 구간에는 없음).
+  //     warn초 동안 한 줄을 빛내 알린 뒤 beam초 동안 레이저. 쏘는 사이 shot초 · bombs: 한 번에 떨어뜨리는 폭탄 수 (뛰어넘는다)
   const DIFFICULTY = {
     easy: {
       id: 'easy', name: '쉬움', desc: '천천히 · 하트 3개',
@@ -31,6 +33,7 @@
       starLine: 0.85,
       item: { first: 7, gap: [9, 14], w: { shield: 3, magnet: 3, boost: 2, heart: 1.5 } },
       bh: { every: [4.5, 6.5], warn: 1.5, safe: 1.3, first: 2 },
+      pirate: { first: [80, 115], every: [90, 130], warn: 1.3, beam: 0.45, shot: [2.8, 3.6], bombs: 2 },
     },
     normal: {
       id: 'normal', name: '보통', desc: '빠르게 · 하트 2개',
@@ -44,6 +47,7 @@
       starLine: 0.65,
       item: { first: 8, gap: [11, 17], w: { shield: 3, magnet: 3, boost: 2, heart: 0.8 } },
       bh: { every: [3.2, 4.5], warn: 1.1, safe: 1.0, first: 1.5 },
+      pirate: { first: [62, 85], every: [55, 85], warn: 0.95, beam: 0.45, shot: [2.1, 2.9], bombs: 3 },
     },
     hard: {
       id: 'hard', name: '어려움', desc: '아주 빠르게 · 하트 1개',
@@ -57,6 +61,7 @@
       starLine: 0.55,
       item: { first: 9, gap: [12, 18], w: { shield: 4, magnet: 2, boost: 2, heart: 0 } },
       bh: { every: [2.4, 3.4], warn: 0.85, safe: 0.8, first: 1 },
+      pirate: { first: [60, 75], every: [40, 65], warn: 0.75, beam: 0.45, shot: [1.7, 2.4], bombs: 4 },
     },
   };
   const DIFF_ORDER = ['easy', 'normal', 'hard'];
@@ -84,12 +89,28 @@
   // pad: 구간이 행성 구간 앞뒤 끝에서 떨어져 있는 거리(m)
   const BLACKHOLE = { chance: 0.15, from: 3, len: [150, 250], pad: [50, 40], bonus: 30 };
 
+  // ─── 우주 해적선 추격전 (빈도·세기는 난이도의 pirate) ───
+  // dur초 동안 뒤 하늘에 떠서 레이저를 쏘고 폭탄을 떨어뜨린다. 버티면 "해적선을 따돌렸어요!" + bonus점 + shower초 동안 별 소나기.
+  // minT: 판 시작 뒤 이만큼(초)은 안 나온다 · retry: 조건이 안 맞으면 이만큼 뒤 다시 본다 · firstShot: 나타나고 첫 레이저까지
+  // gapMul: 해적선이 있는 동안 장애물 줄 간격 배율 (넉넉하게) · clearPad: 레이저를 피할 옆 줄은 경고+레이저 시간보다 이만큼 더 비어 있어야 한다
+  // bombAhead: 폭탄은 이만큼(초) 앞에 떨어진다 · bombGap: 폭탄 앞뒤 이만큼(초) 안에는 같은 줄에 다른 장애물이 없다
+  const PIRATE = { dur: 10, minT: 60, retry: 0.3, firstShot: 1.6, gapMul: 1.3, clearPad: 0.25, bombAhead: 3, bombGap: 0.7, bonus: 60, shower: 2.2 };
+
+  // ─── 알아서 맞춰 주는 난이도 (놀이 본부 HUB.adaptMul: 0.85 ~ 1.12, 처음 두 판은 1) ───
+  // mul이 1보다 크면 살짝 어렵게, 작으면 살짝 쉽게. 쉬움·보통·어려움 안에서만 조금 움직인다 (world.js adaptCfg)
+  //   speed: 최고 속도 배율 = 1 + (mul-1) × speed · ramp: 빨라지는 시간 ÷ (1 + (mul-1) × ramp) · gap: 줄 간격 × (1 - (mul-1) × gap)
+  //   mix: 어려운 줄 모양 가중치 × mul^mix (쉬운 줄은 ÷) · pirate: 해적선 간격 ÷ (1 + (mul-1) × pirate)
+  // target: 판이 끝날 때 성적 = 달린 거리 ÷ target (1 = 그 난이도에서 보통 잘하는 아이. 사람 같은 로봇 두 종류 사이 값)
+  const ADAPT = { min: 0.85, max: 1.12, speed: 0.4, ramp: 1, gap: 0.6, mix: 1.5, pirate: 1,
+    hardRows: ['two', 'mg', 'mb', 'gg', 'bb', 'gb', 'g3', 'b3', 'mgb', 'mover'], easyRows: ['one', 'stars', 'gate', 'bar'],
+    target: { easy: 4500, normal: 1500, hard: 650 } };
+
     RN.DATA = {
     // 규칙은 1/120초 칸으로 돈다 (60·90·120Hz 화면에서 결과가 같게)
     TICK: 1 / 120,
     LANES: 3,
 
-    DIFFICULTY, DIFF_ORDER, ZONES, ROUTE, BLACKHOLE,
+    DIFFICULTY, DIFF_ORDER, ZONES, ROUTE, BLACKHOLE, PIRATE, ADAPT,
 
     // 앞쪽 이만큼(m)까지 물체를 미리 만들어 둔다 (지평선 끝). 뒤로 behind m 지나면 지운다
     // actGap: 빈 줄이 없는 줄(벽) 다음 줄까지 적어도 이만큼(초) 띄운다 (점프·미끄러지기 뒤 숨 돌리기)
@@ -165,6 +186,7 @@
       { id: 'stars1k', tier: 2, name: '별 부자',     desc: '모두 합쳐 별 1,000개',         check: (r, R) => R.total.stars >= 1000 },
       { id: 'pluto',   tier: 3, name: '명왕성 탐험가', desc: '한 판에 명왕성 도착 (3,000m)', check: r => r.zone >= 8 },
       { id: 'bhole',   tier: 2, name: '블랙홀 탈출', desc: '블랙홀 구간을 끝까지 지나기',   check: r => r.bhs >= 1 },
+      { id: 'pirate',  tier: 2, name: '해적 따돌리기', desc: '우주 해적선을 따돌리기',       check: r => r.pirates >= 1 },
       { id: 'slide10', tier: 1, name: '쏙쏙 미끄럼', desc: '한 판에 위쪽 막대 10번 미끄러져 지나기', check: r => r.bars >= 10 },
     ],
 
@@ -257,6 +279,7 @@
     { id: 'rnm5',   kind: 'run',  stat: 'nears',    goal: 5,    reward: 100, text: '한 판에 아슬아슬 5번' },
     { id: 'br20',   kind: 'life', stat: 'bars',     goal: 20,   reward: 100, text: '위쪽 막대 20번 미끄러져 지나기 (누적)' },
     { id: 'rsl10',  kind: 'run',  stat: 'slides',   goal: 10,   reward: 100, text: '한 판에 미끄러지기 10번' },
+    { id: 'rpir1',  kind: 'run',  stat: 'pirates',  goal: 1,    reward: 120, text: '한 판에 우주 해적선 따돌리기' },
   ];
   const MISSION_SLOTS = 3;
 

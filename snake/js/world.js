@@ -1,7 +1,7 @@
 'use strict';
 // 게임 규칙. DOM·canvas를 쓰지 않는다 (node 테스트가 그대로 불러 돌린다: tests/snake.test.js).
 // 좌표는 칸 단위 정수. snake[0]이 머리다.
-// 모드: classic(기본 규칙만) · endless(무한: 콤보·아이템·황금 시간 제한) · stage(스테이지: 레벨마다 벽·포털·목표)
+// 모드: classic(기본 규칙만) · endless(무한: 콤보·아이템·황금 시간 제한 + 라이벌 뱀) · stage(스테이지: 레벨마다 벽·포털·목표)
 (function (SN) {
   const D = SN.DATA;
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
@@ -140,6 +140,7 @@
     if (W.startGhost > 0) W.eff.ghost = W.startGhost;
     W.lastEat = -99; W.combo = 0; W.mult = 1;
     W.food = null;
+    if (W.rival) resetRival(W);
     spawnFood(W);
   }
 
@@ -156,11 +157,17 @@
     return L.find(c => c.id === id) || L[0] || { id: 'neon', traits: {} };
   }
 
+  // 알아서 맞춰 주는 난이도 배율(opts.adapt)을 값 하나에: 값 × 배율^지수 (D.ADAPT)
+  function adaptPow(W, k) { return Math.pow(W.adapt, (D.ADAPT && D.ADAPT[k]) || 0); }
+
   // opts: {mode: 'classic' | 'endless' | 'stage', level, easy, char: 캐릭터 id,
-  //        up: {goldTime, itemFreq, comboTime: 0~5단계} (상점 강화), start: {ghost, slow, double: true} (시작 아이템)}
+  //        up: {goldTime, itemFreq, comboTime: 0~5단계} (상점 강화), start: {ghost, slow, double: true} (시작 아이템),
+  //        rival: false면 라이벌 없음 (무한 모드만, 기본 있음), rivalLevel: 'easy' | 'normal' | 'hard' (기본은 쉬움·보통을 따름),
+  //        adapt: 알아서 맞춰 주는 난이도 배율 (HUB.adaptMul, 기본 1)}
   function create(cols, rows, seed, opts) {
     opts = opts || {};
-    const rand = SN.rng(seed == null ? (Date.now() ^ 0x5bd1e995) : seed);
+    const seed0 = seed == null ? (Date.now() ^ 0x5bd1e995) : seed;
+    const rand = SN.rng(seed0);
     const mode = opts.mode === 'endless' || opts.mode === 'stage' ? opts.mode : 'classic';
     const W = {
       cols, rows, rand, mode, fun: mode !== 'classic', easy: !!opts.easy,
@@ -183,17 +190,33 @@
       fx: [],             // 그리기 연출용: {kind, x, y}
     };
     W.startLevel = W.level;
+    const am = Number(opts.adapt);
+    W.adapt = Number.isFinite(am) && am > 0 ? Math.max(0.7, Math.min(1.3, am)) : 1;
+    W.growMul = adaptPow(W, 'perGrow');
     // 상점 강화: 황금 구슬 시간 · 아이템 간격 · 콤보 시간 (규칙 수치는 W에 들고 다닌다)
     const up = opts.up || {};
     // 캐릭터 특기는 강화 위에 더한다 (char를 안 넘기면 특기 없음: 규칙 테스트·옛 호출)
     const ch = charDef(opts.char), T = (opts.char && ch.id === opts.char && ch.traits) || {};
     W.char = ch.id;
-    W.goldLife = D.FOOD.goldLife + upLevel(up, 'goldTime') * upPer('goldTime') + (T.goldPlus || 0);
+    W.goldLife = (D.FOOD.goldLife + upLevel(up, 'goldTime') * upPer('goldTime') + (T.goldPlus || 0)) * adaptPow(W, 'goldLife');
     W.itemGapMul = Math.max(0.3, Math.max(0.4, 1 - upLevel(up, 'itemFreq') * upPer('itemFreq')) * (T.itemMul || 1));
     W.comboWindow = D.COMBO.window + upLevel(up, 'comboTime') * upPer('comboTime') + (T.comboPlus || 0);
     W.speedMul = T.speedMul || 1;
     W.startGhost = T.startGhost || 0;
     W.ghostMul = T.ghostMul || 1;
+    // 라이벌 뱀: 무한 모드에만. 규칙용 난수는 따로 써서 내 판(먹이 자리)의 흐름을 흔들지 않는다
+    W.rival = null;
+    if (mode === 'endless' && opts.rival !== false) {
+      const lvId = D.RIVAL.levels[opts.rivalLevel] ? opts.rivalLevel : W.easy ? 'easy' : 'normal';
+      const L = D.RIVAL.levels[lvId];
+      W.rival = {
+        level: lvId, rng: SN.rng(((seed0 >>> 0) * 2654435761 + 97) >>> 0),
+        speed: L.speed * adaptPow(W, 'rivalSpeed'), react: L.react * adaptPow(W, 'rivalReact'),
+        smart: Math.min(1, L.smart * adaptPow(W, 'rivalSmart')), wander: L.wander, clumsy: L.clumsy,
+        keepAway: L.keepAway, maxLen: L.maxLen,
+        met: false, eaten: 0, golds: 0, bumps: 0, passes: 0,
+      };
+    }
     setup(W);
     // 시작 아이템: 첫 레벨에만 효과를 켜 둔다 (출발 대기 동안은 줄지 않는다)
     W.startItems = [];
@@ -210,10 +233,10 @@
   function speed(W) {
     const len = W.snake.length - D.START.len, E = D.EASY;
     let s = W.easy
-      ? Math.min(E.max, (W.mode === 'stage' ? W.lv.speed * E.stageMul : E.base) + len * E.perGrow)
+      ? Math.min(E.max, (W.mode === 'stage' ? W.lv.speed * E.stageMul : E.base) + len * E.perGrow * (W.growMul || 1))
       : W.mode === 'stage'
-      ? Math.min(D.SPEED.max, W.lv.speed + len * D.SPEED.stagePerGrow)
-      : Math.min(D.SPEED.max, D.SPEED.base + len * D.SPEED.perGrow);
+      ? Math.min(D.SPEED.max, W.lv.speed + len * D.SPEED.stagePerGrow * (W.growMul || 1))
+      : Math.min(D.SPEED.max, D.SPEED.base + len * D.SPEED.perGrow * (W.growMul || 1));
     if (W.eff && W.eff.slow > 0) s *= D.ITEM.slowMul;
     return s * (W.speedMul || 1);
   }
@@ -221,6 +244,7 @@
   function freeCells(W) {
     const used = new Uint8Array(W.cols * W.rows);
     for (const p of W.snake) used[p.y * W.cols + p.x] = 1;
+    if (rivalShown(W)) for (const p of W.rival.body) used[p.y * W.cols + p.x] = 1;
     if (W.walls) for (let i = 0; i < used.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) used[i] = 1;
     if (W.food) used[W.food.y * W.cols + W.food.x] = 1;
     if (W.item) used[W.item.y * W.cols + W.item.x] = 1;
@@ -235,7 +259,7 @@
     const free = freeCells(W);
     if (!free.length) return false;
     const i = free[Math.floor(W.rand() * free.length)];
-    W.food = { x: i % W.cols, y: Math.floor(i / W.cols), gold: (W.eaten + 1) % D.FOOD.goldEvery === 0, born: W.t };
+    W.food = { x: i % W.cols, y: Math.floor(i / W.cols), gold: (W.eaten + (W.rival ? W.rival.eaten : 0) + 1) % D.FOOD.goldEvery === 0, born: W.t };
     return true;
   }
 
@@ -331,6 +355,13 @@
       for (let i = 0; i < n; i++) {
         const p = W.snake[i];
         if (p.x === nx && p.y === ny) return die(W, 'self');
+      }
+      // 라이벌 몸: 보통은 내 몸처럼 위험, 쉬움은 그냥 지나가고 라이벌이 멈칫 (꼬리 끝 칸은 곧 빠지니 괜찮다)
+      if (rivalAt(W, nx, ny, true)) {
+        if (!W.easy) return die(W, 'rival');
+        const V = W.rival;
+        if (!(V.stun > 0)) { V.passes++; W.events.push('pass'); W.fx.push({ kind: 'pass', x: nx, y: ny }); }
+        V.stun = Math.max(V.stun, D.RIVAL.passStun);
       }
     }
 
@@ -503,6 +534,7 @@
       // 이번 판에 깬 가장 높은 레벨 (스테이지만, 못 깼으면 0) · 보통 난이도일 때만 센 길이 (미션용)
       lvlTop: W.mode === 'stage' && W.levelsCleared > 0 ? W.startLevel + W.levelsCleared - 1 : 0,
       normalLen: W.easy ? 0 : W.maxLen,
+      rivalMet: !!(W.rival && W.rival.met), rivalEaten: W.rival ? W.rival.eaten : 0,
     };
   }
 

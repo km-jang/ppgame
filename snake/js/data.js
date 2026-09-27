@@ -140,6 +140,44 @@
     ],
     MISSION_SLOTS: 3,
 
+    // 라이벌 뱀 (2026-09-27, 소유자 "추천대로"): 무한 모드에서 컴퓨터가 모는 주황·보라 줄무늬 뱀(눈에 가면)이
+    // 같은 구슬을 두고 겨룬다. 아이템은 먹지 않는다 (황금 구슬은 먹는다). 시작 화면에서 끄고 켤 수 있다
+    RIVAL: {
+      intro: 5,        // 판에서 움직인 시간이 이만큼 지나면 나온다 (초). 처음 몇 초는 혼자 연습
+      appear: 1.2,     // 나오기 전 깜빡이는 예고 시간 (이때는 부딪혀도 아무 일 없다)
+      len: 4,          // 처음 길이. 부딪혀 줄어도 minLen 밑으로는 안 줄어든다
+      minLen: 3,
+      minDist: 9,      // 나오는 자리: 몸 모든 칸이 내 머리에서 이만큼(칸) 떨어진 곳, 내게서 멀어지는 방향
+      bumpStun: 2,     // 라이벌 머리가 내 몸에 부딪히면 멈칫(초)하고 bumpShrink칸 줄어든다 (내가 이긴 것)
+      bumpShrink: 2,
+      passStun: 1.2,   // 쉬움: 내가 라이벌 몸을 지나가면 라이벌이 멈칫 (나는 아무 일 없음)
+      blockStun: 1,    // 갈 곳이 막히면 멈칫. 멈칫이 끝나도 막혀 있으면 사라졌다가 back초 뒤 다른 자리에서 다시
+      back: 3,
+      // 난이도별 (쉬움·보통은 시작 화면 난이도를 따른다. hard는 opts.rivalLevel로만)
+      //   speed: 초당 칸 · maxLen: 이 길이까지만 자람 · react: 새 구슬을 알아채기까지(초)
+      //   smart: 한 칸마다 구슬 쪽으로 갈 확률 (나머지는 그냥 앞으로) · wander: 아무 데로 꺾을 확률
+      //   clumsy: 내 몸을 못 보고 부딪힐 확률 (부딪히면 라이벌만 멈칫) · keepAway: 내 머리 둘레 이 칸 안은 피한다
+      levels: {
+        easy:   { speed: 3.6, maxLen: 12, react: 1.2, smart: 0.55, wander: 0.12, clumsy: 0.25, keepAway: 3 },
+        normal: { speed: 6.4, maxLen: 20, react: 0.5, smart: 0.85, wander: 0.04, clumsy: 0.08, keepAway: 2 },
+        hard:   { speed: 8.6, maxLen: 26, react: 0.2, smart: 0.97, wander: 0.01, clumsy: 0,    keepAway: 1 },
+      },
+    },
+
+    // 알아서 맞춰 주는 난이도 (common/hub.js HUB.adaptMul: 처음 두 판은 1, 그 뒤 0.85~1.12).
+    // 판마다 값 × 배율^지수. 배율이 1보다 크면(잘하면) 조금 어렵게, 작으면 조금 쉽게.
+    // world.js create의 opts.adapt로 들어간다
+    ADAPT: {
+      perGrow: 1.5,     // 길어질 때 빨라지는 정도 (0.85면 0.78배, 1.12면 1.19배)
+      goldLife: -1,     // 황금 구슬 시간 (잘하면 짧게)
+      rivalSpeed: 1,    // 라이벌 속도
+      rivalReact: -1.5, // 라이벌이 새 구슬을 알아채는 시간 (잘하면 빨리)
+      rivalSmart: 1,    // 라이벌이 구슬 쪽으로 가는 확률
+      // 판이 끝나면 perf = 먹은 구슬 / target 을 HUB.adaptRun에 알린다 (1 = 그 난이도에서 아이가 보통 잘한 판).
+      // 봇(botDir)이 라이벌과 겨루며 먹는 수의 중간값은 쉬움 약 50 · 보통 약 40 (tests/snake.test.js), 아이는 그 절반쯤
+      target: { easy: 22, normal: 18 },
+    },
+
     // 빠르게 두 번 밀어도 잃지 않게 방향을 2개까지 줄 세운다
     TURN_QUEUE: 2,
 

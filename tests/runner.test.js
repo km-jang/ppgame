@@ -410,21 +410,28 @@ function makeHuman(seed, o) {
       if (ob.done || ob.kind === 'arch') continue;
       const rel = ob.z - W.dist;
       if (rel < -P.hitZ || rel > look) continue;
-      if (ob.kind === 'meteor' || ob.kind === 'gate' || ob.kind === 'bar') {
+      if (ob.kind === 'meteor' || ob.kind === 'gate' || ob.kind === 'bar' || ob.kind === 'bomb') {
         if (ob._h === undefined) ob._h = r() < o.lapse;   // 딴생각: 못 봤다
         if (ob._h) continue;
       }
-      if (ob.kind === 'meteor' || (o.lazy && (ob.kind === 'gate' || ob.kind === 'bar'))) {
+      const act = ob.kind === 'gate' || ob.kind === 'bar' || ob.kind === 'bomb';
+      if (ob.kind === 'meteor' || (o.lazy && act)) {
         for (const l of (ob.moving && ob.x !== ob.to ? [ob.from, ob.to] : [Math.round(ob.x)])) near[l] = Math.min(near[l], rel);
-      } else if (ob.kind === 'gate' || ob.kind === 'bar') {
+      } else if (act) {
         if (ob.x === cur && !S.seen.has(ob)) {
           S.seen.add(ob);
-          const T = ob.kind === 'gate' ? P.jumpT : P.slideT;
+          const T = ob.kind === 'bar' ? P.slideT : P.jumpT;
           const want = rel / v - T * 0.5 + (r() - 0.5) * 2 * o.jumpErr;
-          S.q.push({ at: W.t + Math.max(delay(), want), dir: ob.kind === 'gate' ? 'jump' : 'slide' });
+          S.q.push({ at: W.t + Math.max(delay(), want), dir: ob.kind === 'bar' ? 'slide' : 'jump' });
         }
       } else if (ob.kind === 'star') gain[Math.round(ob.x)] += 1;
       else if (ob.kind === 'item') gain[Math.round(ob.x)] += 3;
+    }
+    // 해적 레이저가 빛나는 줄: 알아챈 뒤(반응 시간)부터는 운석처럼 피한다
+    const Z = W.pir && W.pir.laser;
+    if (Z) {
+      if (S.laserSeen !== Z) { S.laserSeen = Z; S.laserAt = W.t + delay(); S.laserLapse = r() < o.lapse; }
+      if (W.t >= S.laserAt && !S.laserLapse) near[Z.lane] = 0;
     }
     if (S.q.some(isLane)) return;
     // 블랙홀이 끌어당기려 한다: 반대쪽이 괜찮으면(또는 끝 줄이면) 반대로 민다
@@ -718,7 +725,7 @@ test('메달: 새 메달 (어려움 · 화성 · 아슬아슬 · 완벽한 별�
   assert(!get('pluto').check(E, rec) && !get('bhole').check(E, rec) && !get('slide10').check(E, rec), 'new medals need their thing');
   // 예전에 딴 메달이 사라지지 않게 옛 id는 모두 남아 있다
   for (const id of ['d500', 'd1500', 'd3000', 's50', 's150', 'gate10', 'shield', 'boost3', 'clean', 'normal', 'hard', 'nebula', 'near10', 'perfect5', 'games10', 'stars1k']) assert(get(id), 'old id ' + id);
-  assert(D.MEDALS.length === 19, 'medal count ' + D.MEDALS.length);
+  assert(D.MEDALS.length === 20, 'medal count ' + D.MEDALS.length);
 });
 
 

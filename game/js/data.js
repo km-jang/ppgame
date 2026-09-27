@@ -25,6 +25,38 @@
     // 예고선이 굳은 뒤에 옆으로 비키면 안 맞는다 (가만히 서 있으면 맞는다)
     charger:  { name: '돌진이', r: 13, hp: 4,   speed: 64,  score: 20,  color: '#ff8c42', shape: 'arrow',
                 range: 340, warn: 0.75, dashSpeed: 560, dashTime: 0.5, rest: 1.4 },
+    // ─── 행성마다 다른 적 (2026-09-27, 소유자 "추천대로") ───────────────
+    // 그 행성 웨이브(2개)에만 섞여 나온다 (PLANETS[].foe, PLANET_FOE). 모두 맞기 전에 알아볼 수 있는 예고가 있다.
+    // 경고 시간(초)에는 난이도 foeWarn을 곱한다 (쉬움은 조금 길게)
+    // 수성 태양 불씨: 해가 있는 쪽(왼쪽·위)에서 날아오는 작고 빠른 불씨. 방향을 천천히만 틀어서 옆으로 비키면 스쳐 간다. 닿으면 꺼진다
+    ember:    { name: '태양 불씨', r: 8,  hp: 1,  speed: 175, score: 8,  color: '#ffb347', shape: 'ember', turn: 0.9 },
+    // 금성 산성 구름: 느린 구름. mistCd초마다 제자리에 안개 웅덩이를 남긴다 (mistForm초 동안 점선으로 생기고, mistLife초 동안
+    // 그 안에선 내 속도가 slow배). 아프지는 않다
+    acid:     { name: '산성 구름', r: 19, hp: 6,  speed: 38,  score: 25, color: '#c8f04a', shape: 'acid',
+                mistCd: 3.2, mistR: 58, mistForm: 0.6, mistLife: 4.5, slow: 0.55, mistMax: 6 },
+    // 지구 인공위성: 나를 가운데 두고 orbit px 거리에서 빙 돈다. beamCd초마다 멈춰서 점선 예고(beamWarn, 방향은 예고 시작 때 굳음)
+    // 뒤 짧은 빛줄기(길이 beamLen)를 beamOn초 쏜다
+    sat:      { name: '인공위성', r: 14, hp: 5,  speed: 75,  score: 30, color: '#9fd8ff', shape: 'sat',
+                orbit: 240, beamCd: 3.4, beamWarn: 0.9, beamOn: 0.25, beamLen: 440, beamW: 14 },
+    // 화성 모래 벌레: 땅속(모래 더미)으로 나를 따라오다(digSpeed, 이때는 못 맞히고 안 아프다) 내 밑에 오거나 digMax초가 지나면
+    // 멈춰서 둥근 예고(popR, popWarn초) 뒤 튀어나온다. 원 안에 있으면 아프다. 그다음 upTime초 동안 밖에 나와 느리게 쫓아온다
+    worm:     { name: '모래 벌레', r: 17, hp: 7,  speed: 45,  score: 35, color: '#e0824f', shape: 'worm',
+                digSpeed: 100, digMax: 5, popR: 50, popWarn: 0.9, upTime: 2.6 },
+    // 목성 번개 구름: 거리를 두고 떠 있다가 번개를 모은다(zapWarn초, 불꽃 + 내가 있던 자리까지 점선). 그 자리까지 짧은 번개
+    zap:      { name: '번개 구름', r: 18, hp: 7,  speed: 50,  score: 35, color: '#c9b6ff', shape: 'zap',
+                keep: 270, zapCd: 3.8, zapWarn: 1.0, zapOn: 0.18, zapW: 18, zapReach: 520 },
+    // 토성 고리 조각: 화면 왼쪽·오른쪽 끝에서 내 높이로 줄을 맞추고(aim초) 가로 띠 예고(warn초) 뒤 반대쪽 끝까지 휙 (sweep px/초)
+    shard:    { name: '고리 조각', r: 14, hp: 5,  speed: 150, score: 25, color: '#f3d58c', shape: 'shard',
+                aim: 1.3, warn: 1.0, sweep: 400 },
+    // 천왕성 얼음 결정: 부수면 작은 얼음 조각 3개로 쪼개진다
+    ice:      { name: '얼음 결정', r: 17, hp: 6,  speed: 60,  score: 25, color: '#bff6ff', shape: 'ice', splitInto: 'iceBit', splitN: 3 },
+    iceBit:   { name: '얼음 조각', r: 8,  hp: 1,  speed: 120, score: 5,  color: '#e6fbff', shape: 'iceBit' },
+    // 해왕성 폭풍 드론: 나를 둘러싸고 소용돌이치며(near~far px) 돈다. 둘레 windR px 안을 지나는 내 총알을 옆으로 휘게 한다
+    storm:    { name: '폭풍 드론', r: 15, hp: 6,  speed: 90,  score: 30, color: '#6fa8ff', shape: 'storm',
+                near: 150, far: 290, windR: 95, windTurn: 3.0 },
+    // 명왕성 하트 유령: 보였다(on초) 흐려졌다(off초) 한다 (fade초에 걸쳐). 흐릴 땐 못 맞히고 닿아도 안 아프며, 나에게서 keepOff px 떨어져 있다
+    ghost:    { name: '하트 유령', r: 15, hp: 5,  speed: 75,  score: 30, color: '#ffb3d9', shape: 'ghost',
+                on: 2.4, off: 1.8, fade: 0.45, keepOff: 140 },
     boss:     { name: '보스',   r: 58, hp: 320, speed: 42,  score: 1000, color: '#ff2e88', shape: 'octa',
                 ringCd: 3.0, ringCount: 14, ringSpeed: 170,
                 aimCd: 1.4, aimSpeed: 240, summonCd: 6.5 },
@@ -55,14 +87,15 @@
   // (2026-09-27 소유자: "난이도 더 높여도 돼, 쉬움부터 상하좌우 움직이게") 아래를 더했다
   // lead: 사수가 내가 움직이는 쪽을 얼마나 앞질러 쏘나 (0 그대로 겨눔, 1 정확히 앞질러)
   // meteor: 운석이 떨어지는 간격(초)·예고 시간(초). 예고 원이 내 자리에 생기고 warn초 뒤 떨어진다
+  // foeWarn: 행성 적(PLANET_FOE)의 예고 시간 배율
   // pull·bulletPull: 블랙홀 웨이브에서 나와 적 탄을 끌어당기는 힘 (px/초, px/초²). 내 속도(220)보다 한참 약하다
   const DIFFICULTY = {
     easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.7,  enemySpeed: 0.85, count: 0.9,  bulletSpeed: 0.8,  fireRate: 0.8,  score: 0.6,
-              lead: 0.3,  meteorEvery: 5.2, meteorWarn: 1.35, pull: 38, bulletPull: 70 },
+              lead: 0.3,  meteorEvery: 5.2, meteorWarn: 1.35, pull: 38, bulletPull: 70, foeWarn: 1.2 },
     normal: { id: 'normal', name: '보통',   hp: 5, enemyHp: 1.05, enemySpeed: 1.05, count: 1.1,  bulletSpeed: 1.05, fireRate: 1.1,  score: 1,
-              lead: 0.6,  meteorEvery: 4.0, meteorWarn: 1.15, pull: 52, bulletPull: 100 },
+              lead: 0.6,  meteorEvery: 4.0, meteorWarn: 1.15, pull: 52, bulletPull: 100, foeWarn: 1 },
     hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.5,  enemySpeed: 1.2,  count: 1.35, bulletSpeed: 1.2,  fireRate: 1.4,  score: 1.6,
-              lead: 0.85, meteorEvery: 3.2, meteorWarn: 1.0,  pull: 66, bulletPull: 130 },
+              lead: 0.85, meteorEvery: 3.2, meteorWarn: 1.0,  pull: 66, bulletPull: 130, foeWarn: 0.85 },
   };
 
   // 운석 (2026-09-27): 가만히 서 있으면 맞도록 내 자리를 노린다. 예고 원(빨간 점선 + 차오르는 빛)이 먼저 뜨고
@@ -82,17 +115,27 @@
   // 웨이브 perPlanet개마다 다음 행성으로. 명왕성 다음은 다시 수성 (2바퀴, 3바퀴 …)
   // 그림(색·무늬)은 render.js PLANET_ART. 여기는 이름·한 줄 설명·알림 색
   const JOURNEY = { perPlanet: 2 };
+  // foe: 그 행성 웨이브에 섞여 나오는 행성 적 (ENEMIES)
   const PLANETS = [
-    { id: 'mercury', name: '수성',   fact: '태양과 가장 가까운 행성',   color: '#c9c3bb' },
-    { id: 'venus',   name: '금성',   fact: '노란 구름이 빙글빙글',       color: '#ffcf6b' },
-    { id: 'earth',   name: '지구',   fact: '우리 집! 파란 바다 행성',    color: '#6fc3ff' },
-    { id: 'mars',    name: '화성',   fact: '빨간 모래 행성',             color: '#ff7a4d' },
-    { id: 'jupiter', name: '목성',   fact: '가장 큰 행성, 커다란 빨간 점', color: '#f0b98a' },
-    { id: 'saturn',  name: '토성',   fact: '멋진 고리를 두른 행성',      color: '#f3d58c' },
-    { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성', color: '#9ef0f0' },
-    { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',   color: '#5b8cff' },
-    { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',        color: '#e8d2b8' },
+    { id: 'mercury', name: '수성',   fact: '태양과 가장 가까운 행성',   color: '#c9c3bb', foe: 'ember' },
+    { id: 'venus',   name: '금성',   fact: '노란 구름이 빙글빙글',       color: '#ffcf6b', foe: 'acid' },
+    { id: 'earth',   name: '지구',   fact: '우리 집! 파란 바다 행성',    color: '#6fc3ff', foe: 'sat' },
+    { id: 'mars',    name: '화성',   fact: '빨간 모래 행성',             color: '#ff7a4d', foe: 'worm' },
+    { id: 'jupiter', name: '목성',   fact: '가장 큰 행성, 커다란 빨간 점', color: '#f0b98a', foe: 'zap' },
+    { id: 'saturn',  name: '토성',   fact: '멋진 고리를 두른 행성',      color: '#f3d58c', foe: 'shard' },
+    { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성', color: '#9ef0f0', foe: 'ice' },
+    { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',   color: '#5b8cff', foe: 'storm' },
+    { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',        color: '#e8d2b8', foe: 'ghost' },
   ];
+  // 행성 적 섞기: 일반 웨이브는 적 수의 share만큼(최소 min), 보스 웨이브는 boss마리를 웨이브 안에 고르게 바꿔 넣는다.
+  // 처음 만나면 그 적 위에 이름표("화성 모래 벌레!")를 tag초 띄운다
+  const PLANET_FOE = { share: 0.3, min: 2, boss: 2, tag: 2.4 };
+
+  // 알아서 맞춰 주는 난이도 (2026-09-27, common/hub.js HUB.adaptMul). 판을 시작할 때 받은 배율 m(0.85 ~ 1.12, 처음 두 판은 1)을
+  // 압박 손잡이에 살짝 곱한다: 손잡이 = 1 + (m - 1) × 무게. count 적 수 · gap 적이 나오는 간격(나눔) · meteor 운석 간격(나눔) · fire 적 연사
+  // 판이 끝나면 perf = 버틴 시간 ÷ target[난이도] (최대 3)를 HUB.adaptRun으로 알린다. 1이면 "그 난이도에서 보통 잘한 판"
+  // target은 원 그리기 봇(피하지 않고 돌기만, 아이 흉내)의 버틴 시간 중앙값 근처 (PLAN.md 5.6)
+  const ADAPT = { count: 1, gap: 1, meteor: 1, fire: 0.6, min: 0.8, max: 1.2, target: { easy: 180, normal: 110, hard: 90 }, maxPerf: 3 };
 
   // 블랙홀 웨이브: from 웨이브부터, 보스 웨이브가 아니고 바로 앞 웨이브가 블랙홀이 아니면 chance 확률로
   // 블랙홀은 화면 안쪽(place 비율 사이)에, 내 자리에서 minFromPlayer px 이상 떨어져 생긴다.
@@ -227,10 +270,11 @@
     { id: 'w10',     tier: 1, icon: '10',  name: '10웨이브',       desc: '아무 난이도로 10웨이브 도달',           check: r => r.wave >= 10 },
     { id: 'w10n',    tier: 2, icon: '10',  name: '보통 10웨이브',  desc: '보통 이상으로 10웨이브 도달',           check: r => r.wave >= 10 && r.diff !== 'easy' },
     { id: 'w15h',    tier: 3, icon: '15',  name: '어려움 15웨이브', desc: '어려움으로 15웨이브 도달',             check: r => r.wave >= 15 && r.diff === 'hard' },
+    { id: 'pluto',   tier: 2, icon: '♥',   name: '태양계 끝까지', desc: '한 판에 명왕성까지 가기 (17웨이브)',     check: r => r.wave >= 17 },
     { id: 'games10', tier: 1, icon: '10판', name: '단골',          desc: '10판 플레이',                           check: (r, L) => L.games >= 10 },
   ];
 
-  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
+  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, PLANET_FOE, ADAPT, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
 
   // ═══ 기체 · 상점 · 미션 · 아이템 (2026-09-26, 소유자: "캐릭터 고를 수 있게, 상점·미션·아이템") ═══
   // 기체. hp: 체력 더하기, speed·dashCd: 배율, gun: 총 바꾸기(barrels 더하기, rate·dmg·speed 배율, crit 더하기,

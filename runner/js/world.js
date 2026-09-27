@@ -10,6 +10,8 @@
   const ITEM_KINDS = Object.keys(D.ITEM.kinds);
   const ROW_KINDS = ['one', 'two', 'gate', 'bar', 'mg', 'mb', 'gg', 'bb', 'gb', 'g3', 'b3', 'mgb', 'mover', 'stars'];
   const BH = D.BLACKHOLE;
+  // 부딪히는 것 (운석 · 바닥 레이저 문 · 위쪽 막대 · 해적 폭탄)
+  const HARM = { meteor: true, gate: true, bar: true, bomb: true };
 
   // 난이도 이름 고르기: 'easy' | 'normal' | 'hard'. 옛 방식 { easy: false }는 보통
   function diffId(opts) {
@@ -17,7 +19,29 @@
     if (opts && opts.easy === false) return 'normal';
     return 'easy';
   }
-  const cfg = W => D.DIFFICULTY[W.diff] || D.DIFFICULTY.easy;
+  // 지금 판의 난이도 수치 (알아서 맞춰 주는 난이도가 1이 아니면 살짝 바꾼 사본 W.C)
+  const cfg = W => W.C || D.DIFFICULTY[W.diff] || D.DIFFICULTY.easy;
+  const PD = D.PIRATE, AD = D.ADAPT;
+  const range = (a, r) => a[0] + (a[1] - a[0]) * r();
+
+  // 알아서 맞춰 주는 난이도: mul(0.85 ~ 1.12)만큼 속도·간격·줄 모양·해적선 빈도를 살짝 바꾼 난이도 사본
+  function adaptCfg(C, m) {
+    if (m === 1) return C;
+    const d = m - 1, k = 1 - d * AD.gap;
+    const mix = (w, kk) => w * (AD.hardRows.includes(kk) ? Math.pow(m, AD.mix) : AD.easyRows.includes(kk) ? Math.pow(m, -AD.mix) : 1);
+    const rows = ab => { const o = {}; for (const kk of Object.keys(ab)) o[kk] = mix(ab[kk], kk); return o; };
+    const out = Object.assign({}, C, {
+      speed: Object.assign({}, C.speed, { max: C.speed.max * (1 + d * AD.speed), ramp: C.speed.ramp / (1 + d * AD.ramp) }),
+      gap: { start: C.gap.start.map(x => x * k), end: C.gap.end.map(x => x * k) },
+      rows: { start: rows(C.rows.start), end: rows(C.rows.end) },
+      adapt: m,
+    });
+    if (C.pirate) {
+      const f = 1 + d * AD.pirate;
+      out.pirate = Object.assign({}, C.pirate, { first: C.pirate.first.map(x => Math.max(PD.minT, x / f)), every: C.pirate.every.map(x => x / f) });
+    }
+    return out;
+  }
   const smooth = u => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
 
   // 얼마나 어려워졌나 (0 → 1): 몸풀기 동안 0, 그 뒤 ramp초에 걸쳐 부드럽게 1까지
@@ -45,6 +69,7 @@
   const charOf = id => ((D.CHARS || []).find(c => c.id === id)) || (D.CHARS && D.CHARS[0]) || NO_CHAR;
 
   // opts: { diff ('easy'|'normal'|'hard') 또는 easy (옛 방식, 기본 true), auto (자동 운전), wait (출발 대기 초),
+  //         adapt (알아서 맞춰 주는 난이도 배율 0.85 ~ 1.12, 기본 1), bh (블랙홀 확률, 테스트용), pirateAt (첫 해적선 초, 테스트용),
   //         tutorial (처음 한 번 안내), up (상점 강화 단계 {magnet, shield, boost, coin}),
   //         loadout (시작 아이템 {shield, boost, heart}), char (캐릭터 id, data.js CHARS. 옛 이름 skin도 받는다) }
   function create(seed, opts) {
@@ -65,7 +90,7 @@
       chain: 0, lastStar: -9, lastNear: -9,
       // 이번 판 기록 (메달·결과 화면)
       jumps: 0, gates: 0, hits: 0, blocks: 0, boosts: 0, smashes: 0, items: 0, kinds: {}, laneMoves: 0,
-      nears: 0, perfects: 0, milestones: 0, heals: 0, slides: 0, bars: 0, bhPassed: 0, pulls: 0, resists: 0,
+      nears: 0, perfects: 0, milestones: 0, heals: 0, slides: 0, bars: 0, bhPassed: 0, pulls: 0, resists: 0, bombsOver: 0, lasers: 0,
       cause: '', auto: !!opts.auto,
       tut: opts.tutorial ? { step: 'lane', tries: 0, want: false, show: '', rows: 0, jumpOk: false, slideOk: false } : null,
       events: [],   // 소리·진동 (main.js가 비운다)
@@ -95,6 +120,14 @@
     W.loadout = Object.keys(lo).filter(k => lo[k]);
     W.maxHearts = W.hearts;
     W.hitAt = 0; W.clean = 0;   // 안 부딪히고 간 가장 긴 거리 (미션)
+    // 알아서 맞춰 주는 난이도
+    W.adapt = Math.max(AD.min, Math.min(AD.max, Number(opts.adapt) || 1));
+    W.C = W.adapt === 1 ? null : adaptCfg(C, W.adapt);
+    // 우주 해적선: 따로 굴리는 난수 (길과 상관없이), 첫 등장까지 남은 시간
+    W.xrand = RN.rng(((seed == null ? 1 : seed) * 69069 + 12345) >>> 0);
+    W.pir = null; W.pirates = 0; W.shower = 0; W.showerT = 0; W.pirGuard = null;
+    const PC = cfg(W).pirate;
+    W.pirT = opts.pirateAt != null ? opts.pirateAt : PC ? range(PC.first, W.xrand) : 1e9;
     // 블랙홀은 길(W.rand)과 따로 굴린다: 블랙홀이 있든 없든 같은 씨앗이면 같은 줄이 나온다
     W.bhChance = opts.bh != null ? opts.bh : BH.chance;
     W.brand = RN.rng(((seed == null ? 1 : seed) * 2654435761 + 97) >>> 0);
@@ -166,7 +199,9 @@
     row.open = [0, 1, 2].filter(l => row.lanes[l] !== 'meteor' && row.lanes[l] !== 'mover');
     const guide = row.free.length ? row.free[Math.floor(r() * row.free.length)] : row.open[Math.floor(r() * row.open.length)];
     // 간격(초)을 m로 바꿀 때는 다음 줄에 닿을 때의 속도(더 빠르다)로 잰다: 빨라지는 중에도 피할 시간이 모자라지 않게
-    const g = gapSec(C, tArrive, r()), gw = row.free.length ? g : Math.max(g, D.GEN.actGap);   // 벽 다음은 숨 돌릴 틈
+    let g = gapSec(C, tArrive, r());
+    if (W.pir) g *= PD.gapMul;   // 해적선이 쏘는 동안은 줄 사이를 넉넉하게
+    const gw = row.free.length ? g : Math.max(g, D.GEN.actGap);   // 벽 다음은 숨 돌릴 틈
     const vArrive = Math.max(1, baseSpeed(C, tArrive + gw));
     const gapM = Math.max(D.GEN.minGap, vArrive * gw);
     // 별: 안전한 줄에 한 줄로 늘어서서 길을 알려 준다. 별만 있는 줄은 옆 줄로 비스듬히 건너간다.
@@ -230,6 +265,7 @@
       const len = Math.round(BH.len[0] + (BH.len[1] - BH.len[0]) * lenU);
       const lo = BH.pad[0], hi = Math.max(lo, leg - len - BH.pad[1]);
       const start = k * leg + Math.round(lo + (hi - lo) * posU);
+      if (W.pirGuard != null && start < W.pirGuard) continue;   // 해적선이 있는 동안에는 블랙홀 없음
       W.bhs.push({ leg: k, start, end: start + len, side: sideU < 0.5 ? 0 : 2 });
     }
   }
@@ -242,7 +278,7 @@
   function laneClear(W, l, sec) {
     const v = Math.max(1, speed(W));
     for (const o of W.obs) {
-      if (o.done || (o.kind !== 'meteor' && o.kind !== 'gate' && o.kind !== 'bar')) continue;
+      if (o.done || !HARM[o.kind]) continue;
       const rel = o.z - W.dist;
       if (rel < -P.hitZ || rel > v * sec + P.hitZ) continue;
       const ls = o.moving && o.x !== o.to ? [o.from, o.to] : [Math.round(o.x)];
@@ -464,6 +500,8 @@
     const zi = zoneAt(W.dist);
     if (zi !== W.zone) { W.zone = zi; W.events.push('zone'); W.fx.push({ kind: 'zone', i: zi }); }
     blackHole(W, dt);
+    pirate(W, dt);
+    if (W.phase !== 'play') { W.score = Math.floor(W.dist) + W.stars * D.STAR.value + W.bonus; return; }
 
     const mag = W.eff.magnet > 0, cy = p.y + 0.5;
     for (let i = W.obs.length - 1; i >= 0; i--) {
@@ -500,7 +538,7 @@
       }
       if (Math.abs(o.x - p.x) < P.hitW) {
         if (Math.abs(rel) < P.hitZ) {
-          if (o.kind === 'gate' && p.y >= D.OBST.gateH) o.over = true;   // 뛰어서 넘는 중
+          if ((o.kind === 'gate' || o.kind === 'bomb') && p.y >= D.OBST.gateH) o.over = true;   // 뛰어서 넘는 중
           else if (o.kind === 'bar' && p.sl > 0 && p.y < 0.05) o.under = true;   // 미끄러져 밑으로 지나는 중
           else { hit(W, o); if (W.phase !== 'play') break; }
         }
@@ -512,6 +550,9 @@
           o.counted = true; W.gates++;
           W.events.push('gate');
           if (o.tut) nextTut(W, true);
+        } else if (o.kind === 'bomb' && o.over) {
+          o.counted = true; W.bombsOver++;
+          W.events.push('gate');
         } else if (o.kind === 'bar' && o.under) {
           o.counted = true; W.bars++;
           W.events.push('bar');
@@ -574,6 +615,91 @@
     W.fx.push({ kind: 'pull', x: p.x, z: W.dist, dir: P0.dir });
   }
 
+  // ─── 우주 해적선 추격전 ─────────────────────────────────────
+  // 나타나기: 처음 1분 뒤, 처음 안내가 끝난 뒤, 앞으로 지나갈 거리에 블랙홀 구간이 없을 때만.
+  // 있는 동안: 한 줄을 warn초 빛내 알리고 beam초 레이저 (피할 옆 줄이 있을 때만 쏜다), 가끔 폭탄. dur초 버티면 따돌린다
+  function pirate(W, dt) {
+    const C = cfg(W), PC = C.pirate;
+    // 따돌린 뒤 별 소나기
+    if (W.shower > 0) {
+      W.shower = Math.max(0, W.shower - dt);
+      if ((W.showerT -= dt) <= 0) {
+        W.showerT = 0.07;
+        W.obs.push({ kind: 'star', x: Math.floor(W.xrand() * 3), y: 0.5, z: W.dist + 22 + W.xrand() * 25, rain: true });
+      }
+    }
+    if (!PC) return;
+    if (!W.pir) {
+      if ((W.pirT -= dt) > 0) return;
+      const span = C.speed.max * D.ITEM.boostMul * PD.dur + 60;
+      planBlackHoles(W, W.dist + span + 20);
+      const clash = W.bh || W.bhs.some(b => b.end > W.dist - 5 && b.start < W.dist + span);
+      if (W.runT < PD.minT || (W.tut && W.tut.step !== 'done') || clash) { W.pirT = PD.retry; return; }
+      W.pir = { t: PD.dur, max: PD.dur, shotT: PD.firstShot, laser: null, bombs: PC.bombs, bombT: PD.dur / (PC.bombs + 1), shots: 0 };
+      W.pirGuard = W.dist + span;
+      W.events.push('pirate');
+      W.fx.push({ kind: 'pirate' });
+      return;
+    }
+    const S = W.pir, p = W.p;
+    S.t -= dt;
+    if (S.laser) {
+      const Z = S.laser;
+      Z.t -= dt;
+      if (Z.phase === 'warn') {
+        if (Z.t <= 0) { Z.phase = 'beam'; Z.t = PC.beam; Z.max = PC.beam; W.events.push('laser'); }
+      } else {
+        // 레이저: 그 줄에 있으면 부딪힌 것 (한 번만)
+        if (!Z.hit && Math.abs(p.x - Z.lane) < P.hitW) { Z.hit = true; hit(W, { kind: 'laser', x: Z.lane, z: W.dist }); if (W.phase !== 'play') return; }
+        if (Z.t <= 0) { if (!Z.hit) W.lasers++; S.laser = null; }
+      }
+    } else if (S.t > PC.warn + PC.beam + 0.3 && (S.shotT -= dt) <= 0) {
+      const lane = pickLaserLane(W, PC.warn + PC.beam + PD.clearPad);
+      if (lane < 0) S.shotT = PD.retry;
+      else {
+        S.laser = { lane, phase: 'warn', t: PC.warn, max: PC.warn, from: p.lane };
+        S.shots++;
+        S.shotT = range(PC.shot, W.xrand);
+        W.events.push('laserWarn');
+      }
+    }
+    if (S.bombs > 0 && S.t > 1.5 && (S.bombT -= dt) <= 0) {
+      if (dropBomb(W)) { S.bombs--; S.bombT = PD.dur / (PC.bombs + 1); } else S.bombT = PD.retry;
+    }
+    if (S.t <= 0 && !S.laser) {
+      // 따돌렸다: 보너스 + 별 소나기
+      W.pir = null; W.pirGuard = null;
+      W.pirates++; W.bonus += PD.bonus; W.shower = PD.shower;
+      W.pirT = range(PC.every, W.xrand);
+      W.events.push('pirOut');
+      W.fx.push({ kind: 'pirout', pts: PD.bonus });
+    }
+  }
+  // 레이저를 쏠 줄: 되도록 우주선이 있는 줄. 단, 바로 옆(또는 제자리)에 sec초 동안 아무것도 없는 줄이 있어야 쏜다 (안전한 줄 약속).
+  // 쏠 수 있는 줄이 없으면 -1
+  function pickLaserLane(W, sec) {
+    const p = W.p.lane;
+    const others = [0, 1, 2].filter(l => l !== p);
+    if (W.xrand() < 0.5) others.reverse();
+    for (const l of [p].concat(others)) {
+      for (let q = 0; q < 3; q++) if (q !== l && Math.abs(q - p) <= 1 && laneClear(W, q, sec)) return l;
+    }
+    return -1;
+  }
+  // 폭탄: bombAhead초 앞, 앞뒤 bombGap초 안에 다른 장애물이 없는 줄에 떨어뜨린다 (뛰어넘는다). 아직 안 만든 줄과도 겹치지 않게
+  function dropBomb(W) {
+    const v = Math.max(1, speed(W)), gap = v * PD.bombGap;
+    const z = Math.min(W.dist + v * PD.bombAhead, W.nextZ - gap - P.hitZ);
+    if (z < W.dist + v * 1.5) return false;
+    const lanes = [0, 1, 2].filter(l => !W.obs.some(o => !o.done && HARM[o.kind] && Math.abs(o.z - z) < gap + P.hitZ &&
+      (o.moving ? (o.from === l || o.to === l) : Math.round(o.x) === l)));
+    if (!lanes.length) return false;
+    const l = lanes[Math.floor(W.xrand() * lanes.length)];
+    W.obs.push({ kind: 'bomb', x: l, z, born: W.t });
+    W.events.push('bomb');
+    return true;
+  }
+
   // 아슬아슬: 이 장애물이 있던 줄에서 방금(window초 안) 옆 줄로 비켜 지나갔다
   function nearMiss(W, o) {
     const p = W.p, N = D.NEAR, side = Math.abs(o.x - p.x);
@@ -605,7 +731,7 @@
       if (o.kind === 'meteor') {
         const ls = o.moving && o.x !== o.to ? [o.from, o.to] : [Math.round(o.x)];
         for (const l of ls) near[l] = Math.min(near[l], Math.max(0, rel));
-      } else if (o.kind === 'gate') {
+      } else if (o.kind === 'gate' || o.kind === 'bomb') {
         if (Math.abs(o.x - p.x) < P.hitW && rel > P.hitZ * 0.5 && rel < v * P.jumpT * 0.4 && p.y <= 0 && !p.drop) jump(W);
         gain[o.x] -= 0.5;
       } else if (o.kind === 'bar') {
@@ -614,6 +740,8 @@
       } else if (o.kind === 'star') gain[Math.round(o.x)] += 1;
       else if (o.kind === 'item') gain[Math.round(o.x)] += 4;
     }
+    // 해적 레이저가 빛나는 줄은 운석처럼 피한다
+    if (W.pir && W.pir.laser) near[W.pir.laser.lane] = 0;
     if (Math.abs(p.x - p.lane) > 0.1) return;   // 옮기는 중
     const cur = p.lane;
     // 블랙홀이 끌어당기려 하면: 반대쪽이 괜찮으면 반대로 밀어 버틴다 (끝 줄이면 제자리에서 버틴다)
@@ -637,7 +765,7 @@
     const p = W.p, v = speed(W);
     let best = null;
     for (const o of W.obs) {
-      if (o.done || (o.kind !== 'meteor' && o.kind !== 'gate' && o.kind !== 'bar')) continue;
+      if (o.done || !HARM[o.kind]) continue;
       const rel = o.z - W.dist;
       if (rel < P.hitZ || rel > v * sec) continue;
       const lanes = o.moving && o.x !== o.to ? [o.from, o.to] : [Math.round(o.x)];
@@ -655,8 +783,9 @@
       jumps: W.jumps, easy: W.diff === 'easy', diff: W.diff, time: W.runT,
       zone: zoneAt(W.dist), nears: W.nears, perfects: W.perfects, milestones: W.milestones, heals: W.heals,
       slides: W.slides, bars: W.bars, bhs: W.bhPassed, pulls: W.pulls, resists: W.resists, lap: placeOf(zoneAt(W.dist)).lap,
+      pirates: W.pirates, planet: Math.min(9, zoneAt(W.dist) + 1),
     };
   }
 
-  RN.World = { create, charOf, step, tick, move, jump, slide, speed, baseSpeed, level, rowWeights, makeRow, fill, bot, dangerAhead, runStats, zoneAt, placeOf, bhAt, laneClear, planBlackHoles, diffId, cfg, jumpY };
+  RN.World = { create, charOf, step, tick, move, jump, slide, speed, baseSpeed, level, rowWeights, makeRow, fill, bot, dangerAhead, runStats, zoneAt, placeOf, bhAt, laneClear, planBlackHoles, pickLaserLane, adaptCfg, diffId, cfg, jumpY };
 })(RN);
