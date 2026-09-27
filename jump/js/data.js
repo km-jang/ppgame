@@ -146,11 +146,46 @@
         sky: ['#0f2150', '#2c4f9a', '#7fb2e6'], glow: ['#9fd8ff', '#5d7bff'], stars: 0.35, clouds: 0.85, mix: { cloud: 1.5 } },
       { id: 'space', name: '우주',    from: 250, color: '#b388ff', banner: '우주 도착!',
         sky: ['#05070f', '#0d1633', '#1c1446'], glow: ['#3a2a8a', '#0d6a8a'], stars: 0.85, clouds: 0, mix: { moving: 1.3, star: 0.05, monster: 1.2 } },
-      { id: 'stars', name: '별나라',  from: 500, color: '#ffe66d', banner: '별나라 도착!',
+      { id: 'stars', name: '별나라',  from: 700, color: '#ffe66d', banner: '별나라 도착!',
         sky: ['#0b0418', '#2a0c42', '#40104a'], glow: ['#ff5ec8', '#ffe66d'], stars: 1, clouds: 0, mix: { spring: 1.3, star: 0.12, monster: 1.3 } },
     ],
-    // 구역이 바뀔 때 배경이 섞여 넘어가는 높이 (m, 경계 앞쪽)
+    // 구역이 바뀔 때 배경이 섞여 넘어가는 높이 (m, 경계 앞쪽). 행성 사이는 PLANET_FADE
     ZONE_FADE: 25,
+
+    // ─── 태양계 여행 (2026-09-27, 소유자: "다른 게임도 우주배경 반영", 뿅뿅 우주선과 같은 행성) ───
+    // 우주 구역(250m)부터 50m마다 행성 하나씩 지나 오른다: 수성 250 · 금성 300 · 지구 350 · 화성 400 · 목성 450 ·
+    // 토성 500 · 천왕성 550 · 해왕성 600 · 명왕성 650, 그 위 700m부터 별나라(은하).
+    // 50m 간격: 쉬움 아이 흉내 봇이 한 판에 평균 450 ~ 500m를 올라 행성 너덧 개를 보고, 쉬움이 가장 어려워지는 700m에서 은하에 닿는다.
+    //   at: 도착 높이(m) · side: 행성이 떠 가는 쪽(기둥 왼쪽·오른쪽 번갈아) · size: 크기 배율 · line: 도착 배너 한 줄
+    //   sky: 그 행성 구간 하늘 [위, 가운데, 아래] · glow: 하늘 빛 덩어리 두 색 (render.js가 한 번 그려 둔다)
+    PLANETS: [
+      { id: 'mercury', name: '수성',   at: 250, side: 1,  size: 0.8,  color: '#d8d0c4', line: '태양과 가장 가까운 행성',
+        sky: ['#07070a', '#2a1e12', '#3a2a14'], glow: ['#ffb070', '#5a4630'] },
+      { id: 'venus',   name: '금성',   at: 300, side: -1, size: 0.95, color: '#ffcf6b', line: '노란 구름이 빙글빙글',
+        sky: ['#0b0804', '#3a2206', '#5a3a0c'], glow: ['#ffcf6b', '#8a5a14'] },
+      { id: 'earth',   name: '지구',   at: 350, side: 1,  size: 1,    color: '#6fc3ff', line: '우리 집! 옆에 달도 있어요',
+        sky: ['#040810', '#0b2a3a', '#0d3a6b'], glow: ['#3d9bff', '#1a6a8a'] },
+      { id: 'mars',    name: '화성',   at: 400, side: -1, size: 0.85, color: '#ff7a4d', line: '빨간 모래 행성',
+        sky: ['#0a0506', '#2a0f16', '#5a1a0c'], glow: ['#ff7a4d', '#6a1a2a'] },
+      { id: 'jupiter', name: '목성',   at: 450, side: 1,  size: 1.35, color: '#f0b98a', line: '가장 큰 행성, 커다란 빨간 점',
+        sky: ['#08060a', '#2a1a2a', '#4a2a1a'], glow: ['#f0b98a', '#6a3a2a'] },
+      { id: 'saturn',  name: '토성',   at: 500, side: -1, size: 0.9,  color: '#f3d58c', line: '멋진 고리를 두른 행성',
+        sky: ['#07060a', '#1f1a2e', '#4a3a14'], glow: ['#f3d58c', '#4a3a6a'] },
+      { id: 'uranus',  name: '천왕성', at: 550, side: 1,  size: 0.95, color: '#9ef0f0', line: '옆으로 누워 도는 얼음 행성',
+        sky: ['#040a0c', '#0b2a3a', '#0e4a50'], glow: ['#9ef0f0', '#1a5a6a'] },
+      { id: 'neptune', name: '해왕성', at: 600, side: -1, size: 0.95, color: '#5b8cff', line: '바람이 가장 센 파란 행성',
+        sky: ['#03050e', '#0a1a4a', '#0f2a7a'], glow: ['#5b8cff', '#2a3a9a'] },
+      { id: 'pluto',   name: '명왕성', at: 650, side: 1,  size: 0.55, color: '#e8d2b8', line: '작고 추운 하트 행성',
+        sky: ['#05050a', '#10141e', '#1a1a2a'], glow: ['#e8d2b8', '#3a3a5a'] },
+    ],
+    PLANET_FADE: 14,
+
+    // ─── 블랙홀 구간 (2026-09-27) ────────────────────────────────
+    // 가끔 len(m) 동안 기둥 한쪽에 블랙홀이 나타나 주인공을 그쪽으로 살짝 끈다 (좌우로 늘 pull 점/초씩 밀림).
+    // 끄는 힘은 늘 좌우 최고 속도보다 훨씬 작아 언제나 빠져나올 수 있고, "닿지 못하는 틈이 없다"도 끄는 힘을 빼고 잰다 (테스트).
+    // 로켓 중에는 끌리지 않는다. 두 구간 사이는 늘 gap(m) [최소, 최대]만큼 떨어져 있어 연달아 오지 않는다.
+    //   first: 난이도별 처음 나올 수 있는 높이(m) (쉬움은 300m 전에는 없다) · pull: 난이도별 끄는 힘(점/초)
+    BLACKHOLE: { len: 30, gap: [110, 200], first: { easy: 300, normal: 180, hard: 130 }, pull: { easy: 28, normal: 44, hard: 60 } },
 
     // 높이 눈금: 작은 눈금 10m, 빛나는 선 50m, 100m마다 큰 축하
     MILE: { tick: 10, line: 50, big: 100 },
@@ -176,7 +211,8 @@
       // 2026-09-27 높이 구역·콤보와 함께
       { id: 'cloudz',   tier: 1, name: '구름 위 도착',  desc: '100m 구름 위까지',             check: r => r.height >= 100 },
       { id: 'spacez',   tier: 2, name: '우주 도착',     desc: '250m 우주까지',                check: r => r.height >= 250 },
-      { id: 'starz',    tier: 3, name: '별나라 도착',   desc: '500m 별나라까지',              check: r => r.height >= 500 },
+      // 2026-09-27 태양계 여행으로 별나라가 500m에서 700m(명왕성 다음)로 옮겨 갔다. 이미 딴 메달은 그대로
+      { id: 'starz',    tier: 3, name: '별나라 도착',   desc: '700m 별나라까지',              check: r => r.height >= 700 },
       { id: 'combo20',  tier: 3, name: '콤보 20',       desc: '콤보 20 만들기',               check: r => r.maxCombo >= 20 },
       { id: 'hard100',  tier: 3, name: '어려움 100',    desc: '어려움으로 100m',              check: r => r.diff === 'hard' && r.height >= 100 },
       // 2026-09-27 밟는 몬스터와 함께
@@ -251,7 +287,7 @@
       { id: 'stomp15',  kind: 'life', stat: 'stomps',   goal: 15,   reward: 90,  text: '몬스터 15마리 밟기 (누적)' },
       { id: 'h100',     kind: 'run',  stat: 'height',   goal: 100,  reward: 80,  text: '한 판에 100m 오르기' },
       { id: 'h250',     kind: 'run',  stat: 'height',   goal: 250,  reward: 150, text: '한 판에 250m (우주 도착)' },
-      { id: 'h500',     kind: 'run',  stat: 'height',   goal: 500,  reward: 250, text: '한 판에 500m (별나라 도착)' },
+      { id: 'h500',     kind: 'run',  stat: 'height',   goal: 500,  reward: 250, text: '한 판에 500m (토성 도착)' },
       { id: 'star30',   kind: 'run',  stat: 'stars',    goal: 30,   reward: 100, text: '한 판에 별 30개' },
       { id: 'stomp5',   kind: 'run',  stat: 'stomps',   goal: 5,    reward: 110, text: '한 판에 몬스터 5마리 밟기' },
       { id: 'combo12',  kind: 'run',  stat: 'maxCombo', goal: 12,   reward: 120, text: '한 판에 콤보 12' },

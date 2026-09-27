@@ -61,6 +61,31 @@
     for (let i = 0; i < D.ZONES.length; i++) if (m >= D.ZONES[i].from) z = i;
     return z;
   }
+  // 높이(m)까지 지나온 행성 수 (0 = 아직, 1 수성 … 9 명왕성)
+  function planetAt(m) {
+    let n = 0;
+    for (const p of D.PLANETS) if (m >= p.at) n++;
+    return n;
+  }
+  // 블랙홀 구간 목록을 높이 upto(m)까지 미리 정해 둔다 (판마다 따로 도는 난수 W.hrand, 발판 자리와는 상관없다).
+  // 구간 {id, from, to, side(-1 왼쪽 · 1 오른쪽)}. 두 구간 사이는 늘 gap 최소보다 멀다 (연달아 오지 않는다)
+  function holesUpTo(W, upto) {
+    const B = D.BLACKHOLE, L = W.holeList;
+    let last = L[L.length - 1];
+    while (!last || last.to < upto) {
+      const from = last ? last.to + B.gap[0] + W.hrand() * (B.gap[1] - B.gap[0]) : W.holeFirst + W.hrand() * (B.gap[1] - B.gap[0]) * 0.5;
+      last = { id: L.length + 1, from, to: from + B.len, side: W.hrand() < 0.5 ? -1 : 1 };
+      L.push(last);
+    }
+    return L;
+  }
+  // 높이 m(m)가 들어 있는 블랙홀 구간 (없으면 null)
+  function holeAt(W, m) {
+    if (m < W.holeFirst) return null;
+    for (const h of holesUpTo(W, m + 1)) if (m >= h.from && m < h.to) return h;
+    return null;
+  }
+
   // 콤보에 따른 별 점수 배율 (step번마다 add씩, max까지)
   const comboMul = c => { const C = D.COMBO; return Math.min(C.max, 1 + Math.floor(Math.max(0, c) / C.step) * C.add); };
 
@@ -307,7 +332,11 @@
     const ch = charOf(opts.char);
     const UP = applyUpgrades(L, opts.upgrades, ch.id);
     const W = {
-      rand, mrand: JP.rng((s0 ^ 0x2c1b3c6d) + 7), A, adapt: A.mul, easy, diff: L.id, L, ctl: UP.ctl, char: ch.id, phys: physOf(ch.id), rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
+      rand, mrand: JP.rng((s0 ^ 0x2c1b3c6d) + 7), hrand: JP.rng((s0 ^ 0x51ed2701) + 3), A, adapt: A.mul,
+      // 블랙홀 구간 (D.BLACKHOLE): 목록 · 처음 나올 수 있는 높이 · 끄는 힘 · 지금 들어 있는 구간
+      holeList: [], holeFirst: D.BLACKHOLE.first[L.id] || 300, pull: D.BLACKHOLE.pull[L.id] || 0, hole: null, holes: 0,
+      planet: 0,   /* 지나온 가장 먼 행성 (1 수성 … 9 명왕성) */
+      easy, diff: L.id, L, ctl: UP.ctl, char: ch.id, phys: physOf(ch.id), rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
       p: { x: WW / 2, y: P0.r, vx: 0, vy: 0, px: WW / 2, py: P0.r, face: 1, land: -9 },
       input: { dir: 0 },          // -1 왼쪽 · 0 · 1 오른쪽 (main.js·봇이 채운다)
       cam: -viewH * D.CAM.start, pcam: 0,
@@ -443,6 +472,11 @@
       if (T.left && T.right) { T.done = true; T.at = W.t; W.events.push('tut'); }
     }
     P.x += P.vx * H;
+    // 블랙홀 구간: 그쪽으로 살짝 끌린다 (로켓 중에는 괜찮다). 처음 들어설 때 한 번 알린다
+    const hole = holeAt(W, P.y / D.METER);
+    if (hole && hole !== W.hole) { W.holes++; W.events.push('hole'); W.fx.push({ kind: 'hole', side: hole.side, x: P.x, y: P.y }); }
+    W.hole = hole;
+    if (hole && W.rocket <= 0) P.x += hole.side * W.pull * H;
     // 한쪽 끝으로 나가면 반대쪽에서 들어온다
     if (P.x < 0) { P.x += WW; P.px += WW; } else if (P.x >= WW) { P.x -= WW; P.px -= WW; }
 
@@ -548,6 +582,9 @@
     // 구역이 바뀌면 배너, 100m마다 축하 (한 번씩만)
     const zi = zoneAt(W.height);
     if (zi > W.zone) { W.zone = zi; W.events.push('zone'); W.fx.push({ kind: 'zone', zone: zi, x: P.x, y: P.y }); }
+    // 행성에 닿으면 한 번씩 알린다 (구역 배너와 같은 때면 render.js가 하나로 합친다)
+    const pn = planetAt(W.height);
+    if (pn > W.planet) { W.planet = pn; W.events.push('planet'); W.fx.push({ kind: 'planet', i: pn - 1, x: P.x, y: P.y }); }
     const mb = Math.floor(W.height / D.MILE.big);
     if (mb > W.mile) { W.mile = mb; W.events.push('mile'); W.fx.push({ kind: 'mile', m: mb * D.MILE.big, x: P.x, y: mb * D.MILE.big * D.METER }); }
     // 카메라: 부드럽게 따라 올라가되(ease), 주인공이 화면 위쪽으로 너무 가지 않게(lead). 내려가지는 않는다
@@ -667,7 +704,9 @@
     }
     if (!t) return 0;
     const tt = Math.max(0, timeTo(t.y + P0.r));
-    const tx = t.x + t.vx * tt;
+    // 블랙홀에 끌리는 만큼 미리 반대쪽을 겨냥한다
+    const drift = W.hole && W.rocket <= 0 ? W.hole.side * W.pull : 0;
+    const tx = t.x + t.vx * tt - drift * tt;
     const dx = wrapDelta(P.x, tx);
     // 가까우면 멈춘다 (멈추는 데 드는 거리만큼 미리)
     const brake = P.vx * P.vx / (2 * C.decel);
@@ -727,12 +766,12 @@
     return {
       diff: W.diff, easy: W.easy, height: W.height, score: W.score, stars: W.starsGot, springs: W.springs,
       rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo, rescued: W.rescued, bounces: W.bounces, time: W.t,
-      zone: W.zone, crumbles: W.crumbles, char: W.char, stomps: W.stomps, bumps: W.bumps, adapt: W.adapt,
+      zone: W.zone, crumbles: W.crumbles, char: W.char, stomps: W.stomps, bumps: W.bumps, adapt: W.adapt, planet: W.planet, holes: W.holes,
     };
   }
 
   // 테스트·봇용: W에서 높이 y에 내려와 닿기까지 시간
   const timeTo = (W, y) => fallTime(W.p.y, W.p.vy, y, W.phys);
 
-  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk };
+  JP.World = { create, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, holeAt, holesUpTo };
 })(JP);

@@ -628,7 +628,7 @@ test('메달 확인 함수: 이번 판 기록과 평생 기록으로 판정', ()
   assert(!M('n100').check({ diff: 'easy', height: 300 }, rec) && M('n100').check({ diff: 'hard', height: 100 }, rec), 'n100 by diff');
   assert(M('hard100').check({ diff: 'hard', height: 100 }, rec) && !M('hard100').check({ diff: 'normal', height: 300 }, rec), 'hard100');
   assert(M('spacez').check({ height: 250 }, rec) && !M('spacez').check({ height: 249 }, rec), 'space zone');
-  assert(M('starz').check({ height: 500 }, rec) && M('combo20').check({ maxCombo: 20 }, rec) && !M('combo20').check({ maxCombo: 19 }, rec), 'stars zone · combo');
+  assert(M('starz').check({ height: 700 }, rec) && !M('starz').check({ height: 699 }, rec) && M('combo20').check({ maxCombo: 20 }, rec) && !M('combo20').check({ maxCombo: 19 }, rec), 'stars zone · combo');
   assert(D.MEDALS.find(m => m.id === 'games10').check(run, { total: { games: 10, stars: 0 } }), 'games10');
   assert(new Set(D.MEDALS.map(m => m.id)).size === D.MEDALS.length && D.MEDALS.length >= 10, 'unique ids');
   const W = create(1, { easy: true });
@@ -636,19 +636,22 @@ test('메달 확인 함수: 이번 판 기록과 평생 기록으로 판정', ()
   for (const k of ['diff', 'easy', 'height', 'score', 'stars', 'springs', 'rockets', 'saves', 'maxCombo', 'zone']) assert(k in s, 'runStats has ' + k);
 });
 
-test('높이 구역: 0 하늘 · 100 구름 위 · 250 우주 · 500 별나라, 넘을 때 한 번씩 알린다', () => {
-  assert(zoneAt(0) === 0 && zoneAt(99) === 0 && zoneAt(100) === 1 && zoneAt(249) === 1 && zoneAt(250) === 2 && zoneAt(499) === 2 && zoneAt(500) === 3 && zoneAt(9999) === 3, 'zoneAt');
+test('높이 구역: 0 하늘 · 100 구름 위 · 250 우주(행성들) · 700 별나라, 넘을 때 한 번씩 알린다', () => {
+  assert(zoneAt(0) === 0 && zoneAt(99) === 0 && zoneAt(100) === 1 && zoneAt(249) === 1 && zoneAt(250) === 2 && zoneAt(699) === 2 && zoneAt(700) === 3 && zoneAt(9999) === 3, 'zoneAt');
   assert(D.ZONES.map(z => z.id).join() === 'sky,cloud,space,stars', 'zone ids');
   for (let i = 1; i < D.ZONES.length; i++) assert(D.ZONES[i].banner && D.ZONES[i].from > D.ZONES[i - 1].from, 'banner ' + i);
   const W = empty();
-  const zones = [], miles = [];
-  for (let m = 0; m <= 620; m += 5) {
-    put(W, 200, m * D.METER + 10, 0); clear(W); tick(W);
+  W.storm = null;   // 높이만 옮겨 보는 시험이라 먹구름은 뺀다
+  const zones = [], miles = [], planets = [];
+  for (let m = 0; m <= 720; m += 5) {
+    put(W, 200, m * D.METER + 10, 0); W.cam = m * D.METER - 100; clear(W); tick(W);
     if (W.events.includes('zone')) zones.push(W.height);
-    for (const f of W.fx) if (f.kind === 'mile') miles.push(f.m);
+    for (const f of W.fx) { if (f.kind === 'mile') miles.push(f.m); if (f.kind === 'planet') planets.push(W.height); }
   }
-  assert(JSON.stringify(zones) === JSON.stringify([100, 250, 500]), 'zones at ' + zones.join(','));
-  assert(JSON.stringify(miles) === JSON.stringify([100, 200, 300, 400, 500, 600]), 'miles at ' + miles.join(','));
+  assert(JSON.stringify(zones) === JSON.stringify([100, 250, 700]), 'zones at ' + zones.join(','));
+  assert(JSON.stringify(miles) === JSON.stringify([100, 200, 300, 400, 500, 600, 700]), 'miles at ' + miles.join(','));
+  assert(JSON.stringify(planets) === JSON.stringify([250, 300, 350, 400, 450, 500, 550, 600, 650]), 'planets at ' + planets.join(','));
+  assert(W.planet === 9 && runStats(W).planet === 9, 'planet kept');
   assert(W.zone === 3 && runStats(W).zone === 3, 'zone kept');
   // 구역에 따라 발판 섞임이 조금 바뀐다 (구름 위에는 구름 발판이 더 많다 등)
   assert(Object.keys(D.ZONES[1].mix).length > 0, 'cloud zone has a mix');
@@ -970,6 +973,98 @@ test('판 기록: 밟은 몬스터 수 · 맞춤 배율, 메달 꾹꾹 20 (모�
   assert(rec.total.stomps === 7, 'total stomps ' + rec.total.stomps);
   assert(RC.clean({ total: { stomps: -3 } }).total.stomps === 0 && RC.clean({ total: { stomps: 12 } }).total.stomps === 12, 'clean');
   for (const id of ['stomp15', 'stomp5']) assert(D.MISSIONS.find(m => m.id === id && m.stat === 'stomps'), 'mission ' + id);
+});
+
+// ─── 태양계 여행 · 블랙홀 구간 ──────────────────────────────
+test('태양계 여행: 우주 구역부터 50m마다 수성 → 명왕성, 그 위는 별나라', () => {
+  const P = D.PLANETS;
+  assert(P.map(p => p.id).join() === 'mercury,venus,earth,mars,jupiter,saturn,uranus,neptune,pluto', 'order ' + P.map(p => p.id).join());
+  assert(P.map(p => p.name).join() === '수성,금성,지구,화성,목성,토성,천왕성,해왕성,명왕성', 'names');
+  const space = D.ZONES.find(z => z.id === 'space'), stars = D.ZONES.find(z => z.id === 'stars');
+  assert(P[0].at === space.from && P[P.length - 1].at < stars.from, 'inside the space zone');
+  for (let i = 0; i < P.length; i++) {
+    assert(P[i].at === 250 + 50 * i, 'every 50m ' + P[i].id);
+    assert(P[i].line && P[i].sky.length === 3 && P[i].glow.length === 2 && P[i].size > 0, 'fields ' + P[i].id);
+    if (i) assert(P[i].side === -P[i - 1].side, 'sides alternate ' + P[i].id);
+  }
+  const pa = JP.World.planetAt;
+  assert(pa(0) === 0 && pa(249) === 0 && pa(250) === 1 && pa(349) === 2 && pa(350) === 3 && pa(650) === 9 && pa(5000) === 9, 'planetAt');
+});
+
+test('블랙홀 구간: 가끔(연달아 오지 않게), 쉬움은 300m 전에는 없고, 끄는 힘은 늘 약하다', () => {
+  const B = D.BLACKHOLE;
+  for (const diff of LEVELS) {
+    assert(B.pull[diff] > 0 && B.first[diff] > 0, diff + ' data');
+    for (const ch of CHAR_IDS) {
+      const W = create(1, { diff, char: ch });
+      assert(W.pull < W.ctl.maxVx * 0.2, diff + ' ' + ch + ' pull is gentle ' + W.pull + ' / ' + W.ctl.maxVx);
+    }
+    let n = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const W = create(seed, { diff, viewH: 600 });
+      const L = JP.World.holesUpTo(W, 3000);
+      assert(L[0].from >= B.first[diff], diff + ' first ' + L[0].from.toFixed(0));
+      for (let i = 0; i < L.length; i++) {
+        assert(Math.abs(L[i].to - L[i].from - B.len) < 1e-9 && (L[i].side === 1 || L[i].side === -1), 'shape');
+        if (i) assert(L[i].from - L[i - 1].to >= B.gap[0] - 1e-9, diff + ' not back to back');
+      }
+      n += L.filter(h => h.from < 1000).length;
+      assert(JP.World.holeAt(W, L[0].from + 1) === L[0] && JP.World.holeAt(W, L[0].from - 1) === null && JP.World.holeAt(W, L[0].to + 1) === null, 'holeAt');
+    }
+    assert(n / 20 >= 3 && n / 20 <= 8, diff + ' a few per 1000m ' + (n / 20));
+  }
+  assert(B.first.easy >= 300, 'easy none before 300m');
+  // 같은 시드면 같은 구간, 발판 자리는 블랙홀과 상관없다
+  const a = create(4, { diff: 'normal' }), b = create(4, { diff: 'normal' });
+  assert(JSON.stringify(JP.World.holesUpTo(a, 2000)) === JSON.stringify(JP.World.holesUpTo(b, 2000)), 'deterministic');
+});
+
+test('블랙홀 구간: 그쪽으로 살짝 끌리지만 반대쪽을 누르면 빠져나온다, 로켓 중에는 안 끌린다', () => {
+  for (const diff of LEVELS) {
+    const W = empty({ diff });
+    W.storm = null;
+    W.holeFirst = 0; W.holeList = [{ id: 1, from: 0, to: 1e6, side: 1 }];
+    put(W, 100, 300, 0); clear(W);
+    for (let i = 0; i < 120; i++) { put(W, W.p.x, 300, 0); tick(W); }
+    assert(Math.abs(W.p.x - 100 - W.pull) < 1, diff + ' pulled one second ' + (W.p.x - 100).toFixed(1));
+    assert(W.events.filter(e => e === 'hole').length === 1 && W.holes === 1, 'announced once');
+    // 반대쪽(왼쪽)을 누르면 끌리는 힘을 이기고 나아간다
+    put(W, 200, 300, 0); W.input.dir = -1;
+    let moved = 0;
+    for (let i = 0; i < 120; i++) { const x = W.p.x; W.p.y = W.p.py = 300; W.p.vy = 0; tick(W); moved += wrapDelta(x, W.p.x); }
+    assert(moved < -(W.ctl.maxVx - W.pull) * 0.8, diff + ' escapable ' + moved.toFixed(0));
+    // 로켓 중에는 괜찮다
+    W.input.dir = 0; put(W, 200, 300, 0); W.rocket = 1;
+    const x0 = W.p.x; tick(W);
+    assert(W.p.x === x0, 'no pull during rocket');
+    assert(runStats(W).holes === 1, 'run stats');
+  }
+});
+
+test('닿지 못하는 틈이 없다: 블랙홀에 끌리는 구간에서도 (세 난이도 · 다섯 캐릭터 · 맞춤 배율 1.12)', () => {
+  const out = [];
+  for (const diff of LEVELS) {
+    let worstAll = 0, inHole = 0;
+    for (const ch of CHAR_IDS) for (let seed = 1; seed <= 2; seed++) {
+      const { W, rows } = rowsOf(diff, seed, 250, ch, 1.12);
+      const F = W.phys, top = F.jump;
+      for (let i = 1; i < rows.length; i++) {
+        const a = rows[i - 1], b = rows[i], gap = b.y - a.y;
+        if (!a.kind || b.kind === 'moving' || a.kind === 'moving') continue;
+        const hole = JP.World.holeAt(W, a.y / D.METER) || JP.World.holeAt(W, b.y / D.METER);
+        const t = Math.sqrt(2 * top / F.gUp) + Math.sqrt(2 * Math.max(0, top - gap) / F.gDown);
+        const need = Math.abs(wrapDelta(a.xs[0], b.xs[0])) - b.w / 2;
+        // 끌리는 쪽과 반대로 가야 하는 가장 나쁜 경우로 잰다 (좌우 최고 속도의 80%에서 끄는 힘을 뺀다)
+        const speed = W.ctl.maxVx * 0.8 - (hole ? W.pull : 0);
+        const k = need / (speed * t);
+        if (hole) { inHole++; worstAll = Math.max(worstAll, k); }
+        assert(k < 1, diff + ' ' + ch + ' sideways with pull ' + k.toFixed(2));
+      }
+    }
+    out.push(diff + ' 끌리는 구간 줄 ' + inHole + '개, 가로 여유 최악 ' + (worstAll * 100).toFixed(0) + '%');
+    assert(inHole > 50, diff + ' holes were measured ' + inHole);
+  }
+  console.log('       ' + out.join(' / '));
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
