@@ -64,16 +64,6 @@
     } else if (Z.id === 'cloud') {
       // 발아래 구름 바다
       for (let i = 0; i < 16; i++) puff(rand() * w, h * (0.88 + rand() * 0.2), Math.max(w, h) * (0.08 + rand() * 0.1), 'rgba(235,245,255,0.45)');
-    } else if (Z.id === 'space') {
-      // 멀리 고리 달린 행성 (기둥 왼쪽 위)
-      const px = w * 0.13, py = h * 0.3, pr = Math.min(w, h) * 0.09;
-      puff(px, py, pr * 2.6, 'rgba(120,90,255,0.25)');
-      const pg = g.createRadialGradient(px - pr * 0.4, py - pr * 0.4, pr * 0.1, px, py, pr);
-      pg.addColorStop(0, '#c7b8ff'); pg.addColorStop(0.55, '#6a4bd6'); pg.addColorStop(1, '#231454');
-      g.fillStyle = pg; g.beginPath(); g.arc(px, py, pr, 0, TAU); g.fill();
-      g.strokeStyle = 'rgba(210,200,255,0.55)'; g.lineWidth = pr * 0.12;
-      g.beginPath(); g.ellipse(px, py, pr * 1.7, pr * 0.42, -0.35, 0, TAU); g.stroke();
-      puff(w * 0.9, h * 0.75, Math.min(w, h) * 0.05, 'rgba(94,231,255,0.5)');
     } else if (Z.id === 'stars') {
       // 별나라: 빛나는 은하 띠
       g.save(); g.translate(w / 2, h / 2); g.rotate(-0.5);
@@ -367,10 +357,21 @@
         if (big && f.combo >= C.step && f.combo % C.step === 0) text(f.x, f.y + 70, '콤보 ' + f.combo + '!', '#ff9ee0', 24 * s);
       } else if (f.kind === 'zone') {
         const Z = D.ZONES[f.zone];
-        R.banner = { title: Z.banner, sub: Z.from + ' m', color: Z.color, life: 2.6, max: 2.6 };
+        if (!W.fx.some(q => q.kind === 'planet')) R.banner = { title: Z.banner, sub: Z.from + ' m', color: Z.color, life: 2.6, max: 2.6 };
         R.big = null;   // 구역 배너가 100m 글자보다 먼저
         ring(f.x, f.y, 110 * s, Z.color, 0.8);
         burst(f.x, f.y, 34, [Z.color, '#ffffff', '#ffe66d'], 520, 6 * s);
+      } else if (f.kind === 'planet') {
+        // 행성 도착 배너. 우주 구역 도착(수성)과 같은 때면 "우주 도착!" 아래에 행성 이름
+        const P = D.PLANETS[f.i];
+        R.banner = zoneNow ? { title: D.ZONES[W.zone].banner, sub: P.name + ' · ' + P.line, color: P.color, life: 3, max: 3, text: true }
+          : { title: P.name + ' 도착!', sub: P.line, color: P.color, life: 2.8, max: 2.8, text: true };
+        R.big = null;
+        ring(f.x, f.y, 100 * s, P.color, 0.7);
+        burst(f.x, f.y, 26, [P.color, '#ffffff'], 440, 5 * s);
+      } else if (f.kind === 'hole') {
+        R.banner = { title: '블랙홀 주의!', sub: (f.side < 0 ? '왼쪽' : '오른쪽') + '으로 살짝 끌려가요 · 반대쪽을 눌러요', color: '#c9a0ff', life: 2.8, max: 2.8, text: true };
+        R.big = null;
       } else if (f.kind === 'mile') {
         if (!zoneNow && !R.banner) R.big = { txt: f.m + ' m!', life: 1.6, max: 1.6 };
         ring(W.p.x, W.p.y, 90 * s, '#ffe66d', 0.6);
@@ -487,23 +488,117 @@
   }
 
   // ─── 배경 ─────────────────────────────────────────────────
-  // 화면 가운데 높이(m)에서 지금 구역과 다음 구역을 얼마나 섞을지: [구역, 다음 구역, 섞는 정도 0 ~ 1]
+  // 배경 장면 목록: 하늘 · 구름 위 · 행성 아홉(우주 구역 안, 행성마다 하늘색이 다르다) · 별나라.
+  // 장면마다 1/4 해상도로 한 번 그려 두고, 경계 앞 fade m 동안 두 장을 섞는다
+  const SCENES = (() => {
+    const out = [];
+    for (const Z of D.ZONES) {
+      if (Z.id === 'space') {
+        for (const P of D.PLANETS) out.push({ id: 'planet', planet: P.id, from: P.at, sky: P.sky, glow: P.glow, stars: 0.85, clouds: 0, fade: P.at === Z.from ? D.ZONE_FADE : D.PLANET_FADE });
+      } else out.push(Object.assign({ fade: D.ZONE_FADE }, Z));
+    }
+    return out;
+  })();
+  // 화면 가운데 높이(m)에서 지금 장면과 다음 장면을 얼마나 섞을지: [장면, 다음 장면, 섞는 정도 0 ~ 1]
   function zoneBlend(m) {
-    const Z = D.ZONES;
+    const Z = SCENES;
     let i = 0;
-    for (let k = 0; k < Z.length; k++) if (m >= Z[k].from - D.ZONE_FADE) i = k;
-    // i는 이미 섞이기 시작한 구역. 경계 앞 ZONE_FADE m 동안 앞 구역에서 넘어간다
+    for (let k = 0; k < Z.length; k++) if (m >= Z[k].from - Z[k].fade) i = k;
+    // i는 이미 섞이기 시작한 장면. 경계 앞 fade m 동안 앞 장면에서 넘어간다
     if (i === 0) return [0, 0, 0];
-    const t = Math.max(0, Math.min(1, (m - (Z[i].from - D.ZONE_FADE)) / D.ZONE_FADE));
+    const t = Math.max(0, Math.min(1, (m - (Z[i].from - Z[i].fade)) / Z[i].fade));
     return [i - 1, i, t];
+  }
+
+  // 행성·블랙홀이 화면 어디에 떠 있는지. 가로 화면이면 기둥 옆자리 가운데, 좁으면 기둥 가장자리(유리 뒤라 흐리게 보인다).
+  // 세로로는 발판보다 훨씬 느리게 흘러간다 (SPAN m에 화면 한 높이): 그 높이(hc)에 닿을 때 화면 42% 높이
+  const SPAN = 70;
+  function skyPlace(v, side, hc, size) {
+    const mc = (CAM + v.viewH * 0.5) / D.METER;
+    const y = v.h * 0.42 + (mc - hc) * v.h / SPAN;
+    let x, r;
+    if (v.side) {
+      const sw = side < 0 ? v.cx : v.w - v.cx - v.cw;
+      x = side < 0 ? v.cx * 0.5 : v.cx + v.cw + sw * 0.5;
+      r = Math.min(sw * 0.34, v.h * 0.19) * size;
+    } else {
+      x = side < 0 ? v.cx + v.cw * 0.08 : v.cx + v.cw * 0.92;
+      r = Math.min(v.cw * 0.2, v.h * 0.15) * size;
+    }
+    return { x, y, r };
+  }
+  // 행성: 지금 화면 가까이 있는 것만 찍는다. 달은 행성 둘레를 아주 천천히 돈다 (움직임 줄이기면 멈춤)
+  function drawPlanets(ctx, W, v) {
+    if (!JP.Space) return;
+    const q = Math.min(v.dpr, 1.25), tt = v.calm ? 0 : performance.now() / 1000;
+    for (const P of D.PLANETS) {
+      const pl = skyPlace(v, P.side, P.at + 25, P.size);
+      const R = Math.max(12, Math.round(pl.r));
+      const k = JP.Space.PLANET_K[P.id] || 1.4;
+      if (pl.y + R * k < -20 || pl.y - R * k > v.h + 20) continue;
+      const sp = JP.Space.planetSprite(P.id, R, q);
+      ctx.globalAlpha = P.id === 'pluto' ? 0.85 : 0.95;
+      ctx.drawImage(sp.c, pl.x - sp.half, pl.y - sp.half, sp.half * 2, sp.half * 2);
+      const moons = JP.Space.MOONS[P.id] || [];
+      moons.forEach((mo, i) => {
+        const ms = JP.Space.moonSprite(mo, R, q, i, P.id);
+        const a = mo.a + tt * 0.05 * (i % 2 ? -1 : 1);
+        const mx = pl.x + Math.cos(a) * R * mo.d, my = pl.y + Math.sin(a) * R * mo.d * 0.9;
+        ctx.drawImage(ms.c, mx - ms.half, my - ms.half, ms.half * 2, ms.half * 2);
+      });
+      ctx.globalAlpha = 1;
+    }
+  }
+  // 블랙홀 구간: 끌어당기는 쪽 옆자리에 블랙홀(원반 + 도는 소용돌이). 구간 가운데 높이에서 화면 42% 높이
+  function drawHoles(ctx, W, v) {
+    if (!JP.Space || !W.holeList) return;
+    const mc = (CAM + v.viewH * 0.5) / D.METER;
+    if (mc < W.holeFirst - SPAN) return;
+    JP.World.holesUpTo(W, mc + SPAN);
+    const q = Math.min(v.dpr, 1.25), tt = v.calm ? 0 : performance.now() / 1000;
+    for (const h of W.holeList) {
+      const pl = skyPlace(v, h.side, (h.from + h.to) / 2, 1);
+      const R = Math.max(20, Math.round(pl.r * 1.1));
+      if (pl.y + R * 2.5 < -20 || pl.y - R * 2.5 > v.h + 20) continue;
+      const sw = JP.Space.swirlSprite(Math.round(R * 2.4));
+      ctx.save();
+      ctx.translate(pl.x, pl.y);
+      ctx.rotate(-tt * 0.5);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(sw.c, -sw.half, -sw.half, sw.half * 2, sw.half * 2);
+      ctx.restore();
+      const hs = JP.Space.holeSprite(R, q);
+      ctx.drawImage(hs.c, pl.x - hs.half, pl.y - hs.half, hs.half * 2, hs.half * 2);
+    }
+  }
+  // 블랙홀 구간 안: 기둥 안에 빛 알갱이가 그쪽으로 흘러가고, 그쪽 가장자리가 보랏빛 (끌리는 쪽을 알 수 있게)
+  function drawPull(ctx, W, v) {
+    const h = W.hole;
+    if (!h || W.phase !== 'play') return;
+    const tt = performance.now() / 1000;
+    const ex = h.side < 0 ? v.cx : v.cx + v.cw, gw = Math.max(30, v.cw * 0.12);
+    const g = ctx.createLinearGradient(ex - h.side * gw, 0, ex, 0);
+    g.addColorStop(0, 'rgba(170,110,255,0)'); g.addColorStop(1, 'rgba(170,110,255,0.35)');
+    ctx.fillStyle = g; ctx.fillRect(Math.min(ex, ex - h.side * gw), v.cy, gw, v.ch);
+    if (v.calm) return;
+    ctx.fillStyle = '#e8d2ff';
+    const rnd = JP.rng(77);
+    for (let i = 0; i < 26; i++) {
+      const y0 = rnd() * v.ch, sp = 0.15 + rnd() * 0.25, ph = rnd();
+      const k = (tt * sp + ph) % 1;
+      const x = h.side > 0 ? v.cx + k * v.cw : v.cx + (1 - k) * v.cw;
+      ctx.globalAlpha = Math.sin(k * Math.PI) * 0.5;
+      ctx.fillRect(x, v.cy + y0, 6 + sp * 10, 2);
+    }
+    ctx.globalAlpha = 1;
   }
   function drawBackground(ctx, W, v) {
     const bk = v.w + 'x' + v.h;
-    if (R.bgKey !== bk) { R.bgKey = bk; R.zones = []; R.cloudLayer = null; R.stars = makeStars(v.w, v.h); }
-    const zone = i => R.zones[i] || (R.zones[i] = paintZone(D.ZONES[i], v.w, v.h));
+    if (R.bgKey !== bk) { R.bgKey = bk; R.zones = []; R.cloudLayer = null; R.stars = makeStars(v.w, v.h); if (JP.Space) JP.Space.clear(); }
+    const zone = i => R.zones[i] || (R.zones[i] = paintZone(SCENES[i], v.w, v.h));
     const m = (CAM + v.viewH * 0.5) / D.METER;
     const [a, b, t] = zoneBlend(m);
-    const A = D.ZONES[a], B = D.ZONES[b];
+    const A = SCENES[a], B = SCENES[b];
     ctx.drawImage(zone(a), 0, 0, v.w, v.h);
     if (t > 0.01) { ctx.globalAlpha = t; ctx.drawImage(zone(b), 0, 0, v.w, v.h); ctx.globalAlpha = 1; }
     const up = CAM * v.scale;
@@ -532,6 +627,9 @@
       ctx.fillRect(st.x, y, st.s, st.s);
     }
     ctx.globalAlpha = 1;
+    // 우주: 지나가는 행성 · 블랙홀 (기둥 유리 뒤에 그려 발판이 늘 또렷하다)
+    if (m > D.PLANETS[0].at - SPAN) drawPlanets(ctx, W, v);
+    drawHoles(ctx, W, v);
     const key = [v.cw, v.ch, v.w, v.dpr].join(',');
     if (R.colKey !== key) { R.colKey = key; R.col = paintColumn(v, v.dpr); }
     ctx.drawImage(R.col, v.cx - CM, v.cy - CM, v.cw + CM * 2, v.ch + CM * 2);
@@ -1403,13 +1501,13 @@
     let y = v.hudMid - 12 * s;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     // 난이도 · 지금 구역
-    const Z = D.ZONES[W.zone];
+    const Z = D.ZONES[W.zone], PL = W.zone === 2 && W.planet > 0 ? D.PLANETS[W.planet - 1] : null;
     ctx.font = Math.round(15 * s) + 'px ' + DISP;
     ctx.fillStyle = '#8aa4b8';
     const dn = W.L.name + ' · ';
     ctx.fillText(dn, x0, y);
-    ctx.fillStyle = Z.color;
-    ctx.fillText(Z.name, x0 + ctx.measureText(dn).width, y);
+    ctx.fillStyle = PL ? PL.color : Z.color;
+    ctx.fillText(PL ? PL.name + ' 근처' : Z.name, x0 + ctx.measureText(dn).width, y);
     y += 26 * s;
     const big = Math.min(54 * s, sw * 0.3);
     ctx.font = Math.round(16 * s) + 'px ' + DISP; ctx.fillStyle = '#8aa4b8';
@@ -1468,6 +1566,12 @@
       ctx.fillStyle = '#ff9f43'; ctx.fillRect(x0 + 44 * s, y + 6 * s, bw * Math.min(1, W.rocket / W.rocketTime), 8 * s);
       y += 30 * s;
     }
+    // 블랙홀 구간: 끌리는 쪽 화살표
+    if (W.hole && W.phase === 'play') {
+      ctx.font = Math.round(16 * s) + 'px ' + DISP; ctx.fillStyle = '#c9a0ff';
+      ctx.fillText(W.hole.side < 0 ? '← 블랙홀이 끌어요' : '블랙홀이 끌어요 →', x0, y);
+      y += 30 * s;
+    }
     // 먹구름까지 남은 높이: 가까울수록 막대가 차고 빨개진다
     const sg = stormGap(W);
     if (sg != null) {
@@ -1501,6 +1605,7 @@
     if (W.shield) items.push(['방울', '#7fd3ff']);
     const sg = stormGap(W);
     if (sg != null) items.push(['먹구름 ' + Math.floor(sg) + 'm', sg < D.STORM.warn ? '#ff8a96' : '#b9a6ff']);
+    if (W.hole && W.phase === 'play') items.push([W.hole.side < 0 ? '← 블랙홀' : '블랙홀 →', '#c9a0ff']);
     items.push(['BEST ' + Math.max(v.bestH || 0, W.height) + ' m', '#bcd3e2']);
     for (const [txt, col] of items) {
       if (x - 70 * s < v.hudLeft) break; // 버튼 묶음과 겹치면 생략
@@ -1614,7 +1719,11 @@
       ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - bw / 2, y - fs * 0.8, bw, bh, fs * 0.5); else ctx.rect(cx - bw / 2, y - fs * 0.8, bw, bh); ctx.fill();
       ctx.strokeStyle = B.color; ctx.lineWidth = 2; ctx.stroke();
       outlined(ctx, B.title, cx, y, B.color);
-      ctx.font = '700 ' + Math.round(fs * 0.5) + 'px ' + NUM;
+      // 글로 된 한 줄(행성 설명·블랙홀 안내)은 둥근 글꼴, 숫자(높이)는 숫자 글꼴. 길면 기둥 폭에 맞춰 줄인다
+      let sf = Math.round(fs * (B.text ? 0.46 : 0.5));
+      ctx.font = (B.text ? '' : '700 ') + sf + 'px ' + (B.text ? DISP : NUM);
+      const sw = ctx.measureText(B.sub).width;
+      if (sw > v.cw - 24) { sf = Math.max(11, Math.floor(sf * (v.cw - 24) / sw)); ctx.font = (B.text ? '' : '700 ') + sf + 'px ' + (B.text ? DISP : NUM); }
       outlined(ctx, B.sub, cx, y + fs * 0.85, '#e8f7ff');
     }
     const G = R.big;
@@ -1641,6 +1750,7 @@
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     ctx.beginPath(); ctx.rect(v.cx, v.cy, v.cw, v.ch); ctx.clip();
+    drawPull(ctx, W, v);
     drawMarks(ctx, W, v);
     drawPlats(ctx, W, v, a);
     drawStars(ctx, W, v);

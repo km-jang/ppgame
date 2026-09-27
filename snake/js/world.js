@@ -205,7 +205,13 @@
   // 알아서 맞춰 주는 난이도 배율(opts.adapt)을 값 하나에: 값 × 배율^지수 (D.ADAPT)
   function adaptPow(W, k) { return Math.pow(W.adapt, (D.ADAPT && D.ADAPT[k]) || 0); }
 
-  // opts: {mode: 'classic' | 'endless' | 'stage', level, easy, char: 캐릭터 id,
+  // 난이도 id: opts.diff가 있으면 그것, 없으면 옛 opts.easy (true 쉬움 · 아니면 보통)
+  function diffOf(opts) {
+    if (opts && (opts.diff === 'easy' || opts.diff === 'normal' || opts.diff === 'hard')) return opts.diff;
+    return opts && opts.easy ? 'easy' : 'normal';
+  }
+
+  // opts: {mode: 'classic' | 'endless' | 'stage', level, diff: 'easy' | 'normal' | 'hard' (옛 호출은 easy: true), char: 캐릭터 id,
   //        up: {goldTime, itemFreq, comboTime: 0~5단계} (상점 강화), start: {ghost, slow, double: true} (시작 아이템),
   //        rival: false면 라이벌 없음 (무한 모드만, 기본 있음), rivalLevel: 'easy' | 'normal' | 'hard' (기본은 쉬움·보통을 따름),
   //        adapt: 알아서 맞춰 주는 난이도 배율 (HUB.adaptMul, 기본 1)}
@@ -215,7 +221,7 @@
     const rand = SN.rng(seed0);
     const mode = opts.mode === 'endless' || opts.mode === 'stage' ? opts.mode : 'classic';
     const W = {
-      cols, rows, rand, mode, fun: mode !== 'classic', easy: !!opts.easy,
+      cols, rows, rand, mode, fun: mode !== 'classic', diff: diffOf(opts),
       level: mode === 'stage' ? Math.max(1, opts.level || 1) : 0,
       snake: [], prev: [], dir: 'right',
       queue: [],          // 아직 적용 안 된 방향 (최대 D.TURN_QUEUE개)
@@ -235,6 +241,7 @@
       fx: [],             // 그리기 연출용: {kind, x, y}
     };
     W.startLevel = W.level;
+    W.easy = W.diff === 'easy'; W.hard = W.diff === 'hard';
     const am = Number(opts.adapt);
     W.adapt = Number.isFinite(am) && am > 0 ? Math.max(0.7, Math.min(1.3, am)) : 1;
     W.growMul = adaptPow(W, 'perGrow');
@@ -243,8 +250,8 @@
     // 캐릭터 특기는 강화 위에 더한다 (char를 안 넘기면 특기 없음: 규칙 테스트·옛 호출)
     const ch = charDef(opts.char), T = (opts.char && ch.id === opts.char && ch.traits) || {};
     W.char = ch.id;
-    W.goldLife = (D.FOOD.goldLife + upLevel(up, 'goldTime') * upPer('goldTime') + (T.goldPlus || 0)) * adaptPow(W, 'goldLife');
-    W.itemGapMul = Math.max(0.3, Math.max(0.4, 1 - upLevel(up, 'itemFreq') * upPer('itemFreq')) * (T.itemMul || 1));
+    W.goldLife = (D.FOOD.goldLife + upLevel(up, 'goldTime') * upPer('goldTime') + (T.goldPlus || 0)) * adaptPow(W, 'goldLife') * (W.hard ? D.HARD.goldMul : 1);
+    W.itemGapMul = Math.max(0.3, Math.max(0.4, 1 - upLevel(up, 'itemFreq') * upPer('itemFreq')) * (T.itemMul || 1)) * (W.hard ? D.HARD.itemMul : 1);
     W.comboWindow = D.COMBO.window + upLevel(up, 'comboTime') * upPer('comboTime') + (T.comboPlus || 0);
     W.speedMul = T.speedMul || 1;
     W.startGhost = T.startGhost || 0;
@@ -253,7 +260,7 @@
     // 라이벌 뱀: 무한 모드에만. 규칙용 난수는 따로 써서 내 판(먹이 자리)의 흐름을 흔들지 않는다
     W.rival = null;
     if (mode === 'endless' && opts.rival !== false) {
-      const lvId = D.RIVAL.levels[opts.rivalLevel] ? opts.rivalLevel : W.easy ? 'easy' : 'normal';
+      const lvId = D.RIVAL.levels[opts.rivalLevel] ? opts.rivalLevel : W.diff;
       const L = D.RIVAL.levels[lvId];
       W.rival = {
         level: lvId, rng: SN.rng(((seed0 >>> 0) * 2654435761 + 97) >>> 0),
@@ -277,8 +284,12 @@
 
   // 초당 칸 수. 길어질수록 빨라지고 상한에서 멈춘다. 느린 시계를 먹으면 잠깐 느려진다
   function speed(W) {
-    const len = W.snake.length - D.START.len, E = D.EASY;
-    let s = W.easy
+    const len = W.snake.length - D.START.len, E = D.EASY, H = D.HARD;
+    let s = W.hard
+      ? (W.mode === 'stage'
+        ? Math.min(H.max, W.lv.speed * H.stageMul + len * H.stagePerGrow * (W.growMul || 1))
+        : Math.min(H.max, H.base + len * H.perGrow * (W.growMul || 1)))
+      : W.easy
       ? Math.min(E.max, (W.mode === 'stage' ? W.lv.speed * E.stageMul : E.base) + len * E.perGrow * (W.growMul || 1))
       : W.mode === 'stage'
       ? Math.min(D.SPEED.max, W.lv.speed + len * D.SPEED.stagePerGrow * (W.growMul || 1))
@@ -681,7 +692,7 @@
   }
   // 알아서 맞춰 주는 난이도: 이번 판이 그 난이도 기준으로 얼마나 잘했나 (1이 보통, HUB.adaptRun이 0~3으로 자른다)
   function adaptPerf(W) {
-    const T = D.ADAPT.target, t = W.easy ? T.easy : T.normal;
+    const t = D.ADAPT.target[W.diff] || D.ADAPT.target.normal;
     return t > 0 ? W.eaten / t : 1;
   }
 
@@ -777,13 +788,15 @@
     return {
       mode: W.mode, score: W.score, golds: W.golds, eaten: W.eaten, maxLen: W.maxLen, maxCombo: W.maxCombo,
       powers: W.powers, powerKinds: Object.keys(W.powerSeen).length, portals: W.portalsUsed, wraps: W.wraps,
-      levelsCleared: W.levelsCleared, level: W.level, time: W.time, easy: W.easy,
+      levelsCleared: W.levelsCleared, level: W.level, time: W.time, easy: W.easy, diff: W.diff,
       // 이번 판에 깬 가장 높은 레벨 (스테이지만, 못 깼으면 0) · 보통 난이도일 때만 센 길이 (미션용)
       lvlTop: W.mode === 'stage' && W.levelsCleared > 0 ? W.startLevel + W.levelsCleared - 1 : 0,
       normalLen: W.easy ? 0 : W.maxLen,
+      // 어려움으로 한 판 (미션용)
+      hardLen: W.hard ? W.maxLen : 0, hardTime: W.hard ? W.time : 0,
       rivalMet: !!(W.rival && W.rival.met), rivalEaten: W.rival ? W.rival.eaten : 0,
     };
   }
 
-  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, DIRS, OPP };
+  SN.World = { create, step, turn, speed, spawnFood, spawnItem, nextLevel, levelDef, buildWalls, botDir, runStats, dangerAhead, charDef, spawnRival, rivalAt, rivalResult, hubStats, adaptPerf, sceneInfo, stageScene, spaceScene, diffOf, DIRS, OPP };
 })(SN);

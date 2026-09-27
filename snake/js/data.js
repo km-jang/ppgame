@@ -9,6 +9,17 @@
     // 방향 버튼을 누를 때까지 출발하지 않는다
     EASY: { board: { land: [24, 15], port: [15, 24] }, base: 5.5, perGrow: 0.08, max: 9, stageMul: 0.7 },
 
+    // 어려움 (2026-09-27, 소유자 "어려움 버튼도 추가해줘"): 보통보다 빨리 출발하고 더 빨리 빨라진다. 판 끝·라이벌 몸은 보통처럼 위험,
+    // 위험 경고는 그대로 켜져 있다. goldMul: 황금 구슬 시간 배율 · itemMul: 아이템 간격 배율(클수록 드물게)
+    // stageMul·stagePerGrow: 스테이지 속도 (레벨 속도 × stageMul + 길이마다)
+    HARD: { base: 9.5, perGrow: 0.2, max: 17, stageMul: 1.15, stagePerGrow: 0.13, goldMul: 0.7, itemMul: 1.25 },
+    // 난이도 세 가지 (시작 화면 단추 순서). 쉬움 = EASY, 보통 = SPEED·BOARD, 어려움 = HARD·BOARD
+    DIFFS: [
+      { id: 'easy',   name: '쉬움',   sub: '느리게 · 벽 통과' },
+      { id: 'normal', name: '보통',   sub: '빠르게 · 벽 조심' },
+      { id: 'hard',   name: '어려움', sub: '더 빠르게 · 센 라이벌' },
+    ],
+
     // 시작: 길이 4칸, 1초 숨 고르고 출발 (그 전에 방향을 넣으면 바로 출발)
     START: { len: 4, wait: 1.0 },
 
@@ -70,6 +81,8 @@
       { id: 'score3k',  tier: 3, name: '삼천 점',       desc: '무한 모드 3,000점',              check: r => r.mode === 'endless' && r.score >= 3000 },
       { id: 'games10',  tier: 1, name: '단골',          desc: '10판 하기',                      check: (r, R) => R.total.games >= 10 },
       { id: 'orbs500',  tier: 2, name: '구슬 500',      desc: '모두 합쳐 구슬 500개',           check: (r, R) => R.total.orbs >= 500 },
+      { id: 'hard20',   tier: 2, name: '어려움 길이 20', desc: '어려움으로 한 판에 길이 20',    check: r => r.diff === 'hard' && r.maxLen >= 20 },
+      { id: 'hard30',   tier: 3, name: '어려움 길이 30', desc: '어려움으로 한 판에 길이 30',    check: r => r.diff === 'hard' && r.maxLen >= 30 },
     ],
 
     // ─── 코인 · 상점 · 미션 (2026-09-27, shop.js) ─────────────────
@@ -137,6 +150,8 @@
       { id: 'normal15', kind: 'run',  stat: 'normalLen',     goal: 15,   reward: 120, text: '보통으로 한 판에 길이 15' },
       { id: 't120',     kind: 'run',  stat: 'time',          goal: 120,  reward: 100, text: '한 판에 2분 버티기' },
       { id: 'ghost2',   kind: 'run',  stat: 'wraps',         goal: 2,    reward: 80,  text: '유령으로 벽 2번 통과' },
+      { id: 'hard12',   kind: 'run',  stat: 'hardLen',       goal: 12,   reward: 150, text: '어려움으로 한 판에 길이 12' },
+      { id: 'hardt60',  kind: 'run',  stat: 'hardTime',      goal: 60,   reward: 150, text: '어려움으로 한 판에 1분 버티기' },
     ],
     MISSION_SLOTS: 3,
 
@@ -179,7 +194,7 @@
       passStun: 1.2,   // 쉬움: 내가 라이벌 몸을 지나가면 라이벌이 멈칫 (나는 아무 일 없음)
       blockStun: 1,    // 갈 곳이 막히면 멈칫. 멈칫이 끝나도 막혀 있으면 사라졌다가 back초 뒤 다른 자리에서 다시
       back: 3,
-      // 난이도별 (쉬움·보통은 시작 화면 난이도를 따른다. hard는 opts.rivalLevel로만)
+      // 난이도별 (시작 화면 난이도를 따른다. opts.rivalLevel로 따로 고를 수도 있다)
       //   speed: 초당 칸 · maxLen: 이 길이까지만 자람 · react: 새 구슬을 알아채기까지(초)
       //   smart: 한 칸마다 구슬 쪽으로 갈 확률 (나머지는 그냥 앞으로) · wander: 아무 데로 꺾을 확률
       //   clumsy: 내 몸을 못 보고 부딪힐 확률 (부딪히면 라이벌만 멈칫) · keepAway: 내 머리 둘레 이 칸 안은 피한다
@@ -201,7 +216,7 @@
       rivalSmart: 1,    // 라이벌이 구슬 쪽으로 가는 확률
       // 판이 끝나면 perf = 먹은 구슬 / target 을 HUB.adaptRun에 알린다 (1 = 그 난이도에서 아이가 보통 잘한 판).
       // 봇(botDir)이 라이벌과 겨루며 3분 동안 먹는 수의 중간값은 쉬움 약 68 · 보통 약 63. 아이의 잘한 판은 그 3분의 1쯤
-      target: { easy: 22, normal: 18 },
+      target: { easy: 22, normal: 18, hard: 14 },
     },
 
     // 빠르게 두 번 밀어도 잃지 않게 방향을 2개까지 줄 세운다

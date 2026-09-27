@@ -330,8 +330,8 @@
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
-      // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터 (이번 판)
-      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, stomps: W.stomps, games: 1 }, W.t);
+      // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터·지나온 가장 먼 행성(1 수성 … 9 명왕성) (이번 판)
+      const fresh = HUB.reportRun('jump', { height: W.height, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet, games: 1 }, W.t);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -410,7 +410,7 @@
     $('over-height').textContent = W.height + 'm';
     $('over-combo').textContent = W.maxCombo;
     $('over-diff').textContent = D.DIFFICULTY[W.diff].name;
-    $('over-zone').textContent = D.ZONES[W.zone].name + ' 구역';
+    $('over-zone').textContent = W.zone === 2 && W.planet > 0 ? D.PLANETS[W.planet - 1].name + ' 근처' : D.ZONES[W.zone].name + ' 구역';
     $('over-new-txt').textContent = D.DIFFICULTY[W.diff].name + ' 최고 점수 경신';
     $('over-stars').textContent = W.starsGot;
     $('over-time').textContent = JP.fmtTime(W.t);
@@ -420,11 +420,12 @@
   }
 
   function drainEvents(world, sound) {
-    const zoneNow = world.events.includes('zone');
+    const zoneNow = world.events.includes('zone'), planetNow = world.events.includes('planet');
     for (const ev of world.events) {
       if (!sound) continue;
       if (ev === 'tut') { tutNeed = false; RC.tutorialDone(JP.store); }
-      if (ev === 'mile' && zoneNow) continue;   // 구역 축하와 겹치면 구역 소리만
+      if (ev === 'mile' && (zoneNow || planetNow)) continue;   // 구역·행성 축하와 겹치면 그 소리만
+      if (ev === 'zone' && planetNow) continue;
       if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo });
       else if (ev === 'over') {
         JP.Audio.play((world.cause === 'fall' || world.cause === 'storm') && !world.easy ? 'fall' : 'over', { soft: world.easy });
@@ -437,7 +438,8 @@
       else if (ev === 'bump') vibrate(15);
       else if (ev === 'storm') vibrate([40, 60, 40]);
       else if (ev === 'rocket' || ev === 'shield') vibrate(20);
-      else if (ev === 'zone') vibrate([20, 40, 20, 40, 30]);
+      else if (ev === 'zone' || ev === 'planet') vibrate([20, 40, 20, 40, 30]);
+      else if (ev === 'hole') vibrate([30, 50, 30]);
     }
     world.events.length = 0;
   }
