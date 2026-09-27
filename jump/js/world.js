@@ -131,15 +131,28 @@
     if (W.mines.length && W.mines[0].y <= low) W.mines = W.mines.filter(o => keep(o) && !o.gone);
   }
 
-  // opts: {diff: 'easy'|'normal'|'hard', easy (예전 방식), viewH, tutorial}
+  // 상점 강화를 적용한 값 (upgrades: {speed, rocket, cloud: 0~5}). 없으면 강화 없음
+  function applyUpgrades(L, up) {
+    up = up || {};
+    const U = id => { const d = D.UPGRADES.find(u => u.id === id); const lv = Math.max(0, Math.min(D.UPGRADE_MAX, Math.floor(Number(up[id]) || 0))); return d ? lv * d.per : 0; };
+    return {
+      ctl: Object.assign({}, L.ctl, { maxVx: L.ctl.maxVx * (1 + U('speed')) }),
+      rocketTime: D.ROCKET.time * (1 + U('rocket')),
+      rescues: L.rescues > 0 ? L.rescues + Math.round(U('cloud')) : 0,   // 구조 구름 강화는 쉬움만
+    };
+  }
+
+  // opts: {diff: 'easy'|'normal'|'hard', easy (예전 방식), viewH, tutorial,
+  //        upgrades: {speed, rocket, cloud} (상점 강화), loadout: {rocket, shield} (시작 아이템)}
   function create(seed, opts) {
     opts = opts || {};
     const rand = JP.rng(seed == null ? (Date.now() ^ 0x5bd1e995) : seed);
     const L = levelOf(opts);
     const easy = L.id === 'easy';
     const viewH = opts.viewH || 600;
+    const UP = applyUpgrades(L, opts.upgrades);
     const W = {
-      rand, easy, diff: L.id, L, ctl: L.ctl, viewH, ids: 0,
+      rand, easy, diff: L.id, L, ctl: UP.ctl, rocketTime: UP.rocketTime, rescueMax: UP.rescues, viewH, ids: 0,
       p: { x: WW / 2, y: P0.r, vx: 0, vy: 0, px: WW / 2, py: P0.r, face: 1, land: -9 },
       input: { dir: 0 },          // -1 왼쪽 · 0 · 1 오른쪽 (main.js·봇이 채운다)
       cam: -viewH * D.CAM.start, pcam: 0,
@@ -152,10 +165,10 @@
       zone: 0, mile: 0,           // 지금 구역 번호 · 지나간 100m 눈금 수
       // 처음 해 보는 판: 왼쪽·오른쪽을 한 번씩 눌러 볼 때까지 큰 안내 (main.js가 기억한다)
       tut: opts.tutorial ? { left: false, right: false, done: false, at: 0 } : null,
-      rescues: L.rescues, rescued: 0,
+      rescues: UP.rescues, rescued: 0,
       shield: false, rocket: 0,
       // 기록·메달용
-      starsGot: 0, springs: 0, rockets: 0, saves: 0, bounces: 0, combo: 0, maxCombo: 0, lastLand: 0,
+      starsGot: 0, springs: 0, rockets: 0, saves: 0, bounces: 0, crumbles: 0, combo: 0, maxCombo: 0, lastLand: 0,
       botT: null,
       events: [],   // 소리·진동용: bounce spring star item rocket shield save crumble rescue over zone mile tut
       fx: [],       // 그리기 연출용: {kind, x, y}
@@ -164,6 +177,10 @@
     // 바닥: 기둥 가로 전체를 덮는 첫 발판
     addPlat(W, 'ground', WW / 2, 0, WW);
     generate(W);
+    // 시작 아이템: 로켓 출발 · 방패 방울
+    const lo = opts.loadout || {};
+    if (lo.shield) { W.shield = true; W.events.push('shield'); }
+    if (lo.rocket) { W.rocket = W.rocketTime; W.rockets++; W.events.push('rocket'); }
     return W;
   }
 
@@ -198,7 +215,7 @@
     if (spring) { W.springs++; W.events.push('spring'); W.fx.push({ kind: 'spring', x: P.x, y: p.y }); }
     else { W.events.push('bounce'); W.fx.push({ kind: 'bounce', x: P.x, y: p.y, combo: W.combo }); }
     if (p.kind === 'crumble') {
-      p.broken = true; p.bt = W.t;
+      p.broken = true; p.bt = W.t; W.crumbles++;
       W.events.push('crumble'); W.fx.push({ kind: 'crumble', x: p.x, y: p.y });
     }
   }
@@ -283,7 +300,7 @@
       const dx = wrapDelta(P.x, it.x), dy = it.y - P.y;
       if (dx * dx + dy * dy < ir) {
         it.got = true;
-        if (it.kind === 'rocket') { W.rocket = D.ROCKET.time; W.rockets++; W.events.push('rocket'); }
+        if (it.kind === 'rocket') { W.rocket = W.rocketTime; W.rockets++; W.events.push('rocket'); }
         else { W.shield = true; W.events.push('shield'); }
         W.fx.push({ kind: 'item', item: it.kind, x: it.x, y: it.y });
       }
@@ -427,9 +444,9 @@
     return {
       diff: W.diff, easy: W.easy, height: W.height, score: W.score, stars: W.starsGot, springs: W.springs,
       rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo, rescued: W.rescued, bounces: W.bounces, time: W.t,
-      zone: W.zone,
+      zone: W.zone, crumbles: W.crumbles,
     };
   }
 
-  JP.World = { create, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV };
+  JP.World = { create, applyUpgrades, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV };
 })(JP);

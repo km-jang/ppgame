@@ -6,7 +6,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
-for (const f of ['util.js', 'data.js', 'world.js']) {
+for (const f of ['util.js', 'data.js', 'world.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'runner', 'js', f), 'utf8'), ctx, { filename: f });
 }
 const RN = vm.runInContext('RN', ctx);
@@ -669,6 +669,145 @@ test('메달: 새 메달 (어려움 · 성운 · 아슬아슬 · 완벽한 별�
   const E = runStats(Object.assign(empty(), { dist: 1300 }));
   assert(!get('hard').check(E, rec) && !get('normal').check(E, rec), 'easy does not get level medals');
   assert(D.MEDALS.length === 16, 'medal count ' + D.MEDALS.length);
+});
+
+
+// ─── 상점 · 미션 (shop.js) ───────────────────────────────────
+const SH = RN.Shop;
+const memStore = init => { const m = Object.assign({}, init); return { m, get: (k, f) => (k in m ? JSON.parse(JSON.stringify(m[k])) : f), set: (k, v) => { m[k] = JSON.parse(JSON.stringify(v)); } }; };
+const fakeWallet = c => ({ c, coins() { return this.c; }, setCoins(n) { this.c = n; } });
+
+test('코인 계산: 거리·별·아치·구역, 난이도 배율, 보통 한 판 20~60개', () => {
+  const st = SH.blank();
+  const typical = SH.coinsFor({ diff: 'easy', dist: 800, stars: 50, milestones: 3, zone: 1 }, st);
+  assert(typical.total >= 20 && typical.total <= 60, 'typical ' + typical.total);
+  assert(typical.parts.dist === 20 && typical.parts.stars === 12 && typical.parts.arch === 6 && typical.parts.zone === 10, JSON.stringify(typical.parts));
+  const short = SH.coinsFor({ diff: 'easy', dist: 300, stars: 20, milestones: 1, zone: 0 }, st);
+  assert(short.total >= 5 && short.total < typical.total, 'short ' + short.total);
+  const hard = SH.coinsFor({ diff: 'hard', dist: 800, stars: 50, milestones: 3, zone: 1 }, st);
+  assert(hard.total > typical.total && hard.parts.diff > 0, 'hard pays more ' + hard.total);
+  st.up.coin = 5;
+  const bonus = SH.coinsFor({ diff: 'easy', dist: 800, stars: 50, milestones: 3, zone: 1 }, st);
+  assert(bonus.parts.bonus === Math.floor(typical.total * 0.5) && bonus.total === typical.total + bonus.parts.bonus, 'coin upgrade ' + JSON.stringify(bonus));
+  // 사람 같은 로봇 한 판 (보통) 값도 20~200 안
+  const W = create(3, { diff: 'normal' }), h = makeHuman(3);
+  while (W.phase === 'play' && W.runT < 120) { h(W); tick(W); }
+  const c = SH.coinsFor(SH.runOf(W), SH.blank());
+  console.log('       보통 2분 (로봇 ' + Math.floor(W.dist) + 'm, 별 ' + W.stars + '): 코인 ' + c.total);
+  assert(c.total > 0 && c.total < W.dist / 8, 'bot game coins ' + c.total);
+  // 값: 80 ~ 1,200
+  const prices = [].concat(D.SKINS.map(x => x.price).filter(Boolean), ...D.UPGRADES.map(u => u.prices), D.START_ITEMS.map(i => i.price));
+  assert(Math.min(...prices) >= 80 && Math.max(...prices) <= 1200, 'price range ' + Math.min(...prices) + '..' + Math.max(...prices));
+});
+
+test('상점: 가짜 지갑으로 사기 · 모자라면 못 삼 · 꾸미기 고르기 · 저장했다 다시 읽기', () => {
+  const store = memStore({}), wal = fakeWallet(0);
+  let st = SH.load(store, wal);
+  assert(st.coins === 0 && st.skin === 'basic' && st.skins.basic && !st.skins.bolt, 'blank');
+  assert(SH.buy(st, 'bolt').reason === 'coins', 'poor');
+  wal.c = 1000; st = SH.load(store, wal);
+  assert(st.coins === 1000, 'wallet coins');
+  const r = SH.buy(st, 'bolt');
+  assert(r.ok && r.cost === 150 && st.coins === 850 && st.skins.bolt && st.skin === 'bolt', 'bought skin');
+  assert(SH.buy(st, 'bolt').reason === 'owned', 'owned');
+  assert(SH.selectSkin(st, 'basic') && st.skin === 'basic' && !SH.selectSkin(st, 'gold'), 'select');
+  assert(SH.buy(st, 'magnet').ok && st.up.magnet === 1 && SH.price(st, 'magnet') === D.UPGRADES[0].prices[1], 'upgrade 1');
+  assert(SH.buy(st, 'sshield').ok && st.items.sshield === 1 && SH.buy(st, 'shield').ok && st.up.shield === 1, 'start item and upgrade');
+  assert(SH.buy(st, 'nope').reason === 'unknown', 'unknown');
+  SH.save(st, store, wal);
+  assert(wal.c === st.coins, 'wallet updated ' + wal.c);
+  const again = SH.load(store, wal);
+  assert(again.skins.bolt && again.up.magnet === 1 && again.items.sshield === 1 && again.coins === wal.c, 'reload');
+  // 5단계가 끝, 시작 아이템은 3개까지
+  st.coins = 1e6;
+  for (let i = 0; i < 7; i++) SH.buy(st, 'boost');
+  assert(st.up.boost === D.UPGRADE_MAX && SH.buy(st, 'boost').reason === 'max', 'upgrade max');
+  for (let i = 0; i < 5; i++) SH.buy(st, 'sheart');
+  assert(st.items.sheart === 3 && SH.price(st, 'sheart') === null, 'item max');
+  // 지갑이 없으면(null) 저장본의 coins
+  const solo = memStore({});
+  const s2 = SH.load(solo, null); s2.coins = 77; SH.save(s2, solo, null);
+  assert(SH.load(solo, null).coins === 77, 'no wallet');
+});
+
+test('강화가 판에 적용된다 (자석·부스트 시간, 방패 여유)', () => {
+  const st = SH.blank();
+  st.up = { magnet: 3, shield: 5, boost: 2, coin: 0 };
+  const W = create(1, Object.assign({ wait: 0 }, SH.worldOpts(st, {})));
+  assert(W.magnetTime === D.ITEM.kinds.magnet.time + 3 && Math.abs(W.boostTime - (D.ITEM.kinds.boost.time + 1.2)) < 1e-9, 'times');
+  assert(Math.abs(W.shieldInv - (D.HIT.shieldInv + 2)) < 1e-9, 'shield inv ' + W.shieldInv);
+  W.obs.length = 0; W.nextZ = 1e9; W.itemT = 1e9;
+  put(W, 'item', 1, 2, { item: 'magnet', y: 0.7 });
+  run(W, 0.3);
+  assert(W.eff.magnet > D.ITEM.kinds.magnet.time + 2, 'magnet longer ' + W.eff.magnet);
+  put(W, 'item', 1, 2, { item: 'shield', y: 0.7 });
+  run(W, 0.3);
+  put(W, 'meteor', 1, 3);
+  run(W, 0.3);
+  assert(W.blocks === 1 && W.inv > D.HIT.shieldInv + 1, 'shield blink longer ' + W.inv);
+  const plain = create(1);
+  assert(plain.magnetTime === D.ITEM.kinds.magnet.time && plain.skin === 'basic', 'no upgrades by default');
+});
+
+test('시작 아이템: 다음 판에 하나씩 쓰고 줄어든다 (하트는 어려움에서 안 씀)', () => {
+  const st = SH.blank();
+  st.items = { sshield: 2, sboost: 1, sheart: 1 };
+  const lo = SH.takeLoadout(st, 'easy');
+  assert(lo.shield && lo.boost && lo.heart && st.items.sshield === 1 && st.items.sboost === 0 && st.items.sheart === 0, 'consumed');
+  const W = create(1, Object.assign({ diff: 'easy' }, SH.worldOpts(st, lo)));
+  assert(W.shield && W.hearts === 4 && W.maxHearts === 4 && W.eff.boost > 0, 'applied ' + W.hearts);
+  const lo2 = SH.takeLoadout(st, 'easy');
+  assert(lo2.shield && !lo2.boost && !lo2.heart && st.items.sshield === 0, 'second game');
+  assert(Object.keys(SH.takeLoadout(st, 'easy')).length === 0, 'empty');
+  const h = SH.blank(); h.items.sheart = 2;
+  const lo3 = SH.takeLoadout(h, 'hard');
+  assert(!lo3.heart && h.items.sheart === 2, 'heart kept on hard');
+  const H = create(1, Object.assign({ diff: 'hard' }, SH.worldOpts(h, { heart: true })));
+  assert(H.hearts === 1, 'hard ignores heart');
+});
+
+test('미션: 3개, 판마다 진행 · 끝나면 받기 · 새 미션으로 바뀜', () => {
+  assert(D.MISSIONS.length >= 15 && new Set(D.MISSIONS.map(m => m.id)).size === D.MISSIONS.length, 'missions ' + D.MISSIONS.length);
+  const st = SH.blank();
+  assert(st.missions.length === 3 && new Set(st.missions.map(m => m.id)).size === 3, 'three');
+  st.missions = [{ id: 'st300', prog: 0, done: false }, { id: 'r1000', prog: 0, done: false }, { id: 'g5', prog: 0, done: false }];
+  const run1 = { diff: 'easy', dist: 700, stars: 200, games: 1 };
+  let res = SH.finishRun(st, run1);
+  assert(res.coins > 0 && st.coins === res.coins && st.life.games === 1, 'coins in');
+  assert(st.missions[0].prog === 200 && st.missions[1].prog === 700 && st.missions[2].prog === 1 && !res.done.length, 'progress');
+  res = SH.finishRun(st, { diff: 'easy', dist: 600, stars: 150, games: 1 });
+  assert(st.missions[0].done && res.done[0] === 'st300', 'life done');
+  assert(st.missions[1].prog === 700, 'run keeps best');
+  res = SH.finishRun(st, { diff: 'easy', dist: 1200, stars: 0, games: 1 });
+  assert(st.missions[1].done, 'run done');
+  const before = st.coins;
+  assert(SH.claim(st, 2) === 0, 'not done yet');
+  const got = SH.claim(st, 0);
+  assert(got === 100 && st.coins === before + 100, 'claimed');
+  assert(st.missions.length === 3 && st.missions[0].id !== 'st300' && !st.missions[0].done, 'replaced in place');
+  assert(st.missions[1].id === 'r1000', 'others stay');
+  const v = SH.missionView(st);
+  assert(v.length === 3 && v.every(m => m.text && m.goal > 0 && m.pct >= 0 && m.pct <= 1), 'view');
+  // 실제 판 요약에도 미션 칸이 모두 있다
+  const W = create(1, { auto: true }); run(W, 60);
+  const ro = SH.runOf(W);
+  for (const m of D.MISSIONS) assert(typeof ro[m.stat] === 'number', 'runOf has ' + m.stat);
+  assert(ro.clean > 0 && ro.clean <= ro.dist + 1, 'clean dist ' + ro.clean);
+});
+
+test('망가진 상점 저장본은 깨끗하게', () => {
+  for (const bad of [null, 'x', 5, [], { coins: -5, skin: 'gold', skins: { gold: 'yes', bolt: true }, up: { magnet: 99, coin: 'a' }, items: { sshield: 50, sheart: -1 }, missions: [{ id: 'zzz' }, { id: 'g5', prog: 999 }, { id: 'g5' }, 7], life: 3 }]) {
+    const st = SH.clean(bad);
+    assert(st.coins >= 0 && st.skins.basic && D.SKINS.some(s => s.id === st.skin) && st.skins[st.skin], 'skin ok');
+    assert(Object.values(st.up).every(v => v >= 0 && v <= D.UPGRADE_MAX), 'up ok');
+    assert(D.START_ITEMS.every(it => st.items[it.id] >= 0 && st.items[it.id] <= it.max), 'items ok');
+    assert(st.missions.length === 3 && new Set(st.missions.map(m => m.id)).size === 3, 'missions ok');
+  }
+  const st = SH.clean({ skin: 'gold', skins: { bolt: true }, up: { magnet: 99 }, items: { sshield: 50 }, missions: [{ id: 'g5', prog: 999 }] });
+  assert(st.skin === 'basic' && st.skins.bolt && st.up.magnet === 5 && st.items.sshield === 3, 'clamped');
+  assert(st.missions[0].id === 'g5' && st.missions[0].done && st.missions[0].prog === 5, 'mission clamped');
+  const store = memStore({ 'runner.shop1': 'garbage' });
+  assert(SH.load(store, null).missions.length === 3, 'garbage load');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

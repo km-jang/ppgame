@@ -147,3 +147,61 @@
     HINT_TIME: 5,
   };
 })(RN);
+
+// ═══ 상점 · 미션 (2026-09-27, 소유자: "미션·상점·기록을 모든 게임에", 코인은 네 게임이 함께 쓰는 지갑) ═══
+(function (RN) {
+  // 꾸미기: 우주선 모양·색·엔진 불꽃 (그리기만 바뀌고 규칙은 같다. render.js drawShipBody)
+  // shape: jet 기본 제트 · bolt 뾰족 번개 · whale 둥근 고래 · comet 꼬리 달린 별똥 · phoenix 깃털 날개
+  // body: [밝은 곳, 가운데, 어두운 곳] · stripe: 날개 줄무늬 · flame: 엔진 불꽃 (r,g,b) · core: 조종석 빛
+  const SKINS = [
+    { id: 'basic',   name: '기본',   price: 0,    shape: 'jet',     body: ['#d9fbff', '#5ee7ff', '#1a9ec0'], stripe: '#ff2e88', flame: '255,46,136',  core: '#5ee7ff', desc: '청록 날개, 분홍 불꽃' },
+    { id: 'bolt',    name: '번개',   price: 150,  shape: 'bolt',    body: ['#fffbd0', '#ffe066', '#d9a400'], stripe: '#20242e', flame: '255,230,109', core: '#ffe066', desc: '뾰족한 노랑 날개, 번개 불꽃' },
+    { id: 'whale',   name: '고래',   price: 300,  shape: 'whale',   body: ['#d8e8ff', '#5b8cff', '#2a3fa8'], stripe: '#bff8ff', flame: '120,220,255', core: '#bff8ff', desc: '둥글둥글 파란 고래, 물빛 불꽃' },
+    { id: 'comet',   name: '별똥',   price: 500,  shape: 'comet',   body: ['#ffffff', '#ffc2e6', '#c05a9a'], stripe: '#ffe66d', flame: '255,150,220', core: '#ffe66d', desc: '반짝 꼬리를 단 분홍 별똥' },
+    { id: 'phoenix', name: '불사조', price: 800,  shape: 'phoenix', body: ['#fff0c0', '#ff8a3d', '#c0301a'], stripe: '#ffe66d', flame: '255,120,40',  core: '#ffe66d', desc: '깃털 날개, 활활 주황 불꽃' },
+    { id: 'gold',    name: '황금',   price: 1200, shape: 'jet',     body: ['#fffbe0', '#ffd24a', '#a87400'], stripe: '#ffffff', flame: '255,215,90',  core: '#ffffff', desc: '번쩍번쩍 황금 우주선', shine: true },
+  ];
+
+  // 강화 (5단계). per: 한 단계 효과. prices: 단계별 값 (1단계부터). world.js create(opts.up)가 읽는다
+  const UPGRADES = [
+    { id: 'magnet', icon: 'magnet', name: '자석 시간',   desc: '자석이 1초 더 오래',                 per: 1,    prices: [100, 200, 350, 550, 800] },
+    { id: 'shield', icon: 'shield', name: '방패 여유',   desc: '방패가 막은 뒤 깜빡이는 시간 +0.4초', per: 0.4,  prices: [100, 200, 350, 550, 800] },
+    { id: 'boost',  icon: 'boost',  name: '부스트 시간', desc: '부스트가 0.6초 더 오래',             per: 0.6,  prices: [120, 250, 450, 700, 1000] },
+    { id: 'coin',   icon: 'star',   name: '별 코인 보너스', desc: '판이 끝날 때 코인 +10%',          per: 0.1,  prices: [150, 300, 550, 900, 1200] },
+  ];
+  const UPGRADE_MAX = 5;
+
+  // 시작 아이템: 사 두면 다음 판 시작할 때 하나씩 자동으로 쓴다. max: 쌓아 둘 수 있는 개수
+  // give: 판에 주는 것 (world.js create opts.loadout의 칸). 하트는 하트가 하나뿐인 어려움에서는 쓰지 않고 남겨 둔다
+  const START_ITEMS = [
+    { id: 'sshield', give: 'shield', icon: 'shield', name: '방패 출발',   desc: '방패를 두르고 출발',     price: 80,  max: 3 },
+    { id: 'sboost',  give: 'boost',  icon: 'boost',  name: '부스트 출발', desc: '출발하자마자 부스트',     price: 120, max: 3 },
+    { id: 'sheart',  give: 'heart',  icon: 'heart',  name: '하트 +1',     desc: '하트 하나 더 (쉬움·보통)', price: 100, max: 3, not: ['hard'] },
+  ];
+
+  // 판이 끝날 때 받는 코인 = 거리 ÷ perDist + 별 ÷ perStar + 기념 아치 × perArch + 새 구역 × perZone,
+  // 난이도 배율(diffMul)을 곱하고, 그 뒤 별 코인 보너스 강화만큼 더. 보통 한 판(500~1,000m) 20~60개
+  const COINS = { perDist: 40, perStar: 4, perArch: 2, perZone: 10, diffMul: { easy: 1, normal: 1.2, hard: 1.5 } };
+
+  // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름
+  const MISSIONS = [
+    { id: 'st300',  kind: 'life', stat: 'stars',    goal: 300,  reward: 100, text: '별 300개 모으기 (누적)' },
+    { id: 'gt30',   kind: 'life', stat: 'gates',    goal: 30,   reward: 100, text: '레이저 문 30번 넘기 (누적)' },
+    { id: 'd5k',    kind: 'life', stat: 'dist',     goal: 5000, reward: 120, text: '모두 5,000m 달리기 (누적)' },
+    { id: 'it15',   kind: 'life', stat: 'items',    goal: 15,   reward: 90,  text: '아이템 15개 줍기 (누적)' },
+    { id: 'nm15',   kind: 'life', stat: 'nears',    goal: 15,   reward: 90,  text: '아슬아슬 15번 (누적)' },
+    { id: 'pf10',   kind: 'life', stat: 'perfects', goal: 10,   reward: 100, text: '별 한 줄 다 먹기 10번 (누적)' },
+    { id: 'bs5',    kind: 'life', stat: 'boosts',   goal: 5,    reward: 80,  text: '부스트 5번 (누적)' },
+    { id: 'g5',     kind: 'life', stat: 'games',    goal: 5,    reward: 60,  text: '5판 하기 (누적)' },
+    { id: 'r1000',  kind: 'run',  stat: 'dist',     goal: 1000, reward: 120, text: '한 판에 1,000m' },
+    { id: 'rs80',   kind: 'run',  stat: 'stars',    goal: 80,   reward: 120, text: '한 판에 별 80개' },
+    { id: 'rg8',    kind: 'run',  stat: 'gates',    goal: 8,    reward: 100, text: '한 판에 레이저 문 8번' },
+    { id: 'rice',   kind: 'run',  stat: 'zone',     goal: 1,    reward: 90,  text: '한 판에 얼음 행성 도착' },
+    { id: 'rneb',   kind: 'run',  stat: 'zone',     goal: 2,    reward: 180, text: '한 판에 초록 성운 도착' },
+    { id: 'rclean', kind: 'run',  stat: 'clean',    goal: 600,  reward: 150, text: '한 판에 안 부딪히고 600m' },
+    { id: 'rnm5',   kind: 'run',  stat: 'nears',    goal: 5,    reward: 100, text: '한 판에 아슬아슬 5번' },
+  ];
+  const MISSION_SLOTS = 3;
+
+  Object.assign(RN.DATA, { SKINS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, MISSIONS, MISSION_SLOTS });
+})(RN);

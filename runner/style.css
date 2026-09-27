@@ -90,6 +90,10 @@ body:not(.touch) .only-touch { display: none; }
   transition: opacity .2s, transform .2s;
   pointer-events: none;
   z-index: 20;
+  white-space: nowrap;
+  max-width: calc(100vw - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 #toast.on { opacity: 1; transform: translateX(-50%); }
 

@@ -248,8 +248,10 @@
 
   // 주인공 몸통 (반지름·배율별 한 번): 광택 네온 공
   const bodyCache = {};
-  function bodySprite(r, dpr) {
-    const key = r + '|' + dpr;
+  const skinOf = id => D.SKINS.find(k => k.id === id) || D.SKINS[0];
+  function bodySprite(r, dpr, skin) {
+    const K = skinOf(skin);
+    const key = r + '|' + dpr + '|' + K.id;
     let c = bodyCache[key];
     if (c) return c;
     const m = 4, size = (r + m) * 2;
@@ -258,12 +260,12 @@
     const g = c.getContext('2d');
     g.scale(dpr, dpr); g.translate(r + m, r + m);
     const grad = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
-    grad.addColorStop(0, '#effdff'); grad.addColorStop(0.35, '#5ee7ff'); grad.addColorStop(1, '#1b5fd0');
+    grad.addColorStop(0, K.body[0]); grad.addColorStop(0.35, K.body[1]); grad.addColorStop(1, K.body[2]);
     g.fillStyle = grad;
     g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
     // 아래쪽 반사광 (주황 네온)
     const rim = g.createLinearGradient(0, r * 0.3, 0, r);
-    rim.addColorStop(0, 'rgba(255,46,136,0)'); rim.addColorStop(1, 'rgba(255,90,170,0.55)');
+    rim.addColorStop(0, 'rgba(' + K.rim + ',0)'); rim.addColorStop(1, 'rgba(' + K.rim + ',0.55)');
     g.fillStyle = rim;
     g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
     g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = Math.max(1, r * 0.06);
@@ -746,6 +748,86 @@
     }
   }
 
+  // 머리 장식 (꾸미기). front=false: 몸 뒤에 그릴 것, true: 몸 앞에 그릴 것. 좌표는 몸 가운데가 (0,0)
+  function drawHat(ctx, hat, r, lean, front) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const antenna = (col, tip) => {
+      const tipX = -lean * r * 0.45 + r * 0.15, tipY = -r * 1.55;
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, r * 0.1);
+      ctx.beginPath(); ctx.moveTo(r * 0.1, -r * 0.9); ctx.quadraticCurveTo(r * 0.15, -r * 1.3, tipX, tipY); ctx.stroke();
+      glow(ctx, 'rgba(255,230,109,0.9)', tipX, tipY, r * 0.55, 0.9);
+      ctx.fillStyle = tip; ctx.beginPath(); ctx.arc(tipX, tipY, r * 0.16, 0, TAU); ctx.fill();
+      return [tipX, tipY];
+    };
+    const leaf = (x, y, len, ang, col) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(len * 0.5, -len * 0.42, len, 0); ctx.quadraticCurveTo(len * 0.5, len * 0.42, 0, 0); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,60,20,0.45)'; ctx.lineWidth = Math.max(1, r * 0.05);
+      ctx.beginPath(); ctx.moveTo(len * 0.1, 0); ctx.lineTo(len * 0.85, 0); ctx.stroke();
+      ctx.restore();
+    };
+    if (!front) {
+      if (hat === 'antenna') antenna('#bff8ff', '#ffe66d');
+      else if (hat === 'leaf') {
+        const w = -lean * r * 0.12;
+        leaf(w, -r * 0.88, r * 0.62, -Math.PI * 0.85, '#3dd96b');
+        leaf(w, -r * 0.88, r * 0.62, -Math.PI * 0.15, '#2fc45c');
+        leaf(w, -r * 0.88, r * 0.5, -Math.PI * 0.5, '#55ef80');
+      } else if (hat === 'sprout') {
+        const tx = -lean * r * 0.3, ty = -r * 1.35;
+        ctx.strokeStyle = '#2fc45c'; ctx.lineWidth = Math.max(1.5, r * 0.09);
+        ctx.beginPath(); ctx.moveTo(0, -r * 0.92); ctx.quadraticCurveTo(tx * 0.3, -r * 1.15, tx, ty); ctx.stroke();
+        leaf(tx, ty, r * 0.55, -Math.PI * 0.95 - lean * 0.2, '#7dff9a');
+        leaf(tx, ty, r * 0.55, -Math.PI * 0.05 - lean * 0.2, '#5ff08a');
+      } else if (hat === 'bolt') {
+        const [tx, ty] = antenna('#fff4c2', '#ffffff');
+        ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#8a4a00'; ctx.lineWidth = Math.max(1, r * 0.05);
+        const k = r * 0.32;
+        ctx.beginPath();
+        ctx.moveTo(tx + k * 0.2, ty - k * 1.1); ctx.lineTo(tx - k * 0.55, ty + k * 0.1); ctx.lineTo(tx - k * 0.02, ty + k * 0.1);
+        ctx.lineTo(tx - k * 0.25, ty + k * 1.05); ctx.lineTo(tx + k * 0.6, ty - k * 0.2); ctx.lineTo(tx + k * 0.05, ty - k * 0.2); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else if (hat === 'helmet') antenna('#e8f0ff', '#5ee7ff');
+      return;
+    }
+    if (hat === 'helmet') {
+      // 유리 헬멧: 몸을 감싸는 투명한 공 + 반사광 + 목 둘레 고리
+      ctx.fillStyle = 'rgba(190,230,255,0.13)';
+      ctx.strokeStyle = 'rgba(220,240,255,0.75)'; ctx.lineWidth = Math.max(1.5, r * 0.07);
+      ctx.beginPath(); ctx.arc(0, -r * 0.08, r * 1.24, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1.5, r * 0.09);
+      ctx.beginPath(); ctx.arc(0, -r * 0.08, r * 1.05, Math.PI * 1.12, Math.PI * 1.42); ctx.stroke();
+      ctx.fillStyle = '#9fb3cc';
+      ctx.beginPath(); ctx.ellipse(0, r * 0.95, r * 0.78, r * 0.2, 0, 0, TAU); ctx.fill();
+    } else if (hat === 'crown') {
+      const w = r * 0.62, b = -r * 0.82, h = r * 0.55, sh = -lean * r * 0.1;
+      glow(ctx, 'rgba(255,207,58,0.8)', sh, b - h * 0.5, r * 0.9, 0.7);
+      const g = ctx.createLinearGradient(0, b - h, 0, b);
+      g.addColorStop(0, '#fff6c2'); g.addColorStop(1, '#e0a000');
+      ctx.fillStyle = g; ctx.strokeStyle = '#8a5a00'; ctx.lineWidth = Math.max(1, r * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(sh - w, b); ctx.lineTo(sh - w, b - h * 0.6); ctx.lineTo(sh - w * 0.5, b - h * 0.25); ctx.lineTo(sh, b - h);
+      ctx.lineTo(sh + w * 0.5, b - h * 0.25); ctx.lineTo(sh + w, b - h * 0.6); ctx.lineTo(sh + w, b); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ff4d6d'; ctx.beginPath(); ctx.arc(sh, b - h * 0.35, r * 0.09, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#5ee7ff';
+      for (const d of [-1, 1]) { ctx.beginPath(); ctx.arc(sh + d * w * 0.55, b - h * 0.2, r * 0.065, 0, TAU); ctx.fill(); }
+    }
+  }
+
+  // 상점 미리보기: 캔버스 한가운데 로봇 공 하나 (움직임 없이)
+  function paintSkin(cv, skin) {
+    if (!cv) return;
+    const g = cv.getContext('2d');
+    const w = cv.width, h = cv.height;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const r = Math.round(Math.min(w, h) * 0.27);
+    const stub = { phase: 'play', rocket: 0, shield: false, t: 1, cause: null, p: { vx: 0, vy: 0 }, ctl: { maxVx: 1 } };
+    drawBot(g, stub, { calm: true, dpr: 1, skin }, w / 2, h * 0.58, r, 1, 1);
+  }
+
   // ─── 주인공: 광택 네온 공 로봇 (눈 두 개, 안테나) ───────────
   function drawPlayer(ctx, W, v, a) {
     const P = W.p, s = v.scale, r = D.PLAYER.r * s;
@@ -775,7 +857,8 @@
       ctx.fillStyle = '#ff9f43';
       ctx.beginPath(); ctx.moveTo(x - r * 0.28, y + r * 0.8); ctx.lineTo(x, y + r * (1.1 + 0.8 * f)); ctx.lineTo(x + r * 0.28, y + r * 0.8); ctx.fill();
     }
-    glow(ctx, dead ? 'rgba(255,77,109,0.6)' : 'rgba(94,231,255,0.6)', x, y, r * 2.5, 0.8);
+    const K = skinOf(v.skin);
+    glow(ctx, dead ? 'rgba(255,77,109,0.6)' : 'rgba(' + K.glow + ',0.6)', x, y, r * 2.5, 0.8);
     const lean = Math.max(-1, Math.min(1, P.vx / W.ctl.maxVx));
     ctx.save();
     ctx.translate(x, y + r);
@@ -783,14 +866,10 @@
     ctx.translate(0, -r);
     // 가는 쪽으로 몸을 살짝 기울인다 (움직임 줄이기면 똑바로)
     if (!v.calm) ctx.rotate(lean * 0.14);
-    // 안테나: 움직이는 반대쪽으로 살짝 휜다
-    const tipX = -lean * r * 0.45 + r * 0.15, tipY = -r * 1.55;
-    ctx.strokeStyle = '#bff8ff'; ctx.lineWidth = Math.max(1.5, r * 0.1); ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(r * 0.1, -r * 0.9); ctx.quadraticCurveTo(r * 0.15, -r * 1.3, tipX, tipY); ctx.stroke();
-    glow(ctx, 'rgba(255,230,109,0.9)', tipX, tipY, r * 0.55, 0.9);
-    ctx.fillStyle = '#ffe66d'; ctx.beginPath(); ctx.arc(tipX, tipY, r * 0.16, 0, TAU); ctx.fill();
+    // 머리 장식 뒤쪽 (안테나·잎·번개, 꾸미기): 움직이는 반대쪽으로 살짝 휜다
+    drawHat(ctx, K.hat, r, lean, false);
     // 몸통 (미리 그린 광택 공)
-    const spr = bodySprite(Math.round(r), v.dpr), half = Math.round(r) + 4;
+    const spr = bodySprite(Math.round(r), v.dpr, K.id), half = Math.round(r) + 4;
     ctx.drawImage(spr, -half, -half, half * 2, half * 2);
     // 얼굴 가리개 (어두운 유리) + 눈 두 개. 가는 쪽·오르내리는 쪽을 본다
     const lx = lean * r * 0.16, ly = -Math.max(-1, Math.min(1, P.vy / 1400)) * r * 0.1;
@@ -814,6 +893,7 @@
       ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - ew / 2, ey - eh / 2, ew, eh, ew / 2); else ctx.rect(cx - ew / 2, ey - eh / 2, ew, eh); ctx.fill();
       if (!blink) { ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - ew * 0.15, ey - eh * 0.32, ew * 0.3, eh * 0.22); }
     }
+    drawHat(ctx, K.hat, r, lean, true);   // 앞쪽 장식 (헬멧 유리·왕관)
     ctx.restore();
     // 방패 방울
     if (W.shield) {
@@ -862,7 +942,7 @@
       ctx.fillStyle = '#ff3b4e'; ctx.fillRect(v.cx, y0 - sh - 2, v.cw, 2);
       return;
     }
-    const n = W.L.rescues, s = Math.max(0.55, Math.min(1.2, v.scale));
+    const n = W.rescueMax, s = Math.max(0.55, Math.min(1.2, v.scale));
     for (let i = 0; i < n; i++) {
       const x = v.cx + v.cw * (i + 0.5) / n, y = y0 + 6 * s, on = i < W.rescues;
       ctx.globalAlpha = on ? 0.8 : 0.12;
@@ -947,10 +1027,11 @@
       ctx.textBaseline = 'top';
       y += ch + 12 * s;
     }
-    if (W.L.rescues) {
+    if (W.rescueMax) {
       ctx.font = Math.round(15 * s) + 'px ' + DISP; ctx.fillStyle = '#8aa4b8';
       ctx.fillText('구조 구름', x0, y);
-      for (let i = 0; i < W.L.rescues; i++) cloudIcon(ctx, x0 + 12 * s + i * 30 * s, y + 34 * s, 1.2 * s, i < W.rescues);
+      const gap = Math.min(30 * s, (sw - 24 * s) / Math.max(1, W.rescueMax));
+      for (let i = 0; i < W.rescueMax; i++) cloudIcon(ctx, x0 + 12 * s + i * gap, y + 34 * s, 1.2 * s * Math.min(1, gap / (30 * s)), i < W.rescues);
       y += 56 * s;
     }
     if (W.shield) {
@@ -965,7 +1046,7 @@
       ctx.fillText('로켓', x0, y);
       const bw = Math.min(sw - 50 * s, 120 * s);
       ctx.fillStyle = 'rgba(255,159,67,0.2)'; ctx.fillRect(x0 + 44 * s, y + 6 * s, bw, 8 * s);
-      ctx.fillStyle = '#ff9f43'; ctx.fillRect(x0 + 44 * s, y + 6 * s, bw * W.rocket / D.ROCKET.time, 8 * s);
+      ctx.fillStyle = '#ff9f43'; ctx.fillRect(x0 + 44 * s, y + 6 * s, bw * Math.min(1, W.rocket / W.rocketTime), 8 * s);
     }
     ctx.textBaseline = 'alphabetic';
   }
@@ -1151,5 +1232,5 @@
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
   const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || R.clouds.length > 0 || !!R.banner || !!R.big;
 
-  JP.Render = { draw, layout, busy };
+  JP.Render = { draw, layout, busy, paintSkin };
 })(JP);

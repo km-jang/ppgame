@@ -141,6 +141,59 @@
       { id: 'hard100',  tier: 3, name: '어려움 100',    desc: '어려움으로 100m',              check: r => r.diff === 'hard' && r.height >= 100 },
     ],
 
+    // ─── 코인 · 상점 · 미션 (shop.js) ───────────────────────────
+    // 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js)에 들어간다.
+    // 판이 끝나면 = 높이 ÷ perMeter + 별 ÷ perStars + 도착한 구역 보너스(zone[구역 번호]까지 모두 더함). 그 뒤 코인 보너스 강화만큼 더
+    COINS: { perMeter: 10, perStars: 2, zone: [0, 5, 10, 20] },
+
+    // 꾸미기: 로봇 공 색과 모자. body: 광택 공 [밝은 곳, 가운데, 어두운 곳], rim: 아래 반사광 r,g,b, glow: 둘레 빛 r,g,b
+    // hat: 머리 장식 (render.js drawHat). price 0 = 처음부터 있음
+    SKINS: [
+      { id: 'basic',  name: '기본',      price: 0,    desc: '반짝이는 하늘색 공',        body: ['#effdff', '#5ee7ff', '#1b5fd0'], rim: '255,90,170',  glow: '94,231,255',  hat: 'antenna' },
+      { id: 'berry',  name: '딸기',      price: 150,  desc: '빨간 공에 초록 잎 꼭지',    body: ['#fff0f3', '#ff5f7e', '#a8123d'], rim: '255,230,109', glow: '255,95,126',  hat: 'leaf' },
+      { id: 'mint',   name: '민트',      price: 300,  desc: '시원한 민트색, 새싹 두 잎', body: ['#f0fff9', '#4dffc0', '#0d8a66'], rim: '94,231,255',  glow: '77,255,192',  hat: 'sprout' },
+      { id: 'bolt',   name: '번개',      price: 500,  desc: '노란 공, 번개 안테나',      body: ['#fffbe0', '#ffd23f', '#c26a00'], rim: '255,94,60',   glow: '255,210,63',  hat: 'bolt' },
+      { id: 'helmet', name: '우주 헬멧', price: 800,  desc: '하얀 공에 유리 헬멧',       body: ['#ffffff', '#cfd8e6', '#5a6a86'], rim: '94,231,255',  glow: '200,220,255', hat: 'helmet' },
+      { id: 'gold',   name: '황금',      price: 1200, desc: '번쩍이는 황금 공과 왕관',   body: ['#fffbe6', '#ffcf3a', '#9a5a00'], rim: '255,255,255', glow: '255,207,58',  hat: 'crown' },
+    ],
+
+    // 강화 (5단계, 한 번 사면 모든 판에). per: 한 단계 효과 (world.js create의 upgrades가 읽는다)
+    UPGRADES: [
+      { id: 'speed',  icon: '⇄', name: '좌우 속도',     desc: '좌우 최고 속도 +4%',             per: 0.04, prices: [100, 200, 350, 550, 800] },
+      { id: 'rocket', icon: '▲', name: '로켓 시간',     desc: '로켓이 12% 더 오래 난다',        per: 0.12, prices: [120, 250, 400, 650, 950] },
+      { id: 'coin',   icon: '¢', name: '별 코인 보너스', desc: '판이 끝날 때 코인 +10%',         per: 0.1,  prices: [150, 300, 550, 900, 1200] },
+      { id: 'cloud',  icon: '☁', name: '구조 구름',     desc: '쉬움에서 구조 구름 +1 (쉬움만)', per: 1,    prices: [150, 300, 500, 750, 1000] },
+    ],
+    UPGRADE_MAX: 5,
+
+    // 시작 아이템: 사 두면 다음 판 시작할 때 하나씩 자동으로 쓴다. max: 쌓아 둘 수 있는 개수
+    START_ITEMS: [
+      { id: 'rocket', icon: '▲', name: '로켓 출발', desc: '시작하자마자 로켓으로 쭉 날아오른다', price: 120, max: 3 },
+      { id: 'shield', icon: '◯', name: '방패 방울', desc: '방패 방울을 두르고 시작한다',         price: 80,  max: 3 },
+    ],
+
+    // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름.
+    // diff: 그 난이도로 할 때만 (그 난이도를 한 번이라도 해 봤을 때만 나온다). 다 채우면 받기 → reward 코인, 새 미션으로
+    MISSIONS: [
+      { id: 'hsum1000', kind: 'life', stat: 'height',   goal: 1000, reward: 120, text: '모두 합쳐 1,000m 오르기 (누적)' },
+      { id: 'star200',  kind: 'life', stat: 'stars',    goal: 200,  reward: 100, text: '별 200개 모으기 (누적)' },
+      { id: 'spring20', kind: 'life', stat: 'springs',  goal: 20,   reward: 90,  text: '스프링 20번 밟기 (누적)' },
+      { id: 'rocket3',  kind: 'life', stat: 'rockets',  goal: 3,    reward: 80,  text: '로켓 3번 타기 (누적)' },
+      { id: 'save3',    kind: 'life', stat: 'saves',    goal: 3,    reward: 100, text: '방패 방울로 3번 살아남기 (누적)' },
+      { id: 'crumb30',  kind: 'life', stat: 'crumbles', goal: 30,   reward: 80,  text: '금 간 발판 30번 밟기 (누적)' },
+      { id: 'bnc300',   kind: 'life', stat: 'bounces',  goal: 300,  reward: 90,  text: '발판 300번 밟기 (누적)' },
+      { id: 'games5',   kind: 'life', stat: 'games',    goal: 5,    reward: 70,  text: '5판 하기 (누적)' },
+      { id: 'h100',     kind: 'run',  stat: 'height',   goal: 100,  reward: 80,  text: '한 판에 100m 오르기' },
+      { id: 'h250',     kind: 'run',  stat: 'height',   goal: 250,  reward: 150, text: '한 판에 250m (우주 도착)' },
+      { id: 'h500',     kind: 'run',  stat: 'height',   goal: 500,  reward: 250, text: '한 판에 500m (별나라 도착)' },
+      { id: 'star30',   kind: 'run',  stat: 'stars',    goal: 30,   reward: 100, text: '한 판에 별 30개' },
+      { id: 'combo12',  kind: 'run',  stat: 'maxCombo', goal: 12,   reward: 120, text: '한 판에 콤보 12' },
+      { id: 't120',     kind: 'run',  stat: 'time',     goal: 120,  reward: 100, text: '한 판에 2분 동안 오르기' },
+      { id: 'n150',     kind: 'run',  stat: 'height',   goal: 150,  reward: 150, text: '보통으로 150m', diff: 'normal' },
+      { id: 'x80',      kind: 'run',  stat: 'height',   goal: 80,   reward: 180, text: '어려움으로 80m', diff: 'hard' },
+    ],
+    MISSION_SLOTS: 3,
+
     // 연출 (그리기 전용, 규칙에는 영향 없음)
     FX: { starSparks: 12, springSparks: 18, dust: 6, maxParticles: 160, shake: 7, flash: 0.3 },
 

@@ -132,6 +132,12 @@
       tone(t, 'square', 392, 392, 0.08, 0.1);
       tone(t + 0.09, 'square', 784, 784, 0.12, 0.1);
     } },
+    // 상점·미션: 코인 딸깍 · 사기 · 안 됨 · 고르기 · 보상 받기
+    coin: { gap: 0.05, fn(t) { tone(t, 'square', 1568, 1568, 0.04, 0.05); tone(t + 0.035, 'triangle', 2093, 2093, 0.07, 0.06); } },
+    buy: { gap: 0.2, fn(t) { [784, 1047, 1319].forEach((f, i) => tone(t + i * 0.06, 'triangle', f, f, 0.2, 0.12)); } },
+    deny: { gap: 0.2, fn(t) { tone(t, 'square', 220, 180, 0.12, 0.07); tone(t + 0.1, 'square', 180, 150, 0.14, 0.06); } },
+    pick: { gap: 0.1, fn(t) { tone(t, 'sine', 880, 1320, 0.12, 0.1); } },
+    claim: { gap: 0.2, fn(t) { [1047, 1319, 1568, 2093].forEach((f, i) => tone(t + i * 0.05, 'triangle', f, f, 0.22, 0.11)); noise(t, 'highpass', 5000, 9000, 0.25, 0.05); } },
     medal: { gap: 0.3, fn(t) { [784, 988, 1175, 1568, 2093].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.35, 0.14)); noise(t, 'highpass', 5000, 9000, 0.4, 0.06); } },
   };
 

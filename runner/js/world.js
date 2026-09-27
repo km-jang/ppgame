@@ -35,8 +35,12 @@
     return i;
   }
 
+  // 상점 강화 한 단계 효과 (data.js UPGRADES)
+  const upPer = id => { const u = (D.UPGRADES || []).find(x => x.id === id); return u ? u.per : 0; };
+
   // opts: { diff ('easy'|'normal'|'hard') 또는 easy (옛 방식, 기본 true), auto (자동 운전), wait (출발 대기 초),
-  //         tutorial (처음 한 번 안내) }
+  //         tutorial (처음 한 번 안내), up (상점 강화 단계 {magnet, shield, boost, coin}),
+  //         loadout (시작 아이템 {shield, boost, heart}), skin (꾸미기 id, 그리기만) }
   function create(seed, opts) {
     opts = opts || {};
     const diff = diffId(opts), C = D.DIFFICULTY[diff];
@@ -59,7 +63,20 @@
       events: [],   // 소리·진동 (main.js가 비운다)
       fx: [],       // 입자·글자 연출 (render.js가 비운다)
     };
+    // 상점 강화: 자석·부스트 시간, 방패가 막은 뒤 깜빡이는 시간
+    const up = opts.up || {};
+    W.skin = opts.skin || 'basic';
+    W.magnetTime = D.ITEM.kinds.magnet.time + Math.min(5, up.magnet || 0) * upPer('magnet');
+    W.boostTime = D.ITEM.kinds.boost.time + Math.min(5, up.boost || 0) * upPer('boost');
+    W.shieldInv = D.HIT.shieldInv + Math.min(5, up.shield || 0) * upPer('shield');
+    // 시작 아이템
+    const lo = opts.loadout || {};
+    if (lo.shield) W.shield = true;
+    if (lo.heart && diff !== 'hard') W.hearts += 1;
+    if (lo.boost) { W.eff.boost = W.boostTime; W.events.push('boost'); }
+    W.loadout = Object.keys(lo).filter(k => lo[k]);
     W.maxHearts = W.hearts;
+    W.hitAt = 0; W.clean = 0;   // 안 부딪히고 간 가장 긴 거리 (미션)
     fill(W);
     return W;
   }
@@ -214,12 +231,12 @@
     if (W.inv > 0) return;   // 깜빡이는 동안은 그냥 지나간다
     o.done = true;
     if (W.shield) {
-      W.shield = false; W.blocks++; W.inv = D.HIT.shieldInv;
+      W.shield = false; W.blocks++; W.inv = W.shieldInv; W.hitAt = W.dist;
       W.fx.push({ kind: 'shield', x: o.x, z: o.z, what: o.kind });
       W.events.push('shield');
       return;
     }
-    W.hearts--; W.hits++; W.inv = cfg(W).inv; W.chain = 0;
+    W.hearts--; W.hits++; W.inv = cfg(W).inv; W.chain = 0; W.hitAt = W.dist;
     W.fx.push({ kind: 'hit', x: o.x, z: o.z, what: o.kind });
     if (W.hearts <= 0) {
       W.hearts = 0; W.phase = 'over'; W.cause = o.kind; W.inv = 0;
@@ -241,7 +258,7 @@
     o.done = true; W.items++; W.kinds[o.item] = true;
     if (o.item === 'shield') W.shield = true;
     else if (o.item === 'heart') { W.hearts = Math.min(W.maxHearts, W.hearts + 1); W.heals++; }
-    else W.eff[o.item] = K.time;
+    else W.eff[o.item] = o.item === 'magnet' ? W.magnetTime : o.item === 'boost' ? W.boostTime : K.time;
     if (o.item === 'boost') { W.boosts++; W.events.push('boost'); } else if (o.item === 'heart') W.events.push('heal'); else W.events.push('power');
     W.fx.push({ kind: 'power', x: o.x, z: o.z, y: o.y, item: o.item });
   }
@@ -322,6 +339,7 @@
 
     const v = speed(W);
     W.dist += v * dt;
+    if (W.dist - W.hitAt > W.clean) W.clean = W.dist - W.hitAt;
 
     // 우주 구역
     const zi = zoneAt(W.dist);

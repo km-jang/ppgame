@@ -34,6 +34,7 @@
     <symbol id="i-magnet" viewBox="0 0 24 24"><path d="M4 3h5v9a3 3 0 0 0 6 0V3h5v9a8 8 0 0 1-16 0zm0 2v3h5V5zm11 0v3h5V5z"/></symbol>
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M14 1L4 14h7l-2 9 11-13h-7z"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z"/></symbol>
+    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M2 3h3l2.2 11.2A2 2 0 0 0 9.2 16H18a2 2 0 0 0 2-1.6L21.6 7H6.2M9 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm9 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
   </svg>
 
@@ -44,29 +45,59 @@
   </div>
   <div id="toast" role="status"></div>
 
-  <!-- 시작 화면 -->
+  <!-- 시작 화면: 왼쪽 로고·내 우주선·미션 / 오른쪽 난이도·출발·상점·메달·도움말 -->
   <section id="scr-title" class="screen">
-    <div class="panel">
-      <h1 class="logo ko">슝슝 <span class="space">우주 </span><span class="hl">달리기</span></h1>
-      <p class="tagline">별을 모으며 우주 길을 달려요</p>
-      <p id="best" class="best"></p>
-      <div class="level-seg" role="group" aria-label="난이도">
-        <button type="button" data-diff="easy" aria-pressed="true"><b>쉬움</b><small>천천히 · 하트 3</small></button>
-        <button type="button" data-diff="normal" aria-pressed="false"><b>보통</b><small>빠르게 · 하트 2</small></button>
-        <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>아주 빠르게 · 하트 1</small></button>
+    <div class="panel tpanel">
+      <div class="t-left">
+        <h1 class="logo ko">슝슝 <span class="space">우주 </span><span class="hl">달리기</span></h1>
+        <p class="tagline">별을 모으며 우주 길을 달려요</p>
+        <p id="best" class="best"></p>
+        <button id="btn-ship" type="button" class="ship-card" aria-label="우주선 꾸미기">
+          <canvas id="ship-preview" class="ship-cv" width="128" height="128" aria-hidden="true"></canvas>
+          <span class="sc-txt"><small>내 우주선</small><b id="ship-name">기본</b><em id="ship-desc"></em></span>
+          <span class="sc-go">꾸미기</span>
+        </button>
+        <div id="title-missions" class="mcard"></div>
       </div>
-      <div class="modes">
+      <div class="t-right">
+        <div class="level-seg" role="group" aria-label="난이도">
+          <button type="button" data-diff="easy" aria-pressed="true"><b>쉬움</b><small>천천히 · 하트 3</small></button>
+          <button type="button" data-diff="normal" aria-pressed="false"><b>보통</b><small>빠르게 · 하트 2</small></button>
+          <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>쌩쌩 · 하트 1</small></button>
+        </div>
+        <p id="loadout-line" class="loadout-line"></p>
         <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>출발!</span> <kbd class="only-pc">Enter</kbd></button>
-        <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
+        <div class="t-row">
+          <button id="btn-shop" type="button" class="shop-btn"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg><span>상점</span><span class="coin-pill"><i class="cn" aria-hidden="true"></i><b id="coin-count">0</b></span></button>
+          <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
+        </div>
+        <ul class="help">
+          <li><svg class="i" aria-hidden="true"><use href="#i-lr"/></svg><span><b class="only-touch">옆으로 밀거나 양옆 누르기</b><b class="only-pc">← → 방향키</b> 줄 바꾸기</span></li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-up"/></svg><span><b class="only-touch">위로 밀기</b><b class="only-pc">↑ · 스페이스</b> 점프, 레이저 문 넘기</span></li>
+          <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 한 줄을 다 먹으면 완벽!</span></li>
+          <li><svg class="i red" aria-hidden="true"><use href="#i-rock"/></svg><span><b class="danger">위험! 피해요</b> 빨간 운석 · 빨간 레이저</span></li>
+          <li><span class="glyphs"><svg class="i" aria-hidden="true" style="color:#5ee7ff"><use href="#i-shield"/></svg><svg class="i" aria-hidden="true" style="color:#ff5fa8"><use href="#i-magnet"/></svg><svg class="i" aria-hidden="true" style="color:#ffe66d"><use href="#i-bolt"/></svg><svg class="i" aria-hidden="true" style="color:#ff6b8a"><use href="#i-heart"/></svg></span><span><b>방패 · 자석 · 부스트 · 하트</b> 모두 좋은 것</span></li>
+        </ul>
+        <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
       </div>
-      <ul class="help">
-        <li><svg class="i" aria-hidden="true"><use href="#i-lr"/></svg><span><b class="only-touch">옆으로 밀거나 양옆 누르기</b><b class="only-pc">← → 방향키</b> 줄 바꾸기</span></li>
-        <li><svg class="i" aria-hidden="true"><use href="#i-up"/></svg><span><b class="only-touch">위로 밀기</b><b class="only-pc">↑ · 스페이스</b> 점프, 레이저 문 넘기</span></li>
-        <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 한 줄을 다 먹으면 완벽!</span></li>
-        <li><svg class="i red" aria-hidden="true"><use href="#i-rock"/></svg><span><b class="danger">위험! 피해요</b> 빨간 운석 · 빨간 레이저</span></li>
-        <li><span class="glyphs"><svg class="i" aria-hidden="true" style="color:#5ee7ff"><use href="#i-shield"/></svg><svg class="i" aria-hidden="true" style="color:#ff5fa8"><use href="#i-magnet"/></svg><svg class="i" aria-hidden="true" style="color:#ffe66d"><use href="#i-bolt"/></svg><svg class="i" aria-hidden="true" style="color:#ff6b8a"><use href="#i-heart"/></svg></span><span><b>방패 · 자석 · 부스트 · 하트</b> 모두 좋은 것</span></li>
-      </ul>
-      <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
+    </div>
+  </section>
+
+  <!-- 상점 -->
+  <section id="scr-shop" class="screen">
+    <div class="panel wide spanel">
+      <div class="shop-head">
+        <h2>상점</h2>
+        <span class="coin-pill big"><i class="cn" aria-hidden="true"></i><b id="shop-coins">0</b></span>
+      </div>
+      <div class="tabs" role="tablist" aria-label="상점 칸">
+        <button type="button" role="tab" data-tab="skins" aria-selected="true">꾸미기</button>
+        <button type="button" role="tab" data-tab="up" aria-selected="false">강화</button>
+        <button type="button" role="tab" data-tab="items" aria-selected="false">시작 아이템</button>
+      </div>
+      <p id="shop-sub" class="sub shop-sub"></p>
+      <div id="shop-list" class="shop-list"></div>
+      <button id="btn-shop-back" class="big-btn"><span>닫기</span></button>
     </div>
   </section>
 
@@ -91,28 +122,40 @@
     </div>
   </section>
 
-  <!-- 게임 오버 -->
+  <!-- 게임 오버: 왼쪽 점수·기록 / 오른쪽 코인·미션·메달·버튼 -->
   <section id="scr-over" class="screen">
-    <div class="panel">
-      <h2 id="over-title">운석에 쾅!</h2>
-      <p class="score-big"><span id="over-score">0</span><small>점</small></p>
-      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 점수 경신</p>
-      <dl class="stats">
-        <div><dt>거리</dt><dd id="over-dist">0m</dd></div>
-        <div><dt>별</dt><dd id="over-stars">0</dd></div>
-        <div><dt>시간</dt><dd id="over-time">0:00</dd></div>
-      </dl>
-      <p id="over-diff" class="over-diff"></p>
-      <div id="over-records" class="chips"></div>
-      <div id="over-medals" class="new-medals"></div>
-      <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
-      <button id="btn-home" class="text-btn">처음 화면으로</button>
+    <div class="panel opanel">
+      <div class="o-left">
+        <h2 id="over-title">운석에 쾅!</h2>
+        <p class="score-big"><span id="over-score">0</span><small>점</small></p>
+        <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 점수 경신</p>
+        <dl class="stats">
+          <div><dt>거리</dt><dd id="over-dist">0m</dd></div>
+          <div><dt>별</dt><dd id="over-stars">0</dd></div>
+          <div><dt>시간</dt><dd id="over-time">0:00</dd></div>
+        </dl>
+        <p id="over-diff" class="over-diff"></p>
+        <div id="over-records" class="chips"></div>
+      </div>
+      <div class="o-right">
+        <div class="coin-earn">
+          <span class="ce-head"><i class="cn" aria-hidden="true"></i>얻은 코인</span>
+          <b id="over-coins">+0</b>
+          <span id="over-coin-parts" class="ce-parts"></span>
+        </div>
+        <div id="over-missions" class="mcard"></div>
+        <div id="over-medals" class="new-medals"></div>
+        <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
+        <button id="btn-home" class="text-btn">처음 화면으로</button>
+      </div>
     </div>
   </section>
 
+  <script src="../common/hub.js"></script>
   <script src="js/util.js"></script>
   <script src="js/data.js"></script>
   <script src="js/world.js"></script>
+  <script src="js/shop.js"></script>
   <script src="js/render.js"></script>
   <script src="js/input.js"></script>
   <script src="js/audio.js"></script>
