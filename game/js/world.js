@@ -737,7 +737,7 @@
       W.shake = Math.max(W.shake, 6);
       addFx(W, { ring: true, x: p.x, y: p.y, r: 46, life: 0.4, max: 0.4, color: '#5ee7ff' });
       W.eBullets = W.eBullets.filter(b => NG.dist2(b.x, b.y, p.x, p.y) > 140 * 140);
-      W.events.push('block');
+      W.events.push('shieldBlock'); // 소리: 방패가 막음 (헥사 가디언 방패의 hexBlock과 다른 소리)
       return;
     }
     p.hp -= n;
@@ -1373,7 +1373,7 @@
       for (const e of W.enemies) {
         if (e.dead || e.spawnT > 0 || e.hide) continue;
         if (e.look && hexShieldBlocks(e, b)) {
-          b.life = 0; burst(W, b.x, b.y, e.look.color, 3, 120, 2); W.events.push('block');
+          b.life = 0; burst(W, b.x, b.y, e.look.color, 3, 120, 2); W.events.push('hexBlock');
           break;
         }
         const rr = e.r + b.r;

@@ -273,6 +273,28 @@ async function until(page, fn, arg, ms) {
     await G.tap('#btn-start');
     assert(await until(G, () => NG.debug.mode === 'play' && NG.debug.world.player.ship === 'titan'), '고른 기체로 시작 안 함');
   });
+  await test('소리: 공통 SND로 소리 판이 열리고, 음악은 지금 행성·보스를 따르고, 끄기·음악 단추는 play.sound1에 저장', async () => {
+    assert(await G.evaluate(() => typeof SND !== 'undefined' && typeof NG.Audio.event === 'function'), 'SND 없음');
+    assert(await until(G, () => SND.ready() && SND.music.playing()), '소리 판이 안 열리거나 음악이 안 남');
+    assert(await G.evaluate(() => SND.music.mood().planet === NG.debug.world.place.planet.id), '음악이 지금 행성이 아님');
+    await G.evaluate(() => NG.debug.world.events.push('boss'));
+    assert(await until(G, () => SND.music.mood().boss), '보스 웨이브에 보스 분위기가 아님');
+    await G.evaluate(() => NG.debug.world.events.push('bossDown'));
+    assert(await until(G, () => !SND.music.mood().boss), '보스를 이겼는데 보스 분위기 그대로');
+    await G.tap('#btn-mute');
+    assert(await G.evaluate(() => SND.muted() && JSON.parse(localStorage.getItem('play.sound1')).muted === true && document.getElementById('btn-mute').classList.contains('muted')), '끄기가 안 됨');
+    await G.tap('#btn-mute');
+    assert(await G.evaluate(() => !SND.muted() && !document.getElementById('btn-mute').classList.contains('muted')), '다시 켜기가 안 됨');
+    await G.tap('#btn-pause');
+    assert(await until(G, () => NG.debug.mode === 'paused'), '일시정지 안 됨');
+    await G.tap('#scr-pause [data-audio="music"]');
+    assert(await G.evaluate(() => !SND.musicOn() && JSON.parse(localStorage.getItem('play.sound1')).music === false && document.querySelector('#scr-pause [data-audio="music"] .state').textContent === '끔'), '음악 끄기가 안 됨');
+    await G.tap('#scr-pause [data-audio="music"]');
+    assert(await G.evaluate(() => SND.musicOn() && document.querySelector('#scr-title [data-audio="music"]').getAttribute('aria-pressed') === 'true'), '음악 다시 켜기가 안 됨');
+    assert(await G.evaluate(() => localStorage.getItem('ngun.muted') === null || localStorage.getItem('ngun.muted') === 'false'), '옛 키에 저장함');
+    await G.tap('#btn-resume');
+    assert(await until(G, () => NG.debug.mode === 'play'), '계속 안 됨');
+  });
   await test('N-GUN 콘솔 오류 없음', async () => { assert(!ng.errors.length, ng.errors.join(' | ')); });
   await ng.ctx.close();
   await test('뿅뿅 우주선 탭 A(893×533): 새 메달이 많아도 다시 하기·게임 고르기 버튼이 화면 안, 집 버튼은 게임 고르기로', async () => {
@@ -427,10 +449,73 @@ async function until(page, fn, arg, ms) {
     assert(await Z.evaluate(() => document.querySelector('#level-list .lvl:nth-child(4)').classList.contains('boss')), '4단계 대왕 뱀 표시');
     await Z.evaluate(() => { SN.debug.rec.stage.max = Math.max(SN.debug.rec.stage.max, 3); SN.debug.newGame(2, { mode: 'stage', level: 4 }); });
     assert(await until(Z, () => SN.debug.mode === 'play' && SN.debug.world.boss && SN.debug.world.rival && SN.debug.world.rival.boss), '대왕 뱀 단계가 아님');
+    assert(await until(Z, () => SND.music.mood().boss && SND.music.playing()), '대왕 뱀 음악(단조·힘차게)');
     await Z.evaluate(() => { const W = SN.debug.world; W.wait = 0; W.rival.bitten = W.rival.need - 1; SN.debug.autopilot(true); });
     assert(await until(Z, () => SN.debug.world && (SN.debug.world.level === 5 || SN.debug.world.bossWins >= 1), null, 20000), '대왕 뱀을 못 쓰러뜨림');
     assert(await until(Z, () => SN.debug.rec.stage.stars[4] >= 1, null, 4000), '4단계 별 기록이 없음');
     await Z.evaluate(() => { SN.debug.autopilot(false); SN.debug.toTitle(); });
+  });
+  await test('소리(SND): 소리 단추는 네 게임 함께, 시작 화면·행성 음악, 쉬움 차분·피버, 멈춤에서 작게·음악 켜기 끄기', async () => {
+    // 공통 효과음·게임 효과음 엿듣기 (소리 이름만 적는다)
+    await Z.evaluate(() => {
+      window._ui = []; window._sn = [];
+      const u = SND.ui; SND.ui = (n, o) => { window._ui.push(n + (o && o.hi ? '!' : '')); return u(n, o); };
+      const p = SN.Audio.play; SN.Audio.play = (n, o) => { window._sn.push(n); return p(n, o); };
+      SN.debug.toTitle();
+    });
+    assert(await Z.evaluate(() => SND.music.playing() && SND.music.mood().planet === 'title'), '시작 화면 음악');
+    assert(await Z.evaluate(() => typeof SND !== 'undefined' && !SND.muted() && !document.getElementById('btn-mute').classList.contains('muted')), '처음 켬');
+    await Z.tap('#btn-mute');
+    assert(await Z.evaluate(() => SND.muted() && JSON.parse(localStorage.getItem('play.sound1')).muted === true && document.getElementById('btn-mute').classList.contains('muted')), '끔');
+    assert(await Z.evaluate(() => localStorage.getItem('snake.muted') === null), '옛 snake.muted에 저장함');
+    await Z.tap('#btn-mute');
+    assert(await Z.evaluate(() => !SND.muted() && !document.getElementById('btn-mute').classList.contains('muted')), '다시 켬');
+    // 다른 게임에서 끈 것이 따라온다
+    await Z.evaluate(() => { localStorage.setItem('play.sound1', JSON.stringify({ muted: true, music: true, fx: true })); window.dispatchEvent(new StorageEvent('storage', { key: 'play.sound1' })); });
+    assert(await Z.evaluate(() => document.getElementById('btn-mute').classList.contains('muted')), '다른 곳에서 끈 것이 안 따라옴');
+    await Z.evaluate(() => SND.setMuted(false));
+    // 판 중: 지금 하늘 음악, 쉬움은 차분하게, 피버는 빠르게
+    await Z.evaluate(() => { SN.debug.setEasy(true); SN.debug.newGame(3, { mode: 'endless', rival: false }); });
+    assert(await until(Z, () => { const m = SND.music.mood(); return SND.music.playing() && m.calm && m.planet !== 'title' && m.planet === SN.debug.musicMood.planet; }), '행성 음악·쉬움 차분');
+    assert(await Z.evaluate(() => window._ui.includes('start')), '시작 소리');
+    await Z.evaluate(() => { const W = SN.debug.world; W.wait = 0; SN.World.startFever(W); });
+    assert(await until(Z, () => SND.music.mood().fever), '피버 음악');
+    // 멈춤: 음악 켜기·끄기 (효과음은 그대로)
+    await Z.evaluate(() => SN.debug.pause());
+    assert(await Z.evaluate(() => { const b = document.getElementById('btn-music'); return !b.hidden && b.getBoundingClientRect().height > 0 && /켬/.test(b.textContent); }), '음악 단추');
+    await Z.tap('#btn-music');
+    assert(await Z.evaluate(() => !SND.musicOn() && !SND.muted() && JSON.parse(localStorage.getItem('play.sound1')).music === false && /끔/.test(document.getElementById('btn-music').textContent)), '음악 끔');
+    await Z.tap('#btn-music');
+    assert(await Z.evaluate(() => SND.musicOn() && /켬/.test(document.getElementById('btn-music').textContent)), '음악 켬');
+    await Z.tap('#btn-resume');
+    assert(await until(Z, () => SN.debug.mode === 'play'), '계속하기');
+  });
+  await test('소리(SND): 한 번 더는 경고음 대신 continueAsk·똑딱(마지막은 높게), 누르면 continueGo 하나만, 결과에서 over·음악 멈춤', async () => {
+    await Z.evaluate(() => { SN.debug.setEasy(false); SN.debug.newGame(4, { mode: 'endless', rival: false }); });
+    await Z.evaluate(() => { const W = SN.debug.world; W.snake = W.snake.map((p, i) => ({ x: W.cols - 1 - i, y: 4 })); W.prev = W.snake.slice(); W.dir = 'right'; W.queue.length = 0; W.wait = 0; window._ui.length = 0; window._sn.length = 0; });
+    assert(await until(Z, () => SN.debug.mode === 'cont' && window._ui.includes('continueAsk'), null, 6000), 'continueAsk가 안 남');
+    // 앞길 경고음은 부딪히기 전에만 (묻는 화면에는 쓰지 않는다)
+    assert(await Z.evaluate(() => { const n = window._sn; return n.includes('crash') && n.lastIndexOf('warn') < n.indexOf('crash') && !window._ui.includes('over'); }), '부딪힘 소리 ' + await Z.evaluate(() => window._sn.join()));
+    await Z.waitForTimeout(1300);
+    assert(await Z.evaluate(() => window._ui.includes('tick')), '똑딱');
+    await Z.evaluate(() => { window._ui.length = 0; window._sn.length = 0; });
+    await Z.tap('#btn-cont');
+    assert(await until(Z, () => SN.debug.mode === 'play'), '되살아나지 않음');
+    await Z.waitForTimeout(200);
+    assert(await Z.evaluate(() => window._ui.join() === 'continueGo' && !window._sn.includes('start') && SN.Audio.play('revive') === false), '한 번 더 소리 ' + await Z.evaluate(() => window._ui.join() + ' / ' + window._sn.join()));
+    // 두 번째는 묻지 않고 결과: over, 음악 멈춤
+    await Z.evaluate(() => { const W = SN.debug.world; W.eff.ghost = 0; W.snake = W.snake.map((p, i) => ({ x: W.cols - 1 - i, y: 8 })); W.prev = W.snake.slice(); W.dir = 'right'; W.queue.length = 0; W.wait = 0; });
+    assert(await until(Z, () => SN.debug.mode === 'over', null, 6000), '결과 화면');
+    assert(await Z.evaluate(() => window._ui.includes('over') && !window._ui.includes('overSoft') && !SND.music.playing()), '결과 소리·음악 ' + await Z.evaluate(() => window._ui.join()));
+    // 기다리면 1초마다 똑딱, 마지막은 높게, 5초 뒤 결과 (쉬움은 부드러운 결과 소리). 쉬움은 벽이 없으니 제 몸에 부딪힌다
+    await Z.evaluate(() => { SN.debug.setEasy(true); SN.debug.newGame(5, { mode: 'endless', rival: false }); });
+    await Z.evaluate(() => { const W = SN.debug.world; W.snake = [{ x: 5, y: 4 }, { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 6, y: 4 }, { x: 7, y: 4 }]; W.prev = W.snake.slice(); W.dir = 'right'; W.queue.length = 0; W.wait = 0; W.food = { x: 0, y: 0, gold: false, born: 0 }; window._ui.length = 0; });
+    assert(await until(Z, () => SN.debug.mode === 'cont', null, 4000), '쉬움 한 번 더 묻기');
+    assert(await until(Z, () => window._ui.includes('tick!'), null, 7000), '마지막 똑딱 ' + await Z.evaluate(() => window._ui.join()));
+    assert(await Z.evaluate(() => window._ui.filter(n => n === 'tick').length === 3), '똑딱 수 ' + await Z.evaluate(() => window._ui.join()));
+    assert(await until(Z, () => SN.debug.mode === 'over', null, 3000), '5초 뒤 결과');
+    assert(await Z.evaluate(() => window._ui.includes('overSoft') && !window._ui.includes('over')), '쉬움 결과 소리 ' + await Z.evaluate(() => window._ui.join()));
+    await Z.evaluate(() => SN.debug.toTitle());
   });
   await test('N-SNAKE 콘솔 오류 없음', async () => { assert(!sn.errors.length, sn.errors.join(' | ')); });
   await sn.ctx.close();
@@ -527,6 +612,16 @@ async function until(page, fn, arg, ms) {
     await J.tap('#btn-start');
     assert(await until(J, () => JP.debug.mode === 'play' && JP.debug.world.start === 250 && JP.debug.world.height >= 250), '우주에서 출발 안 함');
     await J.evaluate(() => JP.debug.setStart('ground'));
+  });
+  await test('통통 점프 소리: 공통 소리(SND), 우주에서 출발하면 행성 음악, 처음 화면은 제목 음악, 소리 단추는 네 게임 함께 (play.sound1)', async () => {
+    assert(await J.evaluate(() => typeof SND !== 'undefined' && SND.ready() && SND.music.playing()), '소리 판·음악이 안 열림');
+    assert(await J.evaluate(() => JP.debug.mode === 'play' && ['galaxy', 'mercury', 'venus'].includes(SND.music.mood().planet)), '우주 출발인데 음악 ' + await J.evaluate(() => SND.music.mood().planet));
+    await J.evaluate(() => { JP.debug.pause(); JP.debug.quitRun(); });
+    assert(await until(J, () => JP.debug.mode === 'title' && SND.music.mood().planet === 'title', null, 3000), '처음 화면 음악이 아님');
+    await J.tap('#btn-mute');
+    assert(await J.evaluate(() => SND.muted() && JSON.parse(localStorage.getItem('play.sound1')).muted === true && document.getElementById('btn-mute').classList.contains('muted') && localStorage.getItem('jump.muted') === null), '소리 끔이 공통 설정에 안 적힘');
+    await J.tap('#btn-mute');
+    assert(await J.evaluate(() => !SND.muted() && !document.getElementById('btn-mute').classList.contains('muted')), '다시 켜기');
   });
   await test('시작 화면·결과 화면에 게임 고르기로 가는 집 버튼', async () => {
     assert(await J.evaluate(() => /index\.html$/.test(document.getElementById('btn-hub').getAttribute('href')) && /index\.html$/.test(document.getElementById('btn-over-hub').getAttribute('href'))), '집 버튼 주소');
@@ -626,6 +721,27 @@ async function until(page, fn, arg, ms) {
     assert(await until(U, () => RN.debug.mode === 'paused'), '뒤로 가기가 멈춤 화면이 아님');
     await U.tap('#btn-quit');
     assert(await until(U, () => RN.debug.mode === 'title' && !RN.debug.histOn), '처음 화면에서 기록이 남음');
+  });
+  await test('슝슝 우주 달리기 소리: 공통 소리(SND), 행성마다 음악, 피버·해적 분위기, 처음 화면은 제목 음악, 소리 단추는 네 게임 함께 (play.sound1)', async () => {
+    assert(await U.evaluate(() => typeof SND !== 'undefined' && SND.ready() && SND.music.playing() && SND.music.mood().planet === 'title'), '처음 화면 음악이 아님');
+    await U.tap('#btn-start');
+    assert(await until(U, () => RN.debug.mode === 'play' && SND.music.mood().planet === 'mercury'), '출발했는데 수성 음악이 아님 ' + await U.evaluate(() => SND.music.mood().planet));
+    assert(await U.evaluate(() => SND.music.mood().calm === (RN.debug.diff === 'easy')), '쉬움은 차분한 음악');
+    await U.evaluate(() => { const W = RN.debug.world; if (W.tut) W.tut.step = 'done'; W.hearts = 9; W.dist = RN.DATA.ROUTE.leg + 1; });
+    assert(await until(U, () => SND.music.mood().planet === 'venus', null, 3000), '금성에 왔는데 음악이 그대로 ' + await U.evaluate(() => SND.music.mood().planet));
+    await U.evaluate(() => { RN.debug.world.fever = 30; });
+    assert(await until(U, () => SND.music.mood().fever === true, null, 2000), '피버 음악');
+    await U.evaluate(() => { const W = RN.debug.world; W.fever = 0; W.pir = { t: 99, max: 99, shotT: 99, laser: null, bombs: 0, bombT: 99, shots: 0 }; });
+    assert(await until(U, () => SND.music.mood().fever === false && SND.music.mood().boss === true, null, 2000), '해적 추격 음악');
+    await U.evaluate(() => { RN.debug.world.pir = null; });
+    assert(await until(U, () => SND.music.mood().boss === false, null, 2000), '해적을 따돌리면 원래 음악');
+    await U.evaluate(() => RN.debug.pause());
+    await U.tap('#btn-mute');
+    assert(await U.evaluate(() => SND.muted() && JSON.parse(localStorage.getItem('play.sound1')).muted === true && document.getElementById('btn-mute').classList.contains('muted') && localStorage.getItem('runner.muted') === null), '소리 끔이 공통 설정에 안 적힘');
+    await U.tap('#btn-mute');
+    assert(await U.evaluate(() => !SND.muted() && !document.getElementById('btn-mute').classList.contains('muted')), '다시 켜기');
+    await U.tap('#btn-quit');
+    assert(await until(U, () => RN.debug.mode === 'title' && SND.music.mood().planet === 'title' && !SND.music.mood().boss && !SND.music.mood().fever, null, 3000), '처음 화면으로 오면 제목 음악');
   });
   await test('슝슝 우주 달리기 콘솔 오류 없음', async () => { assert(!rn.errors.length, rn.errors.join(' | ')); });
   await rn.ctx.close();

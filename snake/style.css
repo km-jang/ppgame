@@ -188,6 +188,20 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
   text-decoration: underline;
 }
 
+/* 멈춤 화면 음악 켜기·끄기 (효과음은 그대로, 네 게임 공통 설정) */
+.music-tog {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 14px auto 0; padding: 8px 18px; min-height: 40px;
+  font: inherit; font-size: 15px; color: var(--muted);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .16); border-radius: 999px; cursor: pointer;
+}
+.music-tog .i { width: 18px; height: 18px; }
+.music-tog[aria-pressed=true] { color: var(--text); border-color: rgba(94, 231, 255, .55); }
+.music-tog[aria-pressed=false] .i { opacity: .45; }
+.music-tog:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.music-tog[hidden] { display: none; }
+body.touch .music-tog { min-height: 48px; padding: 10px 22px; }
+
 .help {
   list-style: none;
   padding: 0;

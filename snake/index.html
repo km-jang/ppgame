@@ -35,6 +35,7 @@
     <symbol id="i-cart" viewBox="0 0 24 24"><path d="M2 3h3.2l.7 3H21a1 1 0 0 1 1 1.2l-1.4 7A2 2 0 0 1 18.6 16H8.4a2 2 0 0 1-2-1.6L4.4 5H2zm7 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 3.2 2.6 11a1 1 0 0 0 1.3 1.5l.9-.8V20a1 1 0 0 0 1 1h4.4v-5.5h3.6V21h4.4a1 1 0 0 0 1-1v-8.3l.9.8a1 1 0 0 0 1.3-1.5z"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.4 5 12 10.6 17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4z"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 3.5 20 1.5v13.2a3.3 3.3 0 1 1-2-3V6.1l-7 1.3v9.3a3.3 3.3 0 1 1-2-3z"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></symbol>
   </svg>
 
@@ -142,6 +143,7 @@
       <h2>일시정지</h2>
       <p class="sub">숨 고르고 다시 달려요</p>
       <button id="btn-resume" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>계속하기</span></button>
+      <button id="btn-music" type="button" class="music-tog" aria-pressed="true"><svg class="i" aria-hidden="true"><use href="#i-note"/></svg><span>음악 켬</span></button>
       <button id="btn-quit" class="text-btn">처음 화면으로</button>
     </div>
   </section>
@@ -194,6 +196,7 @@
 
   <script src="../common/hub.js"></script>
   <script src="../common/worlds.js"></script>
+  <script src="../common/sound.js"></script>
   <script src="js/util.js"></script>
   <script src="js/data.js"></script>
   <script src="js/world.js"></script>

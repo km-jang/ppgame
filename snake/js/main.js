@@ -13,7 +13,9 @@
   const input = SN.createInput(canvas);
   let warnKey = '';
   const BEST_KEY = 'snake.best';   // {score, len}
-  const MUTE_KEY = 'snake.muted';
+  // 소리 끄기·음악은 네 게임 공통 (common/sound.js, 키 play.sound1). 옛 snake.muted는 SND가 처음 한 번 이어받는다
+  const HAS_SND = typeof SND !== 'undefined' && !!SND;
+  const MUS = HAS_SND ? SND.music : null;
 
   const view = { dpr: 1, w: 0, h: 0, ui: 1, hudMid: 32, hudLeft: 150, hudRight: 14, touch: isTouch, calm: false, best: 0 };
   view.pad = input;   // 밀기 화살표 그리기용 (render.js가 읽기만 한다)
@@ -277,10 +279,12 @@
     if (tab) shopTab = tab;
     renderShop();
     show('scr-shop');
+    SN.Audio.play('open');
   }
   function closeShop() {
     if (mode !== 'shop') return;
     mode = 'title';
+    SN.Audio.play('close');
     renderBest();
     show('scr-title');
   }
@@ -303,7 +307,7 @@
   }
   function useChar(id) {
     const ok = SH.selectChar(shop, id);
-    if (ok) { SH.save(shop); SN.Audio.play('pick'); toast(SH.charDef(id).name + ' 골랐어요!'); }
+    if (ok) { SH.save(shop); SN.Audio.play('tap'); toast(SH.charDef(id).name + ' 골랐어요!'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
     return ok;
@@ -435,6 +439,7 @@
     $('record-list').innerHTML = rows.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + v + '</dd></div>').join('');
     mode = 'medals';
     show('scr-medals');
+    SN.Audio.play('open');
   }
 
   // ─── 스테이지 고르기 ───────────────────────────────────────
@@ -455,13 +460,14 @@
         '<em class="lvl-stars' + (st ? '' : ' none') + '" aria-label="별 ' + st + '개">' + starText(st) + '</em>';
       if (SN.Space) SN.Space.icon(b.querySelector('canvas'), sky.id);
       b.addEventListener('click', () => {
-        if (n > open) { toast((n - 1) + '단계를 먼저 깨요'); return; }
+        if (n > open) { SN.Audio.play('deny'); toast((n - 1) + '단계를 먼저 깨요'); return; }
         keep(); newGame(undefined, { mode: 'stage', level: n });
       });
       box.appendChild(b);
     }
     mode = 'stage';
     show('scr-stage');
+    SN.Audio.play('open');
   }
 
   // ─── 흐름 ──────────────────────────────────────────────────
@@ -492,6 +498,41 @@
     wakeLock(true);
     show(null);
     SN.Audio.play('start');
+    startMusic();
+  }
+
+  // ─── 배경 음악 (common/sound.js) ───────────────────────────
+  // 시작 화면은 'title', 판 중에는 지금 하늘(행성) 음악. 블랙홀은 'space', 은하 중심은 'galaxy'로
+  // 피버는 빠르게, 대왕 뱀과 겨루는 동안은 단조로 힘차게, 쉬움은 차분하게. 멈춤·한 번 더 묻기는 작게, 결과 화면은 멈춤
+  const musicId = id => (id === 'hole' ? 'space' : id === 'core' ? 'galaxy' : id || 'mercury');
+  let musKey = '';
+  function musicMood(world) {
+    return {
+      planet: musicId(world.space && world.space.scene), fever: world.feverT > 0,
+      boss: !!(world.boss && world.rival && world.rival.boss && !world.rival.down), calm: world.diff === 'easy',
+    };
+  }
+  function startMusic() {
+    if (!MUS || !W) return;
+    const m = musicMood(W);
+    musKey = JSON.stringify(m);
+    MUS.duck(1);
+    MUS.setMood({ fever: m.fever, boss: m.boss, calm: m.calm });
+    MUS.play('snake', m.planet);
+  }
+  function syncMusic() {
+    if (!MUS || !W) return;
+    const m = musicMood(W), k = JSON.stringify(m);
+    if (k === musKey) return;
+    musKey = k;
+    MUS.setMood(m);
+  }
+  function titleMusic() {
+    if (!MUS) return;
+    musKey = '';
+    MUS.duck(1);
+    MUS.setMood({ fever: false, boss: false, calm: false });
+    MUS.play('snake', 'title');
   }
 
   function toTitle() {
@@ -502,13 +543,18 @@
     wakeLock(false);
     renderBest();
     show('scr-title');
+    titleMusic();
   }
+  // 스테이지 고르기·메달 화면 닫기
+  function closeMenu() { SN.Audio.play('close'); toTitle(); }
 
   function pause() {
     if (mode !== 'play') return;
     mode = 'paused';
     frozenDrawn = false;
     show('scr-pause');
+    renderMusicBtn();
+    if (MUS) MUS.duck(0.3);
   }
 
   function resume() {
@@ -516,6 +562,7 @@
     input.reset();
     mode = 'play';
     show(null);
+    if (MUS) MUS.duck(1);
   }
 
   // 판 정리: 기록 장부 · 메달 · 코인 · 미션 · 놀이 본부 (결과 화면으로 가든, 멈춤에서 처음 화면으로 가든 똑같이 한 번만)
@@ -571,7 +618,7 @@
   }
 
   // 판이 끝났다: 한 번 더 할 수 있으면 먼저 묻고, 아니면 결과 화면
-  let contAt = 0;
+  let contAt = 0, contTick = 0;
   function onDeath() {
     if (SN.World.canContinue(W)) {
       mode = 'cont';
@@ -586,7 +633,9 @@
         const ring = $('cont-ring');
         ring.classList.remove('run'); void ring.offsetWidth; ring.classList.add('run');
         show('scr-cont');
-        SN.Audio.play('warn');
+        contTick = 0;
+        SN.Audio.play('continueAsk');
+        if (MUS) MUS.duck(0.3);
       }, 700);
       return;
     }
@@ -600,7 +649,9 @@
     mode = 'play';
     wakeLock(true);
     show(null);
-    SN.Audio.play('start');
+    // 한 번 더: continueGo 하나만 (시작 소리·되살아남 소리를 겹쳐 틀지 않는다. world의 revive 사건은 소리 없음)
+    SN.Audio.play('continueGo');
+    if (MUS) MUS.duck(1);
     vibrate([20, 30, 20]);
     return true;
   }
@@ -613,6 +664,9 @@
   function gameOver(soon) {
     mode = 'over';
     overAt = performance.now();
+    // 결과 소리: 쉬움은 부드럽게, 보통·어려움은 내려가는 소리 (판을 가득 채웠으면 팡파르가 이미 났다)
+    if (!W.won) SN.Audio.play(W.diff === 'easy' ? 'overSoft' : 'over');
+    if (MUS) MUS.stop(0.8);
     const res = settleRun() || { newRec: [], isBest: false, fresh: [] };
     const { newRec, isBest } = res, fresh = res.fresh;
     renderEarn();
@@ -647,7 +701,9 @@
   function drainEvents(world, sound) {
     for (const ev of world.events) {
       if (!sound) continue;
-      if (ev === 'eat') SN.Audio.play('eat', { k: (world.eaten - 1) % D.FOOD.goldEvery });
+      // 냠: 5개 묶음 안의 차례로 한 계단씩, 콤보 배율로 조금 더 높게. 부딪힘은 부드러운 쿵 (결과 소리는 gameOver에서)
+      if (ev === 'eat') SN.Audio.play('eat', { k: (world.eaten - 1) % D.FOOD.goldEvery, m: world.mult || 1 });
+      else if (ev === 'over') SN.Audio.play('crash');
       else SN.Audio.play(ev);
       if (ev === 'rival') {
         if (world.rival && world.rival.boss) { if (!rivalToast) toast('대왕 뱀 등장! 꼬리를 냠냠!', 'rv'); }
@@ -689,30 +745,47 @@
     SN.Audio.unlock();
     if (mode === 'play' && W && SN.World.turn(W, dir) && touch) vibrate(10);
   };
-  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { SN.Audio.unlock(); setDiff(b.dataset.diff); });
-  $('btn-rival').addEventListener('click', () => { SN.Audio.unlock(); setRival(!rivalOn); SN.Audio.play('pick'); });
+  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { SN.Audio.unlock(); setDiff(b.dataset.diff); SN.Audio.play('tap'); });
+  $('btn-rival').addEventListener('click', () => { SN.Audio.unlock(); setRival(!rivalOn); SN.Audio.play('tap'); });
   input.onKey = code => {
     SN.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
     if (mode === 'shop') { if (code === 'Escape') closeShop(); return; }
     // 스테이지 고르기·메달 화면은 제 화면 (Enter·Space로 무한 모드가 시작되지 않게)
-    if (mode === 'stage' || mode === 'medals') { if (code === 'Escape') toTitle(); return; }
+    if (mode === 'stage' || mode === 'medals') { if (code === 'Escape') closeMenu(); return; }
     if (mode === 'cont') { if (code === 'Enter' || code === 'Space') continueRun(); else if (code === 'Escape') giveUp(); return; }
     if (mode === 'title' && (code === 'Enter' || code === 'Space')) return newGame(undefined, { mode: 'endless' });
     if (mode === 'over') { if ((code === 'Enter' || code === 'Space') && !tooSoon('scr-over') && $('scr-over').classList.contains('on')) newGame(); return; }
     if (code === 'KeyP' || code === 'Escape' || code === 'Space') return mode === 'play' ? pause() : resume();
   };
 
+  // 소리 단추: 네 게임과 첫 화면이 함께 꺼지고 켜진다 (SND). 단추 모양은 onChange로 (다른 게임에서 바꿔도 따라온다)
   function toggleMute() {
-    SN.Audio.unlock();
-    SN.Audio.setMuted(!SN.Audio.muted);
-    SN.store.set(MUTE_KEY, SN.Audio.muted);
-    $('btn-mute').classList.toggle('muted', SN.Audio.muted);
-    toast(SN.Audio.muted ? '소리 끔' : '소리 켬');
+    if (!HAS_SND) return;
+    SND.unlock();
+    SND.toggleMuted();
+    toast(SND.muted() ? '소리 끔' : '소리 켬');
+  }
+  function renderMute() { $('btn-mute').classList.toggle('muted', HAS_SND && SND.muted()); }
+  // 멈춤 화면의 음악 켜기·끄기 (효과음은 그대로)
+  function renderMusicBtn() {
+    const b = $('btn-music');
+    if (!b) return;
+    const on = HAS_SND && SND.musicOn();
+    b.setAttribute('aria-pressed', String(on));
+    b.querySelector('span').textContent = on ? '음악 켬' : '음악 끔';
+    b.hidden = !HAS_SND;
+  }
+  function toggleMusic() {
+    if (!HAS_SND) return;
+    SND.unlock();
+    SND.setMusic(!SND.musicOn());
+    SN.Audio.play('tap');
   }
 
-  // 브라우저는 첫 터치·클릭 뒤에야 소리를 허락한다
+  // 브라우저는 첫 터치·클릭 뒤에야 소리를 허락한다 (SND도 스스로 듣지만, 밀기 시작에서도 풀어 둔다)
   window.addEventListener('pointerdown', () => SN.Audio.unlock(), { passive: true });
+  if (HAS_SND) SND.onChange(() => { renderMute(); renderMusicBtn(); });
   window.addEventListener('touchstart', () => document.body.classList.add('touch'), { once: true, passive: true });
 
   // 최고 점수가 브라우저 정리 때 지워지지 않게 요청 (돈 0원, 이 기기 안에서만)
@@ -723,7 +796,7 @@
   $('btn-shop').addEventListener('click', () => { SN.Audio.unlock(); openShop(); });
   $('btn-char').addEventListener('click', () => { SN.Audio.unlock(); openShop('chars'); });
   $('btn-shop-back').addEventListener('click', closeShop);
-  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); });
+  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); SN.Audio.play('tap'); });
   $('shop-list').addEventListener('click', e => {
     const b = e.target.closest('[data-buy],[data-use]');
     if (!b) return;
@@ -732,10 +805,10 @@
   for (const id of ['title-missions', 'over-missions']) {
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) claimMission(+b.dataset.claim, b); });
   }
-  $('btn-stage-back').addEventListener('click', toTitle);
-  $('btn-medals-back').addEventListener('click', toTitle);
-  $('btn-medals-x').addEventListener('click', toTitle);
-  $('btn-stage-x').addEventListener('click', toTitle);
+  $('btn-stage-back').addEventListener('click', closeMenu);
+  $('btn-medals-back').addEventListener('click', closeMenu);
+  $('btn-medals-x').addEventListener('click', closeMenu);
+  $('btn-stage-x').addEventListener('click', closeMenu);
   $('btn-retry').addEventListener('click', () => { if (!tooSoon('scr-over')) newGame(); });
   $('btn-home').addEventListener('click', () => { if (!tooSoon('scr-over')) toTitle(); });
   $('btn-resume').addEventListener('click', resume);
@@ -753,6 +826,7 @@
   });
   $('btn-pause').addEventListener('click', () => (mode === 'play' ? pause() : resume()));
   $('btn-mute').addEventListener('click', toggleMute);
+  $('btn-music').addEventListener('click', toggleMusic);
 
   // 게임 중 화면이 어두워지거나 꺼지지 않게 (지원 기기만, 거절되면 무시)
   let lock = null;
@@ -842,6 +916,12 @@
         if (dk && dk !== warnKey) { SN.Audio.play('warn'); vibrate(30); }
         warnKey = dk;
         frozenDrawn = false;
+        syncMusic();
+      }
+      // 한 번 더?: 1초마다 똑딱 (마지막 1초는 높게)
+      if (mode === 'cont' && contAt) {
+        const left = Math.ceil(D.CONTINUE.time - (performance.now() - contAt) / 1000);
+        if (left >= 1 && left < D.CONTINUE.time && left !== contTick) { contTick = left; SN.Audio.play('tick', { hi: left === 1 }); }
       }
       // 한 번 더?: 시간이 다 되면 결과 화면으로
       if (mode === 'cont' && contAt && performance.now() - contAt > D.CONTINUE.time * 1000) giveUp(true);
@@ -859,8 +939,8 @@
   // ─── 시작 ──────────────────────────────────────────────────
   renderDiff();
   renderRival();
-  SN.Audio.setMuted(SN.store.get(MUTE_KEY, false));
-  $('btn-mute').classList.toggle('muted', SN.Audio.muted);
+  renderMute();
+  renderMusicBtn();
   resize();
   toTitle();
   reportSummary();
@@ -885,7 +965,7 @@
     get best() { return best; },
     get rec() { return rec; }, get easy() { return diff === 'easy'; }, setEasy, get diff() { return diff; }, setDiff,
     get rival() { return rivalOn; }, setRival, get adapt() { return W ? W.adapt : adaptMul(diff); },
-    newGame, pause, resume, toTitle, openStage, openMedals, quitRun, continueRun, giveUp: () => giveUp(true),
+    newGame, pause, resume, toTitle, toggleMute, toggleMusic, get musicMood() { return W ? musicMood(W) : null; }, openStage, openMedals, quitRun, continueRun, giveUp: () => giveUp(true),
     noAuto: false, get low() { return !!view.low; }, set low(v) { view.low = !!v; },
     turn(dir) { return W ? SN.World.turn(W, dir) : false; },
     autopilot(on) { auto = on !== false; return auto; },
