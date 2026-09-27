@@ -38,8 +38,8 @@
     normal: {
       id: 'normal', name: '보통', desc: '빠르게 · 하트 2개',
       hearts: 2, inv: 1.8,
-      speed: { base: 17, max: 36, warm: 4, ramp: 75 },
-      gap: { start: [1.1, 1.5], end: [0.7, 0.92] },
+      speed: { base: 16, max: 31, warm: 10, ramp: 120 },
+      gap: { start: [1.15, 1.55], end: [0.8, 1.02] },
       rows: {
         start: { one: 3, two: 3, gate: 1, bar: 1, mg: 1.5, mb: 1.5, gg: 0.5, bb: 0.5, gb: 1, g3: 1, b3: 1, mgb: 1, mover: 1.5, stars: 1 },
         end:   { one: 1, two: 4, gate: 0.5, bar: 0.5, mg: 2, mb: 2, gg: 1, bb: 1, gb: 1.5, g3: 1, b3: 1, mgb: 2, mover: 4, stars: 1 },
@@ -66,23 +66,28 @@
   };
   const DIFF_ORDER = ['easy', 'normal', 'hard'];
 
-  // ─── 태양계 여행: 달린 거리(m)에 따라 행성을 차례로 지나간다 (그리기는 render.js PLANET_ART) ───
-  // leg m마다 다음 곳에 도착한다. 수성 → … → 명왕성(3,000m) → 은하 너머 → 다시 수성(2바퀴째)
+  // ─── 우주 여행: 달린 거리(m)에 따라 행성을 차례로 지나간다 (그리기는 render.js PLANET_ART) ───
+  // leg m마다 다음 곳에 도착한다. 수성 → … → 명왕성(3,000m) → 외계 행성 여덟(common/worlds.js EXO, 3,375 ~ 6,000m)
+  // → 은하 너머(6,375m) → 다시 수성(2바퀴째, 6,750m). worlds.js가 없으면(불러오지 못하면) 외계 행성 없이 태양계만 돈다
+  // weather: 그곳 날씨 (worlds.js SOLAR_WEATHER · EXO[].weather, 그림 전용. 은하 너머는 null)
   // 기념 아치(250m마다)와 짝수 번째 도착(750·1,500·2,250·3,000m)이 겹쳐서 그 아치에는 행성 이름도 적힌다
-  // line: 도착할 때 이름 아래에 뜨는 한 줄 (아이 눈높이)
+  // line: 도착할 때 이름 아래에 뜨는 한 줄 (아이 눈높이, 재미 한 줄. 배우는 사실은 넣지 않는다: 소유자 결정 "학습 요소 없음").
+  //   태양계 행성은 도감(worlds.js SOLAR_WEATHER[id].line)의 날씨 한 줄을 쓰고, 도감이 없을 때만 여기 적은 줄
   const ROUTE = { leg: 375 };
+  const WX = typeof WORLDS !== 'undefined' && WORLDS && WORLDS.EXO ? WORLDS : null;   // common/worlds.js (hub.js 다음에 불러온다)
   const ZONES = [
-    { id: 'mercury', name: '수성',   line: '해가 엄청 커요! 태양과 가장 가까운 행성' },
-    { id: 'venus',   name: '금성',   line: '두꺼운 노란 구름이 빙글빙글' },
-    { id: 'earth',   name: '지구',   line: '우리 집! 파란 바다와 달이 보여요' },
-    { id: 'mars',    name: '화성',   line: '빨간 모래 행성, 하얀 얼음 모자' },
-    { id: 'jupiter', name: '목성',   line: '제일 큰 행성, 커다란 빨간 점' },
-    { id: 'saturn',  name: '토성',   line: '반짝이는 넓은 고리' },
-    { id: 'uranus',  name: '천왕성', line: '옆으로 누운 하늘색 행성' },
-    { id: 'neptune', name: '해왕성', line: '깊고 파란 바람의 행성' },
-    { id: 'pluto',   name: '명왕성', line: '작은 얼음 행성, 하트 무늬가 있어요' },
-    { id: 'beyond',  name: '은하 너머', line: '태양계 밖! 반짝이는 은하' },
-  ].map((z, i) => Object.assign(z, { at: i * ROUTE.leg }));   // at: 첫 바퀴에서 도착하는 거리
+    { id: 'mercury', name: '수성',   line: '뜨거운 불씨가 날려요' },
+    { id: 'venus',   name: '금성',   line: '노란 안개가 뭉게뭉게' },
+    { id: 'earth',   name: '지구',   line: '우리 집! 시원한 빗방울' },
+    { id: 'mars',    name: '화성',   line: '빨간 모래바람이 쌩쌩' },
+    { id: 'jupiter', name: '목성',   line: '번쩍번쩍 큰 폭풍' },
+    { id: 'saturn',  name: '토성',   line: '반짝이 고리가 빙글빙글' },
+    { id: 'uranus',  name: '천왕성', line: '데굴데굴 얼음 행성' },
+    { id: 'neptune', name: '해왕성', line: '쌩쌩 눈보라' },
+    { id: 'pluto',   name: '명왕성', line: '소복소복 하트 눈 행성' },
+  ].map(z => Object.assign(z, { line: (WX && WX.SOLAR_WEATHER && WX.SOLAR_WEATHER[z.id] && WX.SOLAR_WEATHER[z.id].line) || z.line })).concat(WX ? WX.EXO.map(e => ({ id: e.id, name: e.name, line: e.line, exo: true })) : [],
+    [{ id: 'beyond',  name: '은하 너머', line: '반짝이는 금빛 은하 소용돌이' }])
+    .map((z, i) => Object.assign(z, { at: i * ROUTE.leg, weather: (WX && WX.weatherOf(z.id)) || null }));   // at: 첫 바퀴에서 도착하는 거리
 
   // ─── 블랙홀 구간: 지구 다음 행성부터, 행성 구간마다 chance 확률로 한 번 (두 구간 연달아 없음, 처음 안내 중에는 없음) ───
   // len m 동안 하늘이 블랙홀로 바뀌고 옆으로 끌어당긴다 (세기는 난이도의 bh). from: 이 번째 곳(0 수성)부터
@@ -131,14 +136,20 @@
 
   const ADAPT = { min: 0.85, max: 1.12, speed: 0.3, ramp: 0.6, gap: 0.45, mix: 1, pirate: 1,
     hardRows: ['two', 'mg', 'mb', 'gg', 'bb', 'gb', 'g3', 'b3', 'mgb', 'mover'], easyRows: ['one', 'stars', 'gate', 'bar'],
-    target: { easy: 6000, normal: 1400, hard: 600 } };
+    target: { easy: 6000, normal: 2400, hard: 600 } };
+
+  // ─── 한 번 더! (2026-09-27 소유자 승인: 점검 권고 공통 항목) ───
+  // 하트가 다하면 한 판에 max번 "한 번 더!"를 물어본다 (돈 0원, 광고 없음). ask초 동안 기다리고(둥근 시계), 안 누르면 그만.
+  // 이어 하면: 부딪힌 자리에서 하트 hearts개, inv초 동안 깜빡(무적), 앞 clear m 안의 장애물을 치우고, wait초 준비한 뒤 출발.
+  // guard: 결과 화면·한 번 더 화면이 뜬 뒤 이만큼(초)은 누르기를 받지 않는다 (부딪힌 뒤에도 계속 누르는 아이 손가락)
+  const CONTINUE = { max: 1, ask: 5, hearts: 1, inv: 3, clear: 45, wait: 0.9, show: 0.7, guard: 0.6 };
 
     RN.DATA = {
     // 규칙은 1/120초 칸으로 돈다 (60·90·120Hz 화면에서 결과가 같게)
     TICK: 1 / 120,
     LANES: 3,
 
-    DIFFICULTY, DIFF_ORDER, ZONES, ROUTE, BLACKHOLE, PIRATE, ADAPT, GIFT, FEVER, WARP,
+    DIFFICULTY, DIFF_ORDER, ZONES, ROUTE, BLACKHOLE, PIRATE, ADAPT, GIFT, FEVER, WARP, CONTINUE,
 
     // 앞쪽 이만큼(m)까지 물체를 미리 만들어 둔다 (지평선 끝). 뒤로 behind m 지나면 지운다
     // actGap: 빈 줄이 없는 줄(벽) 다음 줄까지 적어도 이만큼(초) 띄운다 (점프·미끄러지기 뒤 숨 돌리기)
@@ -189,16 +200,22 @@
     // 방패가 깨졌을 때·부스트가 끝났을 때·불사조가 다시 살아났을 때 잠깐 깜빡이는 시간 (부딪힌 뒤 시간은 난이도의 inv)
     HIT: { shieldInv: 1.0, boostGrace: 1.0, revive: 2.5, get inv() { return DIFFICULTY.easy.inv; } },
 
-    // 처음 한 번만 나오는 안내: 옆으로 밀기 → 레이저 문이 오면 위로 밀기 → 위쪽 막대가 오면 아래로 밀기 (그동안 slow배로 느려진다).
-    // 안내용 문·막대는 세 줄 모두 막지만 부딪혀도 하트를 잃지 않는다. 한 단계에서 tries번 놓치면 다음 단계로 (마지막이면 끝)
-    TUTORIAL: { slow: 0.5, showSec: 2.4, tries: 3, laneSec: 2.5 },
+    // 처음 안내: 옆으로 밀기 → 레이저 문이 오면 위로 밀기 → 위쪽 막대가 오면 아래로 밀기.
+    // 안내 동안은 늘 가장 쉬운 속도(쉬움 출발 속도)이고, 길에는 별 줄과 안내용 문·막대만 나온다 (진짜 운석·벽 없음, 하트를 잃을 일 없음).
+    // 안내용 문·막대가 slowSec초(쉬움 출발 속도로 잰) 앞에 오면 slow배로 느려지고, 지금 속도로 showSec초 앞에 오면 글자가 뜬다.
+    // 글자가 떴을 때(또는 느려지는 동안) 밀면 알맞은 때까지 기다렸다가 뛰거나 미끄러진다(assist: 문까지 이만큼 × 체공 시간 남았을 때).
+    // 안내용 문·막대는 앞뒤 hitZ m 안에서만 부딪힌다 (보통 판보다 좁게: 느린 속도에서도 뛸 틈이 줄지 않게).
+    // 옆으로 밀기 단계는 laneSec초 안에 안 밀면 다음 단계로. 한 단계에서 tries번 놓치면 다음 단계로 (마지막이면 끝).
+    // 이 기기에서 안내를 maxRuns판 시작했으면 다 못 마쳐도 더 나오지 않는다 (util.js Prefs)
+    TUTORIAL: { slow: 0.55, slowSec: 2.4, showSec: 1.2, assist: 0.45, hitZ: 0.3, tries: 3, laneSec: 7, maxRuns: 2 },
 
     // 메달. check(run, rec): run = 이번 판 기록, rec = 평생 기록 (main.js가 판이 끝날 때·게임 중에 확인)
     // tier: 1 동 · 2 은 · 3 금
     MEDALS: [
       { id: 'd500',    tier: 1, name: '첫 비행',     desc: '한 판에 500m',                 check: r => r.dist >= 500 },
       { id: 'd1500',   tier: 2, name: '먼 우주',     desc: '한 판에 1,500m',               check: r => r.dist >= 1500 },
-      { id: 'd3000',   tier: 3, name: '은하 끝까지', desc: '한 판에 3,000m',               check: r => r.dist >= 3000 },
+      // d3000: 명왕성 메달(3,000m)과 똑같아서 목표를 바꿈 (id는 그대로라 예전에 딴 메달은 남는다): 여행의 끝 은하 너머
+      { id: 'd3000',   tier: 3, name: '은하 너머까지', desc: '한 판에 은하 너머 도착 (' + ZONES[ZONES.length - 1].at.toLocaleString() + 'm)', check: r => r.dist >= ZONES[ZONES.length - 1].at },
       { id: 's50',     tier: 1, name: '별 50',       desc: '한 판에 별 50개',              check: r => r.stars >= 50 },
       { id: 's150',    tier: 2, name: '별 150',      desc: '한 판에 별 150개',             check: r => r.stars >= 150 },
       { id: 'gate10',  tier: 1, name: '폴짝폴짝',    desc: '한 판에 레이저 문 10번 넘기',  check: r => r.gates >= 10 },
@@ -208,7 +225,7 @@
       { id: 'normal',  tier: 2, name: '보통도 거뜬', desc: '보통이나 어려움으로 1,000m',   check: r => r.diff !== 'easy' && r.dist >= 1000 },
       { id: 'hard',    tier: 3, name: '어려움 정복', desc: '어려움으로 1,000m',            check: r => r.diff === 'hard' && r.dist >= 1000 },
       { id: 'nebula',  tier: 2, name: '화성 탐험가', desc: '한 판에 화성 도착',            check: r => r.zone >= 3 },   // 옛 이름 성운 탐험가 (id 그대로)
-      { id: 'near10',  tier: 1, name: '아슬아슬',    desc: '한 판에 아슬아슬 10번',        check: r => r.nears >= 10 },
+      { id: 'near10',  tier: 1, name: '아슬아슬',    desc: '한 판에 운석 옆을 아슬아슬 10번 스치기', check: r => r.nears >= 10 },
       { id: 'perfect5', tier: 1, name: '완벽한 별길', desc: '한 판에 별 한 줄 다 먹기 5번', check: r => r.perfects >= 5 },
       { id: 'games10', tier: 1, name: '단골 조종사', desc: '10판 하기',                    check: (r, R) => R.total.games >= 10 },
       { id: 'stars1k', tier: 2, name: '별 부자',     desc: '모두 합쳐 별 1,000개',         check: (r, R) => R.total.stars >= 1000 },
@@ -219,7 +236,10 @@
     ],
 
     // 연출 (그리기 전용, 규칙에는 영향 없음). 부딪힘은 분명하지만 무섭지 않게: 흔들림·번쩍임은 작게
-    FX: { starSparks: 8, hitSparks: 26, smashSparks: 24, maxParticles: 160, shake: 10, flash: 0.22, zoneFade: 2.2, banner: 2.6 },
+    FX: { starSparks: 8, hitSparks: 26, smashSparks: 24, maxParticles: 160, shake: 10, flash: 0.22, zoneFade: 2.2, banner: 2.6, texts: 3 },
+    // 행성 날씨 (그리기 전용): 날씨 입자는 max개까지 (worlds.js amount 1일 때), 움직임 줄이기면 calm배 개수·calmSpeed배 빠르기.
+    // fade: 행성이 바뀔 때 날씨가 바뀌는 시간(초) · boltEvery: 번개 사이 (초, 범위) · bolt: 번개 빛이 남는 시간(초)
+    WEATHER: { max: 90, calm: 0.4, calmSpeed: 0.45, fade: 2.2, boltEvery: [2.8, 5.5], bolt: 0.35 },
 
     // 밀기 판정: 짧은 변 길이의 3% 또는 18px 중 큰 값 이상 움직이면 줄 바꾸기·점프
     SWIPE: { min: 18, ratio: 0.03 },
@@ -242,23 +262,23 @@
   const CHARS = [
     { id: 'jet', name: '슝슝 제트', price: 0, shape: 'jet', ui: '#5ee7ff',
       body: ['#d9fbff', '#5ee7ff', '#1a9ec0'], accent: '#ff2e88', flame: '255,46,136', core: '#5ee7ff',
-      look: '청록 날개, 분홍 불꽃', desc: '균형형: 별 한 줄 다 먹기 보너스 1.5배',
+      look: '청록 날개, 분홍 불꽃', desc: '별 한 줄을 다 먹으면 점수가 더 많아요',
       trait: { perfectMul: 1.5 } },
     { id: 'ufo', name: '비행접시', price: 300, shape: 'ufo', ui: '#b6ff5c',
       body: ['#ffffff', '#c9d3e6', '#56607a'], accent: '#b6ff5c', flame: '182,255,92', core: '#b6ff5c',
-      look: '둥근 접시, 연두 유리 지붕, 도는 불빛', desc: '자석이 3초 더 오래, 더 멀리서 별을 끌어와요',
+      look: '둥근 접시, 연두 유리 지붕, 도는 불빛', desc: '자석이 더 오래, 더 멀리서 별을 끌어와요',
       trait: { magnet: 3, magnetRange: 24 } },
     { id: 'whale', name: '우주 고래', price: 500, shape: 'whale', ui: '#7aa6ff',
       body: ['#e0ecff', '#5b8cff', '#2a3fa8'], accent: '#bff8ff', flame: '120,220,255', core: '#bff8ff',
-      look: '꼬리를 흔드는 파란 고래, 물빛 반짝이', desc: '하트 +1 (어려움에서는 방패를 두르고 출발)',
+      look: '꼬리를 흔드는 파란 고래, 물빛 반짝이', desc: '하트 하나 더 (어려움에서는 방패를 두르고 출발)',
       trait: { heart: 1, hardShield: true } },
     { id: 'fox', name: '번개 여우', price: 800, shape: 'fox', ui: '#ff9a3d',
       body: ['#ffe6cc', '#ff8a2a', '#a8420c'], accent: '#ffe66d', flame: '255,236,140', core: '#ffe66d',
-      look: '귀 날개가 쫑긋한 주황 여우', desc: '줄 바꾸기가 빨라요, 아슬아슬 보너스 2배',
+      look: '귀 날개가 쫑긋한 주황 여우', desc: '줄 바꾸기가 빨라요, 아슬아슬 점수 두 배',
       trait: { laneT: 0.13, nearMul: 2 } },
     { id: 'phoenix', name: '불사조', price: 1200, shape: 'phoenix', ui: '#ff5a7a',
       body: ['#fff0c0', '#ff4f6a', '#8a0f3c'], accent: '#ffd24a', flame: '255,150,40', core: '#ffe66d',
-      look: '불꽃 날개를 펄럭이는 새', desc: '부스트 1.5초 더, 한 판에 한 번 다시 살아나요',
+      look: '불꽃 날개를 펄럭이는 새', desc: '부스트가 더 길고, 한 판에 한 번 다시 살아나요',
       trait: { boost: 1.5, revive: 1 } },
   ];
   // 옛 꾸미기(모양만 달랐던 우주선 6종)를 가진 저장본 옮기기: to = 이 캐릭터를 준다, refund = 값을 한 번 돌려준다
@@ -269,10 +289,10 @@
 
   // 강화 (5단계). per: 한 단계 효과. prices: 단계별 값 (1단계부터). world.js create(opts.up)가 읽는다
   const UPGRADES = [
-    { id: 'magnet', icon: 'magnet', name: '자석 시간',   desc: '자석이 1초 더 오래',                 per: 1,    prices: [100, 200, 350, 550, 800] },
-    { id: 'shield', icon: 'shield', name: '방패 여유',   desc: '방패가 막은 뒤 깜빡이는 시간 +0.4초', per: 0.4,  prices: [100, 200, 350, 550, 800] },
-    { id: 'boost',  icon: 'boost',  name: '부스트 시간', desc: '부스트가 0.6초 더 오래',             per: 0.6,  prices: [120, 250, 450, 700, 1000] },
-    { id: 'coin',   icon: 'star',   name: '별 코인 보너스', desc: '판이 끝날 때 코인 +10%',          per: 0.1,  prices: [150, 300, 550, 900, 1200] },
+    { id: 'magnet', icon: 'magnet', name: '자석 시간',   desc: '자석이 조금 더 오래 가요',           per: 1,    prices: [100, 200, 350, 550, 800] },
+    { id: 'shield', icon: 'shield', name: '방패 여유',   desc: '방패가 막은 뒤 조금 더 오래 안전해요', per: 0.4,  prices: [100, 200, 350, 550, 800] },
+    { id: 'boost',  icon: 'boost',  name: '부스트 시간', desc: '부스트가 조금 더 오래 가요',         per: 0.6,  prices: [120, 250, 450, 700, 1000] },
+    { id: 'coin',   icon: 'star',   name: '별 코인 보너스', desc: '판이 끝날 때 코인을 조금 더 받아요', per: 0.1,  prices: [150, 300, 550, 900, 1200] },
   ];
   const UPGRADE_MAX = 5;
 
@@ -289,27 +309,30 @@
   const COINS = { perDist: 40, perStar: 4, perArch: 2, perZone: 5, diffMul: { easy: 1, normal: 1.2, hard: 1.5 } };
 
   // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름
+  // text: 아이가 읽고 알 수 있게 (여러 판 합치는지·한 판인지는 화면 숫자 옆에 따로 적는다).
+  // starter: 처음 며칠(판이 STARTER판보다 적을 때)에는 이 쉬운 미션들만 고른다
   const MISSIONS = [
-    { id: 'st300',  kind: 'life', stat: 'stars',    goal: 300,  reward: 100, text: '별 300개 모으기 (누적)' },
-    { id: 'gt30',   kind: 'life', stat: 'gates',    goal: 30,   reward: 100, text: '레이저 문 30번 넘기 (누적)' },
-    { id: 'd5k',    kind: 'life', stat: 'dist',     goal: 5000, reward: 120, text: '모두 5,000m 달리기 (누적)' },
-    { id: 'it15',   kind: 'life', stat: 'items',    goal: 15,   reward: 90,  text: '아이템 15개 줍기 (누적)' },
-    { id: 'nm15',   kind: 'life', stat: 'nears',    goal: 15,   reward: 90,  text: '아슬아슬 15번 (누적)' },
-    { id: 'pf10',   kind: 'life', stat: 'perfects', goal: 10,   reward: 100, text: '별 한 줄 다 먹기 10번 (누적)' },
-    { id: 'bs5',    kind: 'life', stat: 'boosts',   goal: 5,    reward: 80,  text: '부스트 5번 (누적)' },
-    { id: 'g5',     kind: 'life', stat: 'games',    goal: 5,    reward: 60,  text: '5판 하기 (누적)' },
-    { id: 'r1000',  kind: 'run',  stat: 'dist',     goal: 1000, reward: 120, text: '한 판에 1,000m' },
+    { id: 'st300',  kind: 'life', stat: 'stars',    goal: 300,  reward: 100, text: '별 300개 모으기', starter: true },
+    { id: 'gt30',   kind: 'life', stat: 'gates',    goal: 30,   reward: 100, text: '레이저 문 30번 뛰어넘기' },
+    { id: 'd5k',    kind: 'life', stat: 'dist',     goal: 5000, reward: 120, text: '모두 합쳐 5,000m 달리기' },
+    { id: 'it15',   kind: 'life', stat: 'items',    goal: 15,   reward: 90,  text: '아이템 구슬 15개 줍기', starter: true },
+    { id: 'nm15',   kind: 'life', stat: 'nears',    goal: 15,   reward: 90,  text: '운석 옆을 아슬아슬 15번 스치기' },
+    { id: 'pf10',   kind: 'life', stat: 'perfects', goal: 10,   reward: 100, text: '별 한 줄을 다 먹기 10번' },
+    { id: 'bs5',    kind: 'life', stat: 'boosts',   goal: 5,    reward: 80,  text: '노란 번개(부스트) 5번 먹기' },
+    { id: 'g5',     kind: 'life', stat: 'games',    goal: 5,    reward: 60,  text: '5판 달리기', starter: true },
+    { id: 'r1000',  kind: 'run',  stat: 'dist',     goal: 1000, reward: 120, text: '한 판에 1,000m 달리기' },
     { id: 'rs80',   kind: 'run',  stat: 'stars',    goal: 80,   reward: 120, text: '한 판에 별 80개' },
-    { id: 'rg8',    kind: 'run',  stat: 'gates',    goal: 8,    reward: 100, text: '한 판에 레이저 문 8번' },
-    { id: 'rice',   kind: 'run',  stat: 'zone',     goal: 2,    reward: 90,  text: '한 판에 지구 도착' },
-    { id: 'rneb',   kind: 'run',  stat: 'zone',     goal: 4,    reward: 180, text: '한 판에 목성 도착' },
+    { id: 'rg8',    kind: 'run',  stat: 'gates',    goal: 8,    reward: 100, text: '한 판에 레이저 문 8번 뛰어넘기' },
+    { id: 'rice',   kind: 'run',  stat: 'zone',     goal: 2,    reward: 90,  text: '한 판에 지구까지 가기', starter: true },
+    { id: 'rneb',   kind: 'run',  stat: 'zone',     goal: 4,    reward: 180, text: '한 판에 목성까지 가기' },
     { id: 'rclean', kind: 'run',  stat: 'clean',    goal: 600,  reward: 150, text: '한 판에 안 부딪히고 600m' },
-    { id: 'rnm5',   kind: 'run',  stat: 'nears',    goal: 5,    reward: 100, text: '한 판에 아슬아슬 5번' },
-    { id: 'br20',   kind: 'life', stat: 'bars',     goal: 20,   reward: 100, text: '위쪽 막대 20번 미끄러져 지나기 (누적)' },
-    { id: 'rsl10',  kind: 'run',  stat: 'slides',   goal: 10,   reward: 100, text: '한 판에 미끄러지기 10번' },
+    { id: 'rnm5',   kind: 'run',  stat: 'nears',    goal: 5,    reward: 100, text: '한 판에 운석 옆을 아슬아슬 5번 스치기' },
+    { id: 'br20',   kind: 'life', stat: 'bars',     goal: 20,   reward: 100, text: '보라 막대 밑으로 20번 쏙 지나기' },
+    { id: 'rsl10',  kind: 'run',  stat: 'slides',   goal: 10,   reward: 100, text: '한 판에 아래로 밀어 미끄러지기 10번' },
     { id: 'rpir1',  kind: 'run',  stat: 'pirates',  goal: 1,    reward: 120, text: '한 판에 우주 해적선 따돌리기' },
   ];
   const MISSION_SLOTS = 3;
+  const MISSION_STARTER = 5;   // 이만큼 판을 하기 전에는 starter 미션만
 
-  Object.assign(RN.DATA, { CHARS, OLD_SKINS, SKINS: CHARS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, MISSIONS, MISSION_SLOTS });
+  Object.assign(RN.DATA, { CHARS, OLD_SKINS, SKINS: CHARS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, MISSIONS, MISSION_SLOTS, MISSION_STARTER });
 })(RN);

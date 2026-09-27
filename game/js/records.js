@@ -4,7 +4,8 @@
 //
 // 저장 키
 //   ngun.rec1  : { v:1, best:{easy|normal|hard:{score,wave,kills,time,combo}},
-//                  life:{games,kills,bosses,ults,time}, medals:{id:'YYYY-MM-DD'} }
+//                  life:{games,kills,bosses,ults,time}, medals:{id:'YYYY-MM-DD'},
+//                  bossKinds:{보스 id:'YYYY-MM-DD'} }  (보스 스티커, 2026-09-27. 없던 저장본은 빈 칸)
 //   ngun.best2 : 예전 키 {easy:{score,wave},...}. 계속 같이 써서 옛 화면·기록과 맞춘다
 (function (NG) {
   const D = NG.DATA;
@@ -23,7 +24,7 @@
   function blank() {
     const best = {};
     for (const d of DIFFS) best[d] = blankBest();
-    return { v: 1, best, life: { games: 0, kills: 0, bosses: 0, ults: 0, time: 0 }, medals: {} };
+    return { v: 1, best, life: { games: 0, kills: 0, bosses: 0, ults: 0, time: 0 }, medals: {}, bossKinds: {} };
   }
 
   // 아무 값이나 받아서 올바른 모양의 기록으로 (망가진 저장본이 와도 게임이 안 멈추게)
@@ -35,6 +36,10 @@
     if (isObj(raw.medals)) {
       const ids = new Set(D.MEDALS.map(m => m.id));
       for (const id of Object.keys(raw.medals)) if (ids.has(id)) r.medals[id] = typeof raw.medals[id] === 'string' ? raw.medals[id].slice(0, 10) : '';
+    }
+    if (isObj(raw.bossKinds)) {
+      const ids = new Set((D.BOSSES || []).map(b => b.id));
+      for (const id of Object.keys(raw.bossKinds)) if (ids.has(id)) r.bossKinds[id] = typeof raw.bossKinds[id] === 'string' ? raw.bossKinds[id].slice(0, 10) : '';
     }
     return r;
   }
@@ -127,5 +132,20 @@
 
   const count = rec => Object.keys(rec.medals).length;
 
-  NG.Records = { KEY, OLD_KEY, DIFFS, blank, clean, load, save, runOf, lifeWith, newMedals, award, finish, count };
+  // 보스 스티커: 이번 판에 이긴 보스 종류(ids) 중 처음 이긴 것을 기록에 넣고 그 id 목록을 돌려준다
+  function addBossKinds(rec, ids, date) {
+    const day = date || new Date().toISOString().slice(0, 10);
+    const known = new Set((D.BOSSES || []).map(b => b.id));
+    const fresh = [];
+    for (const id of Array.isArray(ids) ? ids : []) {
+      if (!known.has(id) || rec.bossKinds[id] != null) continue;
+      rec.bossKinds[id] = day;
+      fresh.push(id);
+    }
+    return fresh;
+  }
+  // 지금까지 이긴 보스 종류 수 (놀이 본부 스티커 bossKinds)
+  const bossKindCount = rec => Object.keys(rec.bossKinds || {}).length;
+
+  NG.Records = { KEY, OLD_KEY, DIFFS, blank, clean, load, save, runOf, lifeWith, newMedals, award, finish, count, addBossKinds, bossKindCount };
 })(NG);

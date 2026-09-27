@@ -166,6 +166,8 @@
     wingman: { gap: 0.5, fn: t => { [659, 880, 1047, 1319].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.2, 0.14)); } },
     wingBye: { gap: 0.5, fn: t => { tone(sfxBus, t, 'triangle', 1047, 1047, 0.14, 0.1); tone(sfxBus, t + 0.16, 'triangle', 1319, 1319, 0.22, 0.1); } },
     pick:    { gap: 0.05, fn: t => { [523, 659, 784].forEach((f, i) => tone(sfxBus, t + i * 0.05, 'square', f, f, 0.1, 0.12)); } },
+    // 한 번 더! 되살아남 (2026-09-27): 올라가는 반짝 소리
+    revive:  { gap: 0.3, fn: t => { [392, 523, 659, 784, 1047].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f * 1.01, 0.16, 0.2)); } },
     clear:   { gap: 0.10, fn: t => { [440, 554, 659, 880].forEach((f, i) => tone(sfxBus, t + i * 0.07, 'triangle', f, f, 0.18, 0.25)); } },
     wave:    { gap: 0.10, fn: t => { tone(sfxBus, t, 'triangle', 330, 660, 0.25, 0.22); } },
     boss:    { gap: 0.50, fn: t => {

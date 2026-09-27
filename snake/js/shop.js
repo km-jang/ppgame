@@ -265,9 +265,10 @@
   }
 
   // 무한 모드 난이도별 최고 기록 적기. best: {easy|normal|hard: {score, len}}. 돌려주는 값: {score: 신기록?, len: 신기록?}
+  // 처음 길이 그대로 끝난 판(구슬을 하나도 못 먹음)은 길이 신기록이 아니다, 0점도 점수 신기록이 아니다
   function recordBest(best, diff, score, len) {
     const B = best[diff] || (best[diff] = { score: 0, len: 0 });
-    const out = { score: score > B.score && score > 0, len: len > B.len };
+    const out = { score: score > B.score && score > 0, len: len > B.len && len > D.START.len };
     if (out.score) B.score = score;
     if (out.len) B.len = len;
     return out;

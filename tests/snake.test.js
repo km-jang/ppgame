@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON, Uint8Array });
+// 공통 우주 여행 도감 (외계 행성 이름·색). index.html과 같은 차례로 data.js보다 먼저
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'snake', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -254,7 +256,8 @@ test('스테이지: 레벨 12개 모두 가로·세로 판에서 출발 자리�
     for (let lv = 1; lv <= D.LEVELS.length + 2; lv++) {
       const W = create(c, r, lv, { mode: 'stage', level: lv });
       const def = levelDef(lv);
-      assert(W.goal === def.goal && W.lv.walls === def.walls, 'level def');
+      // 대왕 뱀 단계는 구슬 목표 대신 대왕 뱀 하나 (goal 1)
+      assert((def.boss ? W.goal === 1 && W.rival && W.rival.boss : W.goal === def.goal && !W.rival) && W.lv.walls === def.walls, 'level def');
       if (def.walls !== 'none') assert(wallsOf(W).length > 0, 'walls for ' + def.walls);
       const h = W.snake[0];
       for (let k = 0; k <= 5; k++) assert(!W.walls[h.y * c + h.x + k], 'lane clear lv' + lv + ' ' + c + 'x' + r);
@@ -384,7 +387,8 @@ test('아이템 유령: 벽을 넘어 반대편으로, 몸도 통과', () => {
   W.dir = 'right';
   turn(W, 'down'); ticks(W, 1); turn(W, 'left'); ticks(W, 1); turn(W, 'up'); ticks(W, 1);
   assert(W.phase === 'play', 'passes own body');
-  step(W, D.ITEM.kinds.ghost.time + 0.1);
+  // 머리가 내 몸 위에서 유령이 끝나면 나올 때까지 조금 더 이어진다 (한 번 더 흘려 보내면 끝)
+  step(W, D.ITEM.kinds.ghost.time + 0.1); step(W, 0.2);
   assert(W.eff.ghost === 0 || W.phase === 'over', 'ghost ends');
 });
 
@@ -877,7 +881,7 @@ test('우주 여행 무한: 수성에서 출발, 내가 구슬 12개 먹을 때�
   assert(W.space.step === 1 && W.space.scene === 'venus' && W.events.includes('planet'), 'venus after 12 ' + W.space.scene);
   // 오래 먹으며 장면 차례 기록
   const seq = [W.space.scene];
-  for (let k = 0; k < 24; k++) { eatN(W, SPD.perOrbs); seq.push(W.space.scene); }
+  for (let k = 0; k < 40; k++) { eatN(W, SPD.perOrbs); seq.push(W.space.scene); }
   const planets = seq.filter(id => id !== 'hole');
   const ids = SPD.planets.map(p => p.id);
   for (let i = 0; i < planets.length; i++) assert(planets[i] === ids[(i + 1) % ids.length], 'planet order at ' + i + ' ' + planets.join(','));
@@ -916,13 +920,20 @@ test('우주 여행: 라이벌이 먹은 구슬로는 넘어가지 않고, 하�
   assert(A.food.x === B.food.x && A.food.y === B.food.y, 'food independent of sky');
 });
 
-test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 · 11 은하수 · 12 은하 중심, 그다음은 다시', () => {
-  const want = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core'];
-  for (let n = 1; n <= 24; n++) {
-    assert(stageScene(n) === want[(n - 1) % 12], 'level ' + n);
+test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 · 11 은하수 · 12 은하 중심, 13~20 외계 행성, 그다음은 다시', () => {
+  const want = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core',
+    'frost', 'lava', 'ocean', 'glass', 'gem', 'twin', 'shroom', 'rogue'];
+  for (let n = 1; n <= 44; n++) {
+    assert(stageScene(n) === want[(n - 1) % 20], 'level ' + n);
     const S = create(COLS, ROWS, 1, { mode: 'stage', level: n });
-    assert(S.space.scene === want[(n - 1) % 12], 'world scene ' + n);
+    assert(S.space.scene === want[(n - 1) % 20], 'world scene ' + n);
   }
+  // 외계 행성 레벨은 10~17번째 행성으로 센다
+  const X = create(COLS, ROWS, 1, { mode: 'stage', level: 13 });
+  assert(X.space.max === 10 && hubStats(X).planet === 10 && spaceScene(X).kind === 'planet', 'frost is planet 10');
+  assert(create(COLS, ROWS, 1, { mode: 'stage', level: 20 }).space.max === 17, 'rogue is planet 17');
+  // 스테이지는 그냥 놀기 출발 행성을 따르지 않는다
+  assert(create(COLS, ROWS, 1, { mode: 'stage', level: 2, skyStart: 12 }).space.scene === 'venus', 'stage ignores skyStart');
   assert(sceneInfo('mars').name === '화성' && sceneInfo('mars').index === 4, 'mars info');
   assert(sceneInfo('hole').kind === 'hole' && sceneInfo('galaxy').kind === 'galaxy' && sceneInfo('core').kind === 'core', 'other kinds');
   for (const id of want) assert(sceneInfo(id).name && sceneInfo(id).color, 'has name ' + id);
@@ -939,6 +950,56 @@ test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 �
   const Q = create(COLS, ROWS, 1, { mode: 'stage', level: 1 });
   Q.eaten = 30; foodAhead(Q); Q.wait = 0; ticks(Q, 1);
   assert(Q.space.scene === 'mercury', 'stage fixed');
+});
+
+test('우주 여행 17행성: 명왕성 다음은 공통 도감의 외계 행성 여덟 (도감 차례 그대로), 떠돌이 행성 다음은 다시 수성', () => {
+  const WORLDS = vm.runInContext('WORLDS', ctx);
+  const ids = SPD.planets.map(p => p.id);
+  assert(ids.length === 17 && SPD.solar === 9, 'seventeen ' + ids.length);
+  assert(ids.slice(0, 9).join() === 'mercury,venus,earth,mars,jupiter,saturn,uranus,neptune,pluto', 'solar first');
+  assert(ids.slice(9).join() === WORLDS.EXO.map(p => p.id).join(), 'exo order same as catalogue ' + ids.slice(9).join());
+  for (const p of SPD.planets.slice(9)) {
+    const e = WORLDS.exo(p.id);
+    assert(p.exo && p.name === e.name && p.fact === e.line && p.color === e.color, 'catalogue text ' + p.id);
+    assert(sceneInfo(p.id).kind === 'planet' && sceneInfo(p.id).index === ids.indexOf(p.id) + 1, 'info ' + p.id);
+  }
+  // 모든 행성에 날씨가 있다 (그림이 날씨를 찾는다)
+  for (const id of ids) assert(WORLDS.weatherOf(id), 'weather ' + id);
+  // 블랙홀 없이 끝까지: 씨앗을 골라 블랙홀이 한 번도 안 끼게 난수를 막는다
+  const W = create(4000, 5, 3, { mode: 'endless', rival: false });
+  W.itemT = 1e9; W.space.rng = () => 0.99;
+  const seq = [W.space.scene];
+  for (let k = 0; k < 18; k++) { eatN(W, SPD.perOrbs); seq.push(W.space.scene); }
+  assert(seq.slice(0, 17).join() === ids.join(), 'journey ' + seq.join());
+  assert(seq[9] === 'frost' && seq[16] === 'rogue' && seq[17] === 'mercury' && seq[18] === 'venus', 'after rogue comes mercury');
+  assert(W.space.lap === 2 && W.space.max === 19, 'lap 2 max ' + W.space.max);
+});
+
+test('우주 여행 이어 가기: 그냥 놀기는 지난 판에 닿은 행성에서 출발 (skyStart), 이상한 값은 수성', () => {
+  const { skyStartOf, skyNext } = SN.World;
+  const ids = SPD.planets.map(p => p.id);
+  const W = create(4000, 5, 3, { mode: 'endless', rival: false, skyStart: 9 });
+  W.itemT = 1e9; W.space.rng = () => 0.99;
+  assert(W.space.scene === 'frost' && W.space.max === 10 && W.space.lap === 1 && spaceScene(W).name === '꽁꽁 얼음 행성', 'start frost');
+  eatN(W, SPD.perOrbs);
+  assert(W.space.scene === 'lava' && W.space.max === 11 && skyNext(W) === 10, 'lava next');
+  for (let k = 0; k < 7; k++) eatN(W, SPD.perOrbs);
+  assert(W.space.scene === 'mercury' && W.space.lap === 1 && skyNext(W) === 0, 'wraps to mercury, still first lap from frost');
+  for (let k = 0; k < 9; k++) eatN(W, SPD.perOrbs);
+  assert(W.space.scene === 'frost' && W.space.lap === 2, 'lap 2 back at frost');
+  // 블랙홀 하늘이면 바로 앞 행성에서 이어 간다
+  const H = create(4000, 5, 3, { mode: 'endless', rival: false, skyStart: 3 });
+  H.itemT = 1e9; H.space.rng = () => 0.99; eatN(H, SPD.perOrbs);
+  H.space.rng = () => 0; eatN(H, SPD.perOrbs);
+  assert(H.space.scene === 'hole' && skyNext(H) === 4, 'hole keeps jupiter ' + skyNext(H));
+  // 값 다듬기: 음수·글자·빈 값은 0, 큰 값은 바퀴 안으로
+  assert(skyStartOf(-3) === 0 && skyStartOf('abc') === 0 && skyStartOf(undefined) === 0 && skyStartOf(null) === 0, 'bad to 0');
+  assert(skyStartOf(20) === 3 && skyStartOf('5') === 5 && skyStartOf(16.7) === 16, 'wrap and floor');
+  assert(create(COLS, ROWS, 1, { mode: 'endless', skyStart: 40 }).space.scene === ids[40 % 17], 'create wraps');
+  // 출발 행성은 먹이 자리를 흔들지 않는다
+  const A = create(200, ROWS, 9, { mode: 'endless', rival: false }), B = create(200, ROWS, 9, { mode: 'endless', rival: false, skyStart: 14 });
+  for (let i = 0; i < 30; i++) { foodAhead(A); ticks(A, 1); foodAhead(B); ticks(B, 1); }
+  assert(A.food.x === B.food.x && A.food.y === B.food.y && A.score === B.score, 'rules same');
 });
 
 // ─── 어려움 ───
@@ -1199,6 +1260,254 @@ test('라이벌 냠냠 기록: 메달 "라이벌 통째로" · 미션 값 · 라
   assert(D.MISSIONS.some(m => m.stat === 'rivalBites'), 'mission');
   const rr = rivalResult(W);
   assert(rr.me === 11 && rr.diff === 1 && rr.bites === 2 && hubStats(W).rivalWin === 1, 'win counts bites ' + JSON.stringify(rr));
+});
+
+// ─── 점검 고침 (2026-09-27): 한 번 더 · 유령 끝 · 첫 밀기 · 포털 너머 경고 · 먹이 다시 놓기 · 단계 이름 ───
+const W2 = SN.World;
+test('한 번 더: 한 판에 한 번, 길이 그대로 되살아나고 3초 유령, 벽을 보지 않는 방향 (쉬움은 밀면 출발)', () => {
+  const W = create(COLS, ROWS, 3, { mode: 'endless', rival: false });
+  W.wait = 0; W.item = null; W.itemT = 99;
+  W.snake = [{ x: COLS - 1, y: 5 }, { x: COLS - 2, y: 5 }, { x: COLS - 3, y: 5 }, { x: COLS - 4, y: 5 }, { x: COLS - 5, y: 5 }];
+  W.dir = 'right'; W.queue = []; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  ticks(W, 1);
+  assert(W.phase === 'over' && W.cause === 'wall', 'died');
+  assert(W2.canContinue(W), 'can continue');
+  assert(W2.revive(W) && W.phase === 'play' && W.continued, 'revived');
+  assert(W.snake.length === 5, 'length kept ' + W.snake.length);
+  assert(W.eff.ghost >= D.CONTINUE.ghost, 'ghost ' + W.eff.ghost);
+  assert(W.dir !== 'right', 'not heading into the edge: ' + W.dir);
+  const d = SN.World.DIRS[W.dir], h = W.snake[0];
+  const nx = h.x + d[0], ny = h.y + d[1];
+  assert(nx >= 0 && ny >= 0 && nx < COLS && ny < ROWS && !W.snake.some(p => p.x === nx && p.y === ny), 'safe next cell');
+  assert(W.wait > 0 && W.wait < 5, 'normal: short wait then go');
+  // 두 번째는 없다
+  W.phase = 'over';
+  assert(!W2.canContinue(W) && !W2.revive(W), 'only once');
+  // 판을 다 채워 이긴 것 · 기본 규칙(classic)은 없음
+  const V = create(COLS, ROWS, 1); V.phase = 'over';
+  assert(!W2.canContinue(V), 'classic none');
+  const Wn = create(COLS, ROWS, 1, { mode: 'endless' }); Wn.phase = 'over'; Wn.won = true;
+  assert(!W2.canContinue(Wn), 'won none');
+  // 쉬움: 되살아나면 밀 때까지 기다린다
+  const E = create(24, 15, 2, { mode: 'stage', level: 3, diff: 'easy' });
+  E.phase = 'over';
+  assert(W2.revive(E) && E.wait === Infinity, 'easy waits for a swipe');
+  assert(runStats(E).revives === 1, 'stats');
+});
+
+test('한 번 더: 벽에 둘러싸여 앞이 모두 막혀도 뒤집어서 안전한 쪽으로, 벽 칸으로는 절대 안 간다 (여러 번)', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const W = create(COLS, ROWS, seed, { mode: 'stage', level: 1 + (seed % 12) });
+    W.wait = 0;
+    for (let i = 0; i < 60 * 60 && W.phase === 'play'; i++) {
+      if (W.phase === 'clear') break;
+      if (!W.queue.length) turn(W, seed % 3 ? botDir(W) : ['up', 'down', 'left', 'right'][i % 4]);
+      step(W, 1 / 60); W.events.length = 0; W.fx.length = 0;
+    }
+    if (W.phase !== 'over') continue;
+    assert(W2.revive(W), 'revive ' + seed);
+    const d = SN.World.DIRS[W.dir], h = W.snake[0];
+    const nx = h.x + d[0], ny = h.y + d[1];
+    const out = nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS;
+    assert(!out && !W.walls[ny * COLS + nx], 'seed ' + seed + ' heads into a wall/edge ' + W.dir);
+  }
+});
+
+test('유령이 벽 속에서 끝나면 머리가 나올 때까지 이어지고, 끝나기 전에 앞길 경고가 다시 켜진다', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'stage', level: 3 });   // 가운데 벽 (가로 한 줄)
+  const idx = wallsOf(W)[3], wx = idx % COLS, wy = Math.floor(idx / COLS);
+  W.wait = 0; W.item = null; W.itemT = 99; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  // 벽 한가운데로 위에서 내려오는 중, 유령이 곧 끝난다
+  W.snake = [{ x: wx, y: wy }, { x: wx, y: wy - 1 }, { x: wx, y: wy - 2 }, { x: wx, y: wy - 3 }];
+  W.prev = W.snake.map(p => ({ x: p.x, y: p.y }));
+  W.dir = 'down'; W.queue = []; W.eff.ghost = 0.01;
+  step(W, 0.02);
+  assert(W.eff.ghost > 0 && W.phase === 'play', 'ghost held while inside a wall');
+  ticks(W, 1);
+  step(W, 0.2);
+  assert(W.phase === 'play' && W.eff.ghost === 0, 'ghost ends once out, alive');
+  // 유령이 1초 남짓 남으면 앞길 경고가 다시 나온다 (그 전에는 조용)
+  const G = create(COLS, ROWS, 1, { mode: 'endless', rival: false });
+  G.wait = 0; G.dir = 'right'; G.queue = [];
+  G.snake = [{ x: COLS - 2, y: 5 }, { x: COLS - 3, y: 5 }, { x: COLS - 4, y: 5 }, { x: COLS - 5, y: 5 }];
+  G.eff.ghost = 3;
+  assert(dangerAhead(G, 3) === null, 'quiet while ghost has time');
+  G.eff.ghost = D.GHOST_WARN - 0.1;
+  const e = dangerAhead(G, 3);
+  assert(e && e.cause === 'edge' && e.ghostEnd, 'warns before ghost ends ' + JSON.stringify(e));
+});
+
+test('쉬움: 기다리는 동안 첫 밀기는 어느 쪽이든 된다 (반대쪽이면 뱀을 뒤집어 출발)', () => {
+  const W = create(24, 15, 1, { mode: 'endless', diff: 'easy', rival: false });
+  const tail = { x: W.snake[W.snake.length - 1].x, y: W.snake[W.snake.length - 1].y };
+  assert(W.wait > 0 && W.dir === 'right', 'waiting');
+  assert(turn(W, 'left'), 'left accepted');
+  assert(W.wait === 0 && W.dir === 'left' && W.snake[0].x === tail.x && W.snake[0].y === tail.y, 'flipped, going left');
+  W.item = null; W.itemT = 99; W.food = { x: 0, y: 0, gold: false, born: 0 };
+  ticks(W, 1);
+  assert(W.phase === 'play' && W.snake[0].x === tail.x - 1, 'moved left');
+  // 보통은 그대로 (정반대 무시)
+  const N = create(COLS, ROWS, 1, { mode: 'endless', rival: false });
+  assert(!turn(N, 'left') && N.dir === 'right', 'normal ignores reverse');
+});
+
+test('위험 경고는 포털 너머도 살핀다 (나오는 쪽 바로 앞 벽)', () => {
+  const W = create(COLS, ROWS, 5, { mode: 'stage', level: 4 });
+  const P = W.portals[0];
+  W.wait = 0; W.dir = 'right'; W.queue = [];
+  W.snake = [{ x: P.a.x - 1, y: P.a.y }, { x: P.a.x - 2, y: P.a.y }, { x: P.a.x - 3, y: P.a.y }, { x: P.a.x - 4, y: P.a.y }];
+  W.walls[P.b.y * COLS + P.b.x + 1] = 1;
+  const e = dangerAhead(W, 3);
+  assert(e && e.cause === 'wall' && e.x === P.b.x + 1 && e.y === P.b.y && e.dist === 2, 'through portal ' + JSON.stringify(e));
+});
+
+test('먹이를 놓을 자리가 없었다가 생기면 다시 놓는다 (먹이가 영영 사라지지 않게)', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless', rival: false });
+  W.wait = 0; W.food = null;
+  step(W, 0.01);
+  assert(W.food, 'food back');
+});
+
+test('단계 이름: 두 번째 바퀴(13~)는 제 이름, 대왕 뱀 단계는 4·8·12·16·20', () => {
+  assert(levelDef(13).name !== levelDef(1).name && levelDef(20).name !== levelDef(8).name, 'names ' + levelDef(13).name);
+  const names = new Set();
+  for (let n = 1; n <= 24; n++) names.add(levelDef(n).name);
+  assert(names.size === 24, 'all 24 names differ');
+  const boss = [];
+  for (let n = 1; n <= 20; n++) if (levelDef(n).boss) boss.push(n);
+  assert(boss.join() === '4,8,12,16,20', 'boss levels ' + boss);
+  assert(levelDef(4).bossNo === 1 && levelDef(12).bossNo === 3 && levelDef(20).bossNo === 5, 'boss numbers');
+});
+
+test('나선(10단계)은 쉬움 작은 판에서도 출발 줄이 막다른 길이 아니다 (봇이 깬다)', () => {
+  for (const [c, r] of [[24, 15], [15, 24], [32, 20]]) {
+    const W = create(c, r, 1, { mode: 'stage', level: 10, diff: c < 32 ? 'easy' : 'normal' });
+    W.wait = 0;
+    for (let i = 0; i < 60 * 120 && W.phase === 'play'; i++) { if (!W.queue.length) turn(W, botDir(W)); step(W, 1 / 60); W.events.length = 0; W.fx.length = 0; }
+    assert(W.phase === 'clear', c + 'x' + r + ' ' + W.phase + ' ' + W.cause + ' ' + W.got + '/' + W.goal);
+  }
+});
+
+// ─── 단계 별 ───
+test('단계 별: 깨면 하나, par 시간 안이면 둘, 게다가 황금 구슬을 먹었으면 셋', () => {
+  const clearWith = (secs, gold) => {
+    const W = create(COLS, ROWS, 3, { mode: 'stage', level: 1 });
+    W.wait = 0; W.lvT = secs;
+    for (let i = 0; i < W.goal; i++) { foodAhead(W, gold && i === 2); ticks(W, 1); if (W.phase !== 'play') break; }
+    assert(W.phase === 'clear', 'cleared');
+    return W;
+  };
+  const par = SN.World.parOf(levelDef(1), 'normal');
+  assert(par > 10 && par < SN.World.parOf(levelDef(1), 'easy'), 'par normal < easy ' + par);
+  assert(clearWith(par + 30, true).lastStars.stars === 1, 'slow = 1');
+  assert(clearWith(1, false).lastStars.stars === 2, 'fast = 2');
+  const W = clearWith(1, true);
+  assert(W.lastStars.stars === 3 && W.stars.length === 1 && W.stars[0].level === 1, '3 stars ' + JSON.stringify(W.lastStars));
+  nextLevel(W);
+  assert(W.lvT === 0 && W.lvGolds === 0, 'reset per level');
+  assert(runStats(W).stars.length === 1, 'stats keep stars');
+  assert(SN.World.parOf(levelDef(13), 'easy') > SN.World.parOf(levelDef(1), 'easy'), 'longer goal, longer par');
+});
+
+// ─── 대왕 뱀 ───
+test('대왕 뱀: 4단계에 나오고 목표는 대왕 뱀 하나, 구슬을 먹어도 목표는 안 찬다', () => {
+  const W = create(COLS, ROWS, 2, { mode: 'stage', level: 4 });
+  assert(W.boss && W.rival && W.rival.boss && W.goal === 1 && W.got === 0, 'boss level');
+  assert(W2.bossLeft(W) === 1, 'full');
+  W.wait = 0;
+  foodAhead(W); ticks(W, 1);
+  assert(W.got === 0 && W.phase === 'play', 'orb does not count');
+  assert(runStats(W).rivalMet === false && rivalResult(W) === null, 'not a rival race');
+  const S = create(COLS, ROWS, 2, { mode: 'stage', level: 3 });
+  assert(!S.boss && S.rival === null, 'no boss on level 3');
+});
+
+test('대왕 뱀: 몸을 물면 조각씩 줄고 게이지가 차며, 쉬는 동안 다시 자란다. 다 물면 쓰러지고 단계 성공', () => {
+  const W = create(COLS, ROWS, 2, { mode: 'stage', level: 4 });
+  W.wait = 0; W.item = null; W.itemT = 99;
+  const V = W.rival;
+  const body = []; for (let i = 0; i < 12; i++) body.push({ x: 25 - i, y: 3 });
+  placeRival(W, body, 'right');
+  V.hp = 12;
+  // 내 머리를 꼬리에서 3번째 칸 바로 아래에
+  W.snake = [{ x: 16, y: 4 }, { x: 16, y: 5 }, { x: 16, y: 6 }, { x: 16, y: 7 }];
+  W.prev = W.snake.map(p => ({ x: p.x, y: p.y })); W.dir = 'up'; W.queue = []; W.food = { x: 0, y: 19, gold: false, born: 0 };
+  const idx = V.body.findIndex(p => p.x === 16 && p.y === 3);
+  ticks(W, 1);
+  assert(V.body.length === idx && V.bitten === 12 - idx, 'bit the tail chunk ' + V.body.length + ' bitten ' + V.bitten);
+  assert(W.phase === 'play' && W.grow <= D.BOSS.growMax, 'me fine, grow capped');
+  const left = W2.bossLeft(W);
+  assert(left < 1 && left > 0, 'gauge ' + left);
+  // 쉬면 다시 자란다 (게이지는 그대로)
+  V.stun = 0;
+  const hp = V.hp;
+  for (let i = 0; i < 60 * D.BOSS.regrow * 2; i++) { W.snake = [{ x: 1, y: 18 }, { x: 1, y: 19 }, { x: 2, y: 19 }, { x: 3, y: 19 }]; W.dir = 'up'; W.acc = 0; step(W, 1 / 60); }
+  assert(V.hp > hp && W2.bossLeft(W) === left, 'regrows, gauge kept ' + V.hp + ' ' + hp);
+  // 게이지가 다 차게 물면 쓰러지고 단계 성공
+  V.bitten = V.need - 1;
+  const b2 = V.body.slice(); const t = b2[b2.length - 1];
+  const up = V.dir === 'up' || V.dir === 'down';
+  W.snake = up ? [{ x: t.x - 1, y: t.y }, { x: t.x - 2, y: t.y }, { x: t.x - 3, y: t.y }, { x: t.x - 4, y: t.y }] : [{ x: t.x, y: t.y + 1 }, { x: t.x, y: t.y + 2 }, { x: t.x, y: t.y + 3 }, { x: t.x, y: t.y + 4 }];
+  W.snake = W.snake.map(p => ({ x: Math.max(0, Math.min(COLS - 1, p.x)), y: Math.max(0, Math.min(ROWS - 1, p.y)) }));
+  W.dir = up ? 'right' : 'up'; W.queue = []; W.acc = 0; V.stun = 5;
+  W.prev = W.snake.map(p => ({ x: p.x, y: p.y }));
+  step(W, 1 / SN.World.speed(W) + 1e-9);
+  assert(V.down && W.bossWins === 1 && W.phase === 'clear' && W.events.includes('bossdown'), 'boss down ' + W.phase + ' ' + V.bitten + '/' + V.need);
+  assert(runStats(W).bossWins === 1 && hubStats(W).bossWins === 1, 'stats');
+  assert(D.MEDALS.find(m => m.id === 'boss1').check(runStats(W), { stage: { stars: {} } }), 'medal');
+});
+
+test('대왕 뱀은 나를 끝내지 않는다: 몸에 부딪혀도 물어 먹는 것, 오래 돌려도 대왕 뱀 때문에 끝나는 일 없음', () => {
+  for (const diff of ['easy', 'normal', 'hard']) for (let seed = 1; seed <= 4; seed++) {
+    const [c, r] = diff === 'easy' ? [24, 15] : [COLS, ROWS];
+    const W = create(c, r, seed, { mode: 'stage', level: 4, diff });
+    W.wait = 0;
+    for (let i = 0; i < 60 * 60 && W.phase === 'play'; i++) {
+      // 봇이 먹이만 보게 (대왕 뱀과 자주 부딪힌다)
+      if (!W.queue.length) turn(W, ['up', 'left', 'down', 'right'][Math.floor(i / 40) % 4]);
+      W.eff.ghost = 0;
+      const was = W.snake.length;
+      step(W, 1 / 60); W.events.length = 0; W.fx.length = 0;
+      if (W.phase === 'over') assert(W.cause === 'wall' || W.cause === 'self', 'ended by ' + W.cause);
+    }
+  }
+});
+
+test('대왕 뱀 균형: 쉬움 아이 흉내 봇이 (한 번 더 한 번으로) 대왕 뱀 단계를 깬다, 대왕 뱀이 같은 벽 모양 단계보다 어렵지 않다', () => {
+  const kid = (level, diff, seed) => {
+    const [c, r] = diff === 'easy' ? [24, 15] : [COLS, ROWS];
+    const W = create(c, r, seed, { mode: 'stage', level, diff });
+    W.wait = 0;
+    const rr = SN.rng(seed * 13 + 1);
+    let lag = 0;
+    for (let i = 0; i < 60 * 180 && (W.phase === 'play' || (W.phase === 'over' && W2.revive(W))); i++) {
+      if (W.wait > 0) W.wait = 0;
+      if ((lag -= 1 / 60) <= 0) {
+        lag = 0.12;
+        if (rr() < 0.04) turn(W, ['up', 'down', 'left', 'right'][Math.floor(rr() * 4)]);
+        else if (!dangerAhead(W, 1) || rr() < 0.85) turn(W, botDir(W));
+      }
+      step(W, 1 / 60); W.events.length = 0; W.fx.length = 0;
+    }
+    return W.phase === 'clear' ? W.lvT : null;
+  };
+  const rate = (lv, diff) => { let ok = 0; const ts = []; for (let s = 1; s <= 10; s++) { const t = kid(lv, diff, s); if (t != null) { ok++; ts.push(t); } } return { ok, t: ts.sort((a, b) => a - b)[ts.length >> 1] }; };
+  const b4 = rate(4, 'easy'), b16 = rate(16, 'easy');
+  assert(b4.ok >= 9 && b16.ok >= 9, 'easy boss clears ' + JSON.stringify([b4, b16]));
+  assert(b4.t <= SN.World.parOf(levelDef(4), 'easy'), 'kid-bot beats par on boss 4 ' + b4.t);
+  // 같은 벽 모양: 8단계(상자) · 12단계(네 방)
+  const b8 = rate(8, 'easy'), b12 = rate(12, 'easy'), r6 = rate(6, 'easy');
+  assert(b8.ok >= 6, 'boss 8 ' + JSON.stringify(b8));
+  assert(b12.ok >= Math.min(r6.ok, 6) - 2, 'boss 12 no harder than rooms ' + JSON.stringify([b12, r6]));
+});
+
+test('놀이 본부·메달: 대왕 뱀 이김, 별 메달 (별 셋 · 별 부자)', () => {
+  const R = { stage: { max: 5, stars: { 1: 3, 2: 1 } }, total: { games: 1, orbs: 0 } };
+  assert(D.MEDALS.find(m => m.id === 'star3').check({}, R), 'star3');
+  assert(!D.MEDALS.find(m => m.id === 'stars30').check({}, R), 'not yet 30');
+  const many = {}; for (let n = 1; n <= 12; n++) many[n] = 3;
+  assert(D.MEDALS.find(m => m.id === 'stars30').check({}, { stage: { stars: many } }), 'stars30');
+  assert(D.MEDALS.find(m => m.id === 'star3').check({}, { stage: {} }) === false, 'old record without stars ok');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

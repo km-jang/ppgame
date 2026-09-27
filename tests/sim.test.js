@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 우주 여행 도감 (외계 행성 여덟, 날씨). index.html처럼 data.js보다 먼저
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -951,9 +953,10 @@ test('미션 목록: 15개 안팎, id 중복 없음, 누적·한 판이 섞이�
 // 다음 웨이브로 바로 넘긴다 (카드 화면을 거쳐 startWave가 불린다)
 function nextWave(W) { W.phase = 'cards'; W.cards = drawCards(W, 3); pickCard(W, 0); }
 
-test('태양계 여행: 웨이브 2개마다 수성 → 금성 → … → 명왕성, 그다음은 2바퀴 수성', () => {
+test('태양계 여행: 웨이브 2개마다 수성 → 금성 → … → 명왕성 → 외계 행성 여덟, 그다음은 2바퀴 수성', () => {
   const P = DA.PLANETS, per = DA.JOURNEY.perPlanet;
-  assert(P.map(p => p.name).join('') === '수성금성지구화성목성토성천왕성해왕성명왕성', 'order ' + P.map(p => p.name).join(','));
+  assert(P.slice(0, 9).map(p => p.name).join('') === '수성금성지구화성목성토성천왕성해왕성명왕성', 'order ' + P.map(p => p.name).join(','));
+  assert(P.length === 17, 'seventeen stops ' + P.length);
   for (const p of P) assert(p.id && p.fact && /^#[0-9a-f]{6}$/i.test(p.color), 'shape ' + p.id);
   for (let n = 1; n <= per * P.length; n++) {
     const pl = NG.World.placeOf(n);
@@ -1220,14 +1223,15 @@ function foeRun(W, sec, input, onFrame) {
 const STILL = { moveX: 0, moveY: 0, aimAngle: 0, dash: false };
 
 test('행성 적: 행성마다 하나씩 9종, 이름·색·모양이 모두 다르고 그 행성 웨이브에만 섞여 나온다', () => {
-  const foes = DA.PLANETS.map(p => p.foe);
+  // 태양계 아홉 행성은 적이 모두 다르다 (외계 행성은 이 아홉 가운데 어울리는 것을 다시 쓴다, 다음 테스트)
+  const foes = DA.PLANETS.slice(0, 9).map(p => p.foe);
   assert(foes.length === 9 && new Set(foes).size === 9, '9 distinct');
   for (const f of foes) assert(DA.ENEMIES[f] && DA.ENEMIES[f].name && DA.ENEMIES[f].color, f);
   assert(new Set(foes.map(f => DA.ENEMIES[f].color)).size === 9 && new Set(foes.map(f => DA.ENEMIES[f].shape)).size === 9, 'looks differ');
   const rand = NG.rng(5);
-  for (let n = 1; n <= 36; n++) {
+  for (let n = 1; n <= 70; n++) {
     const q = buildWave(n, rand, DA.DIFFICULTY.normal), foe = NG.World.foeOf(n);
-    assert(foe === DA.PLANETS[Math.floor((n - 1) / 2) % 9].foe, 'foe of ' + n);
+    assert(foe === DA.PLANETS[Math.floor((n - 1) / 2) % DA.PLANETS.length].foe, 'foe of ' + n);
     const k = q.filter(t => t === foe).length;
     if (n % 5 === 0) assert(q[0] === 'boss' && k === DA.PLANET_FOE.boss, 'boss wave ' + n + ' k ' + k);
     else assert(k >= DA.PLANET_FOE.min && k >= Math.round((q.length) * DA.PLANET_FOE.share) - 1, 'share ' + n + ' k ' + k + '/' + q.length);
@@ -1450,6 +1454,69 @@ test('행성 적: 아홉 행성을 모두 지나는 긴 판도 값이 망가지�
   assert(seen.has('iceBit'), 'ice split in play');
 });
 
+// ─── 태양계 밖 외계 행성 (2026-09-27) ─────────────────────────
+test('외계 행성: 명왕성 다음 도감(WORLDS.EXO) 순서대로 여덟, 이름·한 줄·색은 도감 것, 17곳을 돌면 2바퀴 수성', () => {
+  const WL = vm.runInContext('WORLDS', ctx), P = DA.PLANETS, per = DA.JOURNEY.perPlanet;
+  const exo = P.slice(9);
+  assert(exo.length === 8 && exo.every(p => p.exo), 'eight exo');
+  assert(exo.map(p => p.id).join() === WL.EXO.map(e => e.id).join(), 'order ' + exo.map(p => p.id).join());
+  for (const p of exo) {
+    const e = WL.exo(p.id);
+    assert(p.name === e.name && p.fact === e.line && p.color === e.color, 'from catalogue ' + p.id);
+    assert(WL.weatherOf(p.id), 'weather ' + p.id);
+  }
+  for (const p of P.slice(0, 9)) assert(!p.exo && WL.weatherOf(p.id), 'solar weather ' + p.id);
+  assert(new Set(P.map(p => p.id)).size === 17, 'ids unique');
+  // 웨이브 19 = 첫 외계 행성, 34 = 떠돌이, 35 = 2바퀴 수성, 69 = 3바퀴 수성
+  const at = n => NG.World.placeOf(n);
+  assert(at(18).planet.id === 'pluto' && at(19).planet.id === 'frost' && at(19).first && at(19).lap === 1, 'after pluto');
+  assert(at(34).planet.id === 'rogue' && !at(34).first && at(34).lap === 1, 'last stop');
+  assert(at(35).planet.id === 'mercury' && at(35).lap === 2 && at(35).first, 'lap 2');
+  assert(at(per * 17 * 2 + 1).planet.id === 'mercury' && at(per * 17 * 2 + 1).lap === 3, 'lap 3');
+  for (let n = 1; n <= 102; n++) {
+    const k = Math.floor((n - 1) / per);
+    assert(at(n).i === k % 17 && at(n).planet === P[k % 17] && at(n).lap === Math.floor(k / 17) + 1, 'place ' + n);
+  }
+});
+
+test('외계 행성 적: 새 적 없이 어울리는 태양계 적을 다시 쓴다 (얼음=얼음 결정, 용암=불씨, 사막=모래 벌레 …)', () => {
+  const want = { frost: 'ice', lava: 'ember', ocean: 'acid', glass: 'storm', gem: 'shard', twin: 'worm', shroom: 'ghost', rogue: 'zap' };
+  const solarFoes = new Set(DA.PLANETS.slice(0, 9).map(p => p.foe));
+  for (const p of DA.PLANETS.slice(9)) {
+    assert(p.foe === want[p.id], 'foe ' + p.id + ' ' + p.foe);
+    assert(solarFoes.has(p.foe) && DA.ENEMIES[p.foe], 'reuses a solar foe ' + p.id);
+  }
+  assert(new Set(DA.PLANETS.slice(9).map(p => p.foe)).size === 8, 'eight different foes');
+  // 판 안: 외계 행성 웨이브엔 그 적만 섞이고, 이름표는 처음 만난 태양계 행성 이름 그대로 한 번만
+  const W = createWorld(1280, 800, 501);
+  while (W.wave < 19) nextWave(W);
+  assert(W.place.planet.id === 'frost' && NG.World.foeOf(W.wave) === 'ice', 'frost wave has ice');
+  assert(W.spawnQueue.includes('ice') && !W.spawnQueue.includes('storm'), 'queue ' + W.spawnQueue.join());
+});
+
+test('외계 행성: 도감(worlds.js)이 없어도 태양계 아홉만으로 돈다', () => {
+  const c2 = vm.createContext({ console, Math, Date, JSON });
+  for (const f of ['util.js', 'data.js', 'world.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game', 'js', f), 'utf8'), c2, { filename: f });
+  const N2 = vm.runInContext('NG', c2);
+  assert(N2.DATA.PLANETS.length === 9, 'nine ' + N2.DATA.PLANETS.length);
+  assert(N2.World.placeOf(19).planet.id === 'mercury' && N2.World.placeOf(19).lap === 2, 'loops after pluto');
+});
+
+test('외계 행성: 쉬움 봇이 34웨이브(떠돌이 행성)까지 가도 값이 멀쩡하고 17곳을 모두 지난다', () => {
+  const W = createWorld(1280, 800, 88, 'easy');
+  const visited = new Set();
+  for (let i = 0; i < 60 * 60 * 30 && W.wave < 35; i++) {
+    if (W.phase === 'cards') pickCard(W, 0);
+    W.player.hp = W.player.maxHp;
+    W.player.gun.dmg = Math.max(W.player.gun.dmg, 3 + W.wave);
+    step(W, dodgeBot(W), DT);
+    visited.add(W.place.planet.id);
+    W.events.length = 0;
+    if (!finite(W)) throw new Error('NaN at ' + i);
+  }
+  assert(W.wave >= 35 && visited.size === 17, 'wave ' + W.wave + ' visited ' + visited.size);
+});
+
 // ─── 알아서 맞춰 주는 난이도 ─────────────────────────────────
 test('알아서 맞춰 주는 난이도: 배율이 적 수·적이 나오는 간격·운석 간격·적 연사를 살짝 바꾸고, 1이면 그대로', () => {
   const A = DA.ADAPT;
@@ -1486,7 +1553,7 @@ test('알아서 맞춰 주는 난이도: 판 성적 perf는 버틴 시간 ÷ 난
 });
 
 // ─── 스티커북 통계 ────────────────────────────────────────────
-test('스티커 통계: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바퀴 수성 10)과 깬 블랙홀 웨이브 수', () => {
+test('스티커 통계: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 10~17 외계 행성, 2바퀴 수성 18)과 깬 블랙홀 웨이브 수', () => {
   const W = createWorld(1280, 800, 94);
   assert(W.stats.planet === 1 && W.stats.holesCleared === 0, 'start at mercury');
   while (W.wave < 7) nextWave(W);
@@ -1494,7 +1561,9 @@ test('스티커 통계: 가 본 가장 먼 행성(1 수성 … 9 명왕성, 2바
   while (W.wave < 17) nextWave(W);
   assert(W.stats.planet === 9, 'pluto ' + W.stats.planet);
   while (W.wave < 19) nextWave(W);
-  assert(W.stats.planet === 10, 'lap 2 mercury ' + W.stats.planet);
+  assert(W.stats.planet === 10, 'first exoplanet ' + W.stats.planet);
+  while (W.wave < 35) nextWave(W);
+  assert(W.stats.planet === 18 && W.place.planet.id === 'mercury' && W.place.lap === 2, 'lap 2 mercury ' + W.stats.planet);
   // 블랙홀 웨이브를 깨면 하나 는다 (카드 화면이 열릴 때)
   clearArena(W);
   W.hole = { fx: 0.5, fy: 0.5, x: 640, y: 400 };
@@ -1801,6 +1870,155 @@ test('놀이 본부 통계: 선물·피버·동료 수를 runOf와 판 통계에
   for (const k of ['gifts', 'fevers', 'wingmen']) assert(Number.isInteger(r[k]) && r[k] === W.stats[k], k);
   assert(W.stats.wingmen >= 1, 'wingmen ' + W.stats.wingmen);
   console.log('       300초 봇 판: 선물 ' + W.stats.gifts + ' · 피버 ' + W.stats.fevers + ' · 동료 ' + W.stats.wingmen);
+});
+
+
+// ─── 아이 눈높이 점검 (2026-09-27) ──────────────────────────
+// 한 번 더!: 지고 나서 되살아나는 규칙이 world.js 안에 있어야 main.js 없이도 믿을 수 있다
+function deadWorld(seed, d) {
+  const W = createWorld(1280, 800, seed, d || 'easy', {});
+  for (let i = 0; i < 60; i++) step(W, IDLE, DT);
+  W.player.hp = 1; W.player.iframe = 0; W.player.dashT = 0; W.player.shield = 0;
+  const e = NG.World.spawnEnemy(W, 'grunt'); e.spawnT = 0; e.x = W.player.x; e.y = W.player.y;
+  for (let i = 0; i < 30 && W.phase === 'play'; i++) { e.x = W.player.x; e.y = W.player.y; step(W, IDLE, DT); }
+  return W;
+}
+
+test('한 번 더!: 지면 한 번 되살아날 수 있고, 되살아나면 체력 절반·3초 무적·주변 적 탄과 적이 치워진다', () => {
+  const RV = NG.DATA.REVIVE;
+  const W = deadWorld(501);
+  assert(W.phase === 'over' && W.canRevive, 'can revive after first death');
+  const p = W.player;
+  // 주변에 적 탄 · 멀리에 적 탄 · 바로 옆 적
+  W.eBullets.push({ x: p.x + 30, y: p.y, vx: 0, vy: 0, r: 5, life: 5 }, { x: p.x + RV.clearR + 200, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
+  const near = NG.World.spawnEnemy(W, 'grunt'); near.spawnT = 0; near.x = p.x + 10; near.y = p.y;
+  // 지고 나면 세상은 멈춘다 (한 번 더를 기다리는 동안 더 맞지 않음)
+  const t0 = W.t;
+  for (let i = 0; i < 60; i++) step(W, IDLE, DT);
+  assert(W.t === t0 && W.phase === 'over', 'frozen while waiting');
+  assert(NG.World.revive(W) === true, 'revive ok');
+  assert(W.phase === 'play' && W.revives === 1 && W.stats.revives === 1 && !W.canRevive, 'state');
+  assert(p.hp === Math.min(p.maxHp, Math.max(RV.hpMin, Math.ceil(p.maxHp * RV.hpShare))), 'hp ' + p.hp);
+  assert(Math.abs(p.iframe - RV.iframe) < 1e-9 && p.iframe >= 2.5, 'invulnerable about 3 s');
+  assert(W.eBullets.length === 1 && W.eBullets[0].x > p.x + RV.clearR, 'nearby bullets cleared, far kept');
+  assert(Math.hypot(near.x - p.x, near.y - p.y) >= RV.pushR - 1, 'near enemy pushed away');
+  assert(W.events.indexOf('revive') >= 0, 'event');
+  // 무적 동안은 적이 붙어도 안 아프다
+  const hp = p.hp;
+  for (let i = 0; i < 60; i++) { near.x = p.x; near.y = p.y; step(W, IDLE, DT); }
+  assert(p.hp === hp && W.phase === 'play', 'no damage while invulnerable');
+});
+
+test('한 번 더!: 한 판에 한 번뿐, 안 쓰면(giveUp) 그대로 끝, 판 기록은 이어진다', () => {
+  const W = deadWorld(502);
+  const kills = W.stats.kills, time = W.stats.time;
+  assert(NG.World.revive(W), 'first');
+  for (let i = 0; i < 60 * 4; i++) step(W, IDLE, DT);
+  W.player.hp = 1; W.player.iframe = 0; W.player.shield = 0;
+  const e = NG.World.spawnEnemy(W, 'grunt'); e.spawnT = 0;
+  for (let i = 0; i < 60 && W.phase === 'play'; i++) { e.x = W.player.x; e.y = W.player.y; step(W, IDLE, DT); }
+  assert(W.phase === 'over' && !W.canRevive, 'second death cannot revive');
+  assert(NG.World.revive(W) === false && W.phase === 'over', 'revive refused');
+  assert(W.stats.time > time && W.stats.kills >= kills, 'run continued');
+  // giveUp: 한 번 더를 안 쓰면 막힌다
+  const V = deadWorld(503);
+  NG.World.giveUp(V);
+  assert(!V.canRevive && NG.World.revive(V) === false && V.phase === 'over', 'give up');
+  // 판 도중(살아 있을 때)엔 revive가 아무것도 안 한다
+  const A = createWorld(800, 600, 504);
+  assert(NG.World.revive(A) === false && A.phase === 'play' && A.revives === 0, 'no revive while alive');
+});
+
+test('카드 글: 모든 카드에 큰 그림과 아이 말 두세 마디 (퍼센트·영어 없음), 수치는 작게 남는다', () => {
+  for (const c of NG.DATA.CARDS.concat([NG.DATA.FALLBACK_CARD])) {
+    const t = NG.World.cardText(c);
+    assert(t.pic && t.pic !== c.icon, 'picture ' + c.id);
+    const words = t.words.split(' ');
+    assert(words.length >= 2 && words.length <= 3, 'two or three words ' + c.id + ' ' + t.words);
+    assert(!/[%×A-Za-z0-9+]/.test(t.words), 'no numbers or jargon ' + c.id + ' ' + t.words);
+    assert(t.small === c.desc, 'small numbers kept ' + c.id);
+  }
+});
+
+test('추천 카드: 체력이 절반 이하면 체력 카드, 아니면 대포 추가 먼저, 없으면 차례대로', () => {
+  const W = createWorld(800, 600, 510, 'easy');
+  const C = id => NG.DATA.CARDS.find(c => c.id === id) || NG.DATA.FALLBACK_CARD;
+  W.cards = [C('rate'), C('vital'), C('barrel')];
+  W.player.hp = W.player.maxHp;
+  assert(NG.World.recommendCard(W) === 2, 'barrel when healthy');
+  W.player.hp = 1;
+  assert(NG.World.recommendCard(W) === 1, 'vital when hurt');
+  W.cards = [C('bounce'), C('crit'), C('move')];
+  W.player.hp = W.player.maxHp;
+  assert(NG.World.recommendCard(W) === 2, 'first in order (move) ' + NG.World.recommendCard(W));
+  W.cards = null;
+  assert(NG.World.recommendCard(W) === -1, 'no cards');
+  // 웨이브를 넘기면 카드와 함께 추천도 정해진다
+  const V = createWorld(800, 600, 511, 'easy');
+  V.player.hp = 1e9;
+  for (let i = 0; i < 60 * 120 && V.phase !== 'cards'; i++) { for (const e of V.enemies) e.hp = 0; step(V, IDLE, DT); }
+  assert(V.phase === 'cards' && V.recommend >= 0 && V.recommend < V.cards.length, 'recommend set ' + V.recommend);
+});
+
+test('보스 스티커: 이긴 보스 종류를 판 기록에 남기고, 기록은 처음 이긴 종류만 새로 넣는다', () => {
+  const W = createWorld(1280, 800, 520, 'easy', {});
+  W.bossKills = 1; // 두 번째 보스 모습 (스타 크러셔)
+  const b = NG.World.spawnEnemy(W, 'boss'); b.spawnT = 0;
+  const id = b.look.id;
+  NG.World.killEnemy(W, b, 0, 0);
+  assert(W.stats.bossTypes.length === 1 && W.stats.bossTypes[0] === id && W.lastBoss === id, 'recorded ' + id);
+  const again = NG.World.spawnEnemy(W, 'boss'); again.spawnT = 0; again.look = b.look;
+  NG.World.killEnemy(W, again, 0, 0);
+  assert(W.stats.bossTypes.length === 1, 'no duplicate in run');
+  const rec = R.blank();
+  assert(R.bossKindCount(rec) === 0, 'empty');
+  assert(R.addBossKinds(rec, W.stats.bossTypes, '2026-09-27').join() === id, 'fresh');
+  assert(R.addBossKinds(rec, [id, 'octa', 'nope']).join() === 'octa', 'only new known kinds');
+  assert(R.bossKindCount(rec) === 2, 'count');
+  // 저장본을 거쳐도 남고, 모르는 보스 id는 버린다
+  const st = fakeStore();
+  rec.bossKinds.fake = 'x';
+  R.save(rec, st);
+  const back = R.load(st);
+  assert(R.bossKindCount(back) === 2 && back.bossKinds[id] === '2026-09-27' && !('fake' in back.bossKinds), 'saved');
+  // 예전 저장본(bossKinds 없음)도 빈 칸으로
+  assert(R.bossKindCount(R.load(fakeStore({ 'ngun.rec1': JSON.stringify({ v: 1 }) }))) === 0, 'old save');
+});
+
+test('화면 크기 바꾸기: 아이템·동료 캡슐·선물 상자·안개·운석 예고도 새 화면 안으로', () => {
+  const W = createWorld(1280, 800, 530, 'easy', {});
+  NG.World.addDrop(W, 1250, 780, 'coin');
+  const c = NG.World.spawnCapsule(W); c.x = 1260; c.y = 790;
+  const g = NG.World.spawnGift(W); g.baseY = g.y = 780;
+  W.mists.push({ x: 1200, y: 760, r: 58, t: 0, form: 0.6, life: 4.5 });
+  W.meteors.push({ x: 1220, y: 770, r: 58, t: 0, warn: 1, rot: 0 });
+  NG.World.resize(W, 600, 400);
+  const d = W.drops[W.drops.length - 1];
+  assert(d.x <= 600 && d.y <= 400, 'drop inside ' + d.x + ',' + d.y);
+  assert(c.x <= 600 - c.r && c.y <= 400 - c.r, 'capsule inside');
+  assert(g.y <= 400 - g.r && g.baseY <= 400, 'gift height inside');
+  assert(W.mists[0].x <= 600 && W.mists[0].y <= 400 && W.meteors[0].x <= 600 && W.meteors[0].y <= 400, 'mist and meteor inside');
+});
+
+test('처음 난이도는 쉬움, 행성 도착 글은 도감의 재미 한 줄 (사실 설명 없음)', () => {
+  assert(NG.DATA.DEFAULT_DIFF === 'easy' && NG.DATA.DIFFICULTY[NG.DATA.DEFAULT_DIFF], 'default easy');
+  const SW = vm.runInContext('WORLDS', ctx).SOLAR_WEATHER;
+  for (const p of NG.DATA.PLANETS.filter(q => !q.exo)) assert(p.fact === SW[p.id].line, 'fun line ' + p.id + ' ' + p.fact);
+  for (const p of NG.DATA.PLANETS) assert(!/가장|행성입니다|태양과/.test(p.fact), 'no fact ' + p.fact);
+});
+
+test('파편은 상한을 넘지 않고, 내 기체 위 글자는 겹치지 않게 쌓인다', () => {
+  const W = createWorld(800, 600, 540, 'easy', {});
+  const cap = NG.DATA.VIEW.particles;
+  for (let i = 0; i < 80; i++) { const e = NG.World.spawnEnemy(W, 'tank'); e.spawnT = 0; NG.World.killEnemy(W, e, 1, 0); }
+  assert(W.particles.length <= cap, 'cap ' + W.particles.length);
+  W.texts.length = 0; W.hitstop = 0; W.enemies.length = 0; W.drops.length = 0;
+  NG.World.addDrop(W, W.player.x, W.player.y, 'shield');
+  NG.World.addDrop(W, W.player.x, W.player.y, 'heat');
+  step(W, IDLE, DT);
+  const mine = W.texts.filter(t => t.mine);
+  assert(mine.length === 2 && Math.abs(mine[0].y - mine[1].y) >= 16, 'stacked ' + mine.map(t => t.y).join());
+  for (const t of mine) assert(t.y < W.player.y - W.player.r * 2, 'above the ship');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

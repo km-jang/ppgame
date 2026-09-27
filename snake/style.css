@@ -51,7 +51,7 @@ kbd {
   left: max(10px, env(safe-area-inset-left));
   display: flex;
   gap: 6px;
-  z-index: 5;
+  z-index: 15;   /* 메뉴 화면(.screen 10) 위: 시작 화면에서도 소리·전체 화면 단추를 누를 수 있게 */
 }
 .icon-btn {
   display: grid; place-items: center;
@@ -72,26 +72,38 @@ kbd {
 #btn-mute.muted .on { display: none; }
 #btn-mute.muted .off { display: block; color: var(--red); }
 #btn-fs[hidden] { display: none; }
-/* 일시정지 버튼은 게임 중에만 */
+/* 일시정지 버튼은 게임 중에만, 집(게임 고르기) 버튼은 시작 화면에만 */
 body:not(.playing) #btn-pause { display: none; }
+body:not(.on-title) #btn-hub { display: none; }
 
 body.touch .only-pc { display: none; }
 body:not(.touch) .only-touch { display: none; }
 
+/* 알림: 위쪽 가운데 (판 아래 줄·결과 화면 단추를 가리지 않게). 게임 중에는 판 위 HUD 줄 높이에 */
 #toast {
   position: fixed;
-  left: 50%; bottom: 40px;
-  transform: translateX(-50%) translateY(10px);
-  padding: 8px 16px;
-  border-radius: 8px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  left: 50%; top: max(12px, env(safe-area-inset-top));
+  max-width: min(560px, calc(100vw - 140px));
+  transform: translateX(-50%) translateY(-8px);
+  padding: 8px 18px;
+  border-radius: 12px;
+  background: rgba(10, 14, 24, .96);
+  border: 2px solid rgba(255, 230, 109, .75);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .5);
+  color: #fff;
+  font: normal 18px/1.25 var(--disp);
+  letter-spacing: .5px;
+  text-align: center;
+  word-break: keep-all;
   opacity: 0;
   transition: opacity .2s, transform .2s;
   pointer-events: none;
   z-index: 20;
 }
 #toast.on { opacity: 1; transform: translateX(-50%); }
+#toast.rv { border-color: #ff8a1f; color: #ffe2c2; background: rgba(40, 16, 4, .96); }
+body.playing #toast { padding: 6px 16px; font-size: 17px; opacity: 0; }
+body.playing #toast.on { opacity: .94; }
 
 /* ─── 오버레이 화면 ─── */
 .screen {
@@ -196,7 +208,7 @@ h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
 .pc-line { font-size: 12px; color: var(--muted); margin: 12px 0 0; }
 
 /* ─── 게임 오버 ─── */
-#scr-over h2 { font-size: 36px; color: var(--red); text-shadow: 0 0 20px rgba(255, 77, 109, .5); }
+#scr-over h2 { font-size: 36px; color: #ffb35c; text-shadow: 0 0 20px rgba(255, 150, 60, .45); }
 .score-big { font: 700 64px/1 var(--num); letter-spacing: 1px; margin: 8px 0 0; color: var(--yellow); }
 .score-big small { font-size: 20px; margin-left: 4px; color: var(--muted); }
 .new-best {
@@ -591,4 +603,131 @@ body.touch .text-btn { padding: 10px 16px; }
 .level-seg .hard[aria-pressed=true] b { color: #ff8a96; }
 @media (max-height: 600px) and (orientation: landscape) {
   .level-seg.three small { font-size: 10px; }
+}
+
+/* ═══ 아이 눈높이 다듬기 (2026-09-27 점검): 글자 크게 · 한 번 더 · 단계 별 · 대왕 뱀 · 결과 화면 맞추기 ═══════════ */
+/* 메뉴 화면 위쪽 단추 묶음: 좁은 화면(작은 탭)에서는 왼쪽에 세로로 세우고 화면 판을 그만큼 비킨다 (판이 단추를 덮지 않게) */
+@media (max-width: 1100px) {
+  body:not(.playing) #topbar { flex-direction: column; }
+  body:not(.playing) .screen { padding-left: max(66px, calc(env(safe-area-inset-left) + 60px)); }
+}
+/* 도움말·설명 글자: 작은 탭에서도 14px 넘게 */
+.help { font-size: 15px; gap: 8px; }
+.help .i { width: 20px; height: 20px; }
+.level-seg small { font-size: 14px; }
+.level-seg.three small { font-size: 13px; }
+.rv-txt small { font-size: 14px; }
+.cc-txt small { font-size: 13px; }
+.cc-txt em { font-size: 14px; }
+.s-desc, .sitem.char .s-trait { font-size: 14px; }
+.shop-sub { font-size: 15px; }
+.mrow { font-size: 15px; }
+.m-num { font-size: 14px; }
+.mc-head { font-size: 16px; }
+.medal b { font-size: 15px; }
+.medal small { font-size: 13px; }
+.records dt { font-size: 13px; }
+.stats dt { font-size: 14px; }
+.stats dd { white-space: nowrap; }
+.stats dd small { font-size: 15px; color: var(--yellow); margin-left: 2px; }
+.ce-parts { font-size: 14px; }
+.sub { font-size: 16px; }
+.text-btn { font-size: 16px; }
+
+/* 닫기 단추가 늘 보이는 머리 줄 (메달·스테이지: 목록이 길어도 안에서만 넘긴다) */
+#scr-medals .panel, #scr-stage .panel { max-height: calc(100dvh - 20px); overflow-y: auto; padding-top: 0; }
+.p-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 -8px 6px; padding: 14px 8px 8px; background: linear-gradient(180deg, rgba(16, 22, 36, 1) 70%, rgba(16, 22, 36, 0)); }
+.p-head h2 { margin: 0; display: flex; align-items: center; gap: 10px; }
+.x-btn { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; border: 1px solid var(--line);
+  background: rgba(94, 231, 255, .08); color: var(--text); cursor: pointer; }
+.x-btn .i { width: 24px; height: 24px; }
+.x-btn:active { transform: scale(.94); }
+.star-pill { font: 700 20px var(--num); color: #ffd23f; padding: 2px 12px; border-radius: 999px; background: rgba(255, 210, 63, .12); letter-spacing: 1px; }
+
+/* 단계 칸: 별 셋 · 대왕 뱀 표시 */
+.lvl-stars { display: block; margin-top: 3px; font: normal 17px/1 var(--num); font-style: normal; letter-spacing: 2px; color: #ffd23f; text-shadow: 0 0 8px rgba(255, 210, 63, .5); }
+.lvl-stars.none { color: rgba(255, 255, 255, .22); text-shadow: none; }
+.lvl.locked .lvl-stars { visibility: hidden; }
+.lvl small { font-size: 14px; word-break: keep-all; line-height: 1.2; }
+.lvl.boss { border-color: rgba(255, 138, 31, .6); background: linear-gradient(180deg, rgba(255, 138, 31, .14), rgba(139, 77, 255, .08)); }
+.lvl.boss::before { content: "대왕"; position: absolute; right: 6px; top: 6px; padding: 1px 7px; border-radius: 999px; background: #ff8a1f; color: #1a0a00; font: normal 12px var(--disp); }
+.lvl.done::after { display: none; }   /* 깬 단계는 별이 보여 준다 */
+
+/* 한 번 더! */
+#scr-cont { background: rgba(7, 8, 13, .45); }
+.panel.cpanel { max-width: 380px; padding: 22px 24px 16px; }
+.c-head { margin: 0 0 12px; font: normal 26px var(--disp); color: #ffe9a8; }
+.cont-btn { position: relative; display: grid; place-items: center; width: 200px; height: 200px; margin: 0 auto; padding: 0; border: none; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 40% 32%, #fff4c2 0%, #ffd23f 42%, #ff9f1a 100%); box-shadow: 0 8px 0 #9a5a00, 0 0 40px rgba(255, 190, 60, .55); color: #2a1400; }
+.cont-btn:active { transform: translateY(4px); box-shadow: 0 3px 0 #9a5a00, 0 0 30px rgba(255, 190, 60, .5); }
+.cont-btn:focus-visible { outline: 3px solid var(--cyan); outline-offset: 4px; }
+.c-txt { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; font: normal 34px var(--disp); letter-spacing: 1px; }
+.c-txt .i { width: 36px; height: 36px; }
+.c-ring { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px); transform: rotate(-90deg); pointer-events: none; }
+.c-ring circle { fill: none; stroke: rgba(255, 255, 255, .14); stroke-width: 5; }
+.c-ring .c-go { stroke: #5ee7ff; stroke-linecap: round; stroke-dasharray: 289; stroke-dashoffset: 0; }
+.c-ring.run .c-go { animation: contRing 5s linear forwards; }
+@keyframes contRing { to { stroke-dashoffset: 289; } }
+#btn-giveup { margin-top: 18px; font-size: 16px; }
+
+/* 결과 화면: 단추는 늘 보이게 (목록이 길면 안에서 넘긴다), 새 메달은 동전 한 줄 */
+#scr-over .panel.opanel { max-height: calc(100dvh - 20px); }
+.o-left { overflow-y: auto; }
+.o-right { min-height: 0; }
+.o-right .mcard { min-height: 0; overflow-y: auto; flex: 0 1 auto; }
+.o-btns { flex: none; }
+.o-right .o-btns .big-btn { margin-top: 12px; }
+.o-sub { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.o-sub .mini-btn { width: 100%; min-height: 46px; }
+.o-sub .mini-btn .i { color: var(--cyan); }
+.ms-head { margin: 4px 0 4px; font: normal 16px var(--disp); color: #ffe9a8; }
+.ms-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.ms-coin { padding: 0; border: none; background: none; cursor: pointer; }
+.ms-coin .coin { width: 34px; height: 34px; font-size: 14px; }
+.new-medals .ms-coin { animation: pop .45s var(--back) both; }
+.new-medals { display: block; }
+.chips span.st { background: rgba(255, 210, 63, .12); border-color: rgba(255, 210, 63, .5); color: #ffe9a8; font: normal 15px var(--disp); }
+.chips span.st i { font-style: normal; color: #ffd23f; letter-spacing: 1px; }
+.chips span { font-size: 14px; }
+@media (orientation: landscape) and (min-width: 720px) {
+  #scr-over .panel.opanel { align-items: stretch; }
+  .o-left { display: flex; flex-direction: column; justify-content: center; min-height: 0; }
+  .o-right { justify-content: center; }
+}
+
+/* 낮은 가로 화면 (탭 A 893×533): 작은 설명은 줄이고, 남은 글은 14px 넘게 */
+@media (max-height: 600px) and (orientation: landscape) {
+  #scr-title .tagline { display: none; }
+  #scr-title .help { font-size: 14px; gap: 4px; }
+  .level-seg.three small, .rv-txt small { display: none; }
+  .level-seg button { min-height: 44px; }
+  .rival-tog { min-height: 44px; }
+  .cc-txt small { display: none; }
+  .cc-txt em { font-size: 14px; }
+  .mrow { font-size: 14px; }
+  .m-num { font-size: 13px; }
+  .mc-head { font-size: 14px; }
+  .s-desc, .sitem.char .s-trait { font-size: 13px; }
+  .shop-sub { font-size: 14px; }
+  .medal b { font-size: 14px; }
+  .medal small { display: none; }
+  .records dt { font-size: 12px; }
+  #scr-medals .sub, #scr-stage .sub { font-size: 14px; }
+  .p-head { padding: 8px 8px 6px; }
+  .p-head h2 { font-size: 24px; }
+  .x-btn { width: 44px; height: 44px; }
+  .lvl small { font-size: 13px; }
+  .lvl-stars { font-size: 15px; }
+  #scr-over .o-left h2 { font-size: 30px; margin-bottom: 2px; }
+  #scr-over .stats div { padding: 6px 2px; }
+  #scr-over .stats dd { font-size: 20px; }
+  .o-sub { margin-top: 6px; }
+  .o-sub .mini-btn { min-height: 44px; padding: 4px 8px; font-size: 15px; }
+  .cont-btn { width: 170px; height: 170px; }
+  .c-txt { font-size: 30px; }
+  .c-head { font-size: 22px; margin-bottom: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .c-ring.run .c-go { animation: contRing 5s linear forwards !important; }   /* 남은 시간은 보여 준다 (움직임이 아니라 시간) */
 }

@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 공용 우주 여행 도감 (외계 행성 이름·날씨). 게임 index.html도 data.js보다 먼저 불러온다
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'records.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -48,18 +50,40 @@ test('자료: 캐릭터 5개 · 강화 4개(5단계) · 시작 아이템 2개 ·
   for (const m of D.MISSIONS) assert(runKeys.includes(m.stat), 'mission stat exists ' + m.stat);
 });
 
-test('코인 계산: 높이 ÷ 20 + 별 ÷ 6 + 도착한 구역 보너스, 보통·어려움은 더, 강화면 +10%씩', () => {
+test('코인 계산: 오른 거리 ÷ 20 + 별 ÷ 6 + 도착한 구역 보너스, 보통·어려움은 더, 강화면 +10%씩, 논 시간 10초마다 1', () => {
   const st = SH.blank();
   const a = SH.coinsFor(run({ height: 150, stars: 41, zone: 1 }), st);
-  assert(a.parts.height === 7 && a.parts.stars === 6 && a.parts.zone === 4 && a.parts.level === 0 && a.total === 17, JSON.stringify(a));
+  assert(a.parts.height === 7 && a.parts.stars === 6 && a.parts.zone === 4 && a.parts.level === 0 && a.parts.time === 0 && a.total === 17, JSON.stringify(a));
   const b = SH.coinsFor(run({ height: 520, stars: 100, zone: 3 }), st);
   assert(b.parts.zone === 24 && b.total === 26 + 16 + 24, 'all zones ' + JSON.stringify(b));
+  // 2026-09-27 점검: 보통 × 2, 어려움 × 2.6 (예전 1.6 · 2.2)
   const n = SH.coinsFor(run({ diff: 'normal', height: 150, stars: 41, zone: 1 }), st), h = SH.coinsFor(run({ diff: 'hard', height: 150, stars: 41, zone: 1 }), st);
-  assert(n.parts.level === 10 && n.total === 27 && h.total === 37 && h.total > n.total, 'level bonus ' + n.total + ' ' + h.total);
+  assert(n.parts.level === 17 && n.total === 34 && h.parts.level === 27 && h.total === 44 && h.total > n.total, 'level bonus ' + n.total + ' ' + h.total);
+  const t = SH.coinsFor(run({ diff: 'normal', height: 150, stars: 41, zone: 1, time: 95 }), st);
+  assert(t.parts.time === 9 && t.parts.try === D.COINS.tryCoins && t.total === 34 + 9 + D.COINS.tryCoins, 'time and try coins (no multiplier) ' + JSON.stringify(t.parts));
+  assert(SH.coinsFor(run({ diff: 'normal', height: 10, time: D.COINS.tryTime - 1 }), st).parts.try === 0, 'no try coins for a very short run');
   st.up.coin = 3;
   const c = SH.coinsFor(run({ height: 150, stars: 41, zone: 1 }), st);
   assert(c.parts.bonus === 5 && c.total === 22, 'bonus ' + JSON.stringify(c));
-  assert(SH.coinsFor(run({ height: -5, stars: NaN, zone: 99 }), SH.blank()).total >= 0, 'bad input safe');
+  assert(SH.coinsFor(run({ height: -5, stars: NaN, zone: 99, time: -3 }), SH.blank()).total >= 0, 'bad input safe');
+});
+
+test('출발 장소: 출발 높이 아래 몫(오른 거리·구역 보너스)은 코인을 주지 않는다, 미션 "오르기"도 오른 만큼만', () => {
+  const st = SH.blank();
+  // 우주(250m)에서 출발해 400m까지: 오른 150m만, 구역 보너스는 우주 위(외계 행성·별나라)에 닿았을 때만
+  const w = SH.coinsFor(run({ height: 150, start: 250, zone: 2 }), st);
+  assert(w.parts.height === 7 && w.parts.zone === 0 && w.total === 7, 'warp start ' + JSON.stringify(w.parts));
+  const x = SH.coinsFor(run({ height: 500, start: 250, zone: 3 }), st);
+  assert(x.parts.zone === 12, 'exo zone reached from space ' + JSON.stringify(x.parts));
+  // 땅에서 400m까지는 예전과 같다
+  assert(SH.coinsFor(run({ height: 400, zone: 2 }), st).parts.zone === 12, 'ground start zones');
+  const W = create(2, { diff: 'easy', viewH: 600, start: 'space' });
+  for (let i = 0; i < 60 * 10 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); W.events.length = 0; W.fx.length = 0; }
+  const r = SH.runOf(W);
+  assert(r.start === 250 && r.top === W.height && r.height === W.height - 250, 'runOf climb ' + JSON.stringify([r.start, r.top, r.height]));
+  st.missions = [{ id: 'h100', prog: 0, done: false }, { id: 'h250', prog: 0, done: false }, { id: 'hsum1000', prog: 0, done: false }];
+  SH.finishRun(st, r);
+  assert(st.missions[0].prog === Math.min(100, r.height) && st.missions[2].prog === r.height && !st.missions[1].done, 'missions use climb ' + JSON.stringify(st.missions));
 });
 
 // 5~7살 아이 흉내 봇 (tests/jump.test.js의 KID와 같은 방식): 반응이 늦고 겨냥이 빗나간다
@@ -80,27 +104,34 @@ function kidBot(seed, cfg) {
     return (prev = Math.abs(dx) < Math.max(6, t.w * 0.2) + (Math.sign(dx) === Math.sign(P.vx) ? brake * 0.5 : 0) ? 0 : dx > 0 ? 1 : -1);
   };
 }
-test('코인 크기: 아이 흉내 봇의 한 판은 20 ~ 60코인쯤 (숫자를 찍는다)', () => {
+test('코인 크기: 아이 흉내 봇의 한 판 코인 · 1분에 받는 코인이 세 난이도 모두 비슷하다 (숫자를 찍는다)', () => {
   const avg = cfg => {
-    const out = {};
+    const out = {}, perMin = {};
     for (const diff of D.DIFF_ORDER) {
-      let sum = 0;
+      let sum = 0, time = 0;
       const n = 12;
       for (let seed = 1; seed <= n; seed++) {
         const W = create(seed, { diff, viewH: 600 });
         const bot = kidBot(seed, cfg);
         for (let i = 0; i < 60 * 300 && W.phase === 'play'; i++) { W.input.dir = bot(W, 1 / 60); step(W, 1 / 60); W.events.length = 0; W.fx.length = 0; }
         sum += SH.coinsFor(SH.runOf(W), SH.blank()).total;
+        time += W.t;
       }
       out[diff] = Math.round(sum / n);
+      perMin[diff] = Math.round(sum / time * 60);
     }
-    return out;
+    return { out, perMin };
   };
-  const out = avg(KID), hum = avg(HUMAN);
-  console.log('       한 판 평균 코인 (강화 없음, 5분 상한): 아이 흉내 ' + JSON.stringify(out) + ', 사람 닮은 봇 ' + JSON.stringify(hum));
-  // 2026-09-27 몬스터 밟기·비밀 방 별·피버 별·깜짝 선물 코인으로 한 판이 길고 알차져 쉬움은 60에서 80 안팎이 됐다 (상한 100)
-  assert(out.easy >= 20 && out.easy <= 100, 'easy ' + out.easy);
-  assert(out.normal >= 5 && out.normal <= out.easy && out.hard <= out.normal, 'order ' + JSON.stringify(out));
+  const K = avg(KID), U = avg(HUMAN);
+  console.log('       한 판 평균 코인 (강화 없음, 5분 상한, 한 번 더 없이): 아이 흉내 ' + JSON.stringify(K.out) + ' · 1분에 ' + JSON.stringify(K.perMin) +
+    ', 사람 닮은 봇 ' + JSON.stringify(U.out) + ' · 1분에 ' + JSON.stringify(U.perMin));
+  // 쉬움은 한 판이 길어(2분 안팎) 한 판 코인이 크고, 보통·어려움은 한 판이 짧다(15초 안팎).
+  // 2026-09-27 점검 전에는 아이 흉내 봇이 보통·어려움 한 판에 6 ~ 9코인(1분에 쉬움 40 · 보통 33)이었다.
+  // 난이도 배율을 올리고 논 시간·도전 코인을 더해, 1분에 받는 코인이 쉬움과 비슷하거나 조금 많게 (쉬움의 0.9 ~ 1.7배.
+  // 짧은 판은 결과 화면을 보는 시간이 더 들어 실제로는 쉬움과 비슷해진다)
+  assert(K.out.easy >= 20 && K.out.easy <= 120, 'easy ' + K.out.easy);
+  assert(K.out.normal >= 10 && K.out.normal <= K.out.easy && K.out.hard <= K.out.normal, 'order ' + JSON.stringify(K.out));
+  for (const d of ['normal', 'hard']) assert(K.perMin[d] >= K.perMin.easy * 0.9 && K.perMin[d] <= K.perMin.easy * 1.7, d + ' per minute ' + JSON.stringify(K.perMin));
 });
 
 test('지갑: 불러올 때 지갑 잔액을 쓰고, 저장하면 지갑에 맞춘다', () => {

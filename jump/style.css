@@ -51,7 +51,7 @@ kbd {
   left: max(10px, env(safe-area-inset-left));
   display: flex;
   gap: 6px;
-  z-index: 5;
+  z-index: 15;   /* 메뉴 화면(.screen 10) 위: 시작 화면에서도 소리·전체 화면·집 단추를 누를 수 있게 */
 }
 .icon-btn {
   display: grid; place-items: center;
@@ -78,20 +78,25 @@ body:not(.playing) #btn-pause { display: none; }
 body.touch .only-pc { display: none; }
 body:not(.touch) .only-touch { display: none; }
 
+/* 알림 한 줄: 화면 위 가운데 (게임 중 가로 화면이면 main.js가 기둥 왼쪽 옆자리 위로 옮긴다. 발판·주인공을 가리지 않게) */
 #toast {
   position: fixed;
-  left: 50%; bottom: 40px;
-  transform: translateX(-50%) translateY(10px);
+  left: 50%; top: max(10px, env(safe-area-inset-top));
+  transform: translateX(-50%) translateY(-10px);
   padding: 8px 16px;
-  border-radius: 8px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(12, 16, 26, .95);
+  border: 1px solid rgba(255, 230, 109, .5);
+  font: normal 16px var(--disp); letter-spacing: .5px; color: var(--text);
+  text-align: center; word-break: keep-all;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .45);
   opacity: 0;
   transition: opacity .2s, transform .2s;
   pointer-events: none;
   z-index: 20;
 }
 #toast.on { opacity: 1; transform: translateX(-50%); }
+#toast.side { font-size: 15px; padding: 8px 12px; }
 
 /* ─── 오버레이 화면 ─── */
 .screen {
@@ -534,4 +539,90 @@ body.touch .text-btn { padding: 10px 16px; }
 @media (prefers-reduced-motion: reduce) {
   .claim, .mrow.fresh, #over-coins.done, .coin-pop { animation: none; }
   .m-bar i { transition: none; }
+}
+
+/* ═══ 2026-09-27 점검: 집 버튼 · 출발 장소 · 한 번 더 · 결과 화면 맞춤 ═══════════════ */
+/* 게임 고르기(놀이 본부)로 가는 작은 집 버튼: 시작 화면 오른쪽 위 모서리, 결과 화면 아래 */
+.t-left { position: relative; }
+.home-btn {
+  position: absolute; top: 0; right: 0; z-index: 2;
+  display: grid; place-items: center; width: 44px; height: 44px;
+  border: 1px solid var(--line); border-radius: 12px; background: rgba(94, 231, 255, .06);
+  color: var(--cyan); text-decoration: none; cursor: pointer;
+}
+.home-btn .i { width: 22px; height: 22px; }
+.home-btn:active { transform: scale(.94); }
+.home-btn:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.home-btn.inline { position: static; display: inline-flex; gap: 6px; width: auto; height: 44px; padding: 0 14px; font: normal 15px var(--disp); letter-spacing: .5px; }
+.home-btn.inline .i { width: 20px; height: 20px; }
+.o-links { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 8px; }
+.o-links .text-btn { margin: 0; }
+.chips span.place { background: rgba(125, 255, 207, .14); border-color: rgba(125, 255, 207, .55); color: #b8ffe4; }
+
+/* 시작 화면 도움말: 세 줄, 글자는 작은 탭에서도 14px 넘게 */
+.tpanel .help { font-size: 15px; gap: 6px; }
+.tpanel .help .i { width: 18px; height: 18px; }
+
+/* 출발 장소 고르기: 그림 버튼 넷 (잠긴 곳은 흐리게 + "몇 m 가면 열려요") */
+.start-pick[hidden] { display: none; }
+.start-pick { margin: 0 0 10px; }
+.sp-head { margin: 0 0 6px; font: normal 16px var(--disp); letter-spacing: .5px; color: var(--yellow); }
+.sp-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.sp {
+  --pc: var(--cyan);
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; padding: 4px 4px 5px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 12px; background: rgba(94, 231, 255, .04); color: var(--muted);
+}
+.sp-cv { width: 100%; max-width: 96px; aspect-ratio: 5 / 3; height: auto; display: block; border-radius: 8px; }
+.sp b { font: normal 15px/1.1 var(--disp); letter-spacing: .5px; }
+.sp small { font-size: 10.5px; line-height: 1.15; word-break: keep-all; text-align: center; }
+.sp[aria-pressed=true] { border-color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, transparent); color: var(--text); box-shadow: 0 0 0 1px var(--pc), 0 0 14px color-mix(in srgb, var(--pc) 35%, transparent); }
+.sp[aria-pressed=true] b { color: var(--pc); }
+.sp.locked { cursor: default; opacity: .6; }
+.sp:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+/* 한 번 더! 큰 동그라미 버튼 + 줄어드는 고리 (main.js가 남은 시간만큼 고리를 줄인다) */
+.panel.cpanel { max-width: 360px; padding: 20px 20px 14px; }
+.cont-sub { margin: 0 0 12px; font-size: 15px; }
+.cont-sub b { font: 700 18px var(--num); color: var(--cyan); }
+.cont-btn {
+  position: relative; display: grid; place-items: center; width: 210px; height: 210px; margin: 0 auto; padding: 0; cursor: pointer;
+  border: none; border-radius: 50%; color: #2a1c00;
+  background: radial-gradient(circle at 40% 32%, #fff6c2 0%, #ffd23f 48%, #d99a00 100%);
+  box-shadow: 0 8px 0 #9a6a00, 0 0 40px rgba(255, 210, 63, .55), inset 0 3px 0 rgba(255, 255, 255, .6);
+}
+.cont-btn:active { transform: translateY(4px); box-shadow: 0 4px 0 #9a6a00, 0 0 30px rgba(255, 210, 63, .5); }
+.cont-btn:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+.cont-ring { position: absolute; inset: -14px; width: calc(100% + 28px); height: calc(100% + 28px); transform: rotate(-90deg); pointer-events: none; }
+.cont-ring circle { fill: none; stroke-width: 6; }
+.cont-ring .bg { stroke: rgba(255, 255, 255, .12); }
+.cont-ring .fg { stroke: #ffe66d; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; }
+.cont-txt { font: normal 40px var(--disp); letter-spacing: 1px; margin-top: 18px; }
+.cont-num { position: absolute; bottom: 30px; font: 700 26px var(--num); color: rgba(42, 28, 0, .7); }
+#scr-cont .text-btn { display: block; margin: 16px auto 0; font-size: 15px; }
+
+/* 결과 화면: 새 메달이 많아도 버튼이 늘 보이게 (메달은 작은 칩, 넘치면 그 안에서 밀기) */
+.o-right .new-medals { max-height: 128px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; justify-content: flex-start; }
+.new-medals.many .medal { padding: 4px 8px 4px 4px; gap: 6px; }
+.new-medals.many .medal .coin { width: 26px; height: 26px; font-size: 11px; }
+.new-medals.many .medal small { display: none; }
+@media (max-height: 600px) and (orientation: landscape) {
+  .tpanel .help { font-size: 14px; gap: 3px; }
+  #scr-title .tpanel .help { margin: 8px 0 0; font-size: 14px; gap: 3px; }
+  .tpanel .help .i { width: 16px; height: 16px; }
+  .start-pick { margin-bottom: 6px; }
+  .sp-head { font-size: 14px; margin-bottom: 4px; }
+  .sp { min-height: 0; padding: 3px 3px 4px; }
+  .sp-cv { max-width: 72px; }
+  .sp b { font-size: 13px; }
+  .sp small { font-size: 10px; }
+  .o-right .new-medals { max-height: 72px; margin-top: 6px; }
+  .o-links { margin-top: 4px; }
+  .home-btn.inline { height: 40px; }
+  .cont-btn { width: 170px; height: 170px; }
+  .cont-txt { font-size: 34px; margin-top: 12px; }
+  .cont-num { bottom: 22px; font-size: 22px; }
+}
+@media (max-height: 420px) and (orientation: landscape) {
+  #scr-title .tpanel .help { display: none; }
 }

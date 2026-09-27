@@ -33,6 +33,7 @@
     <symbol id="i-mine" viewBox="0 0 24 24"><path d="M12 1l1.6 4.1 4-1.9-1.4 4.2 4.3 1-3.4 2.8 3.4 2.8-4.3 1 1.4 4.2-4-1.9L12 23l-1.6-4.1-4 1.9 1.4-4.2-4.3-1 3.4-2.8-3.4-2.8 4.3-1-1.4-4.2 4 1.9z"/></symbol>
     <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 2 4 11h5v6h6v-6h5zM6 19h12v3H6z"/></symbol>
     <symbol id="i-cart" viewBox="0 0 24 24"><path d="M2 3h3.2l.7 3H21a1 1 0 0 1 1 1.2l-1.4 7A2 2 0 0 1 18.6 16H8.4a2 2 0 0 1-2-1.6L4.4 5H2zm7 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm9 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 3.2 2.5 11.3a1 1 0 0 0 1.3 1.5l.9-.8V20a1 1 0 0 0 1 1h4.3v-5.5h4v5.5h4.3a1 1 0 0 0 1-1v-8l.9.8a1 1 0 0 0 1.3-1.5z"/></symbol>
     <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
   </svg>
 
@@ -47,6 +48,7 @@
   <section id="scr-title" class="screen">
     <div class="panel tpanel">
       <div class="t-left">
+        <a id="btn-hub" class="home-btn" href="../index.html" aria-label="게임 고르기로"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg></a>
         <h1 class="logo ko">통통 <span>점프</span></h1>
         <p class="tagline">발판을 밟고 하늘 높이 올라가요</p>
         <p id="best" class="best"></p>
@@ -63,6 +65,10 @@
           <button type="button" data-diff="normal" aria-pressed="false"><b>보통</b><small>가시 폭탄<br>떨어지면 끝</small></button>
           <button type="button" data-diff="hard" aria-pressed="false"><b>어려움</b><small>좁고 빠른 발판<br>폭탄 일찍</small></button>
         </div>
+        <div id="start-pick" class="start-pick" hidden>
+          <p class="sp-head">어디서 출발할까?</p>
+          <div id="start-row" class="sp-row" role="group" aria-label="출발 장소"></div>
+        </div>
         <p id="loadout-line" class="loadout-line"></p>
         <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>시작하기</span> <kbd class="only-pc">Enter</kbd></button>
         <div class="t-row">
@@ -70,12 +76,9 @@
           <button id="btn-medals" type="button" class="shop-btn"><svg class="i gold" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
         </div>
         <ul class="help">
-          <li><svg class="i" aria-hidden="true"><use href="#i-lr"/></svg><span><b class="only-touch">화면 왼쪽·오른쪽을 누르고</b><b class="only-pc">← → 방향키로</b> 움직여요</span></li>
-          <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 모으면 점수가 쑥쑥 · 콤보면 더</span></li>
-          <li><svg class="i green" aria-hidden="true"><use href="#i-spring"/></svg><span><b>스프링</b> 아주 높이 통! · <b class="orange">금 간 발판</b>은 한 번만</span></li>
-          <li><svg class="i orange" aria-hidden="true"><use href="#i-rocket"/></svg><span><b>로켓 · 방패 방울</b> 모두 좋은 것</span></li>
-          <li><svg class="i violet" aria-hidden="true"><use href="#i-up"/></svg><span><b>높이 오르면</b> 구름 위 · 우주 · 별나라</span></li>
-          <li><svg class="i red" aria-hidden="true"><use href="#i-mine"/></svg><span><b class="danger">위험! 피해요</b> 빨간 가시 폭탄 (보통·어려움)</span></li>
+          <li><svg class="i" aria-hidden="true"><use href="#i-lr"/></svg><span><b class="only-touch">왼쪽·오른쪽을 누르거나 손가락으로 밀어요</b><b class="only-pc">← → 방향키로 움직여요</b></span></li>
+          <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별·스프링·로켓</b>은 좋아요 · <b class="danger">빨간 가시</b>는 피해요</span></li>
+          <li><svg class="i violet" aria-hidden="true"><use href="#i-up"/></svg><span><b>높이높이</b> 구름 위, 우주, 외계 행성까지!</span></li>
         </ul>
         <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
       </div>
@@ -121,11 +124,24 @@
     </div>
   </section>
 
+  <!-- 한 번 더! (한 판에 한 번, 공짜): 큰 버튼 + 5초 고리, 작은 "그만하기" -->
+  <section id="scr-cont" class="screen">
+    <div class="panel cpanel">
+      <p class="sub cont-sub">구름이 받아 줄게요 · 지금 <b id="cont-height">0m</b></p>
+      <button id="btn-cont" type="button" class="cont-btn" aria-label="한 번 더">
+        <svg class="cont-ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="bg" cx="60" cy="60" r="54"/><circle id="cont-ring" class="fg" cx="60" cy="60" r="54" pathLength="100"/></svg>
+        <span class="cont-txt">한 번 더!</span>
+        <span id="cont-num" class="cont-num">5</span>
+      </button>
+      <button id="btn-cont-no" type="button" class="text-btn">그만하기</button>
+    </div>
+  </section>
+
   <!-- 게임 오버: 왼쪽 점수·기록 / 오른쪽 코인·미션·메달·버튼 -->
   <section id="scr-over" class="screen">
     <div class="panel opanel">
       <div class="o-left">
-        <h2 id="over-title">아래로 떨어졌다</h2>
+        <h2 id="over-title">잘했어요!</h2>
         <p id="over-sub" class="sub over-sub"></p>
         <p class="over-diff">난이도 <b id="over-diff">쉬움</b> · <b id="over-zone">하늘 구역</b></p>
         <p class="score-big"><span id="over-score">0</span><small>점</small></p>
@@ -147,18 +163,23 @@
         <div id="over-missions" class="mcard"></div>
         <div id="over-medals" class="new-medals"></div>
         <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
-        <button id="btn-home" class="text-btn">처음 화면으로</button>
+        <div class="o-links">
+          <button id="btn-home" class="text-btn">처음 화면으로</button>
+          <a id="btn-over-hub" class="home-btn inline" href="../index.html" aria-label="게임 고르기로"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span>게임 고르기</span></a>
+        </div>
       </div>
     </div>
   </section>
 
   <script src="../common/hub.js"></script>
+  <script src="../common/worlds.js"></script>
   <script src="js/util.js"></script>
   <script src="js/data.js"></script>
   <script src="js/world.js"></script>
   <script src="js/records.js"></script>
   <script src="js/shop.js"></script>
   <script src="js/space.js"></script>
+  <script src="js/sky.js"></script>
   <script src="js/render.js"></script>
   <script src="js/input.js"></script>
   <script src="js/audio.js"></script>

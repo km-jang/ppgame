@@ -20,7 +20,7 @@
 
   let W = null;        // 실제 판
   let demo = null;     // 시작 화면 뒤에서 자동 운전으로 도는 시연 판
-  let mode = 'title';  // title | play | paused | over
+  let mode = 'title';  // title | play | paused | cont (한 번 더?) | over
   let auto = false;    // 자동 운전 (테스트용)
   let overAt = 0;
   // 난이도: 'easy' | 'normal' | 'hard'. 쉬움이 기본, 이 기기에 기억한다 (옛 runner.easy도 이어받는다)
@@ -81,15 +81,27 @@
   window.addEventListener('resize', resize);
 
   // ─── 오버레이 ──────────────────────────────────────────────
-  const screens = ['scr-title', 'scr-shop', 'scr-pause', 'scr-over', 'scr-medals'];
+  const screens = ['scr-title', 'scr-shop', 'scr-pause', 'scr-over', 'scr-medals', 'scr-cont'];
+  // 누르기 막기: 결과 화면·한 번 더 화면이 막 떴을 때 (부딪힌 뒤에도 계속 누르는 아이 손가락이 버튼을 잘못 누르지 않게)
+  let guardUntil = 0;
+  const guarded = () => performance.now() < guardUntil;
   function show(id) {
     for (const s of screens) $(s).classList.toggle('on', s === id);
     document.body.classList.toggle('playing', mode === 'play');
+    document.body.classList.toggle('at-title', id === 'scr-title');
     input.active = mode === 'play';
     if (mode === 'play') measureHud();
+    hideToast();   // 다른 화면으로 넘어가면 글 띠를 지운다 (새 화면의 버튼을 가리지 않게)
+    if (id === 'scr-over' || id === 'scr-cont') {
+      const el = $(id), ms = D.CONTINUE.guard * 1000;
+      guardUntil = performance.now() + ms;
+      el.classList.add('guard');
+      setTimeout(() => el.classList.remove('guard'), ms);
+    }
   }
 
   let toastTimer = 0;
+  function hideToast() { clearTimeout(toastTimer); $('toast').classList.remove('on'); }
   function toast(msg) {
     const t = $('toast');
     t.textContent = msg;
@@ -149,6 +161,8 @@
     if (D.DIFFICULTY[opts.diff]) setDiff(opts.diff);
     else if (typeof opts.easy === 'boolean') setEasy(opts.easy);
     const tutorial = typeof opts.tutorial === 'boolean' ? opts.tutorial : PF.tutorialPending(RN.store);
+    // 안내를 이 기기에서 두 판 시작했으면 다 못 마쳐도 다음부터는 안 나온다 (매 판 안내가 나오지 않게)
+    if (tutorial && typeof opts.tutorial !== 'boolean') PF.startTutorial(RN.store);
     lastOpts = { diff, tutorial };
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다
     const lo = SH.takeLoadout(shop, diff);
@@ -163,11 +177,14 @@
     mode = 'play';
     wakeLock(true);
     show(null);
+    pushHistory();
     RN.Audio.play('start');
     return W;
   }
 
   function toTitle() {
+    clearTimeout(contTimer);
+    popHistory();
     W = null;
     mode = 'title';
     wakeLock(false);
@@ -188,7 +205,7 @@
           ? '<button type="button" class="claim" data-claim="' + i + '">받기 <i class="cn" aria-hidden="true"></i>' + m.reward + '</button>'
           : '<span class="m-rew"><i class="cn" aria-hidden="true"></i>' + m.reward + '</span>') +
         '<span class="m-bar"><i style="width:' + Math.round(m.pct * 100) + '%"></i></span>' +
-        '<span class="m-num">' + fmt(m.prog) + ' / ' + fmt(m.goal) + (m.kind === 'life' ? ' 누적' : ' 한 판') + '</span>' +
+        '<span class="m-num">' + fmt(m.prog) + ' / ' + fmt(m.goal) + (m.kind === 'life' ? ' · 여러 판' : ' · 한 판') + '</span>' +
       '</div>').join('');
   }
   function renderTitleShop() {
@@ -231,7 +248,7 @@
         let pips = '';
         for (let k = 0; k < D.UPGRADE_MAX; k++) pips += '<i class="' + (k < lv ? 'on' : '') + '"></i>';
         return '<div class="sitem row"><span class="s-icon">' + iconSvg(u.icon) + '</span>' +
-          '<span class="s-mid"><b class="s-name">' + esc(u.name) + ' <small>Lv ' + lv + '</small></b><span class="s-desc">' + esc(u.desc) + '</span><span class="pips">' + pips + '</span></span>' +
+          '<span class="s-mid"><b class="s-name">' + esc(u.name) + ' <small>' + lv + '단계</small></b><span class="s-desc">' + esc(u.desc) + '</span><span class="pips">' + pips + '</span></span>' +
           priceBtn(u.id, '최대') + '</div>';
       }).join('');
     } else {
@@ -339,11 +356,11 @@
       HUB.report('runner', { best, bestText: best ? '최고 ' + best.toLocaleString() + 'm' : '', medals: Object.keys(rec.medals).length, medalMax: D.MEDALS.length, games: rec.total.games });
     } catch (e) { /* 무시 */ }
   }
-  function reportHub() {
+  function reportHub(quit) {
     if (typeof HUB === 'undefined' || !HUB.reportRun) return;
     reportSummary();
-    // 알아서 맞춰 주는 난이도: 이번 판 성적 = 달린 거리 ÷ 그 난이도의 보통 잘하는 아이 거리
-    try { if (HUB.adaptRun) HUB.adaptRun('runner', W.diff, W.dist / (D.ADAPT.target[W.diff] || 1000)); } catch (e) { /* 무시 */ }
+    // 알아서 맞춰 주는 난이도: 이번 판 성적 = 달린 거리 ÷ 그 난이도의 보통 잘하는 아이 거리 (스스로 그만둔 판은 넣지 않는다)
+    try { if (HUB.adaptRun && !quit) HUB.adaptRun('runner', W.diff, W.dist / (D.ADAPT.target[W.diff] || 1000)); } catch (e) { /* 무시 */ }
     try {
       const s = RN.World.runStats(W);
       // 스티커·오늘의 미션: 거리 · 별 · 넘은 레이저 문 · 미끄러지기 · 가장 멀리 간 행성(1 수성 ~ 9 명왕성) · 따돌린 해적선
@@ -368,11 +385,14 @@
     show(null);
   }
 
-  function gameOver() {
-    mode = 'over';
-    input.active = false;
-    overAt = performance.now();
-    // 기록 장부: 신기록은 칩으로 보여 준다
+  // 판을 마무리한다 (게임 오버와 일시정지 → 처음 화면으로 둘 다): 기록 장부·메달·코인·미션·놀이 본부.
+  // quit: 스스로 그만뒀다 (알아서 맞춰 주는 난이도에는 넣지 않는다: 진 판이 아니니까)
+  function settle(quit) {
+    if (!W || W.settled) return null;
+    W.settled = true;
+    // 다른 창(놀이 본부·다른 게임)에서 지갑이 바뀌었을 수 있으니 저장본을 다시 읽고 더한다
+    shop = SH.load();
+    rec = PF.rec(RN.store);
     const newRec = [], T = rec.total, dist = Math.floor(W.dist), B = bestOf(W.diff);
     T.games++; T.stars += W.stars; T.dist += dist;
     const isBest = W.score > B.score && W.score > 0;
@@ -381,25 +401,101 @@
     if (W.stars > B.stars) { B.stars = W.stars; newRec.push('한 판 별 ' + W.stars); }
     saveRec();
     const fresh = checkMedals(false);
-    // 코인 · 미션
     lastEarn = SH.finishRun(shop, SH.runOf(W));
     SH.save(shop);
-    reportHub();
+    reportHub(quit);
+    return { newRec, isBest, fresh, dist, B };
+  }
+
+  // 일시정지 → 처음 화면으로: 판을 버리지 않고 마무리한다 (코인·미션·메달·기록 모두)
+  function quitRun() {
+    if (!W || (mode !== 'paused' && mode !== 'cont')) return toTitle();
+    const moved = W.dist >= 1;
+    const r = moved ? settle(true) : null;
+    toTitle();
+    if (r) {
+      const bits = ['코인 +' + fmt(lastEarn ? lastEarn.coins : 0)];
+      if (r.fresh.length) bits.push('메달 ' + r.fresh.map(m => m.name).join(', '));
+      if (lastEarn && lastEarn.done.length) bits.push('미션 완료 ' + lastEarn.done.length + '개');
+      toast(bits.join(' · '));
+    }
+  }
+
+  // ─── 한 번 더! (하트가 다했을 때 한 판에 한 번) ─────────────────
+  let contTimer = 0, contTick = 0;
+  function crashed() {
+    if (RN.World.canContinue(W)) {
+      mode = 'cont';
+      input.active = false;
+      overAt = performance.now();
+      wakeLock(false);
+      // 부딪힌 연출을 잠깐 보여 준 뒤 물어본다
+      clearTimeout(contTimer);
+      contTimer = setTimeout(askContinue, D.CONTINUE.show * 1000);
+    } else gameOver();
+  }
+  function askContinue() {
+    if (mode !== 'cont') return;
+    $('cont-title').textContent = causeText(W.cause);
+    const ask = D.CONTINUE.ask;
+    let left = ask;
+    $('cont-num').textContent = left;
+    const ring = $('cont-ring');
+    ring.style.animation = 'none'; void ring.getBoundingClientRect(); ring.style.animation = '';
+    ring.style.animationDuration = ask + 's';
+    show('scr-cont');
+    RN.Audio.play('medal');
+    clearInterval(contTick);
+    contTick = setInterval(() => { left--; if (mode === 'cont') $('cont-num').textContent = Math.max(0, left); else clearInterval(contTick); }, 1000);
+    clearTimeout(contTimer);
+    contTimer = setTimeout(() => { clearInterval(contTick); if (mode === 'cont') gameOver(); }, ask * 1000);
+  }
+  function contYes() {
+    if (mode !== 'cont' || guarded() || !$('scr-cont').classList.contains('on')) return false;
+    clearTimeout(contTimer); clearInterval(contTick);
+    if (!RN.World.continueRun(W)) { gameOver(); return false; }
+    input.reset();
+    mode = 'play';
+    wakeLock(true);
+    show(null);
+    RN.Audio.play('start');
+    vibrate([20, 30, 20]);
+    return true;
+  }
+  function contNo() {
+    if (mode !== 'cont' || guarded()) return false;
+    clearTimeout(contTimer); clearInterval(contTick);
+    gameOver();
+    return true;
+  }
+  const causeText = c => ({ gate: '레이저에 찌릿!', bar: '막대에 머리 콩!', laser: '해적 레이저에 찌릿!', bomb: '해적 폭탄에 펑!' }[c] || '운석에 쾅!');
+
+  function gameOver() {
+    const fromCont = mode === 'cont';
+    clearTimeout(contTimer); clearInterval(contTick);
+    mode = 'over';
+    input.active = false;
+    overAt = performance.now();
+    const r = settle(false) || { newRec: [], isBest: false, fresh: [], dist: Math.floor(W.dist), B: bestOf(W.diff) };
     renderEarn();
-    $('over-records').innerHTML = newRec.map(x => '<span>신기록 · ' + x + '</span>').join('');
-    $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
-    if (fresh.length) setTimeout(() => { if (mode === 'over') RN.Audio.play('medal'); }, 900);
-    $('over-title').textContent = { gate: '레이저에 찌릿!', bar: '막대에 머리 콩!', laser: '해적 레이저에 찌릿!', bomb: '해적 폭탄에 펑!' }[W.cause] || '운석에 쾅!';
+    $('over-records').innerHTML = r.newRec.map(x => '<span>신기록 · ' + x + '</span>').join('');
+    // 새 메달: 이름만 작은 칩으로 (여러 개여도 결과 화면이 한 화면에 들어가게)
+    // 아주 많으면 다섯 개와 "+N개 더" (모두 메달·기록 화면에 있다)
+    const MC = 6, shown = r.fresh.length > MC ? r.fresh.slice(0, MC - 1) : r.fresh;
+    $('over-medals').innerHTML = shown.map(m => '<span class="mchip t' + m.tier + '"><i>' + TIER[m.tier] + '</i>' + esc(m.name) + '</span>').join('') +
+      (r.fresh.length > shown.length ? '<span class="mchip more">새 메달 ' + (r.fresh.length - shown.length) + '개 더</span>' : '');
+    if (r.fresh.length) setTimeout(() => { if (mode === 'over') RN.Audio.play('medal'); }, 900);
+    $('over-title').textContent = causeText(W.cause);
     $('over-score').textContent = W.score.toLocaleString();
-    $('over-new').style.display = isBest ? '' : 'none';
-    $('over-dist').textContent = dist.toLocaleString() + 'm';
+    $('over-new').style.display = r.isBest ? '' : 'none';
+    $('over-dist').textContent = r.dist.toLocaleString() + 'm';
     $('over-stars').textContent = W.stars;
     $('over-time').textContent = RN.fmtTime(W.runT);
     const place = RN.World.placeOf(W.zone);
-    $('over-diff').textContent = D.DIFFICULTY[W.diff].name + ' 최고 ' + B.dist.toLocaleString() + 'm · ' + place.name + '까지' + (place.lap > 1 ? ' (' + place.lap + '바퀴째)' : '');
+    $('over-diff').textContent = D.DIFFICULTY[W.diff].name + ' 최고 ' + r.B.dist.toLocaleString() + 'm · ' + place.name + '까지' + (place.lap > 1 ? ' (' + place.lap + '바퀴째)' : '');
     wakeLock(false);
-    // 부딪힌 연출을 잠깐 보여 준 뒤 결과 화면
-    setTimeout(() => { if (mode === 'over') { show('scr-over'); countCoins(); } }, 900);
+    // 부딪힌 연출을 잠깐 보여 준 뒤 결과 화면 (한 번 더 화면에서 왔으면 바로)
+    setTimeout(() => { if (mode === 'over') { show('scr-over'); countCoins(); } }, fromCont ? 0 : 900);
   }
 
   function drainEvents(world, sound) {
@@ -435,7 +531,8 @@
     if (code === 'KeyM') return toggleMute();
     if (mode === 'shop') { if (code === 'Escape') closeShop(); return; }
     if (mode === 'title' && (code === 'Enter' || code === 'Space')) return newGame();
-    if (mode === 'over' && (code === 'Enter' || code === 'Space')) return newGame();
+    if (mode === 'cont') { if (code === 'Enter' || code === 'Space') contYes(); else if (code === 'Escape') contNo(); return; }
+    if (mode === 'over' && (code === 'Enter' || code === 'Space')) return guarded() ? null : newGame();
     if (code === 'KeyP' || code === 'Escape') return mode === 'play' ? pause() : resume();
     if (mode === 'paused' && (code === 'Enter' || code === 'Space')) return resume();
   };
@@ -469,10 +566,14 @@
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) claimMission(+b.dataset.claim, b); });
   }
   $('btn-medals-back').addEventListener('click', toTitle);
-  $('btn-retry').addEventListener('click', () => newGame());
-  $('btn-home').addEventListener('click', toTitle);
+  $('btn-retry').addEventListener('click', () => { if (!guarded()) newGame(); });
+  $('btn-home').addEventListener('click', () => { if (!guarded()) toTitle(); });
   $('btn-resume').addEventListener('click', resume);
-  $('btn-quit').addEventListener('click', toTitle);
+  $('btn-quit').addEventListener('click', quitRun);
+  $('btn-cont').addEventListener('click', contYes);
+  $('btn-cont-no').addEventListener('click', contNo);
+  // 게임 고르기(집) 링크: 결과 화면에서는 막 떴을 때 누른 것은 무시
+  $('btn-over-hub').addEventListener('click', e => { if (guarded()) e.preventDefault(); });
   $('btn-pause').addEventListener('click', () => (mode === 'play' ? pause() : resume()));
   $('btn-mute').addEventListener('click', toggleMute);
 
@@ -498,15 +599,43 @@
     } catch (e) { hideFs(); }
   });
 
+  // 다른 창·다른 게임에서 지갑이 바뀌었을 수 있다: 돌아오면(뒤로 가기로 저장된 페이지가 다시 보일 때도) 상점·기록을 다시 읽는다.
+  // 옛 코인 수를 들고 있다가 함께 쓰는 지갑을 덮어쓰지 않게
+  function refreshSaved() {
+    if (mode !== 'title' && mode !== 'shop' && mode !== 'over') return;
+    shop = SH.load();
+    rec = PF.rec(RN.store);
+    renderBest(); renderTitleShop();
+    if (mode === 'shop') renderShop();
+  }
+  window.addEventListener('pageshow', e => { if (e.persisted) refreshSaved(); });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) pause();
-    else if (mode === 'play' || mode === 'paused') wakeLock(true);   // 돌아오면 다시 요청
+    else {
+      if (mode === 'play' || mode === 'paused') wakeLock(true);   // 돌아오면 다시 요청
+      refreshSaved();
+    }
   });
-  // 뒤로 가기 제스처: 나가지 않고 멈춤 화면으로
-  try {
-    history.pushState({ rn: 1 }, '');
-    window.addEventListener('popstate', () => { if (mode === 'play') { pause(); history.pushState({ rn: 1 }, ''); } });
-  } catch (e) { /* 무시 */ }
+  // 뒤로 가기 제스처: 판을 하는 동안에만 나가지 않고 멈춤 화면으로. 기록을 판이 시작할 때만 하나 쌓고, 판에서 나오면 되돌린다
+  // (시작 화면에서는 뒤로 가기 한 번이면 게임 고르기로)
+  let histOn = false, ignorePop = false;
+  function pushHistory() {
+    if (histOn) return;
+    try { history.pushState({ rn: 1 }, ''); histOn = true; } catch (e) { /* 무시 */ }
+  }
+  function popHistory() {
+    if (!histOn) return;
+    histOn = false;
+    try { ignorePop = true; history.back(); } catch (e) { ignorePop = false; }
+  }
+  window.addEventListener('popstate', () => {
+    if (ignorePop) { ignorePop = false; return; }
+    if (!histOn) return;
+    histOn = false;
+    if (mode === 'play' || mode === 'paused') { pause(); pushHistory(); }
+    else if (mode === 'cont') contNo();
+    else if (mode === 'over') toTitle();
+  });
 
   // ─── 루프 ──────────────────────────────────────────────────
   // 120Hz 화면에서도 60번만 그린다 (배터리·발열). 규칙은 흐른 시간만큼 1/120초 칸으로 돌아 결과가 같다
@@ -533,15 +662,15 @@
         if ((medalCheckT += dt) > 0.5 && W.phase === 'play') { medalCheckT = 0; checkMedals(true); }
         // 처음 안내를 마치면 이 기기에 적어 둔다 (다음 판부터 안 나온다)
         if (W.tut && W.tut.step === 'done' && !W.tut.saved) { W.tut.saved = true; PF.markTutorial(RN.store); }
-        if (W.phase === 'over') gameOver();
+        if (W.phase === 'over') crashed();
         frozenDrawn = false;
       }
       // 피버 동안 빠른 배경 박자 (멈춤·결과 화면에서는 멈춘다)
       RN.Audio.feverBeat(mode === 'play' && W.phase === 'play' && W.fever > 0);
       // 결과 화면이 뜨고 연출이 끝나면 그리기를 쉰다 (배터리)
-      const idle = mode === 'paused' || (mode === 'over' && performance.now() - overAt > 1300 && !RN.Render.busy());
+      const idle = mode === 'paused' || ((mode === 'over' || mode === 'cont') && performance.now() - overAt > 1300 && !RN.Render.busy());
       if (!idle || !frozenDrawn) {
-        RN.Render.draw(ctx, W, view, mode === 'play' || mode === 'over' ? dt : 0);
+        RN.Render.draw(ctx, W, view, mode === 'play' || mode === 'over' || mode === 'cont' ? dt : 0);
         frozenDrawn = idle;
       }
     }
@@ -583,7 +712,9 @@
     get rec() { return rec; },
     get easy() { return diff === 'easy'; }, setEasy,
     get diff() { return diff; }, setDiff,
-    newGame, pause, resume, toTitle, openMedals,
+    newGame, pause, resume, toTitle, openMedals, quitRun, contYes, contNo,
+    get guarded() { return guarded(); },
+    get histOn() { return histOn; },
     move(dir) { return move(dir); },
     autopilot(on) { auto = on !== false; return auto; },
     // 상점·미션 (shop.js)

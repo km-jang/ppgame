@@ -21,10 +21,17 @@
 
   let W = null;        // 실제 판
   let demo = null;     // 시작 화면 뒤에서 혼자 도는 시연 판
-  let mode = 'title';  // title | medals | play | cards | paused | over
+  let mode = 'title';  // title | medals | shop | play | cards | paused | continue | over
   let cardsShownAt = 0;
-  let diff = NG.store.get(DIFF_KEY, 'normal');
-  if (typeof diff !== 'string' || !NG.DATA.DIFFICULTY[diff]) diff = 'normal';
+  let overShownAt = 0;   // 결과 화면이 뜬 시각 (처음 REVIVE.guard초 동안 누른 것은 무시)
+  let contShownAt = 0, contT = 0; // 한 번 더! 화면이 뜬 시각 · 지난 시간 (초)
+  let runLoadout = {};   // 이번 판에 쓴 시작 아이템 (금방 그만두면 돌려준다)
+  let cardsIdle = false; // 카드 화면에 오래 머물러 화면 켜 두기를 풀었나
+  // 처음 켠 기기는 쉬움 (2026-09-27 점검). 이미 고른 난이도가 저장돼 있으면 그대로
+  const DEF_DIFF = NG.DATA.DIFFICULTY[NG.DATA.DEFAULT_DIFF] ? NG.DATA.DEFAULT_DIFF : 'easy';
+  let diff = NG.store.get(DIFF_KEY, DEF_DIFF);
+  if (typeof diff !== 'string' || !NG.DATA.DIFFICULTY[diff]) diff = DEF_DIFF;
+  const GUARD = ((NG.DATA.REVIVE && NG.DATA.REVIVE.guard) || 0.6) * 1000;
   // 기록·메달 (records.js). 예전 최고 기록 키(ngun.best2)도 읽어 합치고 계속 같이 쓴다
   const REC = NG.Records;
   let rec = REC.load();
@@ -51,7 +58,10 @@
     // 터치 기기는 HUD를 키우고, 왼쪽 위 버튼(44px 두 개)만큼 비켜서 그린다
     view.ui = isTouch ? (Math.min(w, h) >= 600 ? 1.35 : 1.15) : 1;
     // HUD는 왼쪽 위 버튼 묶음 오른쪽부터 (전체 화면 버튼이 숨겨지면 그만큼 당긴다)
-    view.hudLeft = Math.round($('topbar').getBoundingClientRect().right) + 12;
+    // (집 버튼은 시작 화면에서만 보이므로 빼고 잰다)
+    let barRight = 0;
+    for (const id of ['btn-pause', 'btn-mute', 'btn-fs']) { const el = $(id); if (!el.hidden) barRight = Math.max(barRight, el.getBoundingClientRect().right); }
+    view.hudLeft = Math.round(barRight || $('topbar').getBoundingClientRect().right) + 12;
     view.hudTop = isTouch ? 16 : 14;
     // 이동 스틱: 태블릿은 크게, 폰은 조금 작게. 왼쪽 아래 엄지가 닿는 자리에 둔다
     const R = Math.min(w, h) >= 600 ? 80 : 62;
@@ -69,10 +79,11 @@
   window.addEventListener('resize', resize);
 
   // ─── 오버레이 ──────────────────────────────────────────────
-  const screens = ['scr-title', 'scr-shop', 'scr-medals', 'scr-cards', 'scr-pause', 'scr-over'];
+  const screens = ['scr-title', 'scr-shop', 'scr-medals', 'scr-cards', 'scr-pause', 'scr-continue', 'scr-over'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('on', s === id);
     document.body.classList.toggle('playing', mode === 'play');
+    document.body.classList.toggle('at-title', mode === 'title');
   }
 
   let toastTimer = 0;
@@ -87,7 +98,7 @@
   function renderBest() {
     const b = rec.best[diff];
     $('best').textContent = b.score > 0
-      ? NG.DATA.DIFFICULTY[diff].name + ' 최고 기록 ' + b.score.toLocaleString() + '점 · WAVE ' + b.wave
+      ? NG.DATA.DIFFICULTY[diff].name + ' 최고 기록 ' + b.score.toLocaleString() + '점 · 웨이브 ' + b.wave
       : NG.DATA.DIFFICULTY[diff].name + ' 첫 도전을 시작하세요';
     $('medal-count').textContent = REC.count(rec) + '/' + NG.DATA.MEDALS.length;
     renderTitleShop();
@@ -155,7 +166,7 @@
     $('rec-table').innerHTML = h + '</tbody>';
     const L = rec.life;
     $('rec-life').innerHTML = '<span>총 <b>' + L.games.toLocaleString() + '</b>판</span><span>처치 <b>' + L.kills.toLocaleString() + '</b></span>' +
-      '<span>보스 <b>' + L.bosses.toLocaleString() + '</b></span><span>N-버스트 <b>' + L.ults.toLocaleString() + '</b></span><span>플레이 <b>' + NG.fmtTime(L.time) + '</b></span>';
+      '<span>보스 <b>' + L.bosses.toLocaleString() + '</b></span><span>필살기 <b>' + L.ults.toLocaleString() + '</b></span><span>플레이 <b>' + NG.fmtTime(L.time) + '</b></span>';
   }
 
   function openMedals() {
@@ -178,7 +189,10 @@
     const run = REC.runOf(W);
     checkMedals(false, finished);
     const broken = REC.finish(rec, run);
+    REC.addBossKinds(rec, W.stats.bossTypes);
     REC.save(rec);
+    // 지갑은 네 게임이 같이 쓴다: 다른 게임에서 바뀐 코인을 먼저 다시 읽고 더한다 (옛 코인으로 덮어쓰지 않게)
+    shop = SH.load();
     lastEarn = SH.finishRun(shop, SH.runOf(W));
     SH.save(shop);
     reportHub(run);
@@ -208,10 +222,12 @@
     if (typeof HUB === 'undefined' || !HUB.report) return;
     reportSummary();
     try {
-      // planet: 가 본 가장 먼 행성 (1 수성 … 9 명왕성, 2바퀴는 10부터) · blackholes: 깬 블랙홀 웨이브 수 (스티커북)
+      // planet: 가 본 가장 먼 행성 (1 수성 … 9 명왕성, 10 얼음 … 17 떠돌이 외계 행성, 2바퀴는 18부터) · blackholes: 깬 블랙홀 웨이브 수 (스티커북)
       // gifts: 연 선물 상자 · fevers: 피버 타임 횟수 · wingmen: 구한 동료 우주선 (2026-09-27)
       const fresh = HUB.reportRun('ngun', { wave: W.wave, bosses: W.bossKills, kills: W.stats.kills, planet: W.stats.planet, blackholes: W.stats.holesCleared,
-        gifts: W.stats.gifts, fevers: W.stats.fevers, wingmen: W.stats.wingmen }, W.stats.time);
+        gifts: W.stats.gifts, fevers: W.stats.fevers, wingmen: W.stats.wingmen,
+        // bossKinds: 지금까지 이긴 보스 종류 수 (보스 스티커, 2026-09-27) · revives: 한 번 더! 쓴 수
+        bossKinds: REC.bossKindCount(rec), revives: W.stats.revives || 0 }, W.stats.time);
       if (fresh.length) toast('오늘의 미션 완료: ' + fresh[0]);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -336,7 +352,7 @@
         let pips = '';
         for (let k = 0; k < DD.UPGRADE_MAX; k++) pips += '<i class="' + (k < lv ? 'on' : '') + '"></i>';
         return '<div class="sitem row"><span class="s-icon">' + u.icon + '</span>' +
-          '<span class="s-mid"><b class="s-name">' + esc(u.name) + ' <small>Lv ' + lv + '</small></b><span class="s-desc">' + esc(u.desc) + '</span><span class="pips">' + pips + '</span></span>' +
+          '<span class="s-mid"><b class="s-name">' + esc(u.name) + ' <small>' + lv + '단계</small></b><span class="s-desc">' + esc(u.desc) + '</span><span class="pips">' + pips + '</span></span>' +
           priceBtn(u.id, '최대') + '</div>';
       }).join('');
     } else {
@@ -451,8 +467,10 @@
     NG.Audio.unlock();
     const { w, h } = size();
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다
+    shop = SH.load();
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
+    runLoadout = lo;
     // 알아서 맞춰 주는 난이도: 놀이 본부가 최근 판들을 보고 준 배율 (처음 두 판은 1, 없으면 1)
     const opts = SH.worldOpts(shop, lo);
     opts.adapt = adaptMul();
@@ -463,6 +481,8 @@
     input.reset();
     runMedals = [];
     runSaved = false;
+    hideSticker();
+    cardsIdle = false;
     medalCheckT = 0;
     clearMedalToasts();
     mode = 'play';
@@ -473,9 +493,34 @@
     show(null);
   }
 
+  // 판을 도중에 그만둘 때(일시정지 → 처음 화면으로·게임 고르기로): 게임 오버처럼 코인·기록·미션·메달·본부 알림을 다 하고 나간다.
+  // 아무것도 조용히 버리지 않는다. 시작하고 QUIT.refundSec초 안이면 이번 판에 쓴 시작 아이템도 돌려준다
+  function endRun() {
+    if (!W || runSaved) return null;
+    if (W.phase === 'over') NG.World.giveUp(W);
+    const before = runMedals.length;
+    saveRun(true);
+    const Q = NG.DATA.QUIT;
+    if (W.stats.time >= Q.adaptMin) adaptReport();
+    let back = 0;
+    if (W.stats.time < Q.refundSec) {
+      for (const it of NG.DATA.START_ITEMS) {
+        if (runLoadout[it.id] && (shop.items[it.id] || 0) < it.max) { shop.items[it.id] = (shop.items[it.id] || 0) + 1; back++; }
+      }
+      if (back) SH.save(shop);
+    }
+    runLoadout = {};
+    const bits = [];
+    if (lastEarn && lastEarn.coins > 0) bits.push('코인 +' + fmt(lastEarn.coins));
+    if (runMedals.length > before) bits.push('새 메달 ' + (runMedals.length - before) + '개');
+    if (back) bits.push('시작 아이템 돌려받음');
+    return bits.join(' · ');
+  }
+
   function toTitle() {
-    if (W && W.stats.time > 10) saveRun(true);
+    const note = endRun();
     clearMedalToasts();
+    hideSticker();
     W = null;
     mode = 'title';
     NG.Audio.setDuck(false);
@@ -484,6 +529,14 @@
     wakeLock(false);
     renderBest();
     show('scr-title');
+    if (note) setTimeout(() => toast(note), 250);
+  }
+
+  // 게임 고르기 화면으로 (첫 화면 ../index.html). 판 중이면 먼저 제대로 끝낸다
+  function toHub() {
+    endRun();
+    wakeLock(false);
+    try { location.href = '../index.html'; } catch (e) { /* 무시 */ }
   }
 
   function pause() {
@@ -496,7 +549,7 @@
 
   function resume() {
     if (mode !== 'paused') return;
-    input.reset();
+    input.clearButtons(); // 댄 엄지는 그대로 (손을 떼지 않고 바로 이어서 움직인다)
     mode = 'play';
     NG.Audio.setDuck(false);
     show(null);
@@ -506,24 +559,30 @@
   function pips(lv, max) {
     let h = '';
     for (let k = 0; k < max; k++) h += '<i class="' + (k < lv ? 'on' : k === lv ? 'next' : '') + '"></i>';
-    return h + '<em>Lv ' + (lv + 1) + '</em>';
+    return h; // 칸만 (영어 Lv 글자 없이)
   }
 
   function showCards() {
     mode = 'cards';
     cardsShownAt = performance.now();
-    $('cards-title').textContent = 'WAVE ' + W.wave + ' 클리어';
+    cardsIdle = false;
+    $('cards-title').textContent = '웨이브 ' + W.wave + ' 끝!';
     const list = $('card-list');
     list.innerHTML = '';
+    // 쉬움이면 한 장에 살짝 "추천" (world.js recommendCard)
+    const rec1 = W.diff.id === 'easy' ? W.recommend : -1;
     W.cards.forEach((c, i) => {
       const lv = W.player.lvl[c.id] || 0;
+      const t = NG.World.cardText(c);
       const b = document.createElement('button');
-      b.className = 'card' + (c.id === 'barrel' ? ' rare' : '');
+      b.className = 'card' + (c.id === 'barrel' ? ' rare' : '') + (i === rec1 ? ' pick-me' : '');
+      b.setAttribute('aria-label', t.words + (i === rec1 ? ' (추천)' : ''));
       b.innerHTML =
-        '<span class="card-key">' + (i + 1) + '</span>' +
-        '<span class="card-icon">' + c.icon + '</span>' +
-        '<span class="card-name">' + c.name + '</span>' +
-        '<span class="card-desc">' + c.desc + '</span>' +
+        '<span class="card-key only-pc">' + (i + 1) + '</span>' +
+        (i === rec1 ? '<span class="card-rec">추천</span>' : '') +
+        '<span class="card-icon" aria-hidden="true">' + esc(t.pic) + '</span>' +
+        '<span class="card-name">' + esc(t.words) + '</span>' +
+        '<span class="card-desc">' + esc(t.small) + '</span>' +
         '<span class="card-lv">' + (c.max === Infinity ? '' : pips(lv, c.max)) + '</span>';
       b.style.animationDelay = (i * 0.07) + 's';
       b.addEventListener('click', () => choose(i));
@@ -537,17 +596,64 @@
     // 터치는 조준하던 손가락이 그대로 카드를 누르기 쉬워서 더 길게 막는다
     if (mode !== 'cards' || performance.now() - cardsShownAt < (isTouch ? 600 : 350)) return;
     if (NG.World.pickCard(W, i)) {
-      input.reset();
+      input.clearButtons(); // 댄 엄지는 그대로 (카드를 고른 뒤 바로 이어서 움직인다)
       mode = 'play';
       show(null);
+      if (cardsIdle) { wakeLock(true); cardsIdle = false; }
       drainEvents(W);
     }
   }
 
-  function gameOver() {
+  // ─── 한 번 더! (2026-09-27) ───────────────────────────────
+  // 지면 한 판에 한 번 큰 "한 번 더!" 버튼과 줄어드는 고리(REVIVE.wait초). 누르면 world.js revive로 그 자리에서 되살아난다 (공짜)
+  function showContinue() {
+    mode = 'continue';
+    contShownAt = performance.now();
+    contT = 0;
+    NG.Audio.setDuck(true);
+    const wait = NG.DATA.REVIVE.wait;
+    $('cont-num').textContent = String(wait);
+    const ring = $('cont-ring');
+    ring.style.animation = 'none';
+    void ring.getBoundingClientRect();
+    ring.style.animation = view.calm ? 'none' : '';
+    ring.style.setProperty('--wait', wait + 's');
+    show('scr-continue');
+  }
+  function doRevive() {
+    if (mode !== 'continue' || performance.now() - contShownAt < GUARD) return false;
+    if (!NG.World.revive(W)) return false;
+    input.clearButtons();
+    mode = 'play';
+    NG.Audio.setDuck(false);
+    show(null);
+    drainEvents(W);
+    vibrate([20, 30, 40]);
+    return true;
+  }
+  function giveUpContinue(force) {
+    if (mode !== 'continue') return false;
+    if (!force && performance.now() - contShownAt < GUARD) return false;
+    NG.World.giveUp(W);
+    NG.Audio.setDuck(false);
+    gameOver(true);
+    return true;
+  }
+  function tickContinue(dt) {
+    contT += dt;
+    const wait = NG.DATA.REVIVE.wait, left = Math.max(0, Math.ceil(wait - contT));
+    const el = $('cont-num');
+    if (el.textContent !== String(left)) el.textContent = String(left);
+    if (contT >= wait) giveUpContinue(true);
+  }
+
+  // quick: 한 번 더! 화면에서 넘어오면 바로 보여 준다 (쓰러지는 장면은 이미 봤다)
+  function gameOver(quick) {
     mode = 'over';
     const broken = saveRun(true);
     adaptReport();
+    wakeLock(false);
+    runLoadout = {};
     clearMedalToasts(); // 이번 판 메달은 결과 화면에 모아 보여 준다
     NG.Audio.setFever(false);
     NG.Audio.music('off');
@@ -572,8 +678,7 @@
       if (hit) el.insertAdjacentHTML('beforeend', '<span class="chip">신기록!</span>');
     }
     // 이번 판에 딴 메달 (게임 중에 딴 것 포함)
-    const om = $('over-medals');
-    om.innerHTML = runMedals.length ? '<p class="nm-head">새 메달 ' + runMedals.length + '개</p>' + runMedals.map(m => medalHtml(m, true)).join('') : '';
+    renderOverMedals();
     if (runMedals.length) setTimeout(() => { if (mode === 'over') NG.Audio.play('medal'); }, 1100);
     const counts = {};
     for (const id of W.stats.picks) counts[id] = (counts[id] || 0) + 1;
@@ -581,10 +686,22 @@
     $('over-picks').innerHTML = Object.keys(counts).length
       ? Object.keys(counts).map(id => {
           const c = all.find(x => x.id === id);
-          return '<span class="pick">' + c.icon + ' ' + c.name + (counts[id] > 1 ? ' ×' + counts[id] : '') + '</span>';
+          const t = NG.World.cardText(c);
+          return '<span class="pick">' + esc(t.pic) + ' ' + esc(t.words) + (counts[id] > 1 ? ' ×' + counts[id] : '') + '</span>';
         }).join('')
       : '<span class="pick">없음</span>';
-    setTimeout(() => { if (mode === 'over') { show('scr-over'); countCoins(); } }, 900);
+    setTimeout(() => { if (mode === 'over') { overShownAt = performance.now(); show('scr-over'); countCoins(); } }, quick ? 0 : 900);
+  }
+
+  // 이번 판에 딴 메달: 3개까지는 카드로, 더 많으면 동그란 메달만 한 줄로 (작은 화면에서도 다시 하기 버튼이 늘 보이게)
+  function renderOverMedals() {
+    const om = $('over-medals');
+    const n = runMedals.length;
+    om.classList.toggle('strip', n > 3);
+    if (!n) { om.innerHTML = ''; return; }
+    if (n <= 3) { om.innerHTML = '<p class="nm-head">새 메달 ' + n + '개</p>' + runMedals.map(m => medalHtml(m, true)).join(''); return; }
+    om.innerHTML = '<p class="nm-head">새 메달 ' + n + '개</p>' + runMedals.map(m =>
+      '<span class="medal t' + m.tier + ' mini" title="' + esc(m.name) + '"><span class="coin' + (String(m.icon).length > 2 ? ' long' : '') + '" aria-hidden="true"><i>' + esc(m.icon) + '</i></span><span class="mname">' + esc(m.name) + '</span></span>').join('');
   }
 
   function drainEvents(world) {
@@ -593,7 +710,7 @@
       else NG.Audio.play(ev);
       if (world === W) {
         if (ev === 'boss') NG.Audio.music('boss');
-        else if (ev === 'bossDown') NG.Audio.music('play');
+        else if (ev === 'bossDown') { NG.Audio.music('play'); bossSticker(world); }
         else if (ev === 'hurt' || ev === 'over') vibrate(ev === 'over' ? 300 : 60);
         else if (ev === 'ult') vibrate([30, 40, 90]);
         else if (ev === 'ultReady') vibrate(25);
@@ -607,6 +724,40 @@
     world.events.length = 0;
   }
 
+  // ─── 보스 스티커 (2026-09-27) ──────────────────────────────
+  // 처음 이긴 보스 종류면 "보스 스티커 받았다!" 창을 잠깐 (누르지 않아도 사라지고, 게임을 막지 않는다)
+  let stickerTimer = 0;
+  function bossSticker(world) {
+    const id = world.lastBoss;
+    if (!id) return;
+    const fresh = REC.addBossKinds(rec, [id]);
+    if (!fresh.length) return;
+    REC.save(rec);
+    showSticker(id);
+  }
+  function showSticker(id) {
+    const look = NG.DATA.BOSSES.find(b => b.id === id);
+    if (!look) return;
+    const el = $('sticker');
+    const cv = $('sticker-cv');
+    NG.Render.drawBossIcon(cv.getContext('2d'), look, cv.width);
+    $('sticker-name').textContent = look.name;
+    $('sticker-name').style.color = look.color;
+    $('sticker-count').textContent = '보스 스티커 ' + REC.bossKindCount(rec) + ' / ' + NG.DATA.BOSSES.length;
+    el.style.setProperty('--sc', look.color);
+    el.classList.remove('on');
+    void el.offsetWidth;
+    el.classList.add('on');
+    NG.Audio.play('medal');
+    vibrate([20, 40, 20, 40, 60]);
+    clearTimeout(stickerTimer);
+    stickerTimer = setTimeout(hideSticker, NG.DATA.STICKER.show * 1000);
+  }
+  function hideSticker() {
+    clearTimeout(stickerTimer);
+    $('sticker').classList.remove('on');
+  }
+
   // ─── 입력 연결 ─────────────────────────────────────────────
   input.onKey = code => {
     NG.Audio.unlock();
@@ -615,7 +766,8 @@
     if (mode === 'medals') { if (code === 'Escape' || code === 'Enter') closeMedals(); return; }
     if (mode === 'shop') { if (code === 'Escape') closeShop(); return; }
     if (mode === 'title' && code === 'Enter') return newGame();
-    if (mode === 'over' && code === 'Enter') return newGame();
+    if (mode === 'over' && code === 'Enter') return retry();
+    if (mode === 'continue') { if (code === 'Enter' || code === 'Space') doRevive(); else if (code === 'Escape') giveUpContinue(); return; }
     if (code === 'KeyP' || code === 'Escape') return mode === 'play' ? pause() : resume();
     if (mode === 'cards') {
       const i = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[code];
@@ -642,7 +794,15 @@
   // 최고 점수·설정이 브라우저 정리 때 지워지지 않게 요청 (돈 0원, 이 기기 안에서만)
   const keep = () => { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* 무시 */ } };
   $('btn-start').addEventListener('click', () => { keep(); newGame(); });
-  $('btn-retry').addEventListener('click', newGame);
+  // 결과 화면: 뜨고 나서 REVIVE.guard초 동안 누른 것은 무시 (아이들이 계속 두드려서 바로 넘어가지 않게)
+  const overReady = () => mode === 'over' && performance.now() - overShownAt >= GUARD;
+  function retry() { if (overReady()) newGame(); }
+  $('btn-retry').addEventListener('click', retry);
+  $('btn-again').addEventListener('click', doRevive);
+  $('btn-giveup').addEventListener('click', () => giveUpContinue());
+  $('btn-hub').addEventListener('click', () => { if (mode === 'title') toHub(); });
+  $('btn-over-hub').addEventListener('click', () => { if (overReady()) toHub(); });
+  $('btn-quit-hub').addEventListener('click', () => { if (mode === 'paused') toHub(); });
   $('btn-medals').addEventListener('click', () => { NG.Audio.unlock(); openMedals(); });
   $('btn-medals-back').addEventListener('click', closeMedals);
   $('btn-shop').addEventListener('click', () => { NG.Audio.unlock(); openShop('ships'); });
@@ -657,7 +817,7 @@
   for (const id of ['title-missions', 'over-missions']) {
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) claimMission(+b.dataset.claim, b); });
   }
-  $('btn-home').addEventListener('click', toTitle);
+  $('btn-home').addEventListener('click', () => { if (overReady()) toTitle(); });
   $('btn-resume').addEventListener('click', resume);
   $('btn-quit').addEventListener('click', toTitle);
   $('btn-pause').addEventListener('click', () => (mode === 'play' ? pause() : resume()));
@@ -729,10 +889,26 @@
     } catch (e) { hideFs(); }
   });
 
+  // 다른 게임·다른 창에서 별코인이 바뀌었을 수 있으니 저장본을 다시 읽는다 (옛 코인으로 지갑을 덮어쓰지 않게)
+  function reloadSaved() {
+    try {
+      shop = SH.load();
+      rec = REC.load();
+      if (mode === 'title') renderBest();
+      else if (mode === 'shop') { renderShop(); renderTitleShop(); }
+      reportSummary();
+    } catch (e) { /* 무시 */ }
+  }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) pause();
-    else if (mode === 'play' || mode === 'paused') wakeLock(true); // 돌아오면 다시 요청
+    if (document.hidden) { pause(); wakeLock(false); }
+    else {
+      reloadSaved();
+      if (mode === 'play' || mode === 'paused') wakeLock(true); // 돌아오면 다시 요청
+    }
   });
+  // 뒤로 가기로 돌아온 페이지(브라우저가 통째로 기억해 둔 것)도 저장본을 다시 읽는다
+  window.addEventListener('pageshow', e => { if (e.persisted) reloadSaved(); });
+  window.addEventListener('pagehide', () => wakeLock(false));
 
   // ─── 루프 ──────────────────────────────────────────────────
   function demoInput(D) {
@@ -754,7 +930,10 @@
       demo.events.length = 0;
       NG.Render.draw(ctx, demo, demoView, null);
     } else if (W) {
-      if (mode === 'play' || mode === 'over') {
+      if (mode === 'continue') tickContinue(dt);
+      // 카드 화면에 1분 넘게 있으면 화면 켜 두기를 푼다 (배터리). 카드를 고르면 다시 요청
+      if (mode === 'cards' && !cardsIdle && performance.now() - cardsShownAt > 60000) { cardsIdle = true; wakeLock(false); }
+      if (mode === 'play' || mode === 'over' || mode === 'continue') {
         const inp = input.read(W.player);
         // 프레임이 길면 두 번에 나눠 진행 (빠른 탄이 적을 뚫고 지나가지 않게)
         const n = dt > 1 / 50 ? 2 : 1;
@@ -765,7 +944,7 @@
         // 메달은 0.5초마다 검사 (판 도중에 딴 것은 바로 알림)
         if (mode === 'play' && W.phase !== 'over' && (medalCheckT += dt) > 0.5) { medalCheckT = 0; checkMedals(true, false); }
         if (mode === 'play' && W.phase === 'cards') showCards();
-        else if (mode === 'play' && W.phase === 'over') gameOver();
+        else if (mode === 'play' && W.phase === 'over') { if (W.canRevive) showContinue(); else gameOver(); }
         updateDashBtn();
         updateUltBtn();
         if (isTouch) updateSticks();
@@ -806,6 +985,9 @@
     get world() { return W; }, get mode() { return mode; }, get diff() { return diff; },
     get medals() { return rec; }, get runMedals() { return runMedals; },
     newGame, choose, setDiff, openMedals, closeMedals, checkMedals,
+    // 한 번 더! · 보스 스티커 · 판 끝내기 (2026-09-27)
+    revive: () => doRevive(), giveUp: () => giveUpContinue(true), showSticker, hideSticker, endRun, toTitle, renderOverMedals,
+    get guard() { return GUARD; }, get view() { return view; }, get touch() { return input.touch; },
     // 기록을 다시 읽는다 (테스트가 저장소를 바꾼 뒤)
     reload() { rec = REC.load(); shop = SH.load(); renderBest(); },
     // 상점·미션 (shop.js)

@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 공용 우주 여행 도감 (외계 행성 이름·날씨). 게임 index.html도 data.js보다 먼저 불러온다
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'records.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -36,6 +38,7 @@ function plat(W, kind, x, y, w) {
   return p;
 }
 // 주인공을 (x, y)에 두고 속도를 준다
+function W0ctl() { return empty().ctl; }
 function put(W, x, y, vy) { const P = W.p; P.x = P.px = x; P.y = P.py = y; P.vx = 0; P.vy = vy || 0; }
 function ticks(W, n) { for (let i = 0; i < n && W.phase === 'play'; i++) tick(W); }
 // 주인공을 화면 가운데 공중에 붙잡아 두고 n칸 돌린다 (발판만 지켜볼 때)
@@ -123,6 +126,16 @@ test('처음 상태: 바닥 위에서 시작, 점수 0, 발판이 위로 넉넉�
   assert(!X.easy && X.diff === 'hard' && X.rescues === 0, 'diff hard');
   assert(create(1, { diff: 'hard', easy: true }).diff === 'hard', 'diff wins over easy');
   assert(create(1, { diff: 'nope' }).diff === 'normal', 'unknown diff falls back');
+});
+
+test('손가락 끌기: 방향 값이 1보다 작으면 그만큼 천천히, 1을 넘으면 1로 친다', () => {
+  const speed = d => { const W = empty(); put(W, 100, 300, 0); W.input.dir = d; ticks(W, 60); return W.p.vx; };
+  const full = speed(1), half = speed(0.5), over = speed(3);
+  assert(Math.abs(full - W0ctl().maxVx) < 1, '최고 속도 ' + full);
+  assert(Math.abs(half - full / 2) < 1, '절반 속도 ' + half);
+  assert(Math.abs(over - full) < 1, '1을 넘으면 1 ' + over);
+  assert(Math.abs(speed(-0.25) + full / 4) < 1, '왼쪽 4분의 1');
+  assert(D.DRAG.start > 0 && D.DRAG.gain > 0 && D.DRAG.full > 0 && D.DRAG.max <= 1, 'DRAG 수치');
 });
 
 test('발판에 내려앉으면 위로 튄다', () => {
@@ -636,23 +649,28 @@ test('메달 확인 함수: 이번 판 기록과 평생 기록으로 판정', ()
   for (const k of ['diff', 'easy', 'height', 'score', 'stars', 'springs', 'rockets', 'saves', 'maxCombo', 'zone']) assert(k in s, 'runStats has ' + k);
 });
 
-test('높이 구역: 0 하늘 · 100 구름 위 · 250 우주(행성들) · 700 별나라, 넘을 때 한 번씩 알린다', () => {
-  assert(zoneAt(0) === 0 && zoneAt(99) === 0 && zoneAt(100) === 1 && zoneAt(249) === 1 && zoneAt(250) === 2 && zoneAt(699) === 2 && zoneAt(700) === 3 && zoneAt(9999) === 3, 'zoneAt');
-  assert(D.ZONES.map(z => z.id).join() === 'sky,cloud,space,stars', 'zone ids');
+// 2026-09-27 외계 행성 여덟이 700m(명왕성 다음)에 들어와 700m 구역이 "외계 행성"이 되고 별나라는 1100m로 옮겼다
+test('높이 구역: 0 하늘 · 100 구름 위 · 250 우주(행성들) · 700 외계 행성 · 1100 별나라, 넘을 때 한 번씩 알린다', () => {
+  assert(zoneAt(0) === 0 && zoneAt(99) === 0 && zoneAt(100) === 1 && zoneAt(249) === 1 && zoneAt(250) === 2 && zoneAt(699) === 2 && zoneAt(700) === 3 && zoneAt(1099) === 3 && zoneAt(1100) === 4 && zoneAt(9999) === 4, 'zoneAt');
+  assert(D.ZONES.map(z => z.id).join() === 'sky,cloud,space,exo,stars', 'zone ids');
   for (let i = 1; i < D.ZONES.length; i++) assert(D.ZONES[i].banner && D.ZONES[i].from > D.ZONES[i - 1].from, 'banner ' + i);
   const W = empty();
   W.storm = null;   // 높이만 옮겨 보는 시험이라 먹구름은 뺀다
-  const zones = [], miles = [], planets = [];
-  for (let m = 0; m <= 720; m += 5) {
+  const zones = [], miles = [], planets = [], legs = [];
+  for (let m = 0; m <= 1120; m += 1) {
     put(W, 200, m * D.METER + 10, 0); W.cam = m * D.METER - 100; clear(W); tick(W);
     if (W.events.includes('zone')) zones.push(W.height);
-    for (const f of W.fx) { if (f.kind === 'mile') miles.push(f.m); if (f.kind === 'planet') planets.push(W.height); }
+    for (const f of W.fx) { if (f.kind === 'mile') miles.push(f.m); if (f.kind === 'planet') planets.push(W.height); if (f.kind === 'leg') legs.push(W.height); }
   }
-  assert(JSON.stringify(zones) === JSON.stringify([100, 250, 700]), 'zones at ' + zones.join(','));
-  assert(JSON.stringify(miles) === JSON.stringify([100, 200, 300, 400, 500, 600, 700]), 'miles at ' + miles.join(','));
-  assert(JSON.stringify(planets) === JSON.stringify([250, 300, 350, 400, 450, 500, 550, 600, 650]), 'planets at ' + planets.join(','));
-  assert(W.planet === 9 && runStats(W).planet === 9, 'planet kept');
-  assert(W.zone === 3 && runStats(W).zone === 3, 'zone kept');
+  assert(JSON.stringify(zones) === JSON.stringify([100, 250, 700, 1100]), 'zones at ' + zones.join(','));
+  assert(JSON.stringify(miles) === JSON.stringify([100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1100]), 'miles at ' + miles.join(','));
+  assert(JSON.stringify(planets) === JSON.stringify([250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750, 800, 850, 900, 950, 1000, 1050]), 'planets at ' + planets.join(','));
+  // 땅에서 우주까지 여정 배너: 구름 속 70 · 높은 하늘 150 · 대기권 돌파 232 (100 구름 위 · 250 우주는 구역 배너)
+  assert(JSON.stringify(legs) === JSON.stringify([70, 150, 232]), 'legs at ' + legs.join(','));
+  assert(W.planet === 17 && runStats(W).planet === 17, 'planet kept');
+  assert(W.zone === 4 && runStats(W).zone === 4, 'zone kept');
+  // 700m 외계 행성 구역의 섞임은 예전 700m 별나라와 같다 (700m까지·그 위의 놀이가 바뀌지 않게)
+  assert(JSON.stringify(D.ZONES[3].mix) === JSON.stringify({ spring: 1.3, star: 0.12, monster: 1.3 }), 'exo zone mix = old stars mix');
   // 구역에 따라 발판 섞임이 조금 바뀐다 (구름 위에는 구름 발판이 더 많다 등)
   assert(Object.keys(D.ZONES[1].mix).length > 0, 'cloud zone has a mix');
 });
@@ -981,10 +999,14 @@ test('판 기록: 밟은 몬스터 수 · 맞춤 배율, 메달 꾹꾹 20 (모�
 });
 
 // ─── 태양계 여행 · 블랙홀 구간 ──────────────────────────────
-test('태양계 여행: 우주 구역부터 50m마다 수성 → 명왕성, 그 위는 별나라', () => {
+test('태양계 여행: 우주 구역부터 50m마다 수성 → 명왕성 → 외계 행성 여덟, 그 위는 별나라', () => {
   const P = D.PLANETS;
-  assert(P.map(p => p.id).join() === 'mercury,venus,earth,mars,jupiter,saturn,uranus,neptune,pluto', 'order ' + P.map(p => p.id).join());
-  assert(P.map(p => p.name).join() === '수성,금성,지구,화성,목성,토성,천왕성,해왕성,명왕성', 'names');
+  const exo = ctx.WORLDS.EXO.map(e => e.id);
+  assert(P.map(p => p.id).join() === ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'].concat(exo).join(), 'order ' + P.map(p => p.id).join());
+  assert(P.slice(0, 9).map(p => p.name).join() === '수성,금성,지구,화성,목성,토성,천왕성,해왕성,명왕성', 'names');
+  assert(P.slice(9).every((p, i) => p.exo && p.name === ctx.WORLDS.EXO[i].name && p.line === ctx.WORLDS.EXO[i].line), 'exo names from common/worlds.js');
+  const exoZ = D.ZONES.find(z => z.id === 'exo');
+  assert(P[9].at === exoZ.from, 'first exoplanet opens the exo zone');
   const space = D.ZONES.find(z => z.id === 'space'), stars = D.ZONES.find(z => z.id === 'stars');
   assert(P[0].at === space.from && P[P.length - 1].at < stars.from, 'inside the space zone');
   for (let i = 0; i < P.length; i++) {
@@ -993,7 +1015,45 @@ test('태양계 여행: 우주 구역부터 50m마다 수성 → 명왕성, 그 
     if (i) assert(P[i].side === -P[i - 1].side, 'sides alternate ' + P[i].id);
   }
   const pa = JP.World.planetAt;
-  assert(pa(0) === 0 && pa(249) === 0 && pa(250) === 1 && pa(349) === 2 && pa(350) === 3 && pa(650) === 9 && pa(5000) === 9, 'planetAt');
+  assert(pa(0) === 0 && pa(249) === 0 && pa(250) === 1 && pa(349) === 2 && pa(350) === 3 && pa(650) === 9 && pa(699) === 9 && pa(700) === 10 && pa(1050) === 17 && pa(5000) === 17, 'planetAt');
+});
+
+test('행성 날씨: 행성마다 공용 도감의 날씨가 있고 (그리기 전용), 입자 수는 상한 안', () => {
+  const kinds = ctx.WORLDS.KINDS;
+  for (const p of D.PLANETS) {
+    const w = D.weatherOf(p.id);
+    assert(w && kinds.includes(w.kind) && w.amount > 0 && w.amount <= 1 && w.color.length === 2, 'weather ' + p.id);
+  }
+  // 얼음 행성은 눈, 용암 행성은 불씨
+  assert(D.weatherOf('frost').kind === 'snow' && D.weatherOf('lava').kind === 'ember', 'frost snow · lava ember');
+  const X = D.WEATHER;
+  assert(X.max >= 60 && X.max <= 90 && X.calm > 0 && X.calm < 1 && X.calmSpeed < 1, 'particle cap and calm');
+  // 날씨는 규칙에 없다: 같은 씨앗이면 날씨가 있든 없든 발판이 같다 (world.js는 WORLDS를 읽지 않는다)
+  assert(!/WORLDS|weather/.test(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'world.js'), 'utf8')), 'world.js has no weather');
+});
+
+test('땅에서 우주까지: 땅 → 구름 층 → 높은 하늘 → 대기권 끝 → 250m 우주 순서', () => {
+  const S = D.SKY, space = D.ZONES.find(z => z.id === 'space'), cloud = D.ZONES.find(z => z.id === 'cloud');
+  assert(space.from === 250 && D.PLANETS[0].at === 250, 'space still at 250m');
+  assert(S.ground > 0 && S.ground < S.cloud[0], 'ground below the clouds');
+  assert(S.cloud[0] < cloud.from && S.cloud[1] >= cloud.from, 'cloud layer ends at the cloud zone');
+  const hi = S.scenes.find(q => q.id === 'high'), ed = S.scenes.find(q => q.id === 'edge');
+  assert(hi && ed && S.cloud[1] < hi.from && hi.from < ed.from && ed.from < S.edge && S.edge < space.from, 'high sky → edge → space');
+  for (let i = 0; i < S.legs.length; i++) {
+    const g = S.legs[i];
+    assert(g.banner && g.sub && g.at > 0 && g.at < space.from && (!i || g.at > S.legs[i - 1].at), 'leg ' + g.id);
+    assert(!D.ZONES.some(z => z.from === g.at), 'leg does not clash with a zone banner ' + g.id);
+  }
+  assert(S.legs.find(g => g.id === 'edge').at === S.edge, 'edge banner at the glowing line');
+  // 하늘이 점점 어두워진다: 배경 별 밝기가 오를수록 커진다
+  const st = [D.ZONES[0].stars, cloud.stars, hi.stars, ed.stars, space.stars];
+  for (let i = 1; i < st.length; i++) assert(st[i] > st[i - 1], 'stars brighten ' + st.join(','));
+  const ok = ['kite', 'birds', 'balloon', 'plane', 'wballoon', 'sat', 'moon'];
+  for (const d of S.deco) assert(ok.includes(d.kind) && (d.side === 1 || d.side === -1) && d.size > 0, 'deco ' + d.kind);
+  // 도착 메달: 700m는 외계 행성, 1100m는 별나라
+  const M = id => D.MEDALS.find(m => m.id === id);
+  assert(M('starz').check({ height: 700 }, {}) && M('galaxy').check({ height: 1100 }, {}) && !M('galaxy').check({ height: 1099 }, {}), 'arrival medals');
+  assert(D.COINS.zone.length === D.ZONES.length, 'zone bonus for every zone');
 });
 
 test('블랙홀 구간: 가끔(연달아 오지 않게), 쉬움은 300m 전에는 없고, 끄는 힘은 늘 약하다', () => {
@@ -1225,6 +1285,176 @@ test('비밀 방: 20초 동안 떨어지지 않고 별을 모으며, 높이·먹
     assert(W.room === null && W.phase === 'play', 'goes on');
     assert(runStats(W).rooms === 1, 'run stats');
   }
+});
+
+// ─── 출발 장소 고르기 · 한 번 더 (2026-09-27 점검) ─────────────────
+test('출발 장소: 구름 위·우주·외계 행성 높이의 발사대에서 짧은 로켓으로 출발 (로켓 횟수에는 안 셈)', () => {
+  assert(D.STARTS.map(s => s.id + ':' + s.at).join() === 'ground:0,cloud:100,space:250,exo:700', 'places');
+  assert(JP.World.startOf('space').at === 250 && JP.World.startOf(700).id === 'exo' && JP.World.startOf('nope').id === 'ground', 'startOf');
+  for (const S of D.STARTS) {
+    const W = create(4, { diff: 'normal', viewH: 600, start: S.id });
+    assert(W.start === S.at && W.height === S.at && W.y0 === S.at * D.METER, S.id + ' height');
+    assert(W.zone === zoneAt(S.at) && W.planet === W.planet0 && W.mile === Math.floor(S.at / D.MILE.big), S.id + ' zone/planet/mile set without events');
+    const g = W.plats[0];
+    assert(g.kind === 'ground' && g.y === W.y0 && g.w === WW && !!g.pad === S.at > 0, S.id + ' pad');
+    assert(W.p.y === W.y0 + R && W.cam < W.y0 && W.genY > W.cam + 600, S.id + ' hero on pad, rows ahead');
+    assert(W.rockets === 0 && (S.at > 0 ? W.rocket === D.WARP.rocket && W.events.includes('warp') : W.rocket === 0), S.id + ' warp rocket');
+    clear(W);
+    for (let i = 0; i < 60 * 6 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+    assert(W.phase === 'play' && W.height > S.at + 20 && !W.events.includes('zone'), S.id + ' climbs ' + W.height);
+    const r = runStats(W);
+    assert(r.start === S.at && r.climb === W.height - S.at, S.id + ' run stats ' + JSON.stringify([r.start, r.climb]));
+  }
+  // 로켓 출발(시작 아이템)은 그대로 한 번 센다
+  const L = create(4, { start: 'space', loadout: { rocket: true } });
+  assert(L.rockets === 1 && L.rocket === L.rocketTime, 'loadout rocket still counts');
+  // 같은 시드·같은 출발 장소면 같은 판
+  const A = create(9, { start: 'cloud' }), B = create(9, { start: 'cloud' });
+  assert(JSON.stringify(A.plats.map(p => [p.x, p.y, p.kind])) === JSON.stringify(B.plats.map(p => [p.x, p.y, p.kind])), 'deterministic');
+});
+
+test('출발 장소: 높은 곳에서도 처음 몇 m는 몸풀기, 닿지 못하는 틈이 없다 (세 난이도)', () => {
+  const g = D.PLAYER.gravity, top = D.PLAYER.jump;
+  for (const diff of LEVELS) for (const st of ['cloud', 'space', 'exo']) {
+    const W = create(2, { diff, viewH: 600, start: st });
+    const L = D.DIFFICULTY[diff];
+    const rows = new Map();
+    for (let i = 0; i < 120; i++) { W.rocket = 10; W.cam += 150; W.p.y = W.cam + 300; tick(W); for (const r of W.recent) rows.set(r.y, r); }
+    const list = [...rows.values()].sort((a, b) => a.y - b.y);
+    const warm = list.filter(r => r.y > W.y0 && (r.y - W.y0) / D.METER < L.warm * 0.9);
+    assert(!warm.length || warm.every(r => r.kind === 'normal' || r.kind === 'spring'), diff + ' ' + st + ' warm rows only normal/spring');
+    let worst = 0, maxGap = 0;
+    for (let i = 1; i < list.length; i++) {
+      const a = list[i - 1], b = list[i], gap = b.y - a.y;
+      maxGap = Math.max(maxGap, gap);
+      if (!a.kind || b.kind === 'moving' || a.kind === 'moving' || !a.xs.length) continue;
+      const t = Math.sqrt(2 * top / g) + Math.sqrt(2 * Math.max(0, top - gap) / g);
+      worst = Math.max(worst, (Math.abs(wrapDelta(a.xs[0], b.xs[0])) - b.w / 2) / (W.ctl.maxVx * t * 0.8));
+    }
+    assert(maxGap < top * 0.9 && worst < 1, diff + ' ' + st + ' gap ' + maxGap.toFixed(0) + ' side ' + worst.toFixed(2));
+  }
+});
+
+test('출발 장소: 장소 메달은 올라서 닿아야, 높이 메달은 이번 판에 오른 거리로', () => {
+  const M = id => D.MEDALS.find(m => m.id === id), rec = { total: { games: 0, stars: 0 } };
+  assert(M('spacez').check({ height: 250, start: 0 }, rec) && M('spacez').check({ height: 260, start: 100 }, rec), 'reach space from below');
+  assert(!M('spacez').check({ height: 400, start: 250 }, rec) && !M('cloudz').check({ height: 300, start: 250 }, rec), 'starting there does not count');
+  assert(!M('starz').check({ height: 720, start: 700 }, rec) && M('galaxy').check({ height: 1100, start: 700 }, rec), 'exo start, galaxy reached');
+  assert(!M('h50').check({ height: 290, start: 250, climb: 40 }, rec) && M('h50').check({ height: 300, start: 250, climb: 50 }, rec), 'h50 by climb');
+  assert(!M('n100').check({ diff: 'normal', height: 330, start: 250, climb: 80 }, rec), 'n100 by climb');
+  // 실제 판: 우주에서 출발해 조금 오르면 우주 도착 메달은 없다
+  const W = create(1, { diff: 'easy', viewH: 600, start: 'space' });
+  for (let i = 0; i < 60 * 8 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+  const got = D.MEDALS.filter(m => m.check(runStats(W), rec)).map(m => m.id);
+  assert(!got.includes('spacez') && !got.includes('cloudz') && !got.includes('h150'), 'medals ' + got.join(','));
+});
+
+test('출발 장소: 올라서 닿은 곳이 열리고 기억된다 (예전 최고 기록도 이어받음), 잠긴 곳을 고르면 땅', () => {
+  const r = RC.blank();
+  assert(JSON.stringify(r.places) === '{}' && RC.placeOpen(r, 'ground') && !RC.placeOpen(r, 'cloud'), 'blank');
+  const a = RC.finish(r, { diff: 'easy', height: 260, score: 300, stars: 3 });
+  assert(a.places.join() === 'cloud,space' && RC.placeOpen(r, 'space') && !RC.placeOpen(r, 'exo'), 'unlocked ' + a.places.join());
+  assert(RC.finish(r, { diff: 'easy', height: 300, score: 1, stars: 0 }).places.length === 0, 'only once');
+  const old = RC.clean({ v: 2, byDiff: { normal: { height: 720, score: 900, stars: 4, games: 3 } } });
+  assert(RC.placeOpen(old, 'exo') && RC.placeOpen(old, 'cloud'), 'old records open places');
+  assert(!RC.placeOpen(RC.clean({ places: { exo: 'yes', nope: true } }), 'exo'), 'bad saved places ignored');
+  const store = memStore({ 'jump.start': 'space' });
+  assert(RC.loadStart(store, r) === 'space' && RC.loadStart(store, RC.blank()) === 'ground' && RC.loadStart(memStore({ 'jump.start': 42 }), r) === 'ground', 'loadStart');
+  RC.saveStart('cloud', store);
+  assert(store.m['jump.start'] === 'cloud', 'saveStart');
+});
+
+test('한 번 더: 한 판에 한 번, 구조 구름이 아래에서 받아 던져 올리고 잠깐 지켜 준다', () => {
+  for (const diff of LEVELS) {
+    const W = empty({ diff });
+    assert(!JP.World.canContinue(W) && !JP.World.revive(W), diff + ' not while playing');
+    put(W, 200, W.cam + 300, 0);
+    for (let i = 0; i < 1200 && W.phase === 'play'; i++) tick(W);
+    assert(W.phase === 'over' && JP.World.canContinue(W), diff + ' can continue after the end ' + W.cause);
+    clear(W);
+    const cam = W.cam;
+    assert(JP.World.revive(W) && W.phase === 'play' && W.continued && W.safeT === D.CONTINUE.safe && W.cause === null, diff + ' revived');
+    assert(W.events.includes('revive') && W.fx.some(f => f.kind === 'rescue') && W.p.vy > 0 && Math.abs(W.p.y - (W.cam + R)) < 1e-6 && W.cam === cam, diff + ' thrown up from the bottom');
+    // 지켜 주는 동안: 떨어져도 다시 받아 주고, 폭탄·몬스터는 톡 터진다
+    const r0 = W.rescued;
+    W.mines.push({ id: 991, x: W.p.x, y: W.p.y + 30, gone: false, seen: -1 });
+    W.monsters.push({ id: 992, kind: 'bird', x: W.p.x, px: W.p.x, x0: W.p.x, y: W.p.y + 60, y0: W.p.y + 60, off: 0, range: 0, vx: 0, float: 0, host: 0, gone: false, cool: 0, seen: -1, hit: -9 });
+    ticks(W, 40);
+    assert(W.phase === 'play' && W.mines[0].gone && W.monsters[0].gone, diff + ' safe from mine and monster');
+    ticks(W, 60 * 2);
+    assert(W.phase === 'play' && W.rescued === r0, diff + ' falls back up while safe, rescue clouds untouched');
+    // 지켜 주는 시간이 끝나면 다시 끝날 수 있고, 두 번째에는 이어 할 수 없다
+    for (let i = 0; i < 2400 && W.phase === 'play'; i++) tick(W);
+    assert(W.phase === 'over' && W.safeT === 0 && !JP.World.canContinue(W) && !JP.World.revive(W), diff + ' only once');
+    assert(runStats(W).continued, diff + ' run stats');
+  }
+});
+
+test('한 번 더: 먹구름은 멀리 물러나 쉬고, 이어 한 판도 기록·높이가 그대로 이어진다', () => {
+  const W = create(3, { diff: 'hard', viewH: 600 });
+  // 봇으로 조금 올라가 먹구름이 나온 뒤, 발판을 치워 떨어지게 한다
+  for (let i = 0; i < 60 * 60 && W.phase === 'play' && W.height < 30; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+  for (let i = 0; i < 60 * 20 && W.phase === 'play'; i++) { W.plats = []; W.input.dir = 0; step(W, 1 / 60); clear(W); }
+  assert(W.phase === 'over' && W.storm.on, 'ended with the storm on');
+  const h = W.height, stars = W.starsGot, S = W.storm;
+  JP.World.revive(W);
+  assert(W.height === h && W.starsGot === stars, 'keeps height and stars');
+  assert(S.y <= W.cam - W.viewH * D.CONTINUE.back + 1e-6 && S.rest >= D.CONTINUE.safe, 'storm pushed back ' + (W.cam - S.y));
+  for (let i = 0; i < 60 * 2.5 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); clear(W); }
+  assert(W.phase === 'play' && W.height >= h, 'goes on (safe for ' + D.CONTINUE.safe + 's)');
+});
+
+// ─── 손가락 입력 (input.js, 가짜 창·캔버스로) ────────────────────
+function fakeInput() {
+  const on = {}, won = {};
+  const el = { addEventListener: (k, f) => { on[k] = f; }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, width: 800 }) };
+  const c = vm.createContext({ console, Math, JSON, window: { addEventListener: (k, f) => { won[k] = f; } } });
+  c.JP = { DATA: D };
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'input.js'), 'utf8'), c, { filename: 'input.js' });
+  const I = c.JP.createInput(el);
+  const ev = (id, x, extra) => Object.assign({ pointerId: id, clientX: x, pointerType: 'touch', width: 10, height: 10, button: 0, pressure: 0.5, buttons: 1 }, extra || {});
+  return {
+    I, down: (id, x) => on.pointerdown(ev(id, x)), move: (id, x, e) => on.pointermove(ev(id, x, e)), up: id => on.pointerup(ev(id, 0)),
+  };
+}
+test('손가락: 두 번째 손가락을 대고 떼도 주인공이 갑자기 튀지 않는다 (끌기 기준을 새로)', () => {
+  const F = fakeInput(), W = { p: { x: 200 } }, v = { scale: 2 };
+  F.down(1, 500);
+  for (let x = 500; x <= 600; x += 25) F.move(1, x);   // 첫 손가락: 끌기 (100px → 62.5점)
+  const d1 = F.I.dir(W, v);
+  assert(d1 > 0, 'drag right ' + d1);
+  W.p.x += 62.5; F.I.dir(W, v);                          // 주인공이 따라갔다
+  // 두 번째 손가락을 왼쪽 멀리 대고, 첫 손가락은 계속 움직인다 (두 번째가 방향을 정한다)
+  F.down(2, 100);
+  for (let x = 600; x <= 760; x += 40) F.move(1, x);
+  const d2 = F.I.dir(W, v);
+  assert(d2 === -1, 'second finger presses left ' + d2);
+  // 두 번째 손가락을 떼면 첫 손가락이 다시 방향을 정한다: 그동안 간 160px가 한꺼번에 더해지면 안 된다
+  F.up(2);
+  const d3 = F.I.dir(W, v);
+  assert(Math.abs(d3) < 0.2, 'no sudden jump after the second finger lifts ' + d3);
+  F.move(1, 800);
+  assert(F.I.dir(W, v) > 0, 'keeps following');
+});
+test('손가락: 멈춤 뒤에도 누르고 있던 손가락이 그대로, 모르는 손가락도 누른 채 움직이면 받아들인다', () => {
+  const F = fakeInput(), W = { p: { x: 200 } }, v = { scale: 2 };
+  F.down(1, 700);
+  assert(F.I.dir(W, v) === 1 && F.I.side === 1, 'right');
+  F.I.soft();                         // 멈춤
+  assert(F.I.side === 0, 'arrow light off while paused');
+  assert(F.I.dir(W, v) === 1, 'still pressed after resume');
+  F.I.reset();                        // 예전처럼 다 잊어도
+  F.move(1, 705);                     // 누른 채 움직이면 다시 받아들인다
+  assert(F.I.dir(W, v) === 1, 're-adopted on move');
+  F.move(3, 100, { pressure: 0, buttons: 0 });   // 떠 있는 손가락(누르지 않음)은 무시
+  assert(F.I.dir(W, v) === 1, 'hover ignored');
+  // 끌기는 22px 넘게 밀어야 (아이 손 떨림)
+  const G = fakeInput();
+  G.down(1, 300); G.move(1, 318);
+  assert(G.I.dir(W, v) === -1 && !G.I.drag, 'small wiggle stays a press');
+  G.move(1, 330);
+  G.I.dir(W, v);
+  assert(G.I.drag, 'a real slide becomes a drag');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -6,6 +6,8 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ console, Math, Date, JSON });
+// 우주 여행 도감(외계 행성·날씨)을 브라우저와 같은 차례로 먼저 불러온다 (index.html: hub.js 다음 worlds.js)
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'worlds.js'), 'utf8'), ctx, { filename: 'worlds.js' });
 for (const f of ['util.js', 'data.js', 'world.js', 'shop.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'runner', 'js', f), 'utf8'), ctx, { filename: f });
 }
@@ -489,7 +491,8 @@ test('난이도 차례: 사람 같은 로봇이 쉬움 > 보통 > 어려움 순�
   assert(E.time > M.time * 2 && M.time > H.time * 1.5, 'order ' + [E.time, M.time, H.time].map(x => x.toFixed(0)).join(' > '));
   assert(E.time >= 300, 'easy several minutes: ' + E.time.toFixed(0));
   assert(kid.time >= 180, 'kid on easy several minutes: ' + kid.time.toFixed(0));
-  assert(M.time >= 60 && M.time <= 150, 'normal about 1 to 2 minutes: ' + M.time.toFixed(0));
+  // 보통은 사람 같은 로봇이 2분 남짓 (2026-09-27 점검: 83초로 쉬움과 차이가 너무 커서 조금 풀었다)
+  assert(M.time >= 110 && M.time <= 160, 'normal about 2 minutes: ' + M.time.toFixed(0));
   assert(H.time <= M.time * 0.6, 'hard clearly shorter: ' + H.time.toFixed(0));
 });
 
@@ -514,21 +517,26 @@ test('옛 키 옮기기: runner.easy → runner.diff, 옛 최고 기록 → 그�
   assert(Pf.rec(mem({ 'runner.rec': 'garbage' })).best.hard.dist === 0, 'broken record');
 });
 
-test('태양계 여행: 거리에 따라 수성 → 금성 → 지구 → 화성 → 목성 → 토성 → 천왕성 → 해왕성 → 명왕성 → 은하 너머 → 다시 수성', () => {
+test('우주 여행: 수성 → … → 명왕성 → 외계 행성 여덟(도감 차례) → 은하 너머 → 다시 수성 (바퀴를 돌아도 같은 차례)', () => {
   const Z = D.ZONES, leg = D.ROUTE.leg, zoneAt = RN.World.zoneAt, placeOf = RN.World.placeOf;
-  const names = ['수성', '금성', '지구', '화성', '목성', '토성', '천왕성', '해왕성', '명왕성', '은하 너머'];
-  assert(Z.length === 10 && Z.map(z => z.name).join() === names.join(), 'order ' + Z.map(z => z.name).join());
+  const WX = vm.runInContext('WORLDS', ctx);
+  const solar = ['수성', '금성', '지구', '화성', '목성', '토성', '천왕성', '해왕성', '명왕성'];
+  const names = solar.concat(WX.EXO.map(e => e.name), ['은하 너머']);
+  const N = names.length;
+  assert(N === 18 && Z.length === N && Z.map(z => z.name).join() === names.join(), 'order ' + Z.map(z => z.name).join());
+  assert(Z.slice(9, 17).map(z => z.id).join() === WX.EXO.map(e => e.id).join() && Z.slice(9, 17).every(z => z.exo), 'exo after pluto');
   assert(Z.every((z, i) => z.at === i * leg && z.line && !/[\u2014\u2013]/.test(z.name + z.line)), 'at and lines');
+  assert(new Set(Z.map(z => z.id)).size === N, 'ids unique');
   assert(leg >= 300 && leg <= 400 && Z[8].at >= 2800 && Z[8].at <= 3200, 'pluto at ' + Z[8].at);
   // 짝수 번째 도착은 기념 아치 자리와 겹친다 (아치에 이름이 적힌다)
   assert(Z[2].at % D.MILESTONE.every === 0 && Z[8].at % D.MILESTONE.every === 0, 'arches line up');
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < N * 2 + 5; i++) {
     const d = i * leg;
     assert(zoneAt(d) === i && zoneAt(d - 0.1) === Math.max(0, i - 1) && zoneAt(d + leg - 0.1) === i, 'threshold ' + i);
     const pl = placeOf(i);
-    assert(pl.name === names[i % 10] && pl.stop === i % 10 && pl.lap === Math.floor(i / 10) + 1, 'place ' + i + ' ' + pl.name);
+    assert(pl.name === names[i % N] && pl.stop === i % N && pl.lap === Math.floor(i / N) + 1, 'place ' + i + ' ' + pl.name);
   }
-  assert(zoneAt(0) === 0 && placeOf(10).name === '수성' && placeOf(10).lap === 2, 'second lap');
+  assert(zoneAt(0) === 0 && placeOf(N).name === '수성' && placeOf(N).lap === 2 && placeOf(N + 9).name === WX.EXO[0].name, 'second lap');
   const W = empty();
   W.dist = leg - 1;
   run(W, 0.5);
@@ -539,8 +547,34 @@ test('태양계 여행: 거리에 따라 수성 → 금성 → 지구 → 화성
   assert(runStats(W).zone === 1, 'run stats zone');
   // 한 판에 여러 바퀴도: 거리와 도착 수가 함께 는다
   const V = empty();
-  V.dist = 10 * leg + 5; run(V, 0.1);
-  assert(runStats(V).zone === 10 && runStats(V).lap === 2, 'lap 2 stats');
+  V.dist = N * leg + 5; run(V, 0.1);
+  assert(runStats(V).zone === N && runStats(V).lap === 2, 'lap 2 stats');
+  // 외계 행성 구간에서도 도착 글자가 한 번씩 (명왕성 → 꽁꽁 얼음 행성)
+  const X = empty();
+  X.dist = 9 * leg - 1; run(X, 0.5);
+  assert(X.zone === 9 && placeOf(X.zone).id === WX.EXO[0].id && X.fx.some(f => f.kind === 'zone' && f.i === 9), 'exo arrival');
+});
+
+test('행성 날씨: 태양계 아홉·외계 여덟 모두 도감의 날씨, 은하 너머는 없음 (그림 전용이라 규칙은 그대로)', () => {
+  const Z = D.ZONES, WX = vm.runInContext('WORLDS', ctx);
+  for (const z of Z) {
+    if (z.id === 'beyond') { assert(z.weather === null, 'beyond has none'); continue; }
+    assert(z.weather && z.weather === WX.weatherOf(z.id) && WX.KINDS.indexOf(z.weather.kind) >= 0, 'weather ' + z.id);
+    assert(z.weather.amount > 0 && z.weather.amount <= 1 && Math.abs(z.weather.wind) <= 1, 'amount/wind ' + z.id);
+  }
+  const kinds = new Set(Z.filter(z => z.weather).map(z => z.weather.kind));
+  for (const k of ['snow', 'ember', 'rain', 'glass', 'sparkle', 'sand', 'spore', 'aurora', 'bolt', 'haze']) assert(kinds.has(k), 'kind used ' + k);
+  // 얼음 행성은 눈, 불 행성은 불씨
+  assert(Z.find(z => z.id === 'neptune').weather.kind === 'snow' && Z.find(z => z.id === 'frost').weather.kind === 'snow', 'ice -> snow');
+  assert(Z.find(z => z.id === 'mercury').weather.kind === 'ember' && Z.find(z => z.id === 'lava').weather.kind === 'ember', 'fire -> ember');
+  assert(D.WEATHER.max >= 60 && D.WEATHER.max <= 90 && D.WEATHER.calm < 1, 'particle cap');
+  // 날씨는 길을 바꾸지 않는다: 같은 씨앗이면 날씨 정보를 지워도 같은 줄
+  const a = create(7, { wait: 0 }), saved = Z.map(z => z.weather);
+  Z.forEach(z => { z.weather = null; });
+  const b = create(7, { wait: 0 });
+  Z.forEach((z, i) => { z.weather = saved[i]; });
+  run(a, 20); run(b, 20);
+  assert(a.dist === b.dist && a.obs.length === b.obs.length && a.obs.every((o, i) => o.kind === b.obs[i].kind && o.x === b.obs[i].x), 'same road');
 });
 
 test('기념 아치: 250m마다 지나가면 작은 보너스', () => {
@@ -721,7 +755,12 @@ test('메달: 새 메달 (어려움 · 화성 · 아슬아슬 · 완벽한 별�
   const E = runStats(Object.assign(empty(), { dist: 1300 }));
   assert(!get('hard').check(E, rec) && !get('normal').check(E, rec), 'easy does not get level medals');
   const far = runStats(Object.assign(empty(), { dist: D.ZONES[8].at + 1, bhPassed: 1, bars: 10 }));
-  for (const id of ['pluto', 'bhole', 'slide10', 'd3000']) assert(get(id).check(far, rec), 'medal ' + id);
+  for (const id of ['pluto', 'bhole', 'slide10']) assert(get(id).check(far, rec), 'medal ' + id);
+  // d3000은 명왕성 메달과 똑같았다: 이제 여행의 끝 은하 너머 (id 그대로)
+  const beyond = D.ZONES[D.ZONES.length - 1];
+  assert(beyond.id === 'beyond' && !get('d3000').check(far, rec), 'd3000 is not the same as pluto');
+  assert(get('d3000').check(runStats(Object.assign(empty(), { dist: beyond.at + 1 })), rec) && !get('d3000').check(runStats(Object.assign(empty(), { dist: beyond.at - 1 })), rec), 'd3000 at the galaxy beyond ' + beyond.at);
+  assert(get('d3000').desc !== get('pluto').desc && get('d3000').name !== get('pluto').name, 'different words');
   assert(!get('pluto').check(E, rec) && !get('bhole').check(E, rec) && !get('slide10').check(E, rec), 'new medals need their thing');
   // 예전에 딴 메달이 사라지지 않게 옛 id는 모두 남아 있다
   for (const id of ['d500', 'd1500', 'd3000', 's50', 's150', 'gate10', 'shield', 'boost3', 'clean', 'normal', 'hard', 'nebula', 'near10', 'perfect5', 'games10', 'stars1k']) assert(get(id), 'old id ' + id);
@@ -1061,7 +1100,10 @@ test('쉬움부터 네 방향: 몸풀기(운석 하나·별) 뒤에 레이저 �
     const W = create(seed, { wait: 0 });
     const seen = new Set();
     for (let i = 0; i < 120 * 120; i++) { W.inv = 99; W.hearts = 9; tick(W); if (W.lastRow) { seen.add(W.lastRow.pat); all.add(W.lastRow.pat); } }
-    for (const k of ['gate', 'bar']) assert(seen.has(k), 'seed ' + seed + ' no ' + k + ' in 2 min: ' + [...seen].join());
+    // 문이 든 줄·막대가 든 줄 (한 줄짜리든 둘 섞인 줄이든)
+    const has = ks => ks.some(k => seen.has(k));
+    assert(has(['gate', 'mg', 'gg', 'gb', 'g3', 'mgb']), 'seed ' + seed + ' no gate in 2 min: ' + [...seen].join());
+    assert(has(['bar', 'mb', 'bb', 'gb', 'b3', 'mgb']), 'seed ' + seed + ' no bar in 2 min: ' + [...seen].join());
     assert(seen.has('g3') || seen.has('b3'), 'seed ' + seed + ' no wall in 2 min');
   }
   assert(all.has('g3') && all.has('b3'), 'both walls');
@@ -1092,6 +1134,14 @@ test('옆으로만 피하는 로봇은 쉬움에서도 멀리 못 간다 (다 �
 });
 
 // ─── 블랙홀 ───
+test('도감(worlds.js)을 못 불러와도 태양계 열 곳으로 그대로 돈다', () => {
+  const c2 = vm.createContext({ console, Math, Date, JSON });
+  for (const f of ['util.js', 'data.js', 'world.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'runner', 'js', f), 'utf8'), c2, { filename: f });
+  const R2 = vm.runInContext('RN', c2), Z2 = R2.DATA.ZONES;
+  assert(Z2.length === 10 && Z2[8].id === 'pluto' && Z2[9].id === 'beyond' && Z2.every(z => z.weather === null), 'fallback ' + Z2.map(z => z.id).join());
+  assert(R2.World.placeOf(10).stop === 0 && R2.World.placeOf(10).lap === 2, 'fallback loop');
+});
+
 test('블랙홀 구간: 지구 다음부터, 행성 구간마다 약 15% (두 구간 연달아 없음), 구간 안에 알맞은 길이', () => {
   const B = D.BLACKHOLE, leg = D.ROUTE.leg;
   let eligible = 0, got = 0;
@@ -1702,6 +1752,169 @@ test('선물·피버·워프가 있어도 같은 씨앗이면 같은 길, 주사
     return [W.ticks, W.dist.toFixed(6), W.stars, W.gifts, W.warps, W.fevers, W.score].join(',');
   });
   assert(res[0] === res[1] && res[1] === res[2], res.join(' | '));
+});
+
+
+// ─── 2026-09-27 점검 권고 (소유자 승인) ───────────────────────────
+// 처음 안내를 아이처럼: 글자가 뜨고 delay초 뒤에 민다. lane: 옆으로 밀기 단계에서 밀 때(초, null이면 안 민다)
+function tutKid(seed, diff, delay, lane) {
+  const W = create(seed, { tutorial: true, wait: 0, diff });
+  const T = W.tut, pats = new Set(), log = { showRel: {}, maxSpeed: 0 };
+  let due = null, lastRow = null;
+  const hearts0 = W.hearts;
+  for (let i = 0; i < 120 * 120 && T.step !== 'done' && W.phase === 'play'; i++) {
+    if (lane != null && T.step === 'lane' && W.runT >= lane) move(W, 'right');
+    const sh = T.show;
+    if ((sh === 'jump' || sh === 'slide') && !due) {
+      const g = RN.World.tutTarget(W, sh);
+      if (g && log.showRel[sh] == null) log.showRel[sh] = g.rel / speed(W);
+      due = { dir: sh, at: W.t + delay };
+    }
+    if (due && W.t >= due.at) { move(W, due.dir); due = null; }
+    if (due && T.step !== due.dir) due = null;
+    tick(W);
+    if (T.step !== 'done') log.maxSpeed = Math.max(log.maxSpeed, speed(W));
+    if (W.lastRow !== lastRow) { lastRow = W.lastRow; if (T.step !== 'done') pats.add(lastRow.pat); }
+  }
+  return { W, T, pats, log, hearts0 };
+}
+test('처음 안내 (a)(b)(e): 글자가 뜨고 0 ~ 0.9초 안에 밀면 늘 성공한다, 글자는 지금 속도로 1초 남짓 앞, 늘 쉬움 속도, 하트는 그대로', () => {
+  const TU = D.TUTORIAL;
+  for (const diff of D.DIFF_ORDER) {
+    for (const delay of [0, 0.15, 0.3, 0.5, 0.7, 0.9]) {
+      for (const seed of [1, 2, 3]) {
+        const { W, T, log, hearts0 } = tutKid(seed, diff, delay, 1);
+        const tag = diff + ' delay ' + delay + ' seed ' + seed;
+        assert(T.step === 'done' && T.jumpOk && T.slideOk && T.ok, tag + ': passed ' + JSON.stringify({ step: T.step, j: T.jumpOk, s: T.slideOk, tries: T.tries }));
+        assert(W.hits === 0 && W.hearts === hearts0 && W.phase === 'play', tag + ': no heart lost');
+        for (const k of ['jump', 'slide']) assert(log.showRel[k] > TU.showSec * 0.8 && log.showRel[k] < TU.showSec * 1.3, tag + ': ' + k + ' prompt ' + (log.showRel[k] || 0).toFixed(2) + 's ahead');
+        assert(log.maxSpeed <= D.DIFFICULTY.easy.speed.base + 1e-6, tag + ': easy speed during tutorial ' + log.maxSpeed.toFixed(2));
+      }
+    }
+  }
+  // 옛 문제: 느린 속도에서 문 앞뒤 부딪힘 칸이 넓어 뛸 틈이 0.27초뿐이었다. 이제 안내용 문은 좁은 칸
+  assert(TU.hitZ < D.PLAYER.hitZ, 'narrow tutorial hit zone');
+});
+
+test('처음 안내 (c)(d): 안내 동안 길에는 별 줄과 안내용 문·막대만, 글자는 한 번에 하나 (옆 → 점프 → 미끄러지기 차례, 거꾸로 안 감)', () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const { T, pats } = tutKid(seed, seed % 2 ? 'easy' : 'normal', 0.3, 1.5);
+    for (const p of pats) assert(p === 'stars' || p === 'tut' || p === 'tuts', 'seed ' + seed + ' row ' + p);
+    assert(T.step === 'done', 'done');
+  }
+  // 글자 차례: lane → (빈칸) → jump → (빈칸) → slide, 다른 글자와 겹치지 않는다
+  const W = create(5, { tutorial: true, wait: 0 }), seq = [];
+  for (let i = 0; i < 120 * 90 && W.tut.step !== 'done'; i++) {
+    if (W.runT > 1 && W.tut.step === 'lane') move(W, 'left');
+    const sh = W.tut.show;
+    if (sh && seq[seq.length - 1] !== sh) seq.push(sh);
+    if (sh === 'jump' || sh === 'slide') move(W, sh);
+    tick(W);
+    assert(!W.obs.some(o => !o.done && !o.tut && (o.kind === 'meteor' || o.kind === 'gate' || o.kind === 'bar' || o.kind === 'bomb')), 'no real obstacles');
+  }
+  assert(seq.join() === 'lane,jump,slide', 'prompt order ' + seq.join());
+});
+
+test('처음 안내 버그 2: 옆으로 안 밀어도 laneSec초 뒤 다음 단계로, 안내가 끝나면 선물·피버·워프·해적선이 다시 돈다, 두 판 뒤에는 안 나온다', () => {
+  const TU = D.TUTORIAL;
+  const W = create(8, { tutorial: true, wait: 0 });
+  run(W, TU.laneSec - 0.5);
+  assert(W.tut.step === 'lane', 'still lane');
+  run(W, 1);
+  assert(W.tut.step === 'jump' && W.events.includes('tutStep'), 'lane step timed out');
+  // 아무것도 안 해도 끝난다 (놓치면 tries번 뒤 다음 단계)
+  for (let i = 0; i < 120 * 120 && W.tut.step !== 'done'; i++) tick(W);
+  assert(W.tut.step === 'done' && W.phase === 'play' && W.hits === 0, 'ends without touching');
+  const g0 = W.giftT;
+  run(W, 2);
+  assert(W.giftT < g0, 'gift timer runs after the tutorial');
+  RN.World.feverAdd(W, 1);
+  assert(W.fever > 0, 'fever can start after the tutorial');
+  // 해적선: 안내가 끝난 뒤 1분(안내 시간은 빼고 잰다)
+  assert(W.runT - W.tutT < D.PIRATE.minT, 'level clock excludes the tutorial');
+  // 저장: 안내를 두 판 시작하면 다 못 마쳐도 더는 안 나온다
+  const m = {}, st = { get: (k, f) => (k in m ? m[k] : f), set: (k, v) => { m[k] = v; } };
+  assert(RN.Prefs.tutorialPending(st), 'first');
+  RN.Prefs.startTutorial(st);
+  assert(RN.Prefs.tutorialPending(st), 'second try');
+  RN.Prefs.startTutorial(st);
+  assert(!RN.Prefs.tutorialPending(st), 'no third time');
+  const old = { get: (k, f) => (k === 'runner.tut' ? false : f), set() {} };
+  assert(RN.Prefs.tutorialPending(old), 'old false value = not seen');
+});
+
+test('한 번 더!: 하트가 다하면 한 판에 한 번, 부딪힌 자리에서 하트 1개·앞 장애물 치움·3초 깜빡, 두 번째는 없다', () => {
+  const CT = D.CONTINUE;
+  const W = empty({ diff: 'normal' });
+  W.hearts = 1;
+  put(W, 'meteor', 1, 3);
+  run(W, 1);
+  assert(W.phase === 'over' && RN.World.canContinue(W), 'can continue');
+  const d0 = W.dist, stars0 = W.stars;
+  const near = put(W, 'meteor', 1, 10), gate = put(W, 'gate', 0, 20), far = put(W, 'meteor', 1, CT.clear + 20);
+  const st = put(W, 'star', 1, 12);
+  assert(RN.World.continueRun(W), 'continued');
+  assert(W.phase === 'play' && W.hearts === CT.hearts && W.inv === CT.inv && W.conts === 1, 'hearts and blink');
+  assert(W.dist === d0 && W.stars === stars0, 'same place, same stars');
+  assert(near.done && gate.done && !far.done && !st.done, 'cleared only obstacles just ahead');
+  assert(W.wait > 0 && W.p.y === 0 && W.p.x === W.p.lane, 'ready pose');
+  run(W, CT.wait + 0.2);
+  assert(W.inv > 0 && W.inv < CT.inv, 'blinking after the ready time');
+  // 두 번째로 다하면: 한 번 더 없음
+  W.inv = 0; W.hearts = 1; put(W, 'meteor', W.p.lane, 3);
+  run(W, 1);
+  assert(W.phase === 'over' && !RN.World.canContinue(W) && !RN.World.continueRun(W), 'only once');
+  assert(runStats(W).continues === 1, 'stats');
+  assert(!RN.World.canContinue(create(1)), 'not while playing');
+  // 해적 레이저 중에 끝나도 이어 하면 레이저가 사라진다
+  const P2 = empty(); P2.hearts = 1; P2.pir = { t: 5, laser: { lane: 1, phase: 'beam', t: 0.3, max: 0.45 } };
+  P2.phase = 'over';
+  assert(RN.World.continueRun(P2) && !P2.pir.laser, 'laser cleared');
+});
+
+test('버그 5: 부스트 별 비는 길과 따로 굴린다 (부스트가 있어도 같은 씨앗이면 같은 길)', () => {
+  const rowsOf = W => {
+    const out = [];
+    for (let i = 0; i < 120 * 40; i++) {
+      W.inv = 99; W.hearts = 9; tick(W);
+      const r = W.lastRow;
+      if (r && out[out.length - 1] !== r) out.push(r);
+    }
+    return out.map(r => r.pat + ':' + r.lanes.join('/'));
+  };
+  // 부스트가 빠르기까지 바꾸면 줄에 닿는 때가 달라지므로, 여기서는 별 비만 보려고 빠르기 배율을 잠깐 1로
+  const mul = D.ITEM.boostMul;
+  D.ITEM.boostMul = 1;
+  let a, b;
+  try {
+    a = rowsOf(create(31, { wait: 0 }));
+    const B = create(31, { wait: 0 });
+    B.eff.boost = 30;   // 30초 내내 별 비
+    b = rowsOf(B);
+    assert(B.obs.some(o => o.rain) || B.stars > 0, 'star rain fell');
+  } finally { D.ITEM.boostMul = mul; }
+  const n = Math.min(a.length, b.length);
+  assert(n >= 8, 'rows ' + n);
+  assert(a.slice(0, n).join() === b.slice(0, n).join(), 'same road with a boost\n' + a.slice(0, n).join() + '\n' + b.slice(0, n).join());
+});
+
+test('행성 도착 한 줄: 태양계는 도감(worlds.js)의 재미 한 줄, 배우는 사실 줄 없음 (도감이 없어도)', () => {
+  const WX = vm.runInContext('WORLDS', ctx);
+  for (const z of D.ZONES.slice(0, 9)) assert(z.line === WX.SOLAR_WEATHER[z.id].line, z.id + ' ' + z.line);
+  const facts = /가장 가까운|제일 큰|누운|태양과/;
+  assert(!D.ZONES.some(z => facts.test(z.line)), 'no fact lines');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'runner', 'js', 'data.js'), 'utf8');
+  assert(!facts.test(src.slice(src.indexOf('const ZONES'), src.indexOf('BLACKHOLE ='))), 'fallback lines are fun too');
+});
+
+test('아이 말: 미션 글에 "(누적)" 같은 말 없음, 처음 몇 판은 쉬운 미션만, 상점 설명에 % 없음', () => {
+  for (const m of D.MISSIONS) assert(!/누적|%/.test(m.text), m.id + ' ' + m.text);
+  assert(D.MISSIONS.find(m => m.id === 'nm15').text.includes('운석'), 'near miss explained');
+  const st = SH.blank();
+  assert(st.missions.length === 3 && st.missions.every(m => D.MISSIONS.find(d => d.id === m.id).starter), 'starter missions ' + st.missions.map(m => m.id));
+  const old = SH.blank(); old.missions = []; old.life.games = D.MISSION_STARTER + 3; SH.fillMissions(old);
+  assert(old.missions.length === 3, 'later all missions');
+  for (const x of [].concat(D.UPGRADES, D.CHARS, D.START_ITEMS)) assert(!/%|\d+(\.\d+)?\s*배|\+\d/.test(x.desc), 'kid words ' + x.desc);
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

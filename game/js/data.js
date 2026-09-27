@@ -112,21 +112,42 @@
   };
 
   // 태양계 여행 (2026-09-27, 소유자: "배경 행성을 수금지화목토천해명 지나가면 각 특색 있는 행성, 간혹 블랙홀 배경도")
-  // 웨이브 perPlanet개마다 다음 행성으로. 명왕성 다음은 다시 수성 (2바퀴, 3바퀴 …)
+  // 웨이브 perPlanet개마다 다음 행성으로. 명왕성 다음은 외계 행성 여덟(아래 EXO_FOE), 그다음 다시 수성 (2바퀴, 3바퀴 …)
   // 그림(색·무늬)은 render.js PLANET_ART. 여기는 이름·한 줄 설명·알림 색
   const JOURNEY = { perPlanet: 2 };
   // foe: 그 행성 웨이브에 섞여 나오는 행성 적 (ENEMIES)
+  // fact: 도착할 때 띄우는 재미 한 줄 (이름은 예전 그대로 두었다. 배우는 사실이 아니라 느낌, 소유자 결정: 학습 요소 없음).
+  // 공통 도감(common/worlds.js)의 WORLDS.SOLAR_WEATHER[id].line이 있으면 그걸 쓰고, 없으면 아래 한 줄
   const PLANETS = [
-    { id: 'mercury', name: '수성',   fact: '태양과 가장 가까운 행성',   color: '#c9c3bb', foe: 'ember' },
-    { id: 'venus',   name: '금성',   fact: '노란 구름이 빙글빙글',       color: '#ffcf6b', foe: 'acid' },
-    { id: 'earth',   name: '지구',   fact: '우리 집! 파란 바다 행성',    color: '#6fc3ff', foe: 'sat' },
-    { id: 'mars',    name: '화성',   fact: '빨간 모래 행성',             color: '#ff7a4d', foe: 'worm' },
-    { id: 'jupiter', name: '목성',   fact: '가장 큰 행성, 커다란 빨간 점', color: '#f0b98a', foe: 'zap' },
-    { id: 'saturn',  name: '토성',   fact: '멋진 고리를 두른 행성',      color: '#f3d58c', foe: 'shard' },
-    { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성', color: '#9ef0f0', foe: 'ice' },
-    { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',   color: '#5b8cff', foe: 'storm' },
-    { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',        color: '#e8d2b8', foe: 'ghost' },
+    { id: 'mercury', name: '수성',   fact: '뜨거운 불씨가 날려요',     color: '#c9c3bb', foe: 'ember' },
+    { id: 'venus',   name: '금성',   fact: '노란 안개가 뭉게뭉게',     color: '#ffcf6b', foe: 'acid' },
+    { id: 'earth',   name: '지구',   fact: '우리 집! 시원한 빗방울',   color: '#6fc3ff', foe: 'sat' },
+    { id: 'mars',    name: '화성',   fact: '빨간 모래바람이 쌩쌩',     color: '#ff7a4d', foe: 'worm' },
+    { id: 'jupiter', name: '목성',   fact: '번쩍번쩍 큰 폭풍',         color: '#f0b98a', foe: 'zap' },
+    { id: 'saturn',  name: '토성',   fact: '반짝이 고리가 빙글빙글',   color: '#f3d58c', foe: 'shard' },
+    { id: 'uranus',  name: '천왕성', fact: '데굴데굴 얼음 행성',       color: '#9ef0f0', foe: 'ice' },
+    { id: 'neptune', name: '해왕성', fact: '쌩쌩 눈보라',              color: '#5b8cff', foe: 'storm' },
+    { id: 'pluto',   name: '명왕성', fact: '소복소복 하트 눈 행성',    color: '#e8d2b8', foe: 'ghost' },
   ];
+  // 태양계 밖 외계 행성 여덟 (2026-09-27, 소유자: "다른 행성 배경도 다양하게. 얼음 행성이면 눈, 불의 행성이면 그에 맞게").
+  // 명왕성 다음에 이어진다 (수성 → … → 명왕성 → 얼음 → 용암 → … → 떠돌이 → 다시 수성 2바퀴, 모두 17곳).
+  // 이름·한 줄·색·날씨는 네 게임이 함께 쓰는 도감 common/worlds.js (WORLDS.EXO)에서 가져온다. 도감이 없으면 태양계 아홉만.
+  // 행성 적은 새로 만들지 않고 그 행성에 어울리는 태양계 적을 다시 쓴다 (난이도 균형이 그대로):
+  // 얼음 → 얼음 결정 · 용암 → 태양 불씨 · 바다 → 산성 구름(물웅덩이처럼 느려짐) · 유리비 → 폭풍 드론(센 바람)
+  // 보석 → 고리 조각(반짝 조각) · 해님 둘 사막 → 모래 벌레 · 버섯 → 하트 유령(빛났다 흐려짐) · 떠돌이 → 번개 구름(깜깜한 밤 번개)
+  const EXO_FOE = { frost: 'ice', lava: 'ember', ocean: 'acid', glass: 'storm', gem: 'shard', twin: 'worm', shroom: 'ghost', rogue: 'zap' };
+  const WX = typeof WORLDS !== 'undefined' && WORLDS && Array.isArray(WORLDS.EXO) ? WORLDS : null;
+  if (WX && WX.SOLAR_WEATHER) for (const p of PLANETS) {
+    const sw = WX.SOLAR_WEATHER[p.id];
+    if (sw && typeof sw.line === 'string' && sw.line) p.fact = sw.line;
+  }
+  if (WX) for (const e of WX.EXO) {
+    if (EXO_FOE[e.id]) PLANETS.push({ id: e.id, name: e.name, fact: e.line, color: e.color, foe: EXO_FOE[e.id], exo: true });
+  }
+  // 날씨 (그림만, 규칙과 무관). max: 화면에 한꺼번에 보이는 날씨 알갱이 최대 수(1280×800 기준, WORLDS 날씨 amount를 곱한다)
+  // calm: 움직임 줄이기면 알갱이 수·빠르기 배율 · low: 느린 기기(자동으로 알아챔) 알갱이 배율 · alpha: 전체 진하기 (적·탄이 잘 보이게)
+  const WEATHER = { max: 84, calmCount: 0.5, calmSpeed: 0.35, low: 0.5, alpha: 0.85 };
+
   // 행성 적 섞기: 일반 웨이브는 적 수의 share만큼(최소 min), 보스 웨이브는 boss마리를 웨이브 안에 고르게 바꿔 넣는다.
   // 처음 만나면 그 적 위에 이름표("화성 모래 벌레!")를 tag초 띄운다
   const PLANET_FOE = { share: 0.3, min: 2, boss: 2, tag: 2.4 };
@@ -183,39 +204,40 @@
   const DROP = { healChance: 0.04, life: 10, pickR: 24, magnetR: 90 };
 
   // 카드. apply(p): 플레이어 상태를 바꾼다. max: 최대 선택 횟수
+  // pic: 카드에 크게 보이는 그림 · kid: 아이 말 두세 마디 (카드 제목). desc의 정확한 수치는 카드 아래 작게만 (2026-09-27 점검)
   const CARDS = [
-    { id: 'barrel', icon: 'N+', name: '총열 추가', desc: '총열 +1. 부채꼴 탄막이 넓어진다', w: 6, max: 11,
+    { id: 'barrel', icon: 'N+', pic: '🔱', kid: '대포 하나 더', name: '총열 추가', desc: '총열 +1. 부채꼴 탄막이 넓어진다', w: 6, max: 11,
       apply: p => { p.gun.barrels += 1; } },
-    { id: 'rate', icon: '≫', name: '연사', desc: '연사 속도 +20%', w: 5, max: 8,
+    { id: 'rate', icon: '≫', pic: '⚡', kid: '더 빨리 뿅뿅', name: '연사', desc: '연사 속도 +20%', w: 5, max: 8,
       apply: p => { p.gun.rate *= 1.2; } },
-    { id: 'dmg', icon: '✦', name: '위력', desc: '탄 위력 ×1.25', w: 5, max: 10,
+    { id: 'dmg', icon: '✦', pic: '💥', kid: '총알 더 세게', name: '위력', desc: '탄 위력 ×1.25', w: 5, max: 10,
       apply: p => { p.gun.dmg *= 1.25; } },
-    { id: 'velocity', icon: '➶', name: '고속탄', desc: '탄속 +20%, 사거리 +15%', w: 3, max: 5,
+    { id: 'velocity', icon: '➶', pic: '💨', kid: '총알 슝 멀리', name: '고속탄', desc: '탄속 +20%, 사거리 +15%', w: 3, max: 5,
       apply: p => { p.gun.speed *= 1.2; p.gun.life *= 1.15; } },
-    { id: 'pierce', icon: '⇉', name: '관통탄', desc: '적을 1마리 더 꿰뚫는다', w: 3, max: 5,
+    { id: 'pierce', icon: '⇉', pic: '🏹', kid: '쏙 뚫고 가요', name: '관통탄', desc: '적을 1마리 더 꿰뚫는다', w: 3, max: 5,
       apply: p => { p.gun.pierce += 1; } },
-    { id: 'bounce', icon: '↯', name: '도탄', desc: '벽에서 1번 더 튕긴다', w: 3, max: 4,
+    { id: 'bounce', icon: '↯', pic: '🏓', kid: '벽에서 통통', name: '도탄', desc: '벽에서 1번 더 튕긴다', w: 3, max: 4,
       apply: p => { p.gun.bounce += 1; } },
-    { id: 'size', icon: '●', name: '대구경', desc: '탄 크기 +30%, 위력 +10%', w: 3, max: 4,
+    { id: 'size', icon: '●', pic: '🔴', kid: '총알 쑥쑥', name: '대구경', desc: '탄 크기 +30%, 위력 +10%', w: 3, max: 4,
       apply: p => { p.gun.size *= 1.3; p.gun.dmg *= 1.1; } },
-    { id: 'crit', icon: '✚', name: '급소 조준', desc: '치명타 확률 +8%', w: 3, max: 5,
+    { id: 'crit', icon: '✚', pic: '⭐', kid: '가끔 왕 세게', name: '급소 조준', desc: '치명타 확률 +8%', w: 3, max: 5,
       apply: p => { p.gun.crit += 0.08; } },
-    { id: 'move', icon: '»', name: '경량화', desc: '이동 속도 +12%', w: 3, max: 4,
+    { id: 'move', icon: '»', pic: '👟', kid: '더 빨리 슝', name: '경량화', desc: '이동 속도 +12%', w: 3, max: 4,
       apply: p => { p.speed *= 1.12; } },
-    { id: 'vital', icon: '♥', name: '강화 외골격', desc: '최대 체력 +1, 체력 전부 회복', w: 3, max: 5,
+    { id: 'vital', icon: '♥', pic: '❤️', kid: '하트 하나 더', name: '강화 외골격', desc: '최대 체력 +1, 체력 전부 회복', w: 3, max: 5,
       apply: p => { p.maxHp += 1; p.hp = p.maxHp; } },
-    { id: 'dash', icon: '⤳', name: '추진기', desc: '대시 쿨다운 -25%', w: 3, max: 3,
+    { id: 'dash', icon: '⤳', pic: '🌀', kid: '대시 자주 자주', name: '추진기', desc: '대시 쿨다운 -25%', w: 3, max: 3,
       apply: p => { p.dashCdMax *= 0.75; } },
-    { id: 'drone', icon: '◎', name: '궤도 드론', desc: '주위를 도는 드론 +1', w: 3, max: 4,
+    { id: 'drone', icon: '◎', pic: '🛸', kid: '친구 드론', name: '궤도 드론', desc: '주위를 도는 드론 +1', w: 3, max: 4,
       apply: p => { p.drones += 1; } },
-    { id: 'vamp', icon: '❦', name: '흡혈', desc: '처치 시 4% 확률로 체력 +1', w: 2, max: 3,
+    { id: 'vamp', icon: '❦', pic: '💖', kid: '잡으면 가끔 하트', name: '흡혈', desc: '처치 시 4% 확률로 체력 +1', w: 2, max: 3,
       apply: p => { p.vamp += 0.04; } },
-    { id: 'nova', icon: '✺', name: '충격파', desc: '대시가 끝날 때 주변을 폭발시킨다', w: 2, max: 3,
+    { id: 'nova', icon: '✺', pic: '🎆', kid: '대시 끝에 펑', name: '충격파', desc: '대시가 끝날 때 주변을 폭발시킨다', w: 2, max: 3,
       apply: p => { p.nova += 1; } },
   ];
 
   // 고를 카드가 모자랄 때만 나오는 보충 카드
-  const FALLBACK_CARD = { id: 'patch', icon: '+', name: '응급 수리', desc: '체력 2 회복', w: 0, max: Infinity,
+  const FALLBACK_CARD = { id: 'patch', icon: '+', pic: '🩹', kid: '하트 채우기', name: '응급 수리', desc: '체력 2 회복', w: 0, max: Infinity,
     apply: p => { p.hp = Math.min(p.maxHp, p.hp + 2); } };
 
   // 필살기 "N-버스트": 적에게 준 피해로 게이지가 찬다. 가득 차면 버튼(PC: Q 또는 E)으로 발동.
@@ -255,17 +277,17 @@
   const MEDALS = [
     { id: 'boss1',   tier: 1, icon: 'B',   name: '첫 보스 격파',   desc: '보스를 처음으로 쓰러뜨린다',            check: (r, L) => L.bosses >= 1 },
     { id: 'boss3',   tier: 3, icon: 'B3',  name: '보스 사냥꾼',    desc: '한 판에 보스 3마리 격파',               check: r => r.bossKills >= 3 },
-    { id: 'ultBoss', tier: 2, icon: 'N!',  name: '마무리 일격',    desc: 'N-버스트로 보스의 숨통을 끊는다',       check: r => r.ultBoss >= 1 },
-    { id: 'n3',      tier: 1, icon: 'N3',  name: '세 갈래',        desc: '한 판에 총열 N 3',                      check: r => r.maxN >= 3 },
-    { id: 'n5',      tier: 2, icon: 'N5',  name: '다섯 갈래',      desc: '한 판에 총열 N 5',                      check: r => r.maxN >= 5 },
-    { id: 'n8',      tier: 3, icon: 'N8',  name: '여덟 갈래',      desc: '한 판에 총열 N 8',                      check: r => r.maxN >= 8 },
+    { id: 'ultBoss', tier: 2, icon: 'N!',  name: '마무리 일격',    desc: '필살기로 보스를 마무리',                check: r => r.ultBoss >= 1 },
+    { id: 'n3',      tier: 1, icon: 'N3',  name: '세 갈래',        desc: '한 판에 대포 3개',                      check: r => r.maxN >= 3 },
+    { id: 'n5',      tier: 2, icon: 'N5',  name: '다섯 갈래',      desc: '한 판에 대포 5개',                      check: r => r.maxN >= 5 },
+    { id: 'n8',      tier: 3, icon: 'N8',  name: '여덟 갈래',      desc: '한 판에 대포 8개',                      check: r => r.maxN >= 8 },
     { id: 'k100',    tier: 1, icon: '100', name: '백 처치',        desc: '한 판에 적 100마리',                    check: r => r.kills >= 100 },
     { id: 'k500',    tier: 2, icon: '500', name: '오백 처치',      desc: '한 판에 적 500마리',                    check: r => r.kills >= 500 },
     { id: 'c10',     tier: 1, icon: 'x10', name: '연쇄 반응',      desc: '10콤보',                                check: r => r.bestCombo >= 10 },
     { id: 'c25',     tier: 2, icon: 'x25', name: '폭주',           desc: '25콤보',                                check: r => r.bestCombo >= 25 },
     { id: 'c50',     tier: 3, icon: 'x50', name: '멈출 수 없다',   desc: '50콤보',                                check: r => r.bestCombo >= 50 },
-    { id: 'ult3',    tier: 1, icon: 'Q3',  name: '필살 3연발',     desc: '한 판에 N-버스트 3번',                  check: r => r.ults >= 3 },
-    { id: 'ultMass', tier: 2, icon: 'Q15', name: '한 방 청소',     desc: 'N-버스트 한 번에 적 15마리',            check: r => r.ultBest >= 15 },
+    { id: 'ult3',    tier: 1, icon: '★3',  name: '필살 3연발',     desc: '한 판에 필살기 3번',                    check: r => r.ults >= 3 },
+    { id: 'ultMass', tier: 2, icon: '★15', name: '한 방 청소',     desc: '필살기 한 번에 적 15마리',              check: r => r.ultBest >= 15 },
     { id: 'clean',   tier: 3, icon: '0',   name: '무결점',         desc: '보스 웨이브를 한 대도 안 맞고 클리어',  check: r => r.cleanBoss >= 1 },
     { id: 'w10',     tier: 1, icon: '10',  name: '10웨이브',       desc: '아무 난이도로 10웨이브 도달',           check: r => r.wave >= 10 },
     { id: 'w10n',    tier: 2, icon: '10',  name: '보통 10웨이브',  desc: '보통 이상으로 10웨이브 도달',           check: r => r.wave >= 10 && r.diff !== 'easy' },
@@ -274,7 +296,7 @@
     { id: 'games10', tier: 1, icon: '10판', name: '단골',          desc: '10판 플레이',                           check: (r, L) => L.games >= 10 },
   ];
 
-  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, PLANET_FOE, ADAPT, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
+  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, EXO_FOE, WEATHER, PLANET_FOE, ADAPT, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
 
   // ═══ 기체 · 상점 · 미션 · 아이템 (2026-09-26, 소유자: "캐릭터 고를 수 있게, 상점·미션·아이템") ═══
   // 기체. hp: 체력 더하기, speed·dashCd: 배율, gun: 총 바꾸기(barrels 더하기, rate·dmg·speed 배율, crit 더하기,
@@ -348,7 +370,7 @@
     { id: 'c20',    kind: 'run',  stat: 'bestCombo', goal: 20,   reward: 120, text: '한 판에 20콤보' },
     { id: 'w10',    kind: 'run',  stat: 'wave',      goal: 10,   reward: 200, text: '한 판에 웨이브 10 도달' },
     { id: 'clean3', kind: 'run',  stat: 'cleanWaves', goal: 3,   reward: 120, text: '한 판에 안 맞고 웨이브 3번 클리어' },
-    { id: 'n4',     kind: 'run',  stat: 'maxN',      goal: 4,    reward: 150, text: '한 판에 총열 N 4' },
+    { id: 'n4',     kind: 'run',  stat: 'maxN',      goal: 4,    reward: 150, text: '한 판에 대포 4개' },
     { id: 's5000',  kind: 'run',  stat: 'score',     goal: 5000, reward: 150, text: '한 판에 5,000점' },
     { id: 't300',   kind: 'run',  stat: 'time',      goal: 300,  reward: 120, text: '한 판에 5분 버티기' },
     { id: 'viper6', kind: 'run',  stat: 'wave',      goal: 6,    reward: 130, text: '바이퍼로 웨이브 6 도달', ship: 'viper' },
@@ -399,5 +421,29 @@
     time: 25, bye: 2.2, rate: 3, dmgMul: 0.5, bulletSpeed: 480, range: 560, r: 10, side: 60, follow: 6,
   };
 
-  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS, GIFT, FEVER, WINGMAN });
+  // ═══ 아이 눈높이 점검 (2026-09-27, 소유자 승인) ═══
+  // 한 번 더!: 한 판에 한 번(count), 지면 큰 "한 번 더!" 버튼이 wait초 동안 뜬다(고리가 줄어듦). 누르면 그 자리에서 되살아나
+  // hpShare만큼(최소 hpMin) 체력을 채우고 iframe초 무적, 둘레 clearR px 안의 적 탄·레이저·운석 예고를 지우고 가까운 적을 pushR px 밖으로 민다.
+  // 공짜 (코인 안 듦). guard: 결과·한 번 더 화면이 뜬 뒤 이 시간 동안 누른 것은 무시 (아이들이 계속 두드려서)
+  const REVIVE = { count: 1, wait: 5, hpShare: 0.5, hpMin: 2, iframe: 3, clearR: 320, pushR: 170, guard: 0.6 };
+
+  // 쉬움에서 카드 하나에 "추천" 표시: 체력이 절반 이하면 hurt 목록을 먼저, 아니면 order 차례로 처음 보이는 카드
+  const RECOMMEND = { hurt: ['vital', 'patch', 'vamp'], order: ['barrel', 'rate', 'dmg', 'drone', 'vital', 'move', 'size', 'pierce', 'dash', 'velocity', 'crit', 'bounce', 'nova', 'vamp', 'patch'] };
+
+  // 보스 스티커: 처음 이긴 보스 종류마다 축하 창(show초)과 보스 그림. 기록은 ngun.rec1 bossKinds, 본부에는 reportRun bossKinds(이긴 종류 수)
+  const STICKER = { show: 2.6 };
+
+  // 화면 (그림만, 규칙과 무관)
+  // particles: 파편·불꽃 최대 수 (가득 차면 가장 오래된 것 자리에 덮어쓴다) · shipScale: 내 기체를 그릴 때 크기 배율 (맞는 판정 r은 그대로)
+  // planetDim: 웨이브 중 배경 행성 밝기 (도착 알림 동안은 1) · hudSafe: 보스·이름표가 HUD 밑으로 들어가지 않게 위에서 비워 두는 px
+  const VIEW = { particles: 420, shipScale: 1.5, planetDim: 0.55, hudSafe: 140 };
+
+  // 그만두기: 판을 시작하고 refundSec초 안에 그만두면 이번 판에 쓴 시작 아이템을 돌려준다 (판 기록은 그대로 남긴다)
+  // adaptMin: 이보다 짧은 판은 알아서 맞춰 주는 난이도에 알리지 않는다 (실수로 시작한 판이 난이도를 흔들지 않게)
+  const QUIT = { refundSec: 5, adaptMin: 30 };
+
+  // 처음 켠 기기(저장된 난이도 없음)의 난이도. 이미 고른 난이도는 그대로 둔다 (main.js)
+  const DEFAULT_DIFF = 'easy';
+
+  Object.assign(NG.DATA, { SHIPS, UPGRADES, UPGRADE_MAX, START_ITEMS, COINS, ITEMS, MISSIONS, MISSION_SLOTS, GIFT, FEVER, WINGMAN, REVIVE, RECOMMEND, STICKER, VIEW, QUIT, DEFAULT_DIFF });
 })(NG);

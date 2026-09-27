@@ -51,7 +51,7 @@ kbd {
   left: max(10px, env(safe-area-inset-left));
   display: flex;
   gap: 6px;
-  z-index: 5;
+  z-index: 15;   /* 메뉴 화면(.screen 10) 위: 시작 화면에서도 소리·전체 화면·집 단추를 누를 수 있게 */
 }
 .icon-btn {
   display: grid; place-items: center;
@@ -519,4 +519,75 @@ body.touch .text-btn { padding: 10px 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .claim, .mrow.fresh, .coin-pop, #over-coins.done { animation: none !important; }
+}
+
+/* ═══ 2026-09-27 점검 권고 (소유자 승인): 집 버튼 · 한 번 더 · 누르기 막기 · 큰 글자 ═══ */
+/* 글 띠는 위 가운데에 (아래쪽 버튼을 가리지 않게) */
+#toast { top: max(12px, env(safe-area-inset-top)); bottom: auto; transform: translateX(-50%) translateY(-10px); max-width: min(560px, calc(100vw - 220px)); white-space: normal; text-align: center; font: normal 16px var(--disp); letter-spacing: .3px; }
+@media (max-width: 600px) { #toast { max-width: calc(100vw - 24px); top: 64px; } }
+/* 집 버튼 (게임 고르기로): 시작 화면에서만 위 줄에 */
+a.icon-btn, a.mini-btn { text-decoration: none; }
+body:not(.at-title) #btn-hub { display: none; }
+#btn-hub .i { color: var(--yellow); }
+/* 막 뜬 결과 화면·한 번 더 화면은 잠깐 누르기를 받지 않는다 */
+.screen.guard { pointer-events: none; }
+/* 결과 화면 아래 버튼 두 개 (진짜 버튼 크기) */
+.o-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.o-btns .mini-btn { min-height: 48px; font-size: 16px; }
+.o-btns .mini-btn .i { color: var(--yellow); }
+.mini-btn.wide-mini { width: 100%; margin-top: 14px; min-height: 52px; font-size: 18px; }
+.mini-btn.wide-mini .i { color: var(--yellow); }
+/* 새 메달: 이름만 작은 칩 (여러 개여도 한 화면에) */
+.new-medals .mchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--line); background: rgba(94, 231, 255, .06); font: normal 15px var(--disp); color: var(--text); animation: pop .45s var(--back) both; }
+.new-medals .mchip i { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font: 700 12px var(--num); font-style: normal; color: #1a1000;
+  background: radial-gradient(circle at 35% 30%, #fff 0 12%, var(--m1) 14% 55%, var(--m2) 100%); }
+.new-medals .mchip.t1 { --m1: #e08a4a; --m2: #7a3a14; } .new-medals .mchip.t2 { --m1: #dfe7f2; --m2: #6b7a90; } .new-medals .mchip.t3 { --m1: #ffe66d; --m2: #b98600; }
+.o-right .new-medals { gap: 6px; margin: 8px 0 0; }
+
+/* 한 번 더? */
+.panel.cpanel { max-width: 420px; padding: 22px 24px 18px; }
+#scr-cont h2 { font-size: 32px; color: var(--red); text-shadow: 0 0 20px rgba(255, 77, 109, .5); margin-bottom: 10px; }
+.cont-btn { position: relative; display: grid; place-items: center; width: 230px; height: 230px; margin: 4px auto 0; padding: 0; border: none; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 50% 35%, #fff7c9 0%, #ffd23f 55%, #d99a00 100%); box-shadow: 0 6px 0 #8a6000, 0 0 36px rgba(255, 210, 63, .55); color: #2a1c00; }
+.cont-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #8a6000, 0 0 24px rgba(255, 210, 63, .5); }
+.cont-btn:focus-visible { outline: 3px solid var(--cyan); outline-offset: 4px; }
+.cont-clock { position: absolute; inset: -12px; width: calc(100% + 24px); height: calc(100% + 24px); transform: rotate(-90deg); pointer-events: none; }
+.cont-clock circle { fill: none; stroke-width: 5; }
+.cont-clock .bg { stroke: rgba(255, 255, 255, .15); }
+.cont-clock .ring { stroke: var(--cyan); stroke-linecap: round; stroke-dasharray: 289.03; stroke-dashoffset: 0; animation: contRing 5s linear forwards; filter: drop-shadow(0 0 4px rgba(94, 231, 255, .8)); }
+@keyframes contRing { to { stroke-dashoffset: 289.03; } }
+.cont-in { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.cont-in b { font: normal 40px/1.1 var(--disp); letter-spacing: 1px; }
+.cont-in small { font: normal 15px var(--disp); color: #5a3d00; }
+.cont-in em { font: 700 30px/1 var(--num); font-style: normal; color: #7a4a00; margin-top: 4px; }
+.cont-no { display: block; margin: 18px auto 0; font-size: 16px; padding: 10px 18px; }
+
+/* 아이가 읽는 글자는 작은 탭(893×533)에서도 14px 안팎 */
+.help { font-size: 15px; }
+.tpanel .help { font-size: 15px; gap: 6px; }
+.medal small { font-size: 13px; }
+.m-num { font-size: 14px; }
+.mrow { font-size: 14px; }
+.s-desc { font-size: 14px; }
+.sc-txt em { font-size: 13px; }
+@media (max-height: 600px) and (orientation: landscape) {
+  #scr-title .tpanel .help { font-size: 14px; gap: 4px; margin-top: 8px; }
+  .mrow { font-size: 14px; } .m-num { font-size: 13px; } .mc-head { font-size: 14px; }
+  .medal b { font-size: 14px; } .medal small { font-size: 13px; line-height: 1.2; }
+  .s-desc { font-size: 13px; }
+  .sc-txt em { font-size: 13px; }
+  .cont-btn { width: 190px; height: 190px; } .cont-in b { font-size: 34px; }
+  #scr-cont h2 { font-size: 26px; margin-bottom: 6px; } .panel.cpanel { padding: 14px 20px 10px; } .cont-no { margin-top: 12px; }
+  .o-btns { margin-top: 6px; } .o-btns .mini-btn { min-height: 44px; font-size: 15px; }
+  .mini-btn.wide-mini { margin-top: 10px; min-height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cont-clock .ring, .new-medals .mchip { animation: none !important; }
+}
+.new-medals .mchip.more { padding: 4px 12px; color: var(--muted); }
+/* 메달 화면: 작은 탭에서는 넓게, 닫기 버튼은 늘 화면 아래에 보이게 (글자를 키워서 길어졌다) */
+#scr-medals #btn-medals-back { position: sticky; bottom: 0; z-index: 1; }
+@media (max-height: 600px) and (orientation: landscape) {
+  #scr-medals .panel.wide { max-width: 880px; }
+  #scr-medals .medal { padding: 4px 6px; }
 }

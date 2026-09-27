@@ -195,7 +195,10 @@
   function fillMissions(st, except) {
     while (st.missions.length < D.MISSION_SLOTS) {
       const used = new Set(st.missions.map(m => m.id));
-      let pool = D.MISSIONS.filter(m => !used.has(m.id) && m.id !== except);
+      // 처음 며칠(판 수가 MISSION_STARTER보다 적을 때)에는 쉬운 미션(starter)만 고른다
+      const starter = ((st.life && st.life.games) || 0) < (D.MISSION_STARTER || 0);
+      const all = starter && D.MISSIONS.some(m => m.starter && !used.has(m.id) && m.id !== except) ? D.MISSIONS.filter(m => m.starter) : D.MISSIONS;
+      let pool = all.filter(m => !used.has(m.id) && m.id !== except);
       if (!pool.length) pool = D.MISSIONS.filter(m => !used.has(m.id));
       if (!pool.length) break;
       st.mseed = (Math.imul(st.mseed || 1, 1103515245) + 12345) >>> 0;
