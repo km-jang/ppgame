@@ -576,3 +576,11 @@ body.touch .text-btn { padding: 10px 16px; }
   .rival-line { font-size: 15px; margin-bottom: 6px; padding: 4px 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .rv-sw i, .rv-sw i::after { transition: none; } }
+/* ═══ 우주 여행 (2026-09-27): 스테이지 칸마다 그 레벨 하늘 ═══════════ */
+.lvl-sky { position: absolute; left: 5px; top: 5px; width: 30px; height: 30px; pointer-events: none; }
+.lvl-sky-name { display: block; margin-top: 2px; font: normal 11px var(--disp); font-style: normal; opacity: .9; }
+.lvl.locked .lvl-sky { filter: grayscale(.6); }
+@media (max-height: 600px) and (orientation: landscape) {
+  .lvl-sky { width: 24px; height: 24px; left: 3px; top: 3px; }
+  .lvl-sky-name { font-size: 10px; margin-top: 1px; }
+}

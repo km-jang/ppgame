@@ -93,6 +93,8 @@
     bump: { gap: 0.15, fn(t) { tone(t, 'sine', 520, 140, 0.3, 0.14); tone(t + 0.05, 'triangle', 900, 700, 0.12, 0.05); } },
     pass: { gap: 0.2, fn(t) { noise(t, 'bandpass', 2000, 600, 0.2, 0.08); tone(t, 'sine', 900, 1400, 0.12, 0.05); } },
     rivaleat: { gap: 0.08, fn(t) { tone(t, 'triangle', 330, 260, 0.12, 0.06); } },
+    // 새 하늘(행성·블랙홀)에 도착: 반짝이는 화음
+    planet: { gap: 0.5, fn(t) { [659, 880, 1175, 1568].forEach((f, i) => tone(t + i * 0.07, 'sine', f, f, 0.35, 0.07)); } },
     wrap: { gap: 0.08, fn(t) { noise(t, 'bandpass', 800, 3000, 0.15, 0.1); } },
     // 황금 구슬이 식음
     cool: { gap: 0.3, fn(t) { tone(t, 'triangle', 700, 350, 0.25, 0.08); } },

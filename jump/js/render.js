@@ -963,7 +963,10 @@
     const S = W.storm;
     if (!S || !S.on) return;
     const wy = S.py + (S.y - S.py) * a;
-    const top = SY(v, wy), bottom = v.cy + v.ch;
+    const bottom = v.cy + v.ch;
+    // 가까워질수록 화면 아래 끝에서 뭉게구름이 조금씩 고개를 내민다 (닿는 선은 wy 그대로)
+    const near = Math.max(0, Math.min(1, 1 - (CAM - wy) / (W.viewH * D.STORM.lag)));
+    const top = Math.min(SY(v, wy), bottom - near * near * v.ch * 0.1);
     const spr = stormSprite(v), sw = spr.width / v.dpr, sh = spr.height / v.dpr;
     const y0 = top - sh * 0.3;   // 뭉게 윗면이 먹구름 높이에 오게
     if (y0 < bottom) {

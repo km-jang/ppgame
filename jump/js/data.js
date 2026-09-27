@@ -106,12 +106,12 @@
     //   옆이나 아래에서 닿으면: 쉬움은 살짝 밀려나고(push 점/초, "앗") 다치지 않는다, 보통·어려움은 가시 폭탄처럼 끝 (방패·로켓이면 괜찮다).
     //   r: 몸 반지름 · points: 밟으면 받는 점수(콤보 배율) · pad: 몬스터가 발판 위 튀는 길에서 떨어져 있는 거리
     //     (길 발판 가운데에서 가로로 pad, 주인공 몸 + 몬스터 몸 + 여유) · top: 주인공 가운데가 몬스터 가운데보다 이만큼(몸 반지름 배율) 위면 "밟기"
-    //   seat: 앉을 곁 발판이 있을 때 슬라임이 나올 확률 · perch: 앉을 곁 발판이 없을 때 두 줄 사이에 놓는 작은 받침 발판 폭
+    //   seat: 앉을 곁 발판이 있을 때 슬라임이 나올 확률 (곁 발판이 길 발판보다 seatBelow점 넘게 낮을 때만) · perch: 앉을 곁 발판이 없을 때 두 줄 사이에 놓는 작은 받침 발판 폭
     //   hurt: 옆·아래로 부딪혔다고 치는 몬스터 몸 배율 (밟기는 몸 전체, 부딪힘은 조금 안쪽만: 아이에게 너그럽게)
     //   kinds: slime 발판 위에 앉는 슬라임(가끔 걸어 다님) · balloon 발판 사이에 둥둥 뜬 풍선 괴물 · bird 옆으로 오가는 작은 로봇 새
     //     (range: 오가는 거리 점, speed: 점/초, float: 위아래 둥실 점)
     MONSTER: {
-      r: 17, stomp: 1.5, points: 15, push: 260, cool: 0.6, pad: 54, top: 0.15, hurt: 0.7, seat: 0.7, perch: 64,
+      r: 17, stomp: 1.5, points: 15, push: 150, cool: 0.6, pad: 54, top: 0.15, hurt: 0.7, seat: 0.7, seatBelow: 6, perch: 64,
       kinds: {
         slime:   { name: '통통 슬라임', color: '#7dff6a', top: '#eaffc2', speed: 40 },
         balloon: { name: '풍선 괴물',   color: '#ff7ad9', top: '#ffd6f4', range: 26, speed: 22, float: 6 },

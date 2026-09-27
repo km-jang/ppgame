@@ -84,7 +84,7 @@ function makeHuman(seed, cfg) {
 }
 // 여러 판을 돌려 처음 떨어질 때(구조 구름이 받거나 끝날 때)까지의 높이·시간과 끝 높이를 잰다
 function measure(diff, cfg, seeds, maxSec, char) {
-  const out = { first: [], time: [], final: [], reach100: 0, over60: 0 };
+  const out = { first: [], time: [], final: [], reach100: 0, over60: 0, short: 0 };
   for (let seed = 1; seed <= seeds; seed++) {
     const W = create(seed, { diff, viewH: 600, char });
     const bot = makeHuman(seed, cfg);
@@ -100,11 +100,12 @@ function measure(diff, cfg, seeds, maxSec, char) {
     out.first.push(fh); out.time.push(ft); out.final.push(W.height);
     if (W.height >= 100) out.reach100++;
     if (W.phase !== 'play' && W.t < 60) out.over60++;
+    if (W.phase !== 'play' && W.t < 60 && W.height < 150) out.short++;   // 1분 안에, 150m도 못 가고 끝난 판 (속상한 판)
   }
   const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
   out.avgFirst = avg(out.first); out.avgTime = avg(out.time); out.avgFinal = avg(out.final);
   out.line = diff + ' 처음 떨어질 때까지 평균 ' + out.avgFirst.toFixed(0) + 'm·' + out.avgTime.toFixed(0) + '초, 끝 높이 평균 ' + out.avgFinal.toFixed(0) +
-    'm, 100m 넘은 판 ' + out.reach100 + '/' + seeds + ', 1분 안에 끝난 판 ' + out.over60 + '/' + seeds;
+    'm, 100m 넘은 판 ' + out.reach100 + '/' + seeds + ', 1분 안에 끝난 판 ' + out.over60 + '/' + seeds + ' (그중 150m 못 간 판 ' + out.short + ')';
   return out;
 }
 
@@ -564,7 +565,10 @@ test('5~7살 아이 흉내 봇: 쉬움은 거의 늘 100m, 1분 안에 끝나는
   const E = measure('easy', KID, 24, 90);
   console.log('       아이 ' + E.line);
   assert(E.reach100 >= 22, 'reach 100m ' + E.reach100 + '/24');
-  assert(E.over60 <= 2, 'over in a minute ' + E.over60 + '/24');
+  // 몬스터를 밟으면 더 빨리 오르므로, 1분 안에 400m 가까이 가서 끝나는 판도 생긴다 (속상한 판이 아니다).
+  // 그래서 "1분 안에 끝남"은 넉넉히, "1분 안에 150m도 못 가고 끝남"은 엄하게 본다
+  assert(E.over60 <= 4, 'over in a minute ' + E.over60 + '/24');
+  assert(E.short <= 1, 'short sad games ' + E.short + '/24');
   assert(E.avgTime > 25, 'first fall not too early ' + E.avgTime.toFixed(0));
 });
 

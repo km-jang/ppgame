@@ -182,13 +182,14 @@
       if (p === host || p.broken) continue;
       const dx = Math.abs(wrapDelta(x, p.x)) - hr;
       if (p.kind === 'spring' && p.y >= my - belowSpring && p.y <= my + above && dx < M.pad) return false;
+      // 어느 발판과도 겹쳐 보이지 않게 (발판은 윗면 p.y에서 아래로 두께 D.PLAT.h)
+      if (p.y > my - M.r - 4 && p.y - D.PLAT.h < my + M.r + 6 && dx < p.w / 2 + M.r + 6) return false;
       if (p.main) {
         if (p.y < my - below || p.y > my + above) continue;
         // 움직이는 길 발판은 오가는 범위 전체를 막는다 (어디서 튀어 오를지 모르니까)
         if (p.kind === 'moving' || dx < M.pad) return false;
       } else {
         // 곁 발판: 겹쳐 보이지 않게, 그리고 그 발판에서 곧게 튀어 올라도 닿지 않게
-        if (Math.abs(p.y - my) < M.r + 14 && dx < p.w / 2 + M.r + 6) return false;
         if (!W.easy && p.y > my - below && p.y < my + above && dx < p.w / 2 + r + M.r * M.hurt + 4) return false;
       }
     }
@@ -215,8 +216,8 @@
     const items = Object.keys(LO.kinds).map(k => ({ k, w: lerp(LO.kinds[k][0], LO.kinds[k][1], d) }));
     // 슬라임은 곁 발판(보통 발판)에만 앉는다. 길 발판에는 절대 앉지 않는다 (길을 막지 않게).
     // 앉을 곁 발판이 있으면 슬라임이 잘 나오고(slime 확률), 없으면 풍선 괴물·로봇 새 중에서
-    // 곁 발판이 길 발판보다 높으면 앉히지 않는다 (다음 줄 길 발판이 바로 위에 와서 몬스터와 붙지 않게)
-    const seat = extra && extra.kind === 'normal' && extra.y <= main.y + 2;
+    // 곁 발판이 길 발판보다 조금이라도 높으면 앉히지 않는다 (다음 줄 길 발판이 바로 위에 와서 몬스터와 겹쳐 보이지 않게)
+    const seat = extra && extra.kind === 'normal' && extra.y <= main.y - M.seatBelow;
     let kind = JP.weighted(items, rand).k;
     if (seat && rand() < M.seat) kind = 'slime';
     const K = M.kinds[kind];
@@ -567,7 +568,7 @@
         else if (S.rest > 0) S.rest -= H;
         else S.y += S.speed * D.METER * H;
         S.y = Math.max(S.y, W.cam - W.viewH * D.STORM.lag);
-        if (S.seen < 0 && S.y > W.cam - 10) { S.seen = W.t; W.events.push('storm'); }
+        if (S.seen < 0 && S.y > W.cam - W.viewH * D.STORM.lag * 0.5) { S.seen = W.t; W.events.push('storm'); }   // 가까워지면 한 번 알린다
         caught = P.y - r < S.y;
       }
     }
@@ -659,7 +660,7 @@
         if (need > C.maxVx * tt * 0.7) continue;
         // 아래에서 올라가다 부딪히는 길이면 밟으러 가지 않는다 (위로 넘어간 뒤 내려오며 밟는 길만)
         if (!W.easy && pathHitsMonster(W, px, tt)) continue;
-        const s = y + (W.easy ? 50 : 40);
+        const s = y + 30;
         if (s > best) { best = s; t = { mon: m, x: m.x, y, w: D.MONSTER.r * 1.6, vx: m.range > 0 ? m.vx : 0, broken: false, kind: 'monster' }; }
       }
       W.botT = t;

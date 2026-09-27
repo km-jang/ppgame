@@ -752,5 +752,87 @@ test('놀이 본부 값: 길이·황금·구슬·깬 레벨·라이벌 이김, �
   assert(hubStats(S).level === 5 && hubStats(S).rivalWin === 0, 'cleared 4 and 5');
 });
 
+// ─── 우주 여행 배경 (그림만, 규칙은 그대로) ───
+const { spaceScene, stageScene, sceneInfo } = SN.World;
+const SPD = D.SPACE;
+// 넓은 판에서 n개를 먹는다 (머리 앞에 먹이를 놓고 한 칸)
+function eatN(W, n) {
+  for (let i = 0; i < n && W.phase === 'play'; i++) { foodAhead(W, false); ticks(W, 1); }
+}
+
+test('우주 여행 무한: 수성에서 출발, 내가 구슬 12개 먹을 때마다 다음 행성 (행성 차례는 건너뛰지 않음)', () => {
+  const W = create(2000, 5, 3, { mode: 'endless', rival: false });
+  W.itemT = 1e9;
+  assert(W.space.scene === 'mercury' && spaceScene(W).name === '수성' && W.space.max === 1, 'start mercury');
+  eatN(W, SPD.perOrbs - 1);
+  assert(W.space.step === 0 && W.space.scene === 'mercury', 'not yet');
+  eatN(W, 1);
+  assert(W.space.step === 1 && W.space.scene === 'venus' && W.events.includes('planet'), 'venus after 12 ' + W.space.scene);
+  // 오래 먹으며 장면 차례 기록
+  const seq = [W.space.scene];
+  for (let k = 0; k < 24; k++) { eatN(W, SPD.perOrbs); seq.push(W.space.scene); }
+  const planets = seq.filter(id => id !== 'hole');
+  const ids = SPD.planets.map(p => p.id);
+  for (let i = 0; i < planets.length; i++) assert(planets[i] === ids[(i + 1) % ids.length], 'planet order at ' + i + ' ' + planets.join(','));
+  assert(W.space.lap === Math.floor(W.space.planet / ids.length) + 1 && W.space.planet >= ids.length, 'second lap ' + W.space.planet);
+  assert(W.space.max === W.space.planet + 1 && hubStats(W).planet === W.space.max, 'max planet in stats');
+});
+
+test('우주 여행 블랙홀: 가끔 행성 대신 끼어들고, 두 번 연달아는 없고, 처음 장면들에는 없다', () => {
+  let holes = 0, chances = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const W = create(2000, 5, seed, { mode: 'endless', rival: false });
+    W.itemT = 1e9;
+    let prev = W.space.scene;
+    for (let k = 1; k <= 20; k++) {
+      eatN(W, SPD.perOrbs);
+      const cur = W.space.scene;
+      if (k < SPD.holeFrom) assert(cur !== 'hole', 'no hole too early');
+      if (cur === 'hole') { holes++; assert(prev !== 'hole', 'never twice in a row'); assert(spaceScene(W).kind === 'hole', 'kind'); }
+      if (k >= SPD.holeFrom && prev !== 'hole') chances++;
+      prev = cur;
+    }
+  }
+  const rate = holes / chances;
+  assert(rate > SPD.holeChance * 0.6 && rate < SPD.holeChance * 1.4, 'hole rate ' + rate.toFixed(3));
+});
+
+test('우주 여행: 라이벌이 먹은 구슬로는 넘어가지 않고, 하늘 차례는 먹이 자리를 흔들지 않는다', () => {
+  const W = create(COLS, ROWS, 1, { mode: 'endless' });
+  W.rival.met = true; W.rival.eaten = 40;
+  W.eaten = 5; foodAhead(W); W.wait = 0; ticks(W, 1);
+  assert(W.space.step === 0, 'rival orbs do not count');
+  // 같은 씨앗이면 하늘 난수를 써도 먹이 자리는 같다
+  const A = create(200, ROWS, 9, { mode: 'endless', rival: false }), B = create(200, ROWS, 9, { mode: 'endless', rival: false });
+  for (let i = 0; i < 30; i++) B.space.rng();
+  for (let i = 0; i < 30; i++) { foodAhead(A); ticks(A, 1); foodAhead(B); ticks(B, 1); }
+  assert(A.food.x === B.food.x && A.food.y === B.food.y, 'food independent of sky');
+});
+
+test('우주 여행 스테이지: 레벨 1~9는 수성~명왕성, 10 블랙홀 · 11 은하수 · 12 은하 중심, 그다음은 다시', () => {
+  const want = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto', 'hole', 'galaxy', 'core'];
+  for (let n = 1; n <= 24; n++) {
+    assert(stageScene(n) === want[(n - 1) % 12], 'level ' + n);
+    const S = create(COLS, ROWS, 1, { mode: 'stage', level: n });
+    assert(S.space.scene === want[(n - 1) % 12], 'world scene ' + n);
+  }
+  assert(sceneInfo('mars').name === '화성' && sceneInfo('mars').index === 4, 'mars info');
+  assert(sceneInfo('hole').kind === 'hole' && sceneInfo('galaxy').kind === 'galaxy' && sceneInfo('core').kind === 'core', 'other kinds');
+  for (const id of want) assert(sceneInfo(id).name && sceneInfo(id).color, 'has name ' + id);
+  // 다음 레벨로 가면 하늘도 바뀌고, 이번 판에 간 가장 먼 행성이 남는다
+  const S = create(COLS, ROWS, 1, { mode: 'stage', level: 3 });
+  assert(S.space.scene === 'earth' && S.space.max === 3, 'earth');
+  S.got = S.goal - 1; foodAhead(S); S.wait = 0; ticks(S, 1);
+  assert(S.phase === 'clear', 'cleared');
+  nextLevel(S);
+  assert(S.space.scene === 'mars' && S.space.max === 4 && hubStats(S).planet === 4, 'mars next');
+  const H = create(COLS, ROWS, 1, { mode: 'stage', level: 10 });
+  assert(H.space.scene === 'hole' && H.space.max === 9, 'beyond pluto counts as 9');
+  // 스테이지는 구슬 수로 넘어가지 않는다
+  const Q = create(COLS, ROWS, 1, { mode: 'stage', level: 1 });
+  Q.eaten = 30; foodAhead(Q); Q.wait = 0; ticks(Q, 1);
+  assert(Q.space.scene === 'mercury', 'stage fixed');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

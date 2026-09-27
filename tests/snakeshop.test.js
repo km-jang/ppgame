@@ -362,6 +362,9 @@ test('놀이 본부: 판 값(hubStats)으로 스티커가 붙고, 알아서 맞�
   assert(H.stickers().find(t => t.id === 'sn_stage').got, 'stage sticker');
   // 오늘의 미션 값 이름도 맞다 (len · golds · orbs)
   for (const m of H.DAILY.snake) assert(m.stat === 'games' || m.stat in W2.hubStats(W), 'daily stat ' + m.stat);
+  // 판 값 이름: len · golds · orbs · level · rivalWin · planet
+  assert(JSON.stringify(Object.keys(W2.hubStats(W)).sort()) === JSON.stringify(['golds', 'len', 'level', 'orbs', 'planet', 'rivalWin']), 'hub stat keys');
+  assert(W2.hubStats(W).planet === 1, 'planet starts at mercury');
   // 알아서 맞추기: 처음 두 판은 1, 잘하면 올라가고 판 옵션으로 들어간다
   assert(H.adaptMul('snake', 'normal') === 1, 'warm');
   W.eaten = D.ADAPT.target.normal * 2;

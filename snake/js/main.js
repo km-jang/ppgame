@@ -389,7 +389,10 @@
     D.LEVELS.forEach((L, i) => {
       const n = i + 1, b = document.createElement('button');
       b.className = 'lvl' + (n <= rec.stage.max ? ' done' : n === open ? ' next' : n > open ? ' locked' : '');
-      b.innerHTML = '<b>' + n + '</b><small>' + L.name + '</small>';
+      // 레벨마다 정해진 하늘 (1~9 수성~명왕성, 10 블랙홀, 11 은하수, 12 은하 중심): 칸 구석에 작은 그림
+      const sky = SN.World.sceneInfo(SN.World.stageScene(n));
+      b.innerHTML = '<canvas class="lvl-sky" width="72" height="72" aria-hidden="true"></canvas><b>' + n + '</b><small>' + L.name + '</small><em class="lvl-sky-name" style="color:' + sky.color + '">' + sky.name + '</em>';
+      if (SN.Space) SN.Space.icon(b.querySelector('canvas'), sky.id);
       b.addEventListener('click', () => {
         if (n > open) { toast('레벨 ' + (n - 1) + '을(를) 먼저 깨요'); return; }
         keep(); newGame(undefined, { mode: 'stage', level: n });

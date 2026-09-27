@@ -276,17 +276,21 @@
   }
 
   // ─── 배경 ─────────────────────────────────────────────────
-  function drawBackground(ctx, W, v) {
-    const bk = v.w + 'x' + v.h;
-    if (R.bgKey !== bk) { R.bgKey = bk; R.backdrop = paintBackdrop(v.w, v.h); R.stars = makeStars(v.w, v.h); }
-    ctx.drawImage(R.backdrop, 0, 0, v.w, v.h);
-    ctx.fillStyle = '#e8f7ff';
-    const t = performance.now() / 1000;
-    for (const s of R.stars) {
-      ctx.globalAlpha = v.calm ? s.a : s.a * (0.6 + 0.4 * Math.sin(t * 1.6 + s.ph));
-      ctx.fillRect(s.x, s.y, s.s, s.s);
+  // 판 뒤 하늘: 우주 여행(space.js, 행성·블랙홀·은하). 없으면 예전 성운
+  function drawBackground(ctx, W, v, dt) {
+    if (SN.Space) SN.Space.draw(ctx, W, v, dt);
+    else {
+      const bk = v.w + 'x' + v.h;
+      if (R.bgKey !== bk) { R.bgKey = bk; R.backdrop = paintBackdrop(v.w, v.h); R.stars = makeStars(v.w, v.h); }
+      ctx.drawImage(R.backdrop, 0, 0, v.w, v.h);
+      ctx.fillStyle = '#e8f7ff';
+      const t = performance.now() / 1000;
+      for (const s of R.stars) {
+        ctx.globalAlpha = v.calm ? s.a : s.a * (0.6 + 0.4 * Math.sin(t * 1.6 + s.ph));
+        ctx.fillRect(s.x, s.y, s.s, s.s);
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
     const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.easy ? 1 : 0].join(',');
     if (R.boardKey !== key || R.boardWalls !== W.walls) { R.boardKey = key; R.boardWalls = W.walls; R.board = paintBoard(v, W.cols, W.rows, v.dpr, W); }
     ctx.drawImage(R.board, v.bx - BM, v.by - BM, v.bw + BM * 2, v.bh + BM * 2);
@@ -1021,6 +1025,8 @@
       x -= chip(ctx, x, cy, ch, txt, col, s) + 6 * s;
     }
     ctx.textBaseline = 'alphabetic';
+    // 새 하늘 알림 ("화성 도착!"): 버튼 묶음과 칸들 사이 빈 곳에 (판을 가리지 않게)
+    if (SN.Space) SN.Space.drawBanner(ctx, W, v, v.hudLeft, x);
   }
 
   // 출발 대기(READY)와 처음 몇 초 조작 안내
@@ -1101,7 +1107,7 @@
     ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
     takeFx(W, v);
     updateFx(dt || 0);
-    drawBackground(ctx, W, v);
+    drawBackground(ctx, W, v, dt);
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     drawPortals(ctx, W, v);
@@ -1123,7 +1129,7 @@
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
-  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0;
+  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || !!(SN.Space && SN.Space.busy());
 
   SN.Render = { draw, layout, busy, drawCharPreview, drawSkinPreview: drawCharPreview, CHAR_IDS: Object.keys(LOOKS) };
 })(SN);
