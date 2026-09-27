@@ -51,7 +51,7 @@ kbd {
   left: max(10px, env(safe-area-inset-left));
   display: flex;
   gap: 6px;
-  z-index: 5;
+  z-index: 15;   /* 메뉴 화면(.screen 10) 위: 시작 화면에서도 소리·전체 화면·집 단추를 누를 수 있게 */
 }
 .icon-btn {
   display: grid; place-items: center;
