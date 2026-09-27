@@ -69,6 +69,12 @@
     pullWarn: { gap: 0.4, fn(t) { tone(t, 'sine', 300, 200, 0.25, 0.09); tone(t + 0.25, 'sine', 300, 200, 0.25, 0.09); } },
     pull: { gap: 0.3, fn(t) { noise(t, 'bandpass', 500, 2500, 0.3, 0.14); tone(t, 'sine', 220, 440, 0.25, 0.06); } },
     resist: { gap: 0.3, fn(t) { tone(t, 'triangle', 988, 988, 0.08, 0.09); tone(t + 0.08, 'triangle', 1319, 1319, 0.14, 0.09); } },
+    // 우주 해적선: 뿌우 뱃고동 · 레이저 경고 삐삐 · 레이저 지잉 · 폭탄 휘잉 · 따돌림 팡파르
+    pirate: { gap: 1, fn(t) { tone(t, 'sawtooth', 196, 196, 0.5, 0.08); tone(t + 0.5, 'sawtooth', 147, 147, 0.7, 0.08); tone(t, 'sine', 98, 98, 1.2, 0.12); } },
+    laserWarn: { gap: 0.3, fn(t) { [0, 0.18, 0.36].forEach(d => tone(t + d, 'square', 1175, 1175, 0.08, 0.05)); } },
+    laser: { gap: 0.2, fn(t) { tone(t, 'sawtooth', 1600, 300, 0.35, 0.08); noise(t, 'bandpass', 3000, 800, 0.35, 0.08); } },
+    bomb: { gap: 0.3, fn(t) { tone(t, 'sine', 1400, 500, 0.5, 0.05); } },
+    pirOut: { gap: 1, fn(t) { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(t + i * 0.08, 'triangle', f, f, 0.3, 0.1)); noise(t + 0.3, 'highpass', 5000, 9000, 0.5, 0.05); } },
     bhOut: { gap: 0.5, fn(t) { [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.07, 'triangle', f, f, 0.22, 0.09)); } },
     // 레이저 문을 넘음: 짧은 두 음
     gate: { gap: 0.1, fn(t) { tone(t, 'triangle', 880, 880, 0.06, 0.08); tone(t + 0.06, 'triangle', 1320, 1320, 0.08, 0.08); } },

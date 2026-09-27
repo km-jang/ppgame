@@ -153,7 +153,10 @@
     // 시작 아이템은 이번 판에 하나씩 쓰고 사라진다
     const lo = SH.takeLoadout(shop, diff);
     SH.save(shop);
-    W = RN.World.create(seed, Object.assign({}, lastOpts, SH.worldOpts(shop, lo)));
+    // 알아서 맞춰 주는 난이도 (놀이 본부가 최근 판들을 보고 0.85 ~ 1.12, 처음 두 판은 1)
+    let adapt = 1;
+    try { if (typeof HUB !== 'undefined' && HUB.adaptMul) adapt = HUB.adaptMul('runner', diff) || 1; } catch (e) { adapt = 1; }
+    W = RN.World.create(seed, Object.assign({}, lastOpts, SH.worldOpts(shop, lo), { adapt }));
     view.best = bestOf(diff).dist;
     medalCheckT = 0;
     input.reset();
@@ -339,8 +342,12 @@
   function reportHub() {
     if (typeof HUB === 'undefined' || !HUB.reportRun) return;
     reportSummary();
+    // 알아서 맞춰 주는 난이도: 이번 판 성적 = 달린 거리 ÷ 그 난이도의 보통 잘하는 아이 거리
+    try { if (HUB.adaptRun) HUB.adaptRun('runner', W.diff, W.dist / (D.ADAPT.target[W.diff] || 1000)); } catch (e) { /* 무시 */ }
     try {
-      const fresh = HUB.reportRun('runner', { dist: Math.floor(W.dist), stars: W.stars, jumps: W.gates, slides: W.bars, games: 1 }, W.runT);
+      const s = RN.World.runStats(W);
+      // 스티커·오늘의 미션: 거리 · 별 · 넘은 레이저 문 · 미끄러지기 · 가장 멀리 간 행성(1 수성 ~ 9 명왕성) · 따돌린 해적선
+      const fresh = HUB.reportRun('runner', { dist: s.dist, stars: s.stars, jumps: s.gates, slides: s.slides, planet: s.planet, pirates: s.pirates, games: 1 }, W.runT);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -380,7 +387,7 @@
     $('over-records').innerHTML = newRec.map(x => '<span>신기록 · ' + x + '</span>').join('');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     if (fresh.length) setTimeout(() => { if (mode === 'over') RN.Audio.play('medal'); }, 900);
-    $('over-title').textContent = W.cause === 'gate' ? '레이저에 찌릿!' : W.cause === 'bar' ? '막대에 머리 콩!' : '운석에 쾅!';
+    $('over-title').textContent = { gate: '레이저에 찌릿!', bar: '막대에 머리 콩!', laser: '해적 레이저에 찌릿!', bomb: '해적 폭탄에 펑!' }[W.cause] || '운석에 쾅!';
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-dist').textContent = dist.toLocaleString() + 'm';
@@ -580,5 +587,6 @@
     get char() { return shop.char; },
     reload() { rec = PF.rec(RN.store); shop = SH.load(); renderBest(); renderTitleShop(); tellRefund(); },
     get pad() { return input; }, get view() { return view; },
+    get adapt() { return W ? W.adapt : 1; },
   };
 })(RN);

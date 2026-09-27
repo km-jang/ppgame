@@ -100,10 +100,11 @@
   // mul이 1보다 크면 살짝 어렵게, 작으면 살짝 쉽게. 쉬움·보통·어려움 안에서만 조금 움직인다 (world.js adaptCfg)
   //   speed: 최고 속도 배율 = 1 + (mul-1) × speed · ramp: 빨라지는 시간 ÷ (1 + (mul-1) × ramp) · gap: 줄 간격 × (1 - (mul-1) × gap)
   //   mix: 어려운 줄 모양 가중치 × mul^mix (쉬운 줄은 ÷) · pirate: 해적선 간격 ÷ (1 + (mul-1) × pirate)
-  // target: 판이 끝날 때 성적 = 달린 거리 ÷ target (1 = 그 난이도에서 보통 잘하는 아이. 사람 같은 로봇 두 종류 사이 값)
-  const ADAPT = { min: 0.85, max: 1.12, speed: 0.4, ramp: 1, gap: 0.6, mix: 1.5, pirate: 1,
+  // target: 판이 끝날 때 성적 = 달린 거리 ÷ target (1 = 그 난이도에서 보통 잘하는 아이. 서툰 아이 로봇과 사람 같은 로봇 평균 거리의 사이 값:
+  //         쉬움 5,600 ~ 9,000m · 보통 800 ~ 2,600m · 어려움 360 ~ 1,120m)
+  const ADAPT = { min: 0.85, max: 1.12, speed: 0.3, ramp: 0.6, gap: 0.45, mix: 1, pirate: 1,
     hardRows: ['two', 'mg', 'mb', 'gg', 'bb', 'gb', 'g3', 'b3', 'mgb', 'mover'], easyRows: ['one', 'stars', 'gate', 'bar'],
-    target: { easy: 4500, normal: 1500, hard: 650 } };
+    target: { easy: 6000, normal: 1400, hard: 600 } };
 
     RN.DATA = {
     // 규칙은 1/120초 칸으로 돈다 (60·90·120Hz 화면에서 결과가 같게)

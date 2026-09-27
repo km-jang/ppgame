@@ -1214,5 +1214,196 @@ test('블랙홀 안전한 줄 약속: 곧 장애물이 닿는 줄로는 끌지 �
   assert(pulls > 30, 'pulls ' + pulls);
 });
 
+
+// ─── 우주 해적선 추격전 ───
+// 해적선이 곧 나오게: 1분이 지난 것으로 치고 바로
+function pirateSoon(W) { W.runT = Math.max(W.runT, D.PIRATE.minT + 1); W.pirT = 0; return W; }
+test('우주 해적선: 처음 1분·처음 안내·블랙홀 구간에는 안 나온다, 쉬움이 가장 드물고 알림이 길다', () => {
+  const E = D.DIFFICULTY.easy.pirate, N = D.DIFFICULTY.normal.pirate, H = D.DIFFICULTY.hard.pirate;
+  assert(E.every[0] > N.every[0] && N.every[0] > H.every[0] && E.first[0] >= N.first[0], 'easy rarer');
+  assert(E.warn > N.warn && N.warn > H.warn && E.warn >= 1.2, 'warning order');
+  for (const C of [E, N, H]) assert(C.first[0] >= D.PIRATE.minT, 'not in the first minute');
+  // 처음 1분에는 안 나온다
+  const W = create(3, { wait: 0, pirateAt: 5 });
+  let first = -1;
+  for (let i = 0; i < 120 * 70 && first < 0; i++) { W.inv = 99; W.hearts = 9; tick(W); if (W.pir) first = W.runT; }
+  assert(first >= D.PIRATE.minT && first < D.PIRATE.minT + 1, 'appears right after a minute ' + first.toFixed(1));
+  assert(W.events.includes('pirate') && W.fx.some(f => f.kind === 'pirate'), 'banner');
+  // 처음 안내 중에는 안 나온다
+  const T = pirateSoon(create(4, { wait: 0, tutorial: true }));
+  for (let i = 0; i < 120 * 5; i++) { T.inv = 99; tick(T); }
+  assert(!T.pir && T.tut.step !== 'done', 'not during tutorial');
+  // 블랙홀 구간이 앞에 있으면 안 나오고, 없어지면 나온다
+  const B = pirateSoon(create(5, { wait: 0 }));
+  B.bhs = [{ leg: 9, start: B.dist + 80, end: B.dist + 300, side: 0 }]; B.bhLeg = 1e9;
+  for (let i = 0; i < 120 * 2; i++) { B.inv = 99; tick(B); }
+  assert(!B.pir, 'no pirate before a black hole');
+  B.bhs = [];
+  for (let i = 0; i < 120; i++) { B.inv = 99; tick(B); }
+  assert(B.pir, 'pirate once the way is clear');
+  // 해적선이 있는 동안 정하는 블랙홀 구간은 해적선이 지나갈 거리와 겹치지 않는다
+  let checked = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const V = pirateSoon(create(seed, { wait: 0, bh: 1 }));
+    V.bhs = []; V.bhLeg = Math.floor(V.dist / D.ROUTE.leg);
+    tick(V);
+    assert(V.pir, 'pirate up');
+    const from = V.dist;
+    RN.World.planBlackHoles(V, V.pirGuard + 2000);
+    for (const b of V.bhs) { checked++; assert(b.start >= V.pirGuard || b.end <= from, 'hole overlaps pirate'); }
+  }
+  assert(checked > 20, 'holes checked ' + checked);
+});
+
+test('해적 레이저: 줄을 빛내 알린 뒤 쏜다. 그 줄에 있으면 부딪히고, 옆 줄로 피하면 괜찮다. 피할 옆 줄이 없으면 안 쏜다', () => {
+  const C = D.DIFFICULTY.hard.pirate;
+  const W = pirateSoon(empty({ diff: 'hard' }));
+  W.pir = null;
+  tick(W);
+  assert(W.pir && !W.pir.laser, 'pirate, no laser yet');
+  let i = 0;
+  while (!W.pir.laser && i++ < 120 * 5) tick(W);
+  const Z = W.pir.laser;
+  assert(Z && Z.phase === 'warn' && Z.lane === W.p.lane && W.events.includes('laserWarn'), 'aims at the ship with a warning');
+  run(W, C.warn - 0.05);
+  assert(W.phase === 'play' && W.hits === 0, 'warning does not hurt');
+  run(W, 0.3);
+  assert(W.phase === 'over' && W.cause === 'laser', 'beam hits ' + W.cause);
+  // 옆 줄로 피하면 괜찮다
+  const V = pirateSoon(empty({ diff: 'hard' }));
+  tick(V);
+  while (!V.pir.laser) tick(V);
+  move(V, 'left');
+  run(V, C.warn + C.beam + 0.1);
+  assert(V.phase === 'play' && V.hits === 0 && V.lasers === 1 && !V.pir.laser, 'dodged');
+  // 피할 줄이 없으면 쏘지 않는다
+  const X = pirateSoon(empty({ diff: 'hard' }));
+  for (const l of [0, 1, 2]) put(X, 'meteor', l, 10);
+  assert(RN.World.pickLaserLane(X, C.warn + C.beam) === -1, 'no safe lane, no shot');
+  X.obs.length = 0;
+  put(X, 'meteor', 0, 10); put(X, 'meteor', 2, 10);
+  const l = RN.World.pickLaserLane(X, C.warn + C.beam);
+  assert(l === 0 || l === 2, 'only shoots where the ship can stay safe: ' + l);
+});
+
+test('해적선을 따돌리면 보너스 + 별 소나기, 기록(pirates)과 메달·미션·스티커 값', () => {
+  const W = pirateSoon(create(8, { wait: 0, auto: true }));
+  W.nextZ = W.dist + 40;
+  run(W, 0.1);
+  assert(W.pir, 'pirate up');
+  const b0 = W.bonus;
+  for (let i = 0; i < 120 * (D.PIRATE.dur + 2) && W.pir; i++) { W.inv = Math.max(W.inv, 0); tick(W); }
+  assert(!W.pir && W.pirates === 1 && W.events.includes('pirOut') && W.bonus >= b0 + D.PIRATE.bonus, 'escaped ' + W.pirates);
+  assert(W.shower > 0, 'star shower');
+  run(W, 1);
+  assert(W.obs.some(o => o.rain), 'stars fall');
+  assert(W.phase === 'play', 'autopilot survived the pirate');
+  const r = runStats(W), ro = SH.runOf(W);
+  assert(r.pirates === 1 && ro.pirates === 1 && r.planet >= 1 && r.planet <= 9, 'stats');
+  assert(D.MEDALS.find(m => m.id === 'pirate').check(r, {}) && D.MISSIONS.some(m => m.stat === 'pirates'), 'medal and mission');
+  // 가장 멀리 간 행성: 1 수성 ~ 9 명왕성 (더 가도 9)
+  const at = d => runStats(Object.assign(empty(), { dist: d })).planet;
+  assert(at(10) === 1 && at(D.ZONES[5].at + 1) === 6 && at(D.ZONES[8].at + 1) === 9 && at(D.ZONES[9].at + 1) === 9 && at(99999) === 9, 'planet index');
+});
+
+test('해적선 안전한 줄 약속: 레이저를 쏠 때마다 바로 옆(또는 제자리)에 비어 있는 줄, 폭탄은 다른 장애물과 떨어져서 (세 난이도, 캐릭터마다, 가장 어렵게 맞춘 난이도까지)', () => {
+  let shots = 0, bombs = 0, pirates = 0;
+  for (const c of D.CHARS) {
+    for (const id of D.DIFF_ORDER) {
+      const C = D.DIFFICULTY[id].pirate;
+      for (const adapt of [1, D.ADAPT.max]) {
+        const W = create(11 + shots % 7, { diff: id, char: c.id, wait: 0, adapt, bh: 0 });
+        W.runT = D.PIRATE.minT + 1;
+        for (let i = 0; i < 120 * 40; i++) {
+          if (!W.pir && W.pirT > 1) W.pirT = 1;
+          W.inv = 99; W.hearts = 9; W.eff.boost = 0;
+          const had = W.pir && W.pir.laser;
+          tick(W);
+          if (W.events.includes('pirate')) pirates++;
+          const Z = W.pir && W.pir.laser;
+          if (Z && Z !== had) {
+            shots++;
+            const p = Z.from, sec = C.warn + C.beam;
+            const ok = [0, 1, 2].some(q => q !== Z.lane && Math.abs(q - p) <= 1 && RN.World.laneClear(W, q, sec));
+            assert(ok, c.id + ' ' + id + ' laser without a safe lane');
+          }
+          if (W.events.includes('bomb')) {
+            bombs++;
+            const b = W.obs[W.obs.length - 1], gap = speed(W) * D.PIRATE.bombGap;
+            assert(b.kind === 'bomb' && b.z - W.dist >= speed(W) * 1.4, 'bomb far enough');
+            for (const o of W.obs) if (o !== b && !o.done && ['meteor', 'gate', 'bar', 'bomb'].includes(o.kind) && Math.round(o.x) === b.x) assert(Math.abs(o.z - b.z) >= gap, 'bomb too close to ' + o.kind);
+          }
+          W.events.length = 0; W.fx.length = 0;
+        }
+      }
+    }
+  }
+  console.log('       해적선 ' + pirates + '번 · 레이저 ' + shots + '번 · 폭탄 ' + bombs + '개 모두 피할 줄 있음');
+  assert(shots > 100 && bombs > 50, 'shots ' + shots + ' bombs ' + bombs);
+});
+
+// ─── 알아서 맞춰 주는 난이도 ───
+test('알아서 맞춰 주는 난이도: 1이면 그대로, 크면 조금 빠르고 촘촘하고 해적선이 자주, 작으면 그 반대 (0.85 ~ 1.12로 묶임)', () => {
+  const A = D.ADAPT;
+  assert(A.min === 0.85 && A.max === 1.12, 'range');
+  assert(create(1).adapt === 1 && !create(1).C, 'default 1');
+  assert(create(1, { adapt: 5 }).adapt === A.max && create(1, { adapt: 0.1 }).adapt === A.min && create(1, { adapt: 'x' }).adapt === 1, 'clamped');
+  for (const id of D.DIFF_ORDER) {
+    const B = D.DIFFICULTY[id], hi = RN.World.cfg(create(1, { diff: id, adapt: A.max })), lo = RN.World.cfg(create(1, { diff: id, adapt: A.min }));
+    assert(hi.speed.max > B.speed.max && lo.speed.max < B.speed.max && hi.speed.max < B.speed.max * 1.06, id + ' speed subtle');
+    assert(hi.speed.ramp < B.speed.ramp && lo.speed.ramp > B.speed.ramp, id + ' ramp');
+    assert(hi.gap.end[0] < B.gap.end[0] && lo.gap.end[0] > B.gap.end[0] && hi.gap.end[0] > B.gap.end[0] * 0.9, id + ' gap subtle');
+    assert(hi.rows.end.two > B.rows.end.two && hi.rows.end.one < B.rows.end.one, id + ' mix');
+    assert(hi.pirate.every[0] < B.pirate.every[0] && lo.pirate.every[0] > B.pirate.every[0] && hi.pirate.first[0] >= D.PIRATE.minT, id + ' pirate');
+    assert(hi.hearts === B.hearts && B.speed.max === D.DIFFICULTY[id].speed.max, id + ' original untouched');
+    // 난이도 순서는 그대로: 쉬움을 가장 어렵게 맞춰도 보통을 가장 쉽게 맞춘 것보다 느리다
+  }
+  const eHi = RN.World.cfg(create(1, { diff: 'easy', adapt: A.max })), nLo = RN.World.cfg(create(1, { diff: 'normal', adapt: A.min }));
+  assert(eHi.speed.max < nLo.speed.max && eHi.gap.end[0] > nLo.gap.end[0], 'levels stay in order');
+});
+
+test('알아서 맞춰 주는 난이도: 가장 어렵게(1.12) 맞춰도 빈 줄 약속과 두 줄 건너갈 시간 (세 난이도, 캐릭터마다, 가장 빠를 때와 달리며)', () => {
+  for (const c of D.CHARS) {
+    for (const id of D.DIFF_ORDER) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const W = create(seed, { diff: id, char: c.id, adapt: D.ADAPT.max });
+        W.runT = 1e6;
+        const vmax = RN.World.cfg(W).speed.max, need = 2 * W.laneT + 0.1;
+        let prev = null;
+        for (let i = 0; i < 60; i++) {
+          const row = makeRow(W);
+          assert(row.open.length >= 1, 'passable lane');
+          if (prev) { const sec = (row.z - prev.z - 2 * D.PLAYER.hitZ) / vmax; assert(sec >= need, c.id + ' ' + id + ' gap ' + sec.toFixed(2)); }
+          prev = row;
+        }
+      }
+    }
+  }
+  for (const id of D.DIFF_ORDER) {
+    const W = create(3, { diff: id, wait: 0, adapt: D.ADAPT.max });
+    const C = RN.World.cfg(W), seen = new Map();
+    let worst = 99;
+    while (W.runT < C.speed.warm + C.speed.ramp + 20) {
+      W.inv = 99; W.hearts = 9; W.eff.boost = 0;
+      tick(W);
+      for (const o of W.obs) if (o.row != null && ['meteor', 'gate', 'bar'].includes(o.kind) && !seen.has(o.row)) seen.set(o.row, o.z);
+      const zs = [...seen.values()].filter(z => z > W.dist - 1 && z < W.dist + 60).sort((a, b) => a - b);
+      if (zs.length >= 2 && zs[0] - W.dist < 1) worst = Math.min(worst, (zs[1] - zs[0] - 2 * D.PLAYER.hitZ) / speed(W));
+    }
+    assert(worst >= MIN_ROW_SEC, id + ' adapt max worst ' + worst.toFixed(2));
+  }
+});
+
+test('알아서 맞춰 주는 난이도: 사람 같은 로봇이 쉽게 맞춘 판(0.85)에서 더 오래, 어렵게 맞춘 판(1.12)에서 덜 간다, 차이는 살짝 (보통, 숫자 출력)', () => {
+  const lo = playHuman('normal', 24, 480, null, { adapt: D.ADAPT.min }), mid = playHuman('normal', 24, 480), hi = playHuman('normal', 24, 480, null, { adapt: D.ADAPT.max });
+  console.log('       보통: 0.85배 ' + lo.time.toFixed(0) + '초 · 1배 ' + mid.time.toFixed(0) + '초 · 1.12배 ' + hi.time.toFixed(0) + '초');
+  assert(lo.time >= mid.time * 0.97 && lo.time > hi.time * 1.1 && mid.time > hi.time, 'easier when lower');
+  assert(hi.time > mid.time * 0.6 && lo.time < mid.time * 1.6, 'subtle');
+  // 성적 기준: 보통 잘하는 아이 = 1 (서툰 아이 로봇보다 멀고, 사람 같은 로봇보다 가깝다)
+  const T = D.ADAPT.target;
+  assert(T.easy > T.normal && T.normal > T.hard, 'targets by level');
+  assert(mid.dist / T.normal > 1 && mid.dist / T.normal < 2.5, 'normal perf of the human bot ' + (mid.dist / T.normal).toFixed(2));
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

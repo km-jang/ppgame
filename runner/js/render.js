@@ -554,7 +554,8 @@
   // bgs: 곳마다 미리 그린 배경 (지금·겹치는 중·곧 올 것만 남긴다) · key/fromKey/zf: 곳이 바뀔 때 겹쳐 바뀌기 · banner: 가운데 큰 글자
   // bhK: 블랙홀 연출 세기 (0 → 1, 별이 휘어 보이기·도는 빛) · sk: 미끄러지는 자세 (0 → 1)
   const R = { bgKey: '', bgs: {}, L: null, parts: [], texts: [], shake: 0, flash: 0, flashColor: '255,77,109', world: null, lines: [], twinkle: null,
-    key: '0', fromKey: null, zf: 1, banner: null, bank: 0, bhK: 0, bhSide: 0, sk: 0 };
+    key: '0', fromKey: null, zf: 1, banner: null, bank: 0, bhK: 0, bhSide: 0, sk: 0,
+    pirK: 0, pirX: 0, pirY: 0 };
 
   function text(x, y, txt, color, size, life) {
     if (R.texts.length > 10) R.texts.shift();
@@ -627,6 +628,12 @@
       } else if (f.kind === 'bhout') {
         R.banner = { big: '블랙홀 탈출!', sub: '+' + f.pts + '점', color: '#d8b0ff', t: 0, max: 1.8, small: true, disp: true };
         burst(L.cx, L.hy + (L.py - L.hy) * 0.2, 26, ['#d8b0ff', '#ffd27a', '#ffffff'], s0 * 6, s0 * 0.1);
+      } else if (f.kind === 'pirate') {
+        R.banner = { big: '우주 해적 출현!', sub: '빨갛게 빛나는 줄은 옆으로 피해요', color: '#ff9a3d', t: 0, max: D.FX.banner + 0.6 };
+        R.pirY = 0;
+      } else if (f.kind === 'pirout') {
+        R.banner = { big: '해적선을 따돌렸어요!', sub: '+' + f.pts + '점 · 별 소나기!', color: '#ffe66d', t: 0, max: 2.6, disp: true };
+        burst(L.cx, L.hy * 0.5, 30, ['#ffe66d', '#ff9a3d', '#ffffff'], s0 * 7, s0 * 0.1);
       } else if (f.kind === 'pull') {
         text(sq.x, sq.y - s0 * 0.6, '슈웅, 끌려갔어요', '#d8b0ff', s0 * 0.3, 1.1);
         burst(sq.x, sq.y, 14, ['#d8b0ff', '#ffffff'], s0 * 4, s0 * 0.07);
@@ -773,6 +780,134 @@
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // ─── 우주 해적선 (한 장 미리 그려 두고 찍는다) ───
+  // 통통한 보라 배 + 금빛 테두리, 분홍 돛 둘, 별 무늬 깃발, 둥근 창 불빛, 뒤쪽 주황 엔진 (무섭지 않게 장난스러운 모양)
+  let pirSpr = null;
+  const PIR_W = 320, PIR_H = 220;
+  function pirateSprite() {
+    if (pirSpr) return pirSpr;
+    const c = mk(PIR_W, PIR_H), g = c.getContext('2d'), cx = PIR_W / 2;
+    // 돛대와 돛
+    g.fillStyle = '#5a3a1a'; g.fillRect(cx - 50, 30, 7, 110); g.fillRect(cx + 38, 44, 7, 96);
+    const sail = (x, y, w, h, col) => {
+      const sg = g.createLinearGradient(x, y, x + w, y);
+      sg.addColorStop(0, col[0]); sg.addColorStop(1, col[1]);
+      g.fillStyle = sg;
+      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w * 1.25, y + h * 0.5, x, y + h); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.stroke();
+    };
+    sail(cx - 43, 36, 70, 88, ['#ff5fa8', '#ffc0dc']);
+    sail(cx + 45, 50, 56, 74, ['#ff5fa8', '#ffc0dc']);
+    // 깃발 (노란 별)
+    g.fillStyle = '#1a0a2a'; g.fillRect(cx - 43, 16, 34, 20);
+    g.fillStyle = '#ffe66d'; g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + TAU * i / 10, r = i % 2 ? 3.5 : 8; g.lineTo(cx - 26 + Math.cos(a) * r, 26 + Math.sin(a) * r); }
+    g.closePath(); g.fill();
+    // 배 몸통
+    const hg = g.createLinearGradient(0, 120, 0, 200);
+    hg.addColorStop(0, '#8a4ad8'); hg.addColorStop(0.5, '#5a2a9a'); hg.addColorStop(1, '#2a1050');
+    g.fillStyle = hg;
+    g.beginPath(); g.moveTo(18, 128); g.lineTo(PIR_W - 18, 128); g.quadraticCurveTo(PIR_W - 30, 200, cx + 40, 204); g.lineTo(cx - 40, 204); g.quadraticCurveTo(30, 200, 18, 128); g.closePath(); g.fill();
+    g.strokeStyle = '#ffd24a'; g.lineWidth = 5; g.stroke();
+    g.strokeStyle = 'rgba(255,210,74,0.6)'; g.lineWidth = 3; g.beginPath(); g.moveTo(28, 150); g.lineTo(PIR_W - 28, 150); g.stroke();
+    // 둥근 창 불빛
+    for (let i = -2; i <= 2; i++) {
+      g.fillStyle = '#2a1050'; g.beginPath(); g.arc(cx + i * 44, 172, 11, 0, TAU); g.fill();
+      g.fillStyle = '#ffe66d'; g.beginPath(); g.arc(cx + i * 44, 172, 7, 0, TAU); g.fill();
+    }
+    // 앞쪽 레이저 포 (가운데 아래)
+    g.fillStyle = '#3a1a5a'; g.fillRect(cx - 12, 198, 24, 14);
+    g.fillStyle = '#ff6b3d'; g.beginPath(); g.arc(cx, 212, 7, 0, TAU); g.fill();
+    return (pirSpr = c);
+  }
+  // 줄 가운데 선의 화면 x (멀리 far m, 가까이 near m)
+  function laneQuad(ctx, L, lane, halfW, near, far) {
+    const a = proj(L, lane - halfW, far), b = proj(L, lane + halfW, far), c = proj(L, lane + halfW, near), d = proj(L, lane - halfW, near);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.closePath();
+  }
+  // 해적선 + 레이저 경고(줄이 주황으로 깜빡) + 레이저(분홍·흰 빛기둥). 바닥 위, 물체보다 먼저 그린다
+  function drawPirate(ctx, W, L, v, dt) {
+    const S = W.pir;
+    R.pirK += ((S ? 1 : 0) - R.pirK) * Math.min(1, dt * (S ? 2.5 : 1.5));
+    if (R.pirK < 0.02) return;
+    const Z = S && S.laser, t = performance.now() / 1000;
+    const aim = Z ? Z.lane : W.p.x;
+    R.pirX += (aim - R.pirX) * Math.min(1, dt * 3);
+    const s = Math.min(v.w, v.h) / 800;
+    const w = PIR_W * 0.9 * s, h = PIR_H * 0.9 * s;
+    const x = L.cx + (R.pirX - 1) * v.w * 0.16, bob = v.calm ? 0 : Math.sin(t * 2) * 6 * s;
+    const y = L.hy * 0.42 - (1 - R.pirK) * L.hy * 0.9 + bob;
+    // 레이저 경고: 그 줄 바닥이 주황으로 깜빡 + 느낌표 판
+    if (Z && Z.phase === 'warn') {
+      const k = 1 - Z.t / Z.max, blink = v.calm ? 0.7 : 0.45 + 0.35 * Math.abs(Math.sin(t * (8 + k * 10)));
+      ctx.globalAlpha = blink * (0.35 + 0.45 * k);
+      ctx.fillStyle = '#ff7a2a';
+      laneQuad(ctx, L, Z.lane, 0.46, -CAMZ + 0.8, D.VIEW); ctx.fill();
+      ctx.globalAlpha = 1;
+      for (const rel of [5, 14, 26]) {
+        const q = proj(L, Z.lane, rel, 0.05), r = Math.max(10, q.s * 0.45);
+        ctx.fillStyle = 'rgba(40,12,4,0.85)'; ctx.strokeStyle = '#ffb13d'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(q.x, q.y - r * 1.6); ctx.lineTo(q.x + r, q.y); ctx.lineTo(q.x - r, q.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#ffe66d'; ctx.font = Math.round(r * 1.1) + 'px ' + NUM; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('!', q.x, q.y - r * 0.5);
+      }
+      ctx.textBaseline = 'alphabetic';
+    }
+    // 해적선
+    ctx.globalAlpha = Math.min(1, R.pirK * 1.3);
+    glow(ctx, 'rgba(255,120,60,0.8)', x, y + h * 0.35, w * 0.35, 0.5);
+    ctx.drawImage(pirateSprite(), x - w / 2, y - h / 2, w, h);
+    ctx.globalAlpha = 1;
+    // 레이저: 배의 포에서 그 줄 먼 곳으로, 그리고 줄 전체가 분홍·흰 빛
+    if (Z && Z.phase === 'beam') {
+      const k = Z.t / Z.max, gx = x, gy = y + h * 0.46;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.55 + 0.45 * k;
+      ctx.fillStyle = '#ff4fa0';
+      laneQuad(ctx, L, Z.lane, 0.42, -CAMZ + 0.8, D.VIEW); ctx.fill();
+      ctx.fillStyle = '#fff0f8';
+      laneQuad(ctx, L, Z.lane, 0.14, -CAMZ + 0.8, D.VIEW); ctx.fill();
+      const far = proj(L, Z.lane, D.VIEW * 0.6, 0.3);
+      ctx.strokeStyle = '#ff9ad0'; ctx.lineWidth = Math.max(4, 10 * s); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(far.x, far.y); ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(2, 4 * s);
+      ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(far.x, far.y); ctx.stroke();
+      glow(ctx, 'rgba(255,120,200,0.9)', gx, gy, 30 * s, 1);
+      ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+
+  // 해적 폭탄: 둥근 주황 폭탄 + 뾰족 가시 + 깜빡이는 불빛 (뛰어넘는다). 떨어질 때 위에서 내려온다
+  let bombSpr = null;
+  function bombSprite() {
+    if (bombSpr) return bombSpr;
+    const c = mk(96, 96), g = c.getContext('2d'), o = 48;
+    const halo = g.createRadialGradient(o, o, 18, o, o, 48);
+    halo.addColorStop(0, 'rgba(255,140,60,0.7)'); halo.addColorStop(1, 'rgba(255,140,60,0)');
+    g.fillStyle = halo; g.fillRect(0, 0, 96, 96);
+    g.fillStyle = '#ffb13d';
+    for (let i = 0; i < 8; i++) { const a = TAU * i / 8; g.beginPath(); g.moveTo(o + Math.cos(a - 0.2) * 22, o + Math.sin(a - 0.2) * 22); g.lineTo(o + Math.cos(a) * 34, o + Math.sin(a) * 34); g.lineTo(o + Math.cos(a + 0.2) * 22, o + Math.sin(a + 0.2) * 22); g.fill(); }
+    const bg = g.createRadialGradient(o - 8, o - 8, 3, o, o, 26);
+    bg.addColorStop(0, '#a070e0'); bg.addColorStop(0.6, '#4a2080'); bg.addColorStop(1, '#1a0830');
+    g.fillStyle = bg; g.beginPath(); g.arc(o, o, 25, 0, TAU); g.fill();
+    g.strokeStyle = '#ffb13d'; g.lineWidth = 3; g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(o - 9, o - 10, 8, 4, -0.6, 0, TAU); g.fill();
+    return (bombSpr = c);
+  }
+  function drawBomb(ctx, W, L, o, rel, fade, v) {
+    ctx.globalAlpha = fade * 0.4;
+    ctx.fillStyle = '#ff9a3d';
+    floorQuad(ctx, L, o.x, rel, 0.38, 0.6); ctx.fill();
+    const fall = Math.max(0, 1 - (W.t - (o.born || 0)) / 0.6);
+    const q = proj(L, o.x, rel, 0.55 + fall * fall * 7), size = q.s * 1.7;
+    ctx.globalAlpha = fade;
+    ctx.drawImage(bombSprite(), q.x - size / 2, q.y - size / 2, size, size);
+    const on = v.calm || Math.sin(W.t * 10 + o.z) > 0;
+    if (on) glow(ctx, 'rgba(255,80,60,0.95)', q.x, q.y - size * 0.3, size * 0.14, fade);
+    ctx.globalAlpha = 1;
   }
 
   // ─── 물체 ─────────────────────────────────────────────────
@@ -985,6 +1120,7 @@
     if (o.kind === 'meteor') drawMeteor(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'gate') drawGate(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'bar') drawBar(ctx, W, L, o, rel, fade, v);
+    else if (o.kind === 'bomb') drawBomb(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'star') drawStar(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'item') drawItem(ctx, W, L, o, rel, fade, v);
   }
@@ -1354,13 +1490,14 @@
     gate:   { txt: '점프!', bg: 'rgba(40,30,4,0.9)', edge: '#ffe66d', ink: '#fff4c2', arrow: -1 },
     bar:    { txt: '숙여!', bg: 'rgba(26,8,44,0.92)', edge: '#c98cff', ink: '#f0dcff', arrow: 1 },
   };
+  BUBBLE.bomb = BUBBLE.gate;
   function drawDanger(ctx, W, L, dist, v) {
     if (W.phase !== 'play' || W.wait > 0 || W.eff.boost > 0) return;
     const d = RN.World.dangerAhead(W, 1.3);
     if (!d || d.t < 0.12) return;
     const o = d.o, rel = o.z - dist, B = BUBBLE[o.kind] || BUBBLE.meteor;
     const lx = o.moving && o.x !== o.to ? W.p.lane : o.x;
-    const hgt = o.kind === 'gate' ? D.OBST.gateH + 0.9 : o.kind === 'bar' ? D.OBST.barHi + 0.75 : D.OBST.meteorR * 2 + 0.5;
+    const hgt = o.kind === 'gate' || o.kind === 'bomb' ? D.OBST.gateH + 0.9 : o.kind === 'bar' ? D.OBST.barHi + 0.75 : D.OBST.meteorR * 2 + 0.5;
     const q = proj(L, lx, rel, hgt);
     const fs = Math.round(Math.max(16, Math.min(28, q.s * 0.5 + 8)));
     const blink = v.calm ? 1 : 0.7 + Math.sin(W.t * (d.t < 0.6 ? 22 : 12)) * 0.3;
@@ -1494,6 +1631,7 @@
     if (W.eff.magnet > 0) items.push([String(Math.ceil(W.eff.magnet)), ITEM.magnet.color, 'magnet']);
     if (W.eff.boost > 0) items.push([String(Math.ceil(W.eff.boost)), ITEM.boost.color, 'boost']);
     if (W.revives > W.revived) items.push(['부활', '#ffd24a']);   // 불사조: 아직 다시 살아날 수 있다
+    if (W.pir) items.push(['해적 ' + Math.max(0, Math.ceil(W.pir.t)), '#ff9a3d']);   // 해적선이 물러갈 때까지 남은 초
     if (v.w >= 700 && v.best > 0) items.push(['BEST ' + Math.max(v.best || 0, Math.floor(W.dist)).toLocaleString() + 'm', '#bcd3e2']);
     for (const [txt, col, icon, hearts] of items) {
       if (x - chipW(ctx, ch, txt, s, icon, hearts) < (narrow ? 8 : v.hudLeft)) continue;   // 버튼 묶음과 겹치면 생략
@@ -1613,6 +1751,7 @@
     takeFx(W, v, L, dist);
     updateFx(dt || 0);
     drawBackground(ctx, W, v, L, dist, dt || 0);
+    drawPirate(ctx, W, L, v, dt || 0);
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
     // 먼 것부터 그리고, 우주선보다 뒤(카메라 쪽)로 지나간 것은 우주선 다음에
