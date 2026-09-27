@@ -1404,5 +1404,58 @@ test('한 번 더: 먹구름은 멀리 물러나 쉬고, 이어 한 판도 기�
   assert(W.phase === 'play' && W.height >= h, 'goes on (safe for ' + D.CONTINUE.safe + 's)');
 });
 
+// ─── 손가락 입력 (input.js, 가짜 창·캔버스로) ────────────────────
+function fakeInput() {
+  const on = {}, won = {};
+  const el = { addEventListener: (k, f) => { on[k] = f; }, setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, width: 800 }) };
+  const c = vm.createContext({ console, Math, JSON, window: { addEventListener: (k, f) => { won[k] = f; } } });
+  c.JP = { DATA: D };
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'input.js'), 'utf8'), c, { filename: 'input.js' });
+  const I = c.JP.createInput(el);
+  const ev = (id, x, extra) => Object.assign({ pointerId: id, clientX: x, pointerType: 'touch', width: 10, height: 10, button: 0, pressure: 0.5, buttons: 1 }, extra || {});
+  return {
+    I, down: (id, x) => on.pointerdown(ev(id, x)), move: (id, x, e) => on.pointermove(ev(id, x, e)), up: id => on.pointerup(ev(id, 0)),
+  };
+}
+test('손가락: 두 번째 손가락을 대고 떼도 주인공이 갑자기 튀지 않는다 (끌기 기준을 새로)', () => {
+  const F = fakeInput(), W = { p: { x: 200 } }, v = { scale: 2 };
+  F.down(1, 500);
+  for (let x = 500; x <= 600; x += 25) F.move(1, x);   // 첫 손가락: 끌기 (100px → 62.5점)
+  const d1 = F.I.dir(W, v);
+  assert(d1 > 0, 'drag right ' + d1);
+  W.p.x += 62.5; F.I.dir(W, v);                          // 주인공이 따라갔다
+  // 두 번째 손가락을 왼쪽 멀리 대고, 첫 손가락은 계속 움직인다 (두 번째가 방향을 정한다)
+  F.down(2, 100);
+  for (let x = 600; x <= 760; x += 40) F.move(1, x);
+  const d2 = F.I.dir(W, v);
+  assert(d2 === -1, 'second finger presses left ' + d2);
+  // 두 번째 손가락을 떼면 첫 손가락이 다시 방향을 정한다: 그동안 간 160px가 한꺼번에 더해지면 안 된다
+  F.up(2);
+  const d3 = F.I.dir(W, v);
+  assert(Math.abs(d3) < 0.2, 'no sudden jump after the second finger lifts ' + d3);
+  F.move(1, 800);
+  assert(F.I.dir(W, v) > 0, 'keeps following');
+});
+test('손가락: 멈춤 뒤에도 누르고 있던 손가락이 그대로, 모르는 손가락도 누른 채 움직이면 받아들인다', () => {
+  const F = fakeInput(), W = { p: { x: 200 } }, v = { scale: 2 };
+  F.down(1, 700);
+  assert(F.I.dir(W, v) === 1 && F.I.side === 1, 'right');
+  F.I.soft();                         // 멈춤
+  assert(F.I.side === 0, 'arrow light off while paused');
+  assert(F.I.dir(W, v) === 1, 'still pressed after resume');
+  F.I.reset();                        // 예전처럼 다 잊어도
+  F.move(1, 705);                     // 누른 채 움직이면 다시 받아들인다
+  assert(F.I.dir(W, v) === 1, 're-adopted on move');
+  F.move(3, 100, { pressure: 0, buttons: 0 });   // 떠 있는 손가락(누르지 않음)은 무시
+  assert(F.I.dir(W, v) === 1, 'hover ignored');
+  // 끌기는 22px 넘게 밀어야 (아이 손 떨림)
+  const G = fakeInput();
+  G.down(1, 300); G.move(1, 318);
+  assert(G.I.dir(W, v) === -1 && !G.I.drag, 'small wiggle stays a press');
+  G.move(1, 330);
+  G.I.dir(W, v);
+  assert(G.I.drag, 'a real slide becomes a drag');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

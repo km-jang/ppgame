@@ -70,9 +70,9 @@
       if (k) { S.side = k > 0 ? 1 : -1; S.drag = false; return S.side; }
       let best = null;
       for (const p of ptrs.values()) if (!best || p.n > best.n) best = p;
-      // 방향을 정하는 손가락이 바뀌면 (두 번째 손가락을 대거나 뗐을 때) 모든 손가락의 끌기 기준을 지금 자리로, 밀린 거리는 0으로.
-      // 그러지 않으면 쉬던 손가락이 그동안 움직인 거리가 한꺼번에 더해져 주인공이 갑자기 튄다
-      if (best !== steer) { steer = best; for (const p of ptrs.values()) p.last = p.x; pending = 0; prevX = null; }
+      // 방향을 정하는 손가락이 바뀌면 (두 번째 손가락을 대거나 뗐을 때) 밀린 거리는 0으로, 다른 손가락의 끌기 기준은 지금 자리로.
+      // 쉬던 손가락이 그동안 움직인 거리가 한꺼번에 더해져 주인공이 갑자기 튀지 않게 (아래에서 부를 때마다 모든 손가락 기준을 옮긴다)
+      if (best !== steer) { steer = best; for (const p of ptrs.values()) if (p !== best) p.last = p.x; pending = 0; prevX = null; }
       S.drag = !!(best && best.drag && W && W.p && v && v.scale > 0);
       if (!S.drag) { S.side = best ? best.side : 0; prevX = null; for (const p of ptrs.values()) p.last = p.x; return S.side; }
       const G = JP.DATA.DRAG, WW = JP.DATA.WORLD.w;

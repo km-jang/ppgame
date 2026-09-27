@@ -208,7 +208,7 @@
     $('btn-char').style.setProperty('--sc', 'rgb(' + K.glow + ')');
     $('coin-count').textContent = fmt(shop.coins);
     $('title-missions').innerHTML = missionsHtml('미션');
-    const lo = D.START_ITEMS.filter(it => shop.items[it.id] > 0).map(it => it.name + (shop.items[it.id] > 1 ? ' ×' + shop.items[it.id] : ''));
+    const lo = D.START_ITEMS.filter(it => shop.items[it.id] > 0).map(it => it.name + (shop.items[it.id] > 1 ? ' ' + shop.items[it.id] + '개' : ''));
     $('loadout-line').textContent = lo.length ? '다음 판 시작 아이템: ' + lo.join(' · ') : '';
   }
 
@@ -242,7 +242,7 @@
         let pips = '';
         for (let k = 0; k < D.UPGRADE_MAX; k++) pips += '<i class="' + (k < lv ? 'on' : '') + '"></i>';
         return '<div class="sitem row"><span class="s-icon">' + u.icon + '</span>' +
-          '<span class="s-mid"><b class="s-name">' + esc(u.name) + ' <small>Lv ' + lv + '</small></b><span class="s-desc">' + esc(u.desc) + '</span><span class="pips">' + pips + '</span></span>' +
+          '<span class="s-mid"><b class="s-name">' + esc(u.name) + ' <small>' + lv + '단계</small></b><span class="s-desc">' + esc(u.desc) + '</span><span class="pips">' + pips + '</span></span>' +
           priceBtn(u.id, '최대') + '</div>';
       }).join('');
     } else {

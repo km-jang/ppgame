@@ -2070,15 +2070,17 @@
       ctx.textBaseline = 'alphabetic';
       return;
     }
+    // 처음 몇 초 짧은 안내: 높은 곳에서 출발했거나(해 본 아이) 배너가 떠 있으면 겹치지 않게 건너뛴다
     const a = Math.max(0, Math.min(1, D.HINT_TIME - W.t));
-    if (a <= 0) return;
+    if (a <= 0 || W.start > 0 || R.banner) { ctx.textBaseline = 'alphabetic'; return; }
+    const hy = v.cy + v.ch * 0.3;
     ctx.globalAlpha = a;
     ctx.font = fs + 'px ' + DISP;
     const lines = v.touch ? ['왼쪽·오른쪽을 누르거나', '손가락으로 밀어 움직여요'] : ['← → 방향키로', '움직여요'];
-    lines.forEach((t, i) => outlined(ctx, t, cx, cy + i * fs * 1.35, i ? '#bff8ff' : '#ffe66d'));
+    lines.forEach((t, i) => outlined(ctx, t, cx, hy + i * fs * 1.35, i ? '#bff8ff' : '#ffe66d'));
     if (!W.L.rescues) {
       ctx.font = Math.round(fs * 0.8) + 'px ' + DISP;
-      outlined(ctx, '아래로 떨어지면 끝!', cx, cy + fs * 3, '#ff8a96');
+      outlined(ctx, '아래로 떨어지면 끝!', cx, hy + fs * 3, '#ff8a96');
     }
     ctx.globalAlpha = 1;
     ctx.textBaseline = 'alphabetic';
