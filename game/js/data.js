@@ -21,6 +21,10 @@
     tank:     { name: '중장갑', r: 26, hp: 18,  speed: 44,  score: 50,  color: '#8f5cff', shape: 'square' },
     splitter: { name: '분열체', r: 20, hp: 8,   speed: 62,  score: 25,  color: '#fb5607', shape: 'penta', splitInto: 'mini' },
     mini:     { name: '새끼',   r: 9,  hp: 1,   speed: 125, score: 5,   color: '#ff9e6d', shape: 'circle' },
+    // 돌진이 (2026-09-27): 가까이 오면 멈춰서 예고선을 보여 주고(warn초) 그 방향으로 쏜살같이 돌진한다.
+    // 예고선이 굳은 뒤에 옆으로 비키면 안 맞는다 (가만히 서 있으면 맞는다)
+    charger:  { name: '돌진이', r: 13, hp: 4,   speed: 64,  score: 20,  color: '#ff8c42', shape: 'arrow',
+                range: 340, warn: 0.75, dashSpeed: 560, dashTime: 0.5, rest: 1.4 },
     boss:     { name: '보스',   r: 58, hp: 320, speed: 42,  score: 1000, color: '#ff2e88', shape: 'octa',
                 ringCd: 3.0, ringCount: 14, ringSpeed: 170,
                 aimCd: 1.4, aimSpeed: 240, summonCd: 6.5 },
@@ -31,6 +35,7 @@
     { type: 'grunt',    from: 1, w: 10 },
     { type: 'runner',   from: 2, w: 5 },
     { type: 'shooter',  from: 3, w: 3 },
+    { type: 'charger',  from: 3, w: 3 },
     { type: 'tank',     from: 4, w: 2 },
     { type: 'splitter', from: 6, w: 3 },
   ];
@@ -47,11 +52,53 @@
   };
 
   // 난이도. 적 체력·속도·수, 적 탄 속도·연사, 내 체력, 점수 배율
+  // (2026-09-27 소유자: "난이도 더 높여도 돼, 쉬움부터 상하좌우 움직이게") 아래를 더했다
+  // lead: 사수가 내가 움직이는 쪽을 얼마나 앞질러 쏘나 (0 그대로 겨눔, 1 정확히 앞질러)
+  // meteor: 운석이 떨어지는 간격(초)·예고 시간(초). 예고 원이 내 자리에 생기고 warn초 뒤 떨어진다
+  // pull·bulletPull: 블랙홀 웨이브에서 나와 적 탄을 끌어당기는 힘 (px/초, px/초²). 내 속도(220)보다 한참 약하다
   const DIFFICULTY = {
-    easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.6,  enemySpeed: 0.8,  count: 0.75, bulletSpeed: 0.75, fireRate: 0.7,  score: 0.6 },
-    normal: { id: 'normal', name: '보통',   hp: 5, enemyHp: 1,    enemySpeed: 1,    count: 1,    bulletSpeed: 1,    fireRate: 1,    score: 1 },
-    hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.5,  enemySpeed: 1.2,  count: 1.3,  bulletSpeed: 1.2,  fireRate: 1.35, score: 1.6 },
+    easy:   { id: 'easy',   name: '쉬움',   hp: 8, enemyHp: 0.7,  enemySpeed: 0.85, count: 0.85, bulletSpeed: 0.8,  fireRate: 0.8,  score: 0.6,
+              lead: 0.3,  meteorEvery: 5.2, meteorWarn: 1.35, pull: 38, bulletPull: 70 },
+    normal: { id: 'normal', name: '보통',   hp: 5, enemyHp: 1.05, enemySpeed: 1.05, count: 1.1,  bulletSpeed: 1.05, fireRate: 1.1,  score: 1,
+              lead: 0.6,  meteorEvery: 4.0, meteorWarn: 1.15, pull: 52, bulletPull: 100 },
+    hard:   { id: 'hard',   name: '어려움', hp: 4, enemyHp: 1.55, enemySpeed: 1.25, count: 1.4,  bulletSpeed: 1.25, fireRate: 1.45, score: 1.6,
+              lead: 0.85, meteorEvery: 3.2, meteorWarn: 1.0,  pull: 66, bulletPull: 130 },
   };
+
+  // 운석 (2026-09-27): 가만히 서 있으면 맞도록 내 자리를 노린다. 예고 원(빨간 점선 + 차오르는 빛)이 먼저 뜨고
+  // 떨어질 때 원 안에 있으면 1칸 아프다. 원 안의 일반 적도 피해를 입는다 (적을 끌어들여 맞히는 재미)
+  // 간격 = 난이도 meteorEvery × max(minMul, 1 - (웨이브-1) × perWave). extraEvery 웨이브마다 운석이 하나씩 더 (내 주변 spread px 안)
+  const METEOR = {
+    r: 58,             // 떨어지는 원 반지름 (내가 0.35초면 빠져나간다)
+    firstDelay: 2.6,   // 웨이브 시작 뒤 첫 운석까지
+    perWave: 0.03, minMul: 0.6,
+    extraEvery: 6, extraMax: 3, spread: 190,
+    bossMul: 1.5,      // 보스 웨이브에선 덜 자주
+    enemyDmg: 8,       // 원 안의 적 피해 (웨이브 체력 배율·난이도 적 체력 배율을 곱함. 졸개·돌격병·돌진이는 한 방)
+    stop: 0.05,        // 떨어지는 순간 화면 멈춤
+  };
+
+  // 태양계 여행 (2026-09-27, 소유자: "배경 행성을 수금지화목토천해명 지나가면 각 특색 있는 행성, 간혹 블랙홀 배경도")
+  // 웨이브 perPlanet개마다 다음 행성으로. 명왕성 다음은 다시 수성 (2바퀴, 3바퀴 …)
+  // 그림(색·무늬)은 render.js PLANET_ART. 여기는 이름·한 줄 설명·알림 색
+  const JOURNEY = { perPlanet: 2 };
+  const PLANETS = [
+    { id: 'mercury', name: '수성',   fact: '태양과 가장 가까운 행성',   color: '#c9c3bb' },
+    { id: 'venus',   name: '금성',   fact: '노란 구름이 빙글빙글',       color: '#ffcf6b' },
+    { id: 'earth',   name: '지구',   fact: '우리 집! 파란 바다 행성',    color: '#6fc3ff' },
+    { id: 'mars',    name: '화성',   fact: '빨간 모래 행성',             color: '#ff7a4d' },
+    { id: 'jupiter', name: '목성',   fact: '가장 큰 행성, 커다란 빨간 점', color: '#f0b98a' },
+    { id: 'saturn',  name: '토성',   fact: '멋진 고리를 두른 행성',      color: '#f3d58c' },
+    { id: 'uranus',  name: '천왕성', fact: '옆으로 누워 도는 얼음 행성', color: '#9ef0f0' },
+    { id: 'neptune', name: '해왕성', fact: '바람이 가장 센 파란 행성',   color: '#5b8cff' },
+    { id: 'pluto',   name: '명왕성', fact: '작고 추운 하트 행성',        color: '#e8d2b8' },
+  ];
+
+  // 블랙홀 웨이브: from 웨이브부터, 보스 웨이브가 아니고 바로 앞 웨이브가 블랙홀이 아니면 chance 확률로
+  // 블랙홀은 화면 안쪽(place 비율 사이)에, 내 자리에서 minFromPlayer px 이상 떨어져 생긴다.
+  // 끌어당기는 힘 = 난이도 pull × (near + (1 - near) × 가까움), 가까움 = 1 - 거리/(range × 화면 긴 변). 한가운데(core)는 힘 없음
+  // 적은 끌려가지 않는다 (적을 나에게 떠밀지 않게). 적 탄은 휘고, 가운데(swallow px)에 닿은 탄은 삼켜진다
+  const BLACKHOLE = { from: 4, chance: 0.16, core: 14, swallow: 26, range: 0.7, near: 0.35, place: [0.28, 0.72], minFromPlayer: 220 };
 
   // 타격감: 큰 적을 잡는 순간 화면을 아주 잠깐 멈춘다 (초). 연달아 걸리지 않게 간격을 둔다
   // 보스 모습: 5웨이브마다 차례로 바뀐다 (한 바퀴 돌면 같은 모습에 "MK2", "MK3"…). 규칙(체력·탄막)은 같다
@@ -183,7 +230,7 @@
     { id: 'games10', tier: 1, icon: '10판', name: '단골',          desc: '10판 플레이',                           check: (r, L) => L.games >= 10 },
   ];
 
-  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
+  NG.DATA = { BOSSES, ULT, IMPACT, DIFFICULTY, METEOR, JOURNEY, PLANETS, BLACKHOLE, PLAYER, GUN, ENEMIES, WAVE_POOL, WAVE, DROP, CARDS, FALLBACK_CARD, DRONE, NOVA, COMBO, comboMul, MEDALS };
 
   // ═══ 기체 · 상점 · 미션 · 아이템 (2026-09-26, 소유자: "캐릭터 고를 수 있게, 상점·미션·아이템") ═══
   // 기체. hp: 체력 더하기, speed·dashCd: 배율, gun: 총 바꾸기(barrels 더하기, rate·dmg·speed 배율, crit 더하기,
