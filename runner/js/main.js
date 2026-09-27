@@ -305,7 +305,7 @@
   function renderEarn() {
     const e = lastEarn || { coins: 0, parts: {}, done: [] }, P = e.parts;
     $('over-coins').textContent = '+0';
-    const bits = [['거리', P.dist], ['별', P.stars], ['기념 아치', P.arch], ['새 구역', P.zone], ['난이도', P.diff], ['강화 보너스', P.bonus]];
+    const bits = [['거리', P.dist], ['별', P.stars], ['기념 아치', P.arch], ['행성', P.zone], ['난이도', P.diff], ['강화 보너스', P.bonus]];
     $('over-coin-parts').innerHTML = bits.filter(b => b[1] > 0).map(b => '<span>' + b[0] + ' <b>' + fmt(b[1]) + '</b></span>').join('');
     $('over-missions').innerHTML = missionsHtml(e.done.length ? '미션 완료 ' + e.done.length + '개! 받기를 누르세요' : '미션');
     for (const id of e.done) { const row = $('over-missions').querySelector('[data-mid="' + id + '"]'); if (row) row.classList.add('fresh'); }
@@ -340,7 +340,7 @@
     if (typeof HUB === 'undefined' || !HUB.reportRun) return;
     reportSummary();
     try {
-      const fresh = HUB.reportRun('runner', { dist: Math.floor(W.dist), stars: W.stars, jumps: W.gates, games: 1 }, W.runT);
+      const fresh = HUB.reportRun('runner', { dist: Math.floor(W.dist), stars: W.stars, jumps: W.gates, slides: W.bars, games: 1 }, W.runT);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -380,13 +380,14 @@
     $('over-records').innerHTML = newRec.map(x => '<span>신기록 · ' + x + '</span>').join('');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     if (fresh.length) setTimeout(() => { if (mode === 'over') RN.Audio.play('medal'); }, 900);
-    $('over-title').textContent = W.cause === 'gate' ? '레이저에 찌릿!' : '운석에 쾅!';
+    $('over-title').textContent = W.cause === 'gate' ? '레이저에 찌릿!' : W.cause === 'bar' ? '막대에 머리 콩!' : '운석에 쾅!';
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = isBest ? '' : 'none';
     $('over-dist').textContent = dist.toLocaleString() + 'm';
     $('over-stars').textContent = W.stars;
     $('over-time').textContent = RN.fmtTime(W.runT);
-    $('over-diff').textContent = D.DIFFICULTY[W.diff].name + ' 최고 ' + B.dist.toLocaleString() + 'm · ' + D.ZONES[W.zone].name + '까지';
+    const place = RN.World.placeOf(W.zone);
+    $('over-diff').textContent = D.DIFFICULTY[W.diff].name + ' 최고 ' + B.dist.toLocaleString() + 'm · ' + place.name + '까지' + (place.lap > 1 ? ' (' + place.lap + '바퀴째)' : '');
     wakeLock(false);
     // 부딪힌 연출을 잠깐 보여 준 뒤 결과 화면
     setTimeout(() => { if (mode === 'over') { show('scr-over'); countCoins(); } }, 900);
@@ -402,6 +403,7 @@
       else if (ev === 'hit') vibrate([40, 30, 40]);
       else if (ev === 'shield' || ev === 'smash') vibrate(30);
       else if (ev === 'power' || ev === 'boost' || ev === 'heal') vibrate([20, 30, 20]);
+      else if (ev === 'pull') vibrate([30, 20, 30]);
     }
     world.events.length = 0;
   }
@@ -506,7 +508,7 @@
 
     if (mode === 'title' || mode === 'shop') {
       // 시연: 자동 운전 우주선이 시작 화면 뒤에서 달린다. 끝나면(드물게) 새로
-      if (!demo || demo.phase !== 'play' || demo.dist > 2600) demo = RN.World.create(777 + Math.floor(Math.random() * 1000), { diff: 'easy', auto: true, wait: 0, char: shop.char });
+      if (!demo || demo.phase !== 'play' || demo.dist > 3400) demo = RN.World.create(777 + Math.floor(Math.random() * 1000), { diff: 'easy', auto: true, wait: 0, char: shop.char });
       RN.World.step(demo, dt);
       drainEvents(demo, false);
       RN.Render.draw(ctx, demo, demoView, dt);

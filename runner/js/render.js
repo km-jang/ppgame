@@ -45,35 +45,333 @@
     ctx.globalAlpha = 1;
   }
 
-  // ─── 우주 구역 그림 (data.js ZONES와 같은 차례) ───
-  // sky: 하늘 위→지평선 · neb: 성운 두 색 · planet: 행성 [밝은 곳, 가운데, 어두운 곳] · ring: 고리 색(r,g,b, 없으면 고리 없음)
-  // moon: 작은 달 · hor: 지평선의 큰 것 (sun 줄무늬 해 · ice 얼음 행성 · galaxy 은하 소용돌이) · floor: 바닥 · track: 길 띠
-  // grid: 바깥 격자 (r,g,b) · lane: 줄 선·길 테두리 (r,g,b) · glow: 지평선 빛 (r,g,b) · accent: 아치·안내 글자 색
-  const ZONE_ART = [
-    { sky: ['#04030c', '#120a2e', '#3b1257'], neb: ['rgba(20,90,140,0.35)', 'rgba(110,30,140,0.35)'], star: '#ffe6f2',
-      planet: ['#9ff3ff', '#4a7de0', '#2a1a6a'], pglow: 'rgba(94,231,255,0.6)', ring: '255,190,120', moon: ['#ffd6e8', '#a03a7a'],
-      hor: 'sun', sun: ['#ffe66d', '#ff7a59', '#ff2e88'], sunGlow: 'rgba(255,90,140,0.8)', stripe: '#2c0e46',
-      floor: ['#1b0830', '#0b0418', '#05020c'], track: ['rgba(60,30,110,0.5)', 'rgba(30,60,120,0.35)'],
-      grid: '255,46,136', lane: '94,231,255', glow: '255,90,170', line: 'rgba(255,200,230,0.9)', accent: '#ffe66d' },
-    { sky: ['#01050f', '#08213f', '#2b6b98'], neb: ['rgba(120,200,255,0.3)', 'rgba(200,230,255,0.22)'], star: '#e8f6ff',
-      planet: ['#ffe0f4', '#c080e0', '#40206a'], pglow: 'rgba(220,160,255,0.55)', ring: null, moon: ['#ffffff', '#7fb0d8'],
-      hor: 'ice', sun: ['#ffffff', '#bfe8ff', '#5aa8e0'], sunGlow: 'rgba(170,225,255,0.85)', stripe: '#0d3a60',
-      floor: ['#0b2440', '#061426', '#02060e'], track: ['rgba(120,190,255,0.3)', 'rgba(200,235,255,0.22)'],
-      grid: '110,190,255', lane: '215,245,255', glow: '160,220,255', line: 'rgba(230,248,255,0.95)', accent: '#bff8ff' },
-    { sky: ['#010806', '#05261f', '#0f4f3c'], neb: ['rgba(40,210,120,0.35)', 'rgba(20,150,170,0.3)'], star: '#e6ffe8',
-      planet: ['#e4ffb8', '#5cc878', '#0d4a3a'], pglow: 'rgba(120,255,160,0.55)', ring: '200,255,150', moon: ['#fff6c8', '#b08a2a'],
-      hor: 'sun', sun: ['#f6ff8a', '#8dff8a', '#16c9a0'], sunGlow: 'rgba(90,255,170,0.8)', stripe: '#062a22',
-      floor: ['#07261d', '#03120d', '#010604'], track: ['rgba(40,160,110,0.4)', 'rgba(20,110,120,0.3)'],
-      grid: '60,255,160', lane: '190,255,120', glow: '120,255,170', line: 'rgba(220,255,210,0.9)', accent: '#c8ff7a' },
-    { sky: ['#06020e', '#1d0838', '#4e1a62'], neb: ['rgba(160,70,255,0.35)', 'rgba(255,180,60,0.22)'], star: '#fff2d0',
-      planet: ['#fff2b0', '#e0a030', '#5a2a0a'], pglow: 'rgba(255,200,90,0.6)', ring: '255,220,140', moon: ['#e8d0ff', '#6a3aa0'],
-      hor: 'galaxy', sun: ['#fffbe0', '#ffd24a', '#b04aff'], sunGlow: 'rgba(255,200,90,0.85)', stripe: '#2a0a3a',
+  // ─── 태양계 여행 그림 (data.js ZONES와 같은 차례) + 블랙홀 ───
+  // sky: 하늘 위→지평선 · neb: 성운 두 색 · star: 가끔 섞는 별 색 · floor: 바닥 · track: 길 띠
+  // grid: 바깥 격자 (r,g,b) · lane: 줄 선·길 테두리 (r,g,b) · glow: 지평선 빛 (r,g,b) · line: 지평선 줄 · accent: 아치·글자 색
+  // paint(g, L, S): 하늘에 떠 있는 행성·해·달 (S: 크기 도우미). 모두 미리 그려 두는 그림이라 여기서는 shadowBlur를 써도 된다
+  const PLANET_ART = [
+    { id: 'mercury', sky: ['#07030a', '#2a0f14', '#6a2a1a'], neb: ['rgba(255,140,60,0.28)', 'rgba(255,80,60,0.2)'], star: '#ffe0c0',
+      floor: ['#2a1410', '#140a08', '#070304'], track: ['rgba(140,90,70,0.45)', 'rgba(90,60,50,0.35)'],
+      grid: '255,150,70', lane: '255,230,170', glow: '255,170,90', line: 'rgba(255,230,190,0.95)', accent: '#ffd27a',
+      paint(g, L, S) {
+        // 아주 가까운 커다란 해 (줄무늬로 잘린 신스웨이브 해)
+        stripedSun(g, L.cx, L.hy - S.sr * 0.05, S.sr * 1.55, ['#fffbe0', '#ffd24a', '#ff6a2a'], 'rgba(255,170,60,0.9)', '#3a1208');
+        // 회색 곰보 수성
+        const p = S.side(0.12);
+        sphere(g, p.x, p.y, p.r, ['#f2eee8', '#a39c95', '#3b3632'], 'rgba(255,220,180,0.45)', -0.9, (x, y, r) => {
+          const cr = RN.rng(4);
+          for (let k = 0; k < 16; k++) {
+            const a = cr() * TAU, d = Math.sqrt(cr()) * r * 0.85, rr = r * (0.05 + cr() * 0.13);
+            const cx = x + Math.cos(a) * d, cy = y + Math.sin(a) * d;
+            g.fillStyle = 'rgba(40,34,30,0.45)'; g.beginPath(); g.arc(cx, cy, rr, 0, TAU); g.fill();
+            g.strokeStyle = 'rgba(255,250,240,0.35)'; g.lineWidth = Math.max(1, rr * 0.18);
+            g.beginPath(); g.arc(cx - rr * 0.1, cy - rr * 0.1, rr, Math.PI * 0.9, Math.PI * 1.7); g.stroke();
+          }
+        });
+      } },
+    { id: 'venus', sky: ['#0a0603', '#2e1a06', '#6e4410'], neb: ['rgba(255,200,80,0.25)', 'rgba(255,150,40,0.2)'], star: '#fff0c0',
+      floor: ['#2c1d08', '#150e04', '#070502'], track: ['rgba(200,150,60,0.4)', 'rgba(140,90,30,0.3)'],
+      grid: '255,190,60', lane: '255,236,160', glow: '255,200,90', line: 'rgba(255,240,200,0.95)', accent: '#ffe066',
+      paint(g, L, S) {
+        smallSun(g, S.x(0.18), L.hy * 0.3, S.m * 0.03, 'rgba(255,240,200,0.9)');
+        // 크게 떠오르는 금성: 노랑·주황 두꺼운 구름이 빙글빙글
+        const r = S.m * 0.33, y = L.hy + r * 0.42;
+        sphere(g, L.cx, y, r, ['#fff4c8', '#f0b44a', '#8a4a10'], 'rgba(255,200,90,0.7)', -0.5, (x, yy, rr) => {
+          const cr = RN.rng(12);
+          for (let k = 0; k < 26; k++) {
+            const ry = yy - rr * (0.95 - k * 0.075), w = rr * (0.7 + cr() * 0.6), a = 0.1 + cr() * 0.16;
+            g.strokeStyle = k % 3 ? 'rgba(255,245,210,' + a + ')' : 'rgba(170,90,20,' + a + ')';
+            g.lineWidth = rr * (0.03 + cr() * 0.05);
+            g.beginPath(); g.ellipse(x + (cr() - 0.5) * rr * 0.6, ry, w, rr * (0.06 + cr() * 0.12), (cr() - 0.5) * 0.25, Math.PI * (0.1 + cr() * 0.3), Math.PI * (1.2 + cr() * 0.7)); g.stroke();
+          }
+          // 소용돌이 몇 개
+          for (let k = 0; k < 3; k++) {
+            const sx = x + (cr() - 0.5) * rr, sy = yy - rr * (0.3 + cr() * 0.5);
+            g.strokeStyle = 'rgba(255,250,225,0.3)'; g.lineWidth = rr * 0.025;
+            g.beginPath();
+            for (let t = 0; t < 1; t += 0.04) { const a = t * 9, d = rr * 0.12 * t; g.lineTo(sx + Math.cos(a) * d * 1.6, sy + Math.sin(a) * d * 0.6); }
+            g.stroke();
+          }
+        });
+      } },
+    { id: 'earth', sky: ['#01030c', '#06163a', '#10407a'], neb: ['rgba(60,140,255,0.25)', 'rgba(120,80,220,0.18)'], star: '#e8f4ff',
+      floor: ['#0a1e3a', '#050f22', '#02060e'], track: ['rgba(60,140,255,0.35)', 'rgba(40,200,160,0.25)'],
+      grid: '80,170,255', lane: '140,255,200', glow: '120,200,255', line: 'rgba(210,240,255,0.95)', accent: '#8cffc8',
+      paint(g, L, S) {
+        // 달 (회색, 곰보)
+        const mo = S.side(0.06);
+        sphere(g, mo.x, mo.y, mo.r, ['#ffffff', '#b8bcc4', '#4a4e58'], 'rgba(220,230,255,0.5)', -0.8, (x, y, r) => {
+          const cr = RN.rng(33);
+          for (let k = 0; k < 7; k++) { g.fillStyle = 'rgba(70,74,86,0.4)'; g.beginPath(); g.arc(x + (cr() - 0.5) * r * 1.3, y + (cr() - 0.5) * r * 1.3, r * (0.08 + cr() * 0.16), 0, TAU); g.fill(); }
+        });
+        // 떠오르는 지구: 파란 바다, 초록·갈색 땅, 흰 구름
+        const r = S.m * 0.36, y = L.hy + r * 0.4;
+        sphere(g, L.cx, y, r, ['#bfe6ff', '#2f7de0', '#08255a'], 'rgba(110,190,255,0.9)', -0.6, (x, yy, rr) => {
+          const cr = RN.rng(21);
+          const blob = (bx, by, br, col) => {
+            g.fillStyle = col; g.beginPath();
+            for (let k = 0; k < 14; k++) { const a = TAU * k / 14, d = br * (0.6 + cr() * 0.5); g.lineTo(bx + Math.cos(a) * d * 1.3, by + Math.sin(a) * d * 0.8); }
+            g.closePath(); g.fill();
+          };
+          blob(x - rr * 0.45, yy - rr * 0.55, rr * 0.28, '#3fa85a'); blob(x - rr * 0.3, yy - rr * 0.35, rr * 0.18, '#7a9a3a');
+          blob(x + rr * 0.35, yy - rr * 0.7, rr * 0.22, '#46b060'); blob(x + rr * 0.55, yy - rr * 0.45, rr * 0.15, '#a88a4a');
+          blob(x + rr * 0.05, yy - rr * 0.85, rr * 0.12, '#58b868');
+          // 구름 띠
+          g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineCap = 'round';
+          for (let k = 0; k < 9; k++) {
+            g.lineWidth = rr * (0.025 + cr() * 0.03);
+            const cy2 = yy - rr * (0.3 + cr() * 0.65), cx2 = x + (cr() - 0.5) * rr * 1.5;
+            g.beginPath(); g.ellipse(cx2, cy2, rr * (0.15 + cr() * 0.25), rr * 0.05, (cr() - 0.5) * 0.4, 0, Math.PI * (0.8 + cr())); g.stroke();
+          }
+          // 북극 얼음
+          g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(x - rr * 0.1, yy - rr * 0.97, rr * 0.3, rr * 0.08, 0, 0, TAU); g.fill();
+        });
+      } },
+    { id: 'mars', sky: ['#0a0305', '#2e0c10', '#7a2a1c'], neb: ['rgba(255,110,70,0.28)', 'rgba(200,60,90,0.18)'], star: '#ffd8c8',
+      floor: ['#3a140c', '#1c0806', '#0a0302'], track: ['rgba(220,90,50,0.4)', 'rgba(150,50,30,0.3)'],
+      grid: '255,110,60', lane: '255,200,160', glow: '255,120,80', line: 'rgba(255,215,190,0.95)', accent: '#ffab7a',
+      paint(g, L, S) {
+        smallSun(g, L.cx, L.hy - S.m * 0.02, S.m * 0.035, 'rgba(255,230,210,0.9)');
+        const p = S.side(0.15);
+        sphere(g, p.x, p.y, p.r, ['#ffc8a0', '#e0602c', '#6a1a08'], 'rgba(255,120,70,0.6)', -0.8, (x, y, r) => {
+          const cr = RN.rng(8);
+          for (let k = 0; k < 7; k++) {
+            g.fillStyle = 'rgba(90,25,10,' + (0.25 + cr() * 0.25) + ')';
+            g.beginPath(); g.ellipse(x + (cr() - 0.5) * r * 1.2, y + (cr() - 0.3) * r, r * (0.12 + cr() * 0.22), r * (0.06 + cr() * 0.1), cr() * 3, 0, TAU); g.fill();
+          }
+          // 흰 얼음 모자 (극지방)
+          g.fillStyle = 'rgba(255,255,255,0.92)'; g.beginPath(); g.ellipse(x, y - r * 0.9, r * 0.38, r * 0.14, 0, 0, TAU); g.fill();
+          g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.ellipse(x + r * 0.1, y + r * 0.93, r * 0.22, r * 0.07, 0, 0, TAU); g.fill();
+        });
+        // 작은 달 둘 (포보스·데이모스)
+        g.fillStyle = '#b8a090'; g.beginPath(); g.ellipse(p.x - p.r * 1.5, p.y - p.r * 0.5, p.r * 0.09, p.r * 0.07, 0.5, 0, TAU); g.fill();
+        g.fillStyle = '#a89080'; g.beginPath(); g.arc(p.x + p.r * 1.6, p.y + p.r * 0.2, p.r * 0.05, 0, TAU); g.fill();
+      } },
+    { id: 'jupiter', sky: ['#060308', '#1e0e1a', '#4a2a22'], neb: ['rgba(255,170,110,0.2)', 'rgba(160,80,160,0.2)'], star: '#fff0d8',
+      floor: ['#2a1a12', '#140c08', '#060403'], track: ['rgba(220,160,100,0.38)', 'rgba(170,90,60,0.28)'],
+      grid: '255,170,100', lane: '255,230,190', glow: '255,190,130', line: 'rgba(255,238,210,0.95)', accent: '#ffc98a',
+      paint(g, L, S) {
+        // 아주 큰 목성: 줄무늬와 커다란 빨간 점
+        const r = S.m * 0.56, y = L.hy + r * 0.5;
+        sphere(g, L.cx, y, r, ['#fff0d8', '#d8a878', '#5a3420'], 'rgba(255,200,150,0.6)', -0.4, (x, yy, rr) => {
+          const bands = [['rgba(150,80,40,0.55)', 0.06], ['rgba(255,240,215,0.5)', 0.05], ['rgba(180,100,60,0.5)', 0.08], ['rgba(250,225,190,0.45)', 0.05],
+            ['rgba(130,70,40,0.5)', 0.07], ['rgba(255,235,205,0.5)', 0.06], ['rgba(170,95,55,0.45)', 0.07]];
+          let by = yy - rr * 0.98;
+          const cr = RN.rng(5);
+          for (const [col, hgt] of bands) {
+            by += rr * (0.05 + cr() * 0.04);
+            g.fillStyle = col;
+            g.beginPath(); g.ellipse(x, by + rr * hgt * 0.5, rr * 1.1, rr * hgt * 0.55, 0, 0, TAU); g.fill();
+            by += rr * hgt;
+          }
+          // 커다란 빨간 점
+          const sx = x + rr * 0.3, sy = yy - rr * 0.74;
+          const sg = g.createRadialGradient(sx, sy, 0, sx, sy, rr * 0.16);
+          sg.addColorStop(0, '#e05030'); sg.addColorStop(0.7, '#b83a22'); sg.addColorStop(1, 'rgba(160,60,40,0)');
+          g.fillStyle = sg; g.beginPath(); g.ellipse(sx, sy, rr * 0.17, rr * 0.08, 0, 0, TAU); g.fill();
+          g.strokeStyle = 'rgba(255,220,190,0.6)'; g.lineWidth = rr * 0.012; g.beginPath(); g.ellipse(sx, sy, rr * 0.19, rr * 0.095, 0, 0, TAU); g.stroke();
+        });
+        // 작은 달들
+        for (const [fx, fy, rr, c] of [[0.14, 0.3, 0.012, '#ffe27a'], [0.26, 0.18, 0.009, '#e8e4dc'], [0.82, 0.22, 0.011, '#c8b8a0']]) {
+          g.fillStyle = c; g.beginPath(); g.arc(L.w * fx, L.hy * fy, S.m * rr, 0, TAU); g.fill();
+        }
+      } },
+    { id: 'saturn', sky: ['#050408', '#1a1428', '#4a3a3a'], neb: ['rgba(255,210,120,0.22)', 'rgba(120,100,200,0.2)'], star: '#fff4d8',
+      floor: ['#241c14', '#120e0a', '#060504'], track: ['rgba(230,190,110,0.38)', 'rgba(150,120,80,0.28)'],
+      grid: '255,205,110', lane: '255,240,200', glow: '255,215,140', line: 'rgba(255,244,215,0.95)', accent: '#ffe08a',
+      paint(g, L, S) {
+        smallSun(g, S.x(0.2), L.hy * 0.75, S.m * 0.02, 'rgba(255,245,220,0.8)');
+        // 금빛 토성과 넓은 고리 (고리 뒤쪽 반 → 행성 → 앞쪽 반)
+        const r = Math.min(S.m * 0.12, L.hy * 0.26), x = L.port ? L.w * 0.6 : L.w * 0.66, y = L.hy * 0.5, tilt = -0.28;
+        const rings = [[2.25, 0.16, 'rgba(230,200,150,0.55)'], [2.0, 0.1, 'rgba(255,235,190,0.85)'], [1.78, 0.14, 'rgba(210,175,120,0.75)'], [1.5, 0.12, 'rgba(160,130,90,0.45)']];
+        const ringDraw = front => {
+          for (const [k, wd, col] of rings) {
+            g.strokeStyle = col; g.lineWidth = r * wd;
+            g.beginPath(); g.ellipse(x, y, r * k, r * k * 0.3, tilt, front ? 0 : Math.PI, front ? Math.PI : TAU); g.stroke();
+          }
+        };
+        ringDraw(false);
+        sphere(g, x, y, r, ['#fff4d0', '#e0b868', '#6a4a20'], 'rgba(255,220,150,0.6)', -0.7, (cx, cy, rr) => {
+          for (let k = -3; k <= 3; k++) { g.fillStyle = k % 2 ? 'rgba(170,120,60,0.3)' : 'rgba(255,245,220,0.25)'; g.fillRect(cx - rr, cy + k * rr * 0.26 - rr * 0.07, rr * 2, rr * 0.14); }
+        });
+        ringDraw(true);
+      } },
+    { id: 'uranus', sky: ['#020608', '#082628', '#1a5a5e'], neb: ['rgba(120,240,240,0.22)', 'rgba(80,160,220,0.18)'], star: '#e0ffff',
+      floor: ['#0a2a2c', '#051618', '#020808'], track: ['rgba(120,230,230,0.32)', 'rgba(80,170,200,0.25)'],
+      grid: '110,240,230', lane: '210,255,255', glow: '140,240,240', line: 'rgba(225,255,255,0.95)', accent: '#aaf8ff',
+      paint(g, L, S) {
+        smallSun(g, S.x(0.2), L.hy * 0.8, S.m * 0.014, 'rgba(255,255,240,0.8)');
+        // 옆으로 누운 하늘색 천왕성 (고리가 거의 세로)
+        const p = S.side(0.13), tilt = 1.35;
+        const ring = front => {
+          g.strokeStyle = 'rgba(210,255,255,0.7)'; g.lineWidth = Math.max(1.5, p.r * 0.05);
+          g.beginPath(); g.ellipse(p.x, p.y, p.r * 1.45, p.r * 0.36, tilt, front ? 0 : Math.PI, front ? Math.PI : TAU); g.stroke();
+          g.strokeStyle = 'rgba(170,230,240,0.45)'; g.lineWidth = Math.max(1, p.r * 0.03);
+          g.beginPath(); g.ellipse(p.x, p.y, p.r * 1.6, p.r * 0.4, tilt, front ? 0 : Math.PI, front ? Math.PI : TAU); g.stroke();
+        };
+        ring(false);
+        sphere(g, p.x, p.y, p.r, ['#effffd', '#8ee4e6', '#2a7a88'], 'rgba(160,250,250,0.55)', -0.8, (x, y, r) => {
+          g.fillStyle = 'rgba(255,255,255,0.12)';
+          for (let k = -2; k <= 2; k++) { g.save(); g.translate(x, y); g.rotate(tilt); g.fillRect(-r, k * r * 0.3 - r * 0.05, r * 2, r * 0.1); g.restore(); }
+        });
+        ring(true);
+      } },
+    { id: 'neptune', sky: ['#01020a', '#05103a', '#10287a'], neb: ['rgba(60,100,255,0.28)', 'rgba(40,200,255,0.16)'], star: '#dfe8ff',
+      floor: ['#081440', '#040a22', '#02040e'], track: ['rgba(70,110,255,0.4)', 'rgba(40,180,255,0.25)'],
+      grid: '80,120,255', lane: '150,210,255', glow: '100,150,255', line: 'rgba(200,225,255,0.95)', accent: '#8ab8ff',
+      paint(g, L, S) {
+        smallSun(g, S.x(0.24), L.hy * 0.85, S.m * 0.011, 'rgba(255,255,240,0.8)');
+        const p = S.side(0.15);
+        sphere(g, p.x, p.y, p.r, ['#b8d4ff', '#2f5ae0', '#081a60'], 'rgba(90,140,255,0.7)', -0.8, (x, y, r) => {
+          g.fillStyle = 'rgba(20,40,140,0.35)';
+          for (let k = -2; k <= 2; k++) g.fillRect(x - r, y + k * r * 0.35 - r * 0.06, r * 2, r * 0.12);
+          // 검은 폭풍 + 흰 구름 줄
+          g.fillStyle = 'rgba(8,16,60,0.8)'; g.beginPath(); g.ellipse(x - r * 0.2, y - r * 0.15, r * 0.24, r * 0.12, -0.1, 0, TAU); g.fill();
+          g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineCap = 'round'; g.lineWidth = r * 0.04;
+          for (const [dx, dy, ww] of [[-0.15, 0.02, 0.25], [0.3, 0.35, 0.2], [0.1, -0.45, 0.18]]) { g.beginPath(); g.moveTo(x + (dx - ww) * r, y + dy * r); g.lineTo(x + (dx + ww) * r, y + dy * r - r * 0.03); g.stroke(); }
+        });
+      } },
+    { id: 'pluto', sky: ['#020203', '#0b0a14', '#1e1a2a'], neb: ['rgba(140,120,200,0.14)', 'rgba(90,120,160,0.12)'], star: '#f0f0ff',
+      floor: ['#1c2230', '#0e121a', '#05060a'], track: ['rgba(190,210,240,0.28)', 'rgba(150,140,200,0.22)'],
+      grid: '180,170,255', lane: '225,235,255', glow: '170,180,230', line: 'rgba(230,236,255,0.9)', accent: '#e6d8ff',
+      paint(g, L, S) {
+        // 아주 먼 해: 작은 밝은 점
+        smallSun(g, L.cx - S.m * 0.1, L.hy - S.m * 0.05, S.m * 0.008, 'rgba(255,255,230,0.9)');
+        // 작고 옅은 명왕성, 하트 무늬 + 카론
+        const p = S.side(0.08);
+        sphere(g, p.x, p.y, p.r, ['#fff4e4', '#d8b890', '#5a4030'], 'rgba(255,230,200,0.35)', -0.9, (x, y, r) => {
+          g.fillStyle = 'rgba(140,70,40,0.45)'; g.beginPath(); g.ellipse(x - r * 0.45, y + r * 0.35, r * 0.45, r * 0.3, 0.4, 0, TAU); g.fill();
+          // 하트 모양 얼음 평원
+          const hx = x + r * 0.18, hy = y + r * 0.05, hs = r * 0.42;
+          g.fillStyle = 'rgba(255,252,244,0.95)';
+          g.beginPath(); g.moveTo(hx, hy + hs * 0.85);
+          g.bezierCurveTo(hx - hs * 1.3, hy - hs * 0.05, hx - hs * 0.6, hy - hs * 1.1, hx, hy - hs * 0.4);
+          g.bezierCurveTo(hx + hs * 0.6, hy - hs * 1.1, hx + hs * 1.3, hy - hs * 0.05, hx, hy + hs * 0.85);
+          g.fill();
+        });
+        g.fillStyle = '#9a9aa4'; g.beginPath(); g.arc(p.x + p.r * 1.9, p.y - p.r * 0.6, p.r * 0.42, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath(); g.arc(p.x + p.r * 2.0, p.y - p.r * 0.52, p.r * 0.36, 0, TAU); g.fill();
+      } },
+    { id: 'beyond', sky: ['#06020e', '#1d0838', '#4e1a62'], neb: ['rgba(160,70,255,0.35)', 'rgba(255,180,60,0.22)'], star: '#fff2d0',
       floor: ['#1c0a2e', '#0c0418', '#05020c'], track: ['rgba(140,70,220,0.45)', 'rgba(255,170,60,0.22)'],
-      grid: '255,190,60', lane: '205,150,255', glow: '255,190,90', line: 'rgba(255,236,190,0.95)', accent: '#ffd24a' },
+      grid: '255,190,60', lane: '205,150,255', glow: '255,190,90', line: 'rgba(255,236,190,0.95)', accent: '#ffd24a',
+      paint(g, L, S) {
+        // 금빛 소용돌이 은하
+        const sr = S.sr, cx = L.cx, gy = L.hy - sr * 0.25;
+        g.globalCompositeOperation = 'lighter';
+        for (let arm = 0; arm < 2; arm++) {
+          for (let k = 0; k < 90; k++) {
+            const t = k / 90, a = arm * Math.PI + t * 5.2, rr = sr * (0.15 + t * 1.9);
+            const x = cx + Math.cos(a) * rr, y = gy + Math.sin(a) * rr * 0.28, rad = sr * (0.2 - t * 0.12);
+            const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+            gr.addColorStop(0, t < 0.5 ? 'rgba(255,210,120,0.22)' : 'rgba(190,120,255,0.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+            g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+          }
+        }
+        const cg = g.createRadialGradient(cx, gy, 0, cx, gy, sr * 0.9);
+        cg.addColorStop(0, 'rgba(255,255,235,1)'); cg.addColorStop(0.25, 'rgba(255,215,110,0.85)'); cg.addColorStop(1, 'rgba(180,80,255,0)');
+        g.fillStyle = cg; g.beginPath(); g.ellipse(cx, gy, sr * 0.9, sr * 0.45, 0, 0, TAU); g.fill();
+        g.globalCompositeOperation = 'source-over';
+      } },
   ];
+  // 블랙홀 하늘 (side 0 왼쪽 · 2 오른쪽). 빛나는 강착 원반, 둘레의 빛 고리. 도는 빛은 bhSwirl 스프라이트로 따로
+  const BH_ART = { id: 'blackhole', sky: ['#000000', '#07020e', '#1a0826'], neb: ['rgba(120,40,200,0.2)', 'rgba(255,120,40,0.12)'], star: '#e8d8ff',
+    floor: ['#120818', '#08040c', '#020104'], track: ['rgba(150,70,230,0.35)', 'rgba(255,130,60,0.18)'],
+    grid: '170,90,255', lane: '230,190,255', glow: '255,150,70', line: 'rgba(240,215,255,0.9)', accent: '#d8b0ff' };
+  const bhSpot = (L, side) => ({ x: side === 0 ? L.w * (L.port ? 0.3 : 0.24) : L.w * (L.port ? 0.7 : 0.76), y: L.hy * 0.5, r: Math.min(L.w, L.h) * (L.port ? 0.07 : 0.075) });
+  function paintHole(g, L, side) {
+    const b = bhSpot(L, side), r = b.r;
+    // 강착 원반 (뒤쪽 반): 주황·흰 빛 고리가 납작하게
+    const disk = front => {
+      for (let k = 0; k < 7; k++) {
+        const rr = r * (1.6 + k * 0.32), a = 0.75 - k * 0.09;
+        g.strokeStyle = k < 2 ? 'rgba(255,250,230,' + a + ')' : k < 4 ? 'rgba(255,190,90,' + a + ')' : 'rgba(255,110,60,' + (a * 0.8) + ')';
+        g.lineWidth = r * 0.3;
+        g.beginPath(); g.ellipse(b.x, b.y, rr, rr * 0.26, -0.12, front ? 0 : Math.PI, front ? Math.PI : TAU); g.stroke();
+      }
+    };
+    g.globalCompositeOperation = 'lighter';
+    const halo = g.createRadialGradient(b.x, b.y, r, b.x, b.y, r * 5);
+    halo.addColorStop(0, 'rgba(255,160,80,0.35)'); halo.addColorStop(0.4, 'rgba(160,70,255,0.18)'); halo.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = halo; g.fillRect(b.x - r * 5, b.y - r * 5, r * 10, r * 10);
+    disk(false);
+    // 휘어 보이는 빛 (구멍 위아래로 넘어가는 고리)
+    g.lineWidth = r * 0.22; g.strokeStyle = 'rgba(255,215,150,0.6)';
+    g.beginPath(); g.ellipse(b.x, b.y, r * 1.45, r * 1.3, 0, 0, TAU); g.stroke();
+    g.globalCompositeOperation = 'source-over';
+    // 사건의 지평선: 새까만 구멍 + 얇은 빛 테두리
+    g.shadowColor = 'rgba(255,220,160,0.9)'; g.shadowBlur = r * 0.5;
+    g.fillStyle = '#000'; g.beginPath(); g.arc(b.x, b.y, r, 0, TAU); g.fill();
+    g.shadowBlur = 0;
+    g.strokeStyle = 'rgba(255,245,220,0.95)'; g.lineWidth = Math.max(1.5, r * 0.07);
+    g.beginPath(); g.arc(b.x, b.y, r * 1.04, 0, TAU); g.stroke();
+    g.globalCompositeOperation = 'lighter';
+    disk(true);
+    g.globalCompositeOperation = 'source-over';
+    // 앞쪽 원반이 구멍을 가리는 곳은 다시 까맣게 (구멍이 원반 위로 보이게)
+    g.save(); g.beginPath(); g.arc(b.x, b.y, r * 0.96, Math.PI, TAU); g.clip();
+    g.fillStyle = '#000'; g.fillRect(b.x - r, b.y - r, r * 2, r);
+    g.restore();
+  }
+  // 도는 빛: 블랙홀 둘레로 빨려 드는 빛줄기 (한 장 그려 두고 천천히 돌린다)
+  let swirlSpr = null;
+  function bhSwirl() {
+    if (swirlSpr) return swirlSpr;
+    const n = 256, c = mk(n, n), g = c.getContext('2d'), o = n / 2;
+    g.globalCompositeOperation = 'lighter';
+    g.lineCap = 'round';
+    for (let arm = 0; arm < 5; arm++) {
+      for (let k = 0; k < 40; k++) {
+        const t = k / 40, a = arm * TAU / 5 + t * 4.2, d = o * (0.95 - t * 0.7);
+        g.fillStyle = arm % 2 ? 'rgba(200,140,255,' + (0.05 + t * 0.12) + ')' : 'rgba(255,190,120,' + (0.05 + t * 0.12) + ')';
+        g.beginPath(); g.arc(o + Math.cos(a) * d, o + Math.sin(a) * d, 2 + t * 3, 0, TAU); g.fill();
+      }
+    }
+    return (swirlSpr = c);
+  }
 
-  // 하늘·행성·해·바닥·줄 테두리: 화면 크기나 구역이 바뀔 때만 다시 그린다 (구역마다 한 장)
-  function paintBackdrop(L, dpr, A) {
+  // 해와 행성 그리기 도우미 (미리 그릴 때만 쓴다)
+  // 줄무늬로 잘린 신스웨이브 해
+  function stripedSun(g, x, y, r, col, glowCol, stripe) {
+    const sg = g.createLinearGradient(0, y - r, 0, y + r * 0.3);
+    sg.addColorStop(0, col[0]); sg.addColorStop(0.55, col[1]); sg.addColorStop(1, col[2]);
+    g.shadowColor = glowCol; g.shadowBlur = r * 0.45;
+    g.fillStyle = sg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+    g.shadowBlur = 0;
+    g.fillStyle = stripe;
+    for (let k = 0; k < 6; k++) g.fillRect(x - r, y - r * 0.1 + k * r * 0.16, r * 2, 2 + k * r * 0.018);
+  }
+  // 작은 해: 밝은 점 + 빛무리
+  function smallSun(g, x, y, r, col) {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r * 6);
+    gr.addColorStop(0, col); gr.addColorStop(0.2, col.replace(/[\d.]+\)$/, '0.35)')); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(x - r * 6, y - r * 6, r * 12, r * 12);
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+  }
+  // 둥근 행성: 색 그러데이션 + 가장자리 빛(대기) + 무늬(detail, 행성 안쪽에만) + 밤쪽 그늘
+  // light: 해가 있는 쪽 각도 (라디안, 0 = 오른쪽, -π/2 = 위)
+  function sphere(g, x, y, r, col, rimCol, light, detail) {
+    const lx = Math.cos(light), ly = Math.sin(light);
+    const pg = g.createRadialGradient(x + lx * r * 0.45, y + ly * r * 0.45, r * 0.1, x, y, r);
+    pg.addColorStop(0, col[0]); pg.addColorStop(0.5, col[1]); pg.addColorStop(1, col[2]);
+    g.shadowColor = rimCol; g.shadowBlur = r * 0.35;
+    g.fillStyle = pg; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+    g.shadowBlur = 0;
+    g.save(); g.beginPath(); g.arc(x, y, r, 0, TAU); g.clip();
+    if (detail) detail(x, y, r);
+    // 밤쪽 그늘
+    const sh = g.createRadialGradient(x + lx * r * 0.7, y + ly * r * 0.7, r * 0.5, x + lx * r * 0.3, y + ly * r * 0.3, r * 1.6);
+    sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(0.55, 'rgba(0,0,0,0.12)'); sh.addColorStop(1, 'rgba(0,0,0,0.6)');
+    g.fillStyle = sh; g.fillRect(x - r, y - r, r * 2, r * 2);
+    g.restore();
+    // 가장자리 빛 테두리
+    g.strokeStyle = rimCol; g.lineWidth = Math.max(1.5, r * 0.03);
+    g.beginPath(); g.arc(x, y, r - g.lineWidth / 2, light - 1.4, light + 1.4); g.stroke();
+  }
+
+  // 하늘·행성·해·바닥·줄 테두리: 화면 크기나 곳이 바뀔 때만 다시 그린다 (곳마다 한 장). key: 행성 차례(0~9) 또는 'bh0'·'bh2'
+  function paintBackdrop(L, dpr, key) {
+    const A = artOf(key);
     const { w, h, hy, cx } = L;
     const c = mk(w * dpr, h * dpr), g = c.getContext('2d');
     g.scale(dpr, dpr);
@@ -100,79 +398,17 @@
     }
     g.globalAlpha = 1;
     const m = Math.min(w, h);
-    // 행성 (오른쪽 위, 세로 화면은 왼쪽 위). 고리가 있으면 뒤·앞 반쪽을 나눠 그린다
-    const px = L.port ? w * 0.24 : w * 0.8, pyy = hy * 0.4, pr = m * (L.port ? 0.1 : 0.085);
-    const ringPath = (front) => {
-      g.beginPath();
-      g.ellipse(px, pyy, pr * 1.9, pr * 0.5, -0.35, front ? 0 : Math.PI, front ? Math.PI : TAU);
+    // 하늘의 행성·해 (지평선 아래로는 그리지 않는다)
+    const S = {
+      m, sr: m * (L.port ? 0.24 : 0.2),
+      x: f => (L.port ? 1 - f : f) * w,
+      // 옆 하늘에 뜬 행성 자리 (가로 화면은 오른쪽 위, 세로 화면은 왼쪽 위). k: 크기 (짧은 변 비율)
+      side: k => { const r = Math.min(m * k, hy * 0.36); return { x: L.port ? w * 0.26 : w * 0.76, y: Math.max(r + 8, hy * 0.52), r }; },
     };
-    if (A.ring) { g.lineWidth = pr * 0.14; g.strokeStyle = 'rgba(' + A.ring + ',0.55)'; ringPath(false); g.stroke(); }
-    const pg = g.createRadialGradient(px - pr * 0.4, pyy - pr * 0.4, pr * 0.1, px, pyy, pr);
-    pg.addColorStop(0, A.planet[0]); pg.addColorStop(0.5, A.planet[1]); pg.addColorStop(1, A.planet[2]);
-    g.shadowColor = A.pglow; g.shadowBlur = pr * 0.6;
-    g.fillStyle = pg; g.beginPath(); g.arc(px, pyy, pr, 0, TAU); g.fill();
-    g.shadowBlur = 0;
-    g.save(); g.beginPath(); g.arc(px, pyy, pr, 0, TAU); g.clip();
-    g.fillStyle = 'rgba(255,255,255,0.08)';
-    for (let k = -2; k <= 2; k++) g.fillRect(px - pr, pyy + k * pr * 0.35 - pr * 0.06, pr * 2, pr * 0.12);
-    g.restore();
-    if (A.ring) { g.strokeStyle = 'rgba(' + A.ring + ',0.85)'; g.lineWidth = pr * 0.14; ringPath(true); g.stroke(); }
-    // 작은 달
-    const mx = L.port ? w * 0.82 : w * 0.16, my = hy * 0.3, mr = m * 0.025;
-    const mg = g.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, 0, mx, my, mr);
-    mg.addColorStop(0, A.moon[0]); mg.addColorStop(1, A.moon[1]);
-    g.fillStyle = mg; g.beginPath(); g.arc(mx, my, mr, 0, TAU); g.fill();
-    // 지평선의 큰 것
-    const sr = m * (L.port ? 0.24 : 0.2), sy = hy - sr * 0.12;
     g.save();
     g.beginPath(); g.rect(0, 0, w, hy); g.clip();
-    if (A.hor === 'sun') {
-      // 줄무늬로 잘린 해
-      const sg = g.createLinearGradient(0, sy - sr, 0, sy + sr * 0.3);
-      sg.addColorStop(0, A.sun[0]); sg.addColorStop(0.55, A.sun[1]); sg.addColorStop(1, A.sun[2]);
-      g.shadowColor = A.sunGlow; g.shadowBlur = sr * 0.5;
-      g.fillStyle = sg; g.beginPath(); g.arc(cx, sy, sr, 0, TAU); g.fill();
-      g.shadowBlur = 0;
-      g.fillStyle = A.stripe;
-      for (let k = 0; k < 6; k++) g.fillRect(cx - sr, sy - sr * 0.1 + k * sr * 0.16, sr * 2, 2 + k * sr * 0.018);
-    } else if (A.hor === 'ice') {
-      // 크게 떠오르는 얼음 행성: 흰 극지방 + 파란 띠 + 얼음 금
-      const ir = sr * 1.5, iy = hy + ir * 0.45;
-      const ig = g.createRadialGradient(cx - ir * 0.35, iy - ir * 0.6, ir * 0.1, cx, iy, ir);
-      ig.addColorStop(0, A.sun[0]); ig.addColorStop(0.45, A.sun[1]); ig.addColorStop(1, A.sun[2]);
-      g.shadowColor = A.sunGlow; g.shadowBlur = sr * 0.6;
-      g.fillStyle = ig; g.beginPath(); g.arc(cx, iy, ir, 0, TAU); g.fill();
-      g.shadowBlur = 0;
-      g.save(); g.beginPath(); g.arc(cx, iy, ir, 0, TAU); g.clip();
-      g.strokeStyle = 'rgba(90,160,220,0.45)'; g.lineWidth = Math.max(2, ir * 0.03);
-      for (let k = 1; k <= 4; k++) { g.beginPath(); g.ellipse(cx, iy, ir * 1.1, ir * (0.2 + k * 0.17), 0, Math.PI, TAU); g.stroke(); }
-      g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = Math.max(1, ir * 0.012);
-      const cr = RN.rng(77);
-      for (let k = 0; k < 7; k++) {
-        let x = cx + (cr() - 0.5) * ir * 1.4, y = iy - ir * (0.3 + cr() * 0.6);
-        g.beginPath(); g.moveTo(x, y);
-        for (let j2 = 0; j2 < 3; j2++) { x += (cr() - 0.5) * ir * 0.25; y += (cr() - 0.3) * ir * 0.12; g.lineTo(x, y); }
-        g.stroke();
-      }
-      g.restore();
-    } else if (A.hor === 'galaxy') {
-      // 은하 중심: 금빛 소용돌이 팔 + 밝은 가운데
-      g.globalCompositeOperation = 'lighter';
-      const gy = hy - sr * 0.25;
-      for (let arm = 0; arm < 2; arm++) {
-        for (let k = 0; k < 90; k++) {
-          const t = k / 90, a = arm * Math.PI + t * 5.2, rr = sr * (0.15 + t * 1.9);
-          const x = cx + Math.cos(a) * rr, y = gy + Math.sin(a) * rr * 0.28, rad = sr * (0.2 - t * 0.12);
-          const gr = g.createRadialGradient(x, y, 0, x, y, rad);
-          gr.addColorStop(0, t < 0.5 ? 'rgba(255,210,120,0.22)' : 'rgba(190,120,255,0.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-          g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
-        }
-      }
-      const cg = g.createRadialGradient(cx, gy, 0, cx, gy, sr * 0.9);
-      cg.addColorStop(0, 'rgba(255,255,235,1)'); cg.addColorStop(0.25, 'rgba(255,215,110,0.85)'); cg.addColorStop(1, 'rgba(180,80,255,0)');
-      g.fillStyle = cg; g.beginPath(); g.ellipse(cx, gy, sr * 0.9, sr * 0.45, 0, 0, TAU); g.fill();
-      g.globalCompositeOperation = 'source-over';
-    }
+    if (typeof key === 'string' && key.startsWith('bh')) paintHole(g, L, +key.slice(2));
+    else A.paint(g, L, S);
     g.restore();
     // 바닥 (가까울수록 짙게)
     const fl = g.createLinearGradient(0, hy, 0, h);
@@ -308,10 +544,17 @@
     return (itemSprites[kind] = c);
   }
 
+  // 곳 이름표 → 그림: 행성 차례(0~9)는 PLANET_ART, 'bh0'·'bh2'는 블랙홀
+  const artOf = key => (typeof key === 'string' && key.startsWith('bh') ? BH_ART : PLANET_ART[+key] || PLANET_ART[0]);
+  const stopOf = zone => RN.World.placeOf(zone).stop;
+  // 지금 보여 줄 하늘: 블랙홀 구간이면 블랙홀, 아니면 지금 행성
+  const skyKey = W => (W.bh ? 'bh' + W.bh.side : String(stopOf(W.zone)));
+
   // ─── 그리기 상태 (꾸밈 전용) ───────────────────────────────
-  // bgs: 구역별 미리 그린 배경 (지금·다음 구역 것만 남긴다) · zone/fromZone/zf: 구역 바뀔 때 겹쳐 바뀌기 · banner: 가운데 큰 글자
+  // bgs: 곳마다 미리 그린 배경 (지금·겹치는 중·곧 올 것만 남긴다) · key/fromKey/zf: 곳이 바뀔 때 겹쳐 바뀌기 · banner: 가운데 큰 글자
+  // bhK: 블랙홀 연출 세기 (0 → 1, 별이 휘어 보이기·도는 빛) · sk: 미끄러지는 자세 (0 → 1)
   const R = { bgKey: '', bgs: {}, L: null, parts: [], texts: [], shake: 0, flash: 0, flashColor: '255,77,109', world: null, lines: [], twinkle: null,
-    zone: 0, fromZone: -1, zf: 1, banner: null, bank: 0 };
+    key: '0', fromKey: null, zf: 1, banner: null, bank: 0, bhK: 0, bhSide: 0, sk: 0 };
 
   function text(x, y, txt, color, size, life) {
     if (R.texts.length > 10) R.texts.shift();
@@ -332,7 +575,7 @@
 
   // 규칙이 남긴 연출 요청(W.fx)을 입자로 바꾼다
   function takeFx(W, v, L, dist) {
-    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; R.zone = W.zone; R.fromZone = -1; R.zf = 1; R.banner = null; }
+    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; R.key = skyKey(W); R.fromKey = null; R.zf = 1; R.banner = null; R.bhK = W.bh ? 1 : 0; R.sk = 0; }
     const s0 = L.F / CAMZ, sq = proj(L, W.p.x, 0, 1.4);
     for (const f of W.fx) {
       const q = proj(L, f.x, Math.max(0, f.z - dist), f.kind === 'star' || f.kind === 'power' ? (f.y || 0.5) : 0.9);
@@ -369,15 +612,27 @@
         burst(q.x, q.y, 16, ['#ffe66d', '#fff4c2', '#ff9fcb'], s0 * 5, s0 * 0.09);
         text(sq.x, sq.y - s0 * 1.0, '완벽! +' + f.pts, '#ffe66d', s0 * 0.4, 1.2);
       } else if (f.kind === 'milestone') {
-        const A = ZONE_ART[W.zone];
-        // 구역 도착과 같은 아치면 구역 글자 아래에 거리만 덧붙인다
-        if (R.banner && !R.banner.small && R.banner.t < 0.5) R.banner.sub = f.m.toLocaleString() + 'm · +' + f.pts + '점';
+        const A = artOf(R.key);
+        // 행성 도착과 같은 아치면 행성 글자 아래에 거리만 덧붙인다
+        if (R.banner && !R.banner.small && R.banner.t < 0.5) R.banner.sub2 = f.m.toLocaleString() + 'm · +' + f.pts + '점';
         else R.banner = { big: f.m.toLocaleString() + 'm', sub: '+' + f.pts + '점', color: A.accent, t: 0, max: 1.6, small: true };
         burst(L.cx, L.hy + (L.py - L.hy) * 0.2, 26, [A.accent, '#ffffff'], s0 * 6, s0 * 0.1);
       } else if (f.kind === 'zone') {
-        R.fromZone = R.zone; R.zone = f.i; R.zf = 0;
-        const A = ZONE_ART[f.i];
-        R.banner = { big: D.ZONES[f.i].name + ' 도착!', sub: '', color: A.accent, t: 0, max: D.FX.banner };
+        // 행성 도착: 이름과 한 줄 (2바퀴째부터는 몇 바퀴째인지도)
+        const pl = RN.World.placeOf(f.i), A = PLANET_ART[pl.stop];
+        R.banner = { big: pl.name + ' 도착!', sub: (pl.lap > 1 && pl.stop === 0 ? '태양계 ' + pl.lap + '바퀴째! ' : '') + pl.line, color: A.accent, t: 0, max: D.FX.banner + 0.6 };
+      } else if (f.kind === 'bh') {
+        R.banner = { big: '블랙홀 주의!', sub: '끌려가면 반대쪽으로 밀어서 버텨요', color: '#d8b0ff', t: 0, max: D.FX.banner + 0.6 };
+        if (!v.calm) R.shake = Math.max(R.shake, D.FX.shake * 0.4);
+      } else if (f.kind === 'bhout') {
+        R.banner = { big: '블랙홀 탈출!', sub: '+' + f.pts + '점', color: '#d8b0ff', t: 0, max: 1.8, small: true, disp: true };
+        burst(L.cx, L.hy + (L.py - L.hy) * 0.2, 26, ['#d8b0ff', '#ffd27a', '#ffffff'], s0 * 6, s0 * 0.1);
+      } else if (f.kind === 'pull') {
+        text(sq.x, sq.y - s0 * 0.6, '슈웅, 끌려갔어요', '#d8b0ff', s0 * 0.3, 1.1);
+        burst(sq.x, sq.y, 14, ['#d8b0ff', '#ffffff'], s0 * 4, s0 * 0.07);
+      } else if (f.kind === 'resist') {
+        text(sq.x, sq.y - s0 * 0.6, '버텼다!', '#ffe66d', s0 * 0.4, 1.1);
+        ring(sq.x, sq.y, s0 * 1.5, '#d8b0ff', 0.45);
       } else if (f.kind === 'revive') {
         // 불사조: 불꽃 고리와 함께 다시 날아오른다
         ring(sq.x, sq.y, s0 * 1.6, '#ffd24a', 0.6); ring(sq.x, sq.y, s0 * 2.6, '#ff5a7a', 0.8);
@@ -404,7 +659,7 @@
     for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y -= 36 * dt; if (q.life <= 0) R.texts.splice(i, 1); }
     R.shake = Math.max(0, R.shake - dt * 40);
     R.flash = Math.max(0, R.flash - dt);
-    if (R.zf < 1) R.zf = Math.min(1, R.zf + dt / D.FX.zoneFade);
+    if (R.zf < 1) { R.zf = Math.min(1, R.zf + dt / D.FX.zoneFade); if (R.zf >= 1) R.fromKey = null; }
     if (R.banner && (R.banner.t += dt) > R.banner.max) R.banner = null;
   }
 
@@ -434,8 +689,8 @@
   }
 
   // ─── 배경 · 움직이는 바닥 격자 · 빛줄기 ───────────────────
-  function backdrop(i, L, v) {
-    return R.bgs[i] || (R.bgs[i] = paintBackdrop(L, v.dpr, ZONE_ART[i]));
+  function backdrop(key, L, v) {
+    return R.bgs[key] || (R.bgs[key] = paintBackdrop(L, v.dpr, key));
   }
   function drawBackground(ctx, W, v, L, dist, dt) {
     const key = v.w + 'x' + v.h + '@' + v.dpr;
@@ -445,17 +700,36 @@
       R.twinkle = [];
       for (let i = 0; i < 26; i++) R.twinkle.push({ x: rand() * v.w, y: rand() * L.hy * 0.9, ph: rand() * TAU });
     }
-    // 지금·겹치는 중인 구역 배경만 남긴다 (메모리). 다음 구역은 가까워지면 미리 그려 둔다
-    for (const k in R.bgs) if (+k !== R.zone && +k !== R.fromZone && +k !== R.zone + 1) delete R.bgs[k];
-    const next = D.ZONES[R.zone + 1];
-    if (next && !R.bgs[R.zone + 1] && next.at - dist < 160) backdrop(R.zone + 1, L, v);
-    if (R.zf < 1 && R.fromZone >= 0) {
-      ctx.drawImage(backdrop(R.fromZone, L, v), 0, 0, v.w, v.h);
+    // 곳이 바뀌면 (새 행성·블랙홀 들어감·나옴) 겹쳐 바꾼다
+    const skyNow = skyKey(W);
+    if (skyNow !== R.key) { R.fromKey = R.zf < 1 && R.fromKey != null ? R.fromKey : R.key; R.key = skyNow; R.zf = 0; }
+    // 곧 올 곳: 다음 행성(160m 전부터), 다가오는 블랙홀 구간. 그 밖의 배경은 버린다 (메모리)
+    const leg = D.ROUTE.leg, nextZone = Math.floor(dist / leg) + 1;
+    const soon = [];
+    if (nextZone * leg - dist < 160) soon.push(String(stopOf(nextZone)));
+    const hole = W.bhs && W.bhs.find(b => b.start > dist && b.start - dist < 160);
+    if (hole) soon.push('bh' + hole.side);
+    if (W.bh && W.bh.end - dist < 160) soon.push(String(stopOf(Math.floor(W.bh.end / leg))));
+    for (const k in R.bgs) if (k !== R.key && k !== R.fromKey && soon.indexOf(k) < 0) delete R.bgs[k];
+    for (const k of soon) if (!R.bgs[k]) { backdrop(k, L, v); break; }   // 한 번에 한 장만 (끊김 없게)
+    if (R.zf < 1 && R.fromKey != null) {
+      ctx.drawImage(backdrop(R.fromKey, L, v), 0, 0, v.w, v.h);
       ctx.globalAlpha = R.zf;
-      ctx.drawImage(backdrop(R.zone, L, v), 0, 0, v.w, v.h);
+      ctx.drawImage(backdrop(R.key, L, v), 0, 0, v.w, v.h);
       ctx.globalAlpha = 1;
-    } else ctx.drawImage(backdrop(R.zone, L, v), 0, 0, v.w, v.h);
-    const A = ZONE_ART[R.zone];
+    } else ctx.drawImage(backdrop(R.key, L, v), 0, 0, v.w, v.h);
+    const A = artOf(R.key);
+    // 블랙홀: 둘레로 빨려 드는 빛이 천천히 돈다 (움직임 줄이기면 멈춤)
+    R.bhK += ((W.bh ? 1 : 0) - R.bhK) * Math.min(1, dt * 1.5);
+    if (W.bh) R.bhSide = W.bh.side;
+    if (R.bhK > 0.02) {
+      const b = bhSpot(L, R.bhSide), sz = b.r * 7, rot = v.calm ? 0.6 : -performance.now() / 1000 * 0.5;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = R.bhK * 0.9;
+      ctx.translate(b.x, b.y); ctx.scale(1, 0.55); ctx.rotate(rot);
+      ctx.drawImage(bhSwirl(), -sz / 2, -sz / 2, sz, sz);
+      ctx.restore();
+    }
     // 반짝이는 별 몇 개
     const t = performance.now() / 1000;
     ctx.fillStyle = '#ffffff';
@@ -573,8 +847,52 @@
     ctx.globalAlpha = 1;
   }
 
+  // 위쪽 막대: 길 위에 떠 있는 두꺼운 보라 막대 + 높은 기둥 (밑으로 미끄러져 지나간다).
+  // 바닥 레이저 문(빨강, 바닥 줄무늬)과 한눈에 다르게: 높이 떠 있고, 밑이 비어 보이고, 막대에 아래 화살표
+  function drawBar(ctx, W, L, o, rel, fade, v) {
+    const lo = D.OBST.barLo, hi = D.OBST.barHi, top = hi + 0.55;
+    // 바닥: 밑으로 지나갈 길이 파랗게 빛난다
+    ctx.globalAlpha = fade * 0.35;
+    ctx.fillStyle = '#7a5cff';
+    floorQuad(ctx, L, o.x, rel, 0.42, 0.45); ctx.fill();
+    ctx.globalAlpha = fade;
+    // 기둥 (위로 높이)
+    const lb = proj(L, o.x - 0.46, rel, 0), lt = proj(L, o.x - 0.46, rel, top), rb = proj(L, o.x + 0.46, rel, 0), rt = proj(L, o.x + 0.46, rel, top);
+    const pw = Math.max(2, lb.s * 0.12);
+    ctx.fillStyle = '#1e0a36'; ctx.strokeStyle = '#b36bff'; ctx.lineWidth = Math.max(1, pw * 0.25);
+    for (const [bt, tp] of [[lb, lt], [rb, rt]]) { ctx.fillRect(bt.x - pw / 2, tp.y, pw, bt.y - tp.y); ctx.strokeRect(bt.x - pw / 2, tp.y, pw, bt.y - tp.y); }
+    // 막대: 두꺼운 띠 + 흰·보라 사선 줄무늬 (위험 표시) + 빛
+    const a = proj(L, o.x - 0.46, rel, hi), b = proj(L, o.x + 0.46, rel, lo);
+    const flick = v.calm ? 1 : 0.85 + 0.15 * Math.sin(W.t * 18 + o.z);
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i <= 4; i++) glow(ctx, 'rgba(190,110,255,0.9)', a.x + (b.x - a.x) * i / 4, (a.y + b.y) / 2, a.s * 0.45, fade * 0.45 * flick);
+    ctx.globalCompositeOperation = 'source-over';
+    const bw = b.x - a.x, bh = b.y - a.y;
+    ctx.save();
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(a.x, a.y, bw, bh, Math.min(bh * 0.3, 8)); else ctx.rect(a.x, a.y, bw, bh);
+    ctx.fillStyle = '#6a22c8'; ctx.fill();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,240,255,0.55)'; ctx.lineWidth = Math.max(2, bh * 0.22);
+    ctx.beginPath();
+    for (let x = a.x - bh; x < b.x + bh; x += bh * 0.9) { ctx.moveTo(x, b.y); ctx.lineTo(x + bh, a.y); }
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = '#e8c8ff'; ctx.lineWidth = Math.max(1.5, a.s * 0.05);
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(a.x, a.y, bw, bh, Math.min(bh * 0.3, 8)); else ctx.rect(a.x, a.y, bw, bh); ctx.stroke();
+    // 막대 가운데 아래 화살표 (밑으로!)
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2, ar = bh * 0.32;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.moveTo(cx - ar, cy - ar * 0.5); ctx.lineTo(cx + ar, cy - ar * 0.5); ctx.lineTo(cx, cy + ar * 0.7); ctx.closePath(); ctx.fill();
+    // 기둥 끝 불빛
+    ctx.fillStyle = '#e8c8ff';
+    for (const tp of [lt, rt]) { ctx.beginPath(); ctx.arc(tp.x, tp.y, Math.max(1.5, tp.s * 0.1), 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+
+  // 블랙홀 구간: 멀리 있는 별은 블랙홀 쪽으로 휘어 보인다 (그림만, 가까이 오면 제자리라 먹는 판정은 그대로)
+  const bend = rel => (R.bhK > 0.01 ? (R.bhSide === 0 ? -1 : 1) * R.bhK * 0.9 * Math.pow(Math.max(0, Math.min(1, (rel - 6) / 50)), 1.3) : 0);
   function drawStar(ctx, W, L, o, rel, fade, v) {
-    const q = proj(L, o.x, rel, o.y + (v.calm ? 0 : Math.sin(W.t * 4 + o.z) * 0.08));
+    const q = proj(L, o.x + bend(rel), rel, o.y + (v.calm ? 0 : Math.sin(W.t * 4 + o.z) * 0.08));
     const size = q.s * 0.9 * (o.mag ? 0.8 : 1);
     if (size < 1.5) return;
     ctx.globalAlpha = fade;
@@ -608,7 +926,7 @@
 
   // 기념 아치: 길 전체를 덮는 빛나는 문 + 거리 숫자 (구역이 바뀌는 곳이면 구역 이름도)
   function drawArch(ctx, W, L, o, rel, fade, v) {
-    const A = ZONE_ART[o.zone != null ? o.zone : W.zone], col = 'rgb(' + A.lane + ')';
+    const A = PLANET_ART[stopOf(o.zone != null ? o.zone : W.zone)], col = 'rgb(' + A.lane + ')';
     const H = 4.4, n = 18, pts = [];
     for (let i = 0; i <= n; i++) {
       const t = i / n, a = Math.PI * t;
@@ -631,7 +949,7 @@
     // 거리 판
     const top = pts[n >> 1], fs = Math.round(Math.max(10, Math.min(64, s * 0.8)));
     if (fs >= 11) {
-      const zoneHere = D.ZONES.find(z => z.at === o.m);
+      const zoneHere = o.m % D.ROUTE.leg === 0 ? RN.World.placeOf(o.m / D.ROUTE.leg) : null;
       const txt = o.m.toLocaleString() + 'm';
       ctx.font = 'italic 700 ' + fs + 'px ' + NUM;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -666,6 +984,7 @@
     if (fade <= 0) return;
     if (o.kind === 'meteor') drawMeteor(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'gate') drawGate(ctx, W, L, o, rel, fade, v);
+    else if (o.kind === 'bar') drawBar(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'star') drawStar(ctx, W, L, o, rel, fade, v);
     else if (o.kind === 'item') drawItem(ctx, W, L, o, rel, fade, v);
   }
@@ -976,7 +1295,11 @@
     if (dead) return;
     // 깜빡임 (부딪힌 뒤 무적)
     if (W.inv > 0 && Math.floor(W.t * 12) % 2 === 0) ctx.globalAlpha = 0.3;
-    const q = proj(L, x, 0, y + 0.45), s = q.s;
+    // 미끄러지기: 바닥에 납작 붙는다 (자세는 부드럽게 바뀐다)
+    R.sk += ((W.phase === 'play' && p.sl > 0 ? 1 : 0) - R.sk) * Math.min(1, (R.dt || 0.016) * 18);
+    const sk = R.sk;
+    const q = proj(L, x, 0, y + 0.45 - 0.3 * sk), s = q.s;
+    if (sk > 0.5 && !v.calm && W.phase === 'play' && Math.random() < 0.6) burst(sh.x + (Math.random() - 0.5) * sh.s * 0.8, sh.y, 1, ['#d8b0ff', '#ffffff', SK.accent], sh.s * 3, sh.s * 0.06);
     // 기울기: 옆으로 움직이는 빠르기를 따라 부드럽게 (줄 바꾸기 곡선과 같이 기울었다 돌아온다). 캐릭터마다 기우는 정도가 다르다
     const vel = W.phase === 'play' ? (p.x - p.px) / D.TICK : 0;
     R.bank += (Math.max(-0.5, Math.min(0.5, vel * 0.05)) - R.bank) * Math.min(1, (R.dt || 0.016) * 20);
@@ -1003,7 +1326,7 @@
     const px = Math.min(s * (v.dpr || 1), s * 1.25);
     const spr = charSprite(SK, frame, up, px);
     ctx.save();
-    ctx.translate(q.x, q.y); ctx.rotate(bank); ctx.scale(s * (1 - Math.min(0.35, Math.abs(bank) * PO.squash)), s);
+    ctx.translate(q.x, q.y); ctx.rotate(bank); ctx.scale(s * (1 - Math.min(0.35, Math.abs(bank) * PO.squash)) * (1 + 0.15 * sk), s * (1 - 0.42 * sk));
     ctx.drawImage(spr, -SPR_BOX, -SPR_BOX, SPR_BOX * 2, SPR_BOX * 2);
     ctx.restore();
     ctx.globalAlpha = 1;
@@ -1024,33 +1347,83 @@
     }
   }
 
-  // ─── 위험 · 점프 안내: 지금 줄 바로 앞 장애물 위에 말풍선 ───
+  // ─── 위험 · 점프 · 숙여 안내: 지금 줄 바로 앞 장애물 위에 말풍선 ───
+  // 운석 "위험!"(빨강) · 바닥 레이저 문 "점프!"(노랑, 위 화살표) · 위쪽 막대 "숙여!"(보라, 아래 화살표)
+  const BUBBLE = {
+    meteor: { txt: '위험!', bg: 'rgba(40,4,10,0.9)', edge: '#ff3b4e', ink: '#ffd0d5', arrow: 0 },
+    gate:   { txt: '점프!', bg: 'rgba(40,30,4,0.9)', edge: '#ffe66d', ink: '#fff4c2', arrow: -1 },
+    bar:    { txt: '숙여!', bg: 'rgba(26,8,44,0.92)', edge: '#c98cff', ink: '#f0dcff', arrow: 1 },
+  };
   function drawDanger(ctx, W, L, dist, v) {
     if (W.phase !== 'play' || W.wait > 0 || W.eff.boost > 0) return;
     const d = RN.World.dangerAhead(W, 1.3);
     if (!d || d.t < 0.12) return;
-    const o = d.o, rel = o.z - dist, gate = o.kind === 'gate';
+    const o = d.o, rel = o.z - dist, B = BUBBLE[o.kind] || BUBBLE.meteor;
     const lx = o.moving && o.x !== o.to ? W.p.lane : o.x;
-    const q = proj(L, lx, rel, gate ? D.OBST.gateH + 0.9 : D.OBST.meteorR * 2 + 0.5);
+    const hgt = o.kind === 'gate' ? D.OBST.gateH + 0.9 : o.kind === 'bar' ? D.OBST.barHi + 0.75 : D.OBST.meteorR * 2 + 0.5;
+    const q = proj(L, lx, rel, hgt);
     const fs = Math.round(Math.max(16, Math.min(28, q.s * 0.5 + 8)));
-    const txt = gate ? '점프!' : '위험!';
     const blink = v.calm ? 1 : 0.7 + Math.sin(W.t * (d.t < 0.6 ? 22 : 12)) * 0.3;
     ctx.globalAlpha = blink;
     ctx.font = fs + 'px ' + DISP;
-    const tw = ctx.measureText(txt).width + fs * 1.1, th = fs * 1.5;
-    ctx.fillStyle = gate ? 'rgba(40,30,4,0.9)' : 'rgba(40,4,10,0.9)';
+    const aw = B.arrow ? fs * 0.9 : 0;
+    const tw = ctx.measureText(B.txt).width + fs * 1.1 + aw, th = fs * 1.5;
+    ctx.fillStyle = B.bg;
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(q.x - tw / 2, q.y - th, tw, th, fs * 0.4); else ctx.rect(q.x - tw / 2, q.y - th, tw, th);
     ctx.fill();
-    ctx.strokeStyle = gate ? '#ffe66d' : '#ff3b4e'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = B.edge; ctx.lineWidth = 2; ctx.stroke();
     // 꼬리
     ctx.beginPath(); ctx.moveTo(q.x - fs * 0.3, q.y); ctx.lineTo(q.x, q.y + fs * 0.4); ctx.lineTo(q.x + fs * 0.3, q.y); ctx.closePath();
-    ctx.fillStyle = gate ? '#ffe66d' : '#ff3b4e'; ctx.fill();
-    ctx.fillStyle = gate ? '#fff4c2' : '#ffd0d5';
+    ctx.fillStyle = B.edge; ctx.fill();
+    const cy = q.y - th / 2;
+    // 화살표: 점프는 위, 숙여는 아래
+    if (B.arrow) {
+      const ax = q.x - tw / 2 + fs * 0.55 + aw * 0.35, a = fs * 0.36, dir = B.arrow;
+      ctx.beginPath(); ctx.moveTo(ax - a, cy - dir * a * 0.45); ctx.lineTo(ax + a, cy - dir * a * 0.45); ctx.lineTo(ax, cy + dir * a * 0.75); ctx.closePath();
+      ctx.fillStyle = B.edge; ctx.fill();
+    }
+    ctx.fillStyle = B.ink;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(txt, q.x, q.y - th / 2 + 1);
+    ctx.fillText(B.txt, q.x + aw / 2, cy + 1);
     ctx.textBaseline = 'alphabetic';
     ctx.globalAlpha = 1;
+  }
+
+  // ─── 블랙홀이 끌어당기려 할 때: 우주선 옆에 블랙홀 쪽 꺾쇠 + 위에 "반대로 밀어요!" (움직임 줄이기면 꺾쇠가 가만히) ───
+  function drawPull(ctx, W, L, v) {
+    const P0 = W.pull;
+    if (!P0 || P0.done || W.phase !== 'play') return;
+    const p = W.p, k = 1 - Math.max(0, P0.t) / P0.max, dir = P0.dir;
+    const q = proj(L, p.x, 0, 0.7), s = q.s, t = performance.now() / 1000;
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    // 블랙홀 쪽으로 흘러가는 꺾쇠 셋
+    for (let i = 0; i < 3; i++) {
+      const u = v.calm ? i / 3 : ((t * 1.6 + i / 3) % 1);
+      const x = q.x + dir * s * (0.9 + u * 1.3), a = s * 0.3;
+      ctx.globalAlpha = (0.35 + 0.65 * k) * (v.calm ? 0.9 : 1 - u * 0.6);
+      ctx.strokeStyle = '#d8b0ff'; ctx.lineWidth = Math.max(3, s * 0.1);
+      ctx.beginPath(); ctx.moveTo(x - dir * a, q.y - a); ctx.lineTo(x, q.y); ctx.lineTo(x - dir * a, q.y + a); ctx.stroke();
+    }
+    // 위쪽 말: 반대로 밀어요 + 반대쪽 화살표
+    const fs = Math.round(Math.max(16, Math.min(26, v.w / 44)));
+    ctx.font = fs + 'px ' + DISP;
+    const txt = v.touch ? '반대로 밀어서 버텨요' : (dir < 0 ? '→' : '←') + ' 키로 버텨요';
+    const tw = ctx.measureText(txt).width + fs * 2.4, th = fs * 1.6, ty = q.y - s * 1.9;
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = 'rgba(20,6,36,0.88)';
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(q.x - tw / 2, ty - th / 2, tw, th, fs * 0.5); else ctx.rect(q.x - tw / 2, ty - th / 2, tw, th); ctx.fill();
+    ctx.strokeStyle = '#d8b0ff'; ctx.lineWidth = 2; ctx.stroke();
+    // 게이지: 남은 시간
+    ctx.fillStyle = 'rgba(216,176,255,0.35)'; ctx.fillRect(q.x - tw / 2 + 6, ty + th / 2 - 5, (tw - 12) * (1 - k), 3);
+    const ax = q.x - dir * (tw / 2 - fs * 0.8), a = fs * 0.35;
+    ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = Math.max(3, fs * 0.16);
+    ctx.beginPath(); ctx.moveTo(ax + dir * a, ty - a); ctx.lineTo(ax, ty); ctx.lineTo(ax + dir * a, ty + a); ctx.stroke();
+    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, q.x + dir * fs * 0.45, ty + 1);
+    ctx.restore();
+    ctx.textBaseline = 'alphabetic';
   }
 
   // ─── 밀기 표시: 손가락으로 민(누른) 자리에 그 방향 화살표가 잠깐 떴다 사라진다 (알아들었다는 표시) ───
@@ -1152,7 +1525,7 @@
       const hs = Math.round(Math.max(16, Math.min(26, v.w / 40)));
       ctx.font = hs + 'px ' + DISP;
       ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(5,7,12,0.85)';
-      const lines = v.touch ? ['옆으로 밀거나 양옆을 눌러서 줄 바꾸기', '위로 밀면 점프!'] : ['← → 방향키로 줄 바꾸기', '↑ 또는 스페이스로 점프!'];
+      const lines = v.touch ? ['옆으로 밀거나 양옆을 눌러서 줄 바꾸기', '위로 밀면 점프! 아래로 밀면 미끄러지기!'] : ['← → 방향키로 줄 바꾸기', '↑ 점프! ↓ 미끄러지기!'];
       lines.forEach((t, i) => {
         const yy = cy + fs * 0.85 + i * hs * 1.4;
         ctx.strokeText(t, cx, yy);
@@ -1171,23 +1544,28 @@
     const fs = Math.round(Math.max(20, Math.min(42, v.w / 24, L.hy / 5.2)));
     const cx = v.w / 2, cy = Math.max(v.hudMid + 24 + fs * 1.95, L.hy - fs * 2.3);
     const t = performance.now() / 1000, bob = v.calm ? 0 : Math.sin(t * 5);
-    const lane = what === 'lane';
-    const txt = lane ? (v.touch ? '옆으로 밀어서 줄 바꾸기' : '← → 키로 줄 바꾸기') : (v.touch ? '위로 밀어서 점프!' : '↑ 키나 스페이스로 점프!');
-    const sub = lane ? '빨간 운석은 피해요' : '레이저 문을 넘어요';
+    const lane = what === 'lane', down = what === 'slide';
+    const txt = lane ? (v.touch ? '옆으로 밀어서 줄 바꾸기' : '← → 키로 줄 바꾸기')
+      : down ? (v.touch ? '아래로 밀어서 미끄러지기!' : '↓ 키로 미끄러지기!')
+      : (v.touch ? '위로 밀어서 점프!' : '↑ 키나 스페이스로 점프!');
+    const sub = lane ? '빨간 운석은 피해요' : down ? '보라 막대 밑으로 쏙' : '바닥 레이저 문을 넘어요';
     ctx.font = fs + 'px ' + DISP;
     const tw = Math.max(ctx.measureText(txt).width, fs * 6) + fs * 1.6, th = fs * 3.9;
     const x0 = cx - tw / 2, y0 = cy - th / 2;
     ctx.fillStyle = 'rgba(8,12,24,0.8)';
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x0, y0, tw, th, fs * 0.5); else ctx.rect(x0, y0, tw, th); ctx.fill();
-    ctx.strokeStyle = lane ? 'rgba(94,231,255,0.8)' : 'rgba(255,230,109,0.85)'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = lane ? 'rgba(94,231,255,0.8)' : down ? 'rgba(216,176,255,0.9)' : 'rgba(255,230,109,0.85)'; ctx.lineWidth = 2; ctx.stroke();
     // 화살표 그림
-    const ay = y0 + fs * 1.1, col = lane ? '#5ee7ff' : '#ffe66d';
+    const ay = y0 + fs * 1.1, col = lane ? '#5ee7ff' : down ? '#d8b0ff' : '#ffe66d';
     ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = Math.max(3, fs * 0.14); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     const chev = (x, y, dx, dy, a) => { ctx.beginPath(); ctx.moveTo(x - dx * a + dy * a, y - dy * a + dx * a); ctx.lineTo(x, y); ctx.lineTo(x - dx * a - dy * a, y - dy * a - dx * a); ctx.stroke(); };
     if (lane) {
       const off = fs * (1.3 + bob * 0.25);
       chev(cx - off, ay, -1, 0, fs * 0.35); chev(cx + off, ay, 1, 0, fs * 0.35);
       ctx.beginPath(); ctx.arc(cx, ay, fs * 0.3, 0, TAU); ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
+    } else if (down) {
+      const dn = fs * (0.15 + bob * 0.15);
+      chev(cx, ay + dn + fs * 0.2, 0, 1, fs * 0.35); chev(cx, ay + dn - fs * 0.25, 0, 1, fs * 0.35);
     } else {
       const up = fs * (0.15 + bob * 0.15);
       chev(cx, ay - up - fs * 0.2, 0, -1, fs * 0.35); chev(cx, ay - up + fs * 0.25, 0, -1, fs * 0.35);
@@ -1196,7 +1574,7 @@
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff'; ctx.fillText(txt, cx, y0 + fs * 2.3);
     ctx.font = Math.round(Math.max(15, fs * 0.55)) + 'px ' + DISP;
-    ctx.fillStyle = lane ? '#bff8ff' : '#fff4c2'; ctx.fillText(sub, cx, y0 + fs * 3.25);
+    ctx.fillStyle = lane ? '#bff8ff' : down ? '#f0dcff' : '#fff4c2'; ctx.fillText(sub, cx, y0 + fs * 3.25);
   }
 
   // 구역 도착·기념 아치: 가운데 위쪽에 큰 글자가 잠깐 (움직임 줄이기면 커지는 연출 없이)
@@ -1210,13 +1588,18 @@
     ctx.globalAlpha = Math.max(0, a);
     glow(ctx, b.color, cx, cy, fs * 3, 0.25);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = (b.small ? 'italic 700 ' + fs + 'px ' + NUM : fs + 'px ' + DISP);
+    ctx.font = (b.small && !b.disp ? 'italic 700 ' + fs + 'px ' + NUM : fs + 'px ' + DISP);
     ctx.lineWidth = Math.max(4, fs * 0.12); ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.strokeText(b.big, cx, cy);
     ctx.fillStyle = b.color; ctx.fillText(b.big, cx, cy);
     if (b.sub) {
       ctx.font = Math.round(Math.max(16, fs * 0.45)) + 'px ' + DISP;
       ctx.lineWidth = 4; ctx.strokeText(b.sub, cx, cy + fs * 0.75);
       ctx.fillStyle = '#ffffff'; ctx.fillText(b.sub, cx, cy + fs * 0.75);
+    }
+    if (b.sub2) {
+      ctx.font = 'italic 700 ' + Math.round(Math.max(15, fs * 0.4)) + 'px ' + NUM;
+      ctx.lineWidth = 4; ctx.strokeText(b.sub2, cx, cy + fs * 1.3);
+      ctx.fillStyle = b.color; ctx.fillText(b.sub2, cx, cy + fs * 1.3);
     }
     ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
   }
@@ -1238,7 +1621,7 @@
     for (; i < list.length && list[i].z - dist > 0.3; i++) drawObject(ctx, W, L, list[i], dist, v);
     drawShip(ctx, W, L, v);
     for (; i < list.length; i++) drawObject(ctx, W, L, list[i], dist, v);
-    if (v.hud !== false) drawDanger(ctx, W, L, dist, v);
+    if (v.hud !== false) { drawDanger(ctx, W, L, dist, v); drawPull(ctx, W, L, v); }
     drawFx(ctx);
     ctx.restore();
     if (R.flash > 0 && !v.calm) {

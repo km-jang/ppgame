@@ -154,6 +154,7 @@
     return {
       diff: W.diff, dist: s.dist, stars: s.stars, gates: s.gates, items: s.items, nears: s.nears, perfects: s.perfects,
       boosts: s.boosts, zone: s.zone, milestones: s.milestones, clean: Math.floor(W.clean || 0), time: s.time, games: 1,
+      slides: s.slides || 0, bars: s.bars || 0, bhs: s.bhs || 0,
     };
   }
 

@@ -239,7 +239,7 @@ test('쉬움 몸풀기: 처음 20초에 닿는 줄은 운석 하나 줄과 별 �
       const os = W.obs.filter(o => o.row === id);
       assert(os.filter(o => o.kind === 'meteor').length <= 1 && !os.some(o => o.kind === 'gate'), 'first rows simple');
     }
-    while (W.runT < C.speed.warm) { tick(W); if (W.lastRow !== last) { last = W.lastRow; check(last); } }
+    while (W.runT < C.speed.warm) { W.inv = 99; tick(W); if (W.lastRow !== last) { last = W.lastRow; check(last); } }
   }
   assert(rows > 40 && starRows / rows >= 0.6, 'plenty of stars ' + starRows + '/' + rows);
   // 움직이는 운석: 쉬움에는 없고, 어려움은 처음부터, 보통은 나중에 많아진다
@@ -262,20 +262,25 @@ function checkRows(W, count, speedOf) {
   let prev = null;
   for (let i = 0; i < count; i++) {
     const row = makeRow(W);
-    const blocked = [false, false, false];
+    // 운석(움직이는 운석은 지나가는 두 줄)만 못 지나간다. 문은 점프, 막대는 미끄러지기로 지나간다
+    const blocked = [false, false, false], empty = [true, true, true];
     for (const o of W.obs) {
       if (o.row !== row.id) continue;
-      if (o.kind === 'meteor') { blocked[o.x] = true; if (o.moving) { blocked[o.from] = true; blocked[o.to] = true; } }
-      if (o.kind === 'gate') blocked[o.x] = true;
+      if (o.kind === 'meteor') { blocked[o.x] = true; empty[o.x] = false; if (o.moving) { blocked[o.from] = blocked[o.to] = true; empty[o.from] = empty[o.to] = false; } }
+      if (o.kind === 'gate' || o.kind === 'bar') empty[o.x] = false;
       if (o.kind === 'item') assert(!row.lanes[o.x], 'item in a free lane');
     }
-    assert(blocked.some(b => !b), 'row has a free lane: ' + row.pat);
-    assert(row.free.length >= 1, 'free list');
+    assert(blocked.some(b => !b), 'row has a passable lane: ' + row.pat);
+    assert(row.open.length >= 1 && row.open.every(l => !blocked[l]), 'open list');
+    assert(row.free.length === empty.filter(Boolean).length, 'free list');
+    // 빈 줄이 없는 줄은 벽 모양뿐 (점프나 미끄러지기로 지나간다), 그다음 줄까지는 숨 돌릴 틈
+    if (!row.free.length) assert(['g3', 'b3', 'mgb'].includes(row.pat), 'no free lane only for walls: ' + row.pat);
     if (W.diff === 'easy') assert(row.pat !== 'mover', 'easy: no movers');
     if (prev) {
       const v = speedOf(row);
       const sec = (row.z - prev.z - 2 * D.PLAYER.hitZ) / v;
       assert(sec >= MIN_ROW_SEC, W.diff + ' gap ' + sec.toFixed(2) + 's at ' + v.toFixed(1) + 'm/s');
+      if (!prev.free.length) assert((row.z - prev.z) / v >= D.GEN.actGap - 1e-9, 'breather after a wall ' + ((row.z - prev.z) / v).toFixed(2));
     }
     prev = row;
   }
@@ -302,9 +307,9 @@ test('빨라지는 중에도 줄 사이 시간이 모자라지 않는다 (실제
       let worst = 99;
       const until = C.speed.warm + C.speed.ramp + 30;
       while (W.runT < until) {
-        W.inv = 99; W.hearts = 9;   // 부딪혀도 계속 (간격만 잰다)
+        W.inv = 99; W.hearts = 9; W.eff.boost = 0;   // 부딪혀도 계속 (간격만 잰다. 부스트는 다 부수고 가니 빼고)
         tick(W);
-        for (const o of W.obs) if (o.row != null && (o.kind === 'meteor' || o.kind === 'gate') && !seen.has(o.row)) seen.set(o.row, o.z);
+        for (const o of W.obs) if (o.row != null && (o.kind === 'meteor' || o.kind === 'gate' || o.kind === 'bar') && !seen.has(o.row)) seen.set(o.row, o.z);
         // 지금 우주선 앞을 지나는 줄과 다음 줄 사이 시간
         const zs = [...seen.values()].filter(z => z > W.dist - 1 && z < W.dist + 60).sort((a, b) => a - b);
         if (zs.length >= 2 && zs[0] - W.dist < 1) worst = Math.min(worst, (zs[1] - zs[0] - 2 * D.PLAYER.hitZ) / speed(W));
@@ -387,13 +392,16 @@ test('같은 시드면 같은 길이 나온다', () => {
 
 
 // ─── 사람 같은 로봇: 반응이 0.3초 남짓 늦고, 앞 일정 거리(32m, 1.4초)만 보고, 가끔 늦거나(8%) 엉뚱한 줄로 가고(4%),
-//     장애물을 아예 못 보기도 한다(3%). 난이도 조절의 근거 (PLAN.md 6절 표의 숫자) ───
+//     장애물을 아예 못 보기도 한다(3%). 문이 오면 뛰고 막대가 오면 미끄러진다 (때를 맞추는 것도 조금씩 틀린다).
+//     블랙홀이 끌어당기면 반응해서 반대로 민다(늦으면 끌려간다). 난이도 조절의 근거 (PLAN.md 6절 표의 숫자)
+//     lazy: 옆으로만 피하는 로봇 (점프·미끄러지기를 안 하고 문·막대도 운석처럼 피한다) ───
 function makeHuman(seed, o) {
   const P = D.PLAYER;
-  o = Object.assign({ react: 0.3, jitter: 0.15, lookS: 1.4, lookM: 32, late: 0.08, lateBy: 0.35, wrong: 0.04, jumpErr: 0.07, greedy: 0.35, lapse: 0.03 }, o || {});
+  o = Object.assign({ react: 0.3, jitter: 0.15, lookS: 1.4, lookM: 32, late: 0.08, lateBy: 0.35, wrong: 0.04, jumpErr: 0.07, greedy: 0.35, lapse: 0.03, counter: 0.85, lazy: false }, o || {});
   const r = RN.rng(seed * 7919 + 13);
-  const S = { q: [], target: null, next: 0, seen: new Set() };
+  const S = { q: [], target: null, next: 0, seen: new Set(), pullSeen: null };
   const delay = () => o.react + r() * o.jitter + (r() < o.late ? o.lateBy : 0);
+  const isLane = a => a.dir === 'left' || a.dir === 'right';
   function think(W) {
     const v = speed(W), look = Math.min(o.lookM, v * o.lookS);
     if (S.target == null) S.target = W.p.lane;
@@ -402,22 +410,33 @@ function makeHuman(seed, o) {
       if (ob.done || ob.kind === 'arch') continue;
       const rel = ob.z - W.dist;
       if (rel < -P.hitZ || rel > look) continue;
-      if (ob.kind === 'meteor' || ob.kind === 'gate') {
+      if (ob.kind === 'meteor' || ob.kind === 'gate' || ob.kind === 'bar') {
         if (ob._h === undefined) ob._h = r() < o.lapse;   // 딴생각: 못 봤다
         if (ob._h) continue;
       }
-      if (ob.kind === 'meteor') {
+      if (ob.kind === 'meteor' || (o.lazy && (ob.kind === 'gate' || ob.kind === 'bar'))) {
         for (const l of (ob.moving && ob.x !== ob.to ? [ob.from, ob.to] : [Math.round(ob.x)])) near[l] = Math.min(near[l], rel);
-      } else if (ob.kind === 'gate') {
+      } else if (ob.kind === 'gate' || ob.kind === 'bar') {
         if (ob.x === cur && !S.seen.has(ob)) {
           S.seen.add(ob);
-          const want = rel / v - P.jumpT * 0.5 + (r() - 0.5) * 2 * o.jumpErr;
-          S.q.push({ at: W.t + Math.max(delay(), want), dir: 'jump' });
+          const T = ob.kind === 'gate' ? P.jumpT : P.slideT;
+          const want = rel / v - T * 0.5 + (r() - 0.5) * 2 * o.jumpErr;
+          S.q.push({ at: W.t + Math.max(delay(), want), dir: ob.kind === 'gate' ? 'jump' : 'slide' });
         }
       } else if (ob.kind === 'star') gain[Math.round(ob.x)] += 1;
       else if (ob.kind === 'item') gain[Math.round(ob.x)] += 3;
     }
-    if (S.q.some(a => a.dir !== 'jump')) return;
+    if (S.q.some(isLane)) return;
+    // 블랙홀이 끌어당기려 한다: 반대쪽이 괜찮으면(또는 끝 줄이면) 반대로 민다
+    if (W.pull && !W.pull.done && S.pullSeen !== W.pull) {
+      S.pullSeen = W.pull;
+      const opp = cur - W.pull.dir;
+      if (r() < o.counter && (opp < 0 || opp > 2 || near[opp] >= look)) {
+        S.q.push({ at: W.t + delay(), dir: W.pull.dir > 0 ? 'left' : 'right' });
+        if (opp >= 0 && opp <= 2) S.target = opp;
+        return;
+      }
+    }
     let best = cur;
     if (near[cur] < look) {
       const c = [0, 1, 2].filter(l => l !== cur).sort((a, b) => (near[b] - near[a]) || (Math.abs(a - cur) - Math.abs(b - cur)));
@@ -434,15 +453,15 @@ function makeHuman(seed, o) {
   }
   return W => {
     for (let i = 0; i < S.q.length; i++) if (S.q[i].at <= W.t) { move(W, S.q[i].dir); S.q.splice(i--, 1); }
-    if (W.p.lane !== S.target && !S.q.some(a => a.dir !== 'jump')) S.target = W.p.lane;
+    if (W.p.lane !== S.target && !S.q.some(isLane)) S.target = W.p.lane;
     if (W.t >= S.next) { S.next = W.t + 0.1; think(W); }
   };
 }
-function playHuman(diff, seeds, cap, prof) {
+function playHuman(diff, seeds, cap, prof, wopts) {
   let dist = 0, time = 0;
   const times = [];
   for (let seed = 1; seed <= seeds; seed++) {
-    const W = create(seed, { diff }), h = makeHuman(seed, prof);
+    const W = create(seed, Object.assign({ diff }, wopts)), h = makeHuman(seed, prof);
     while (W.phase === 'play' && W.runT < cap) { h(W); tick(W); }
     dist += W.dist; time += W.runT; times.push(W.runT);
   }
@@ -450,10 +469,12 @@ function playHuman(diff, seeds, cap, prof) {
   return { dist: dist / seeds, time: time / seeds, median: times[seeds >> 1] };
 }
 
+const HUMAN = {};
 test('난이도 차례: 사람 같은 로봇이 쉬움 > 보통 > 어려움 순으로 오래 간다 (숫자 출력)', () => {
   const N = 24, CAP = 480;
   const res = {};
   for (const id of D.DIFF_ORDER) res[id] = playHuman(id, N, CAP);
+  HUMAN.easy = res.easy;
   const kid = playHuman('easy', N, CAP, { react: 0.45, jitter: 0.25, lapse: 0.06, wrong: 0.08, late: 0.15, lateBy: 0.45, lookM: 28, jumpErr: 0.1 });
   for (const id of D.DIFF_ORDER) console.log('       ' + D.DIFFICULTY[id].name + ': 평균 ' + Math.round(res[id].dist) + 'm · ' + res[id].time.toFixed(0) + '초 (가운데 ' + res[id].median.toFixed(0) + '초, 최대 ' + CAP + '초까지)');
   console.log('       쉬움 (더 서툰 아이 로봇): 평균 ' + Math.round(kid.dist) + 'm · ' + kid.time.toFixed(0) + '초');
@@ -486,21 +507,33 @@ test('옛 키 옮기기: runner.easy → runner.diff, 옛 최고 기록 → 그�
   assert(Pf.rec(mem({ 'runner.rec': 'garbage' })).best.hard.dist === 0, 'broken record');
 });
 
-test('우주 구역: 거리에 따라 노을 우주 → 얼음 행성 → 초록 성운 → 은하 중심', () => {
-  const Z = D.ZONES;
-  assert(Z.length === 4 && Z[0].at === 0, 'four zones');
-  for (let i = 1; i < Z.length; i++) assert(Z[i].at > Z[i - 1].at, 'increasing');
-  assert(Z[1].name === '얼음 행성', 'ice');
-  const zoneAt = RN.World.zoneAt;
-  assert(zoneAt(0) === 0 && zoneAt(Z[1].at - 0.1) === 0 && zoneAt(Z[1].at) === 1 && zoneAt(Z[2].at + 1) === 2 && zoneAt(99999) === 3, 'thresholds');
+test('태양계 여행: 거리에 따라 수성 → 금성 → 지구 → 화성 → 목성 → 토성 → 천왕성 → 해왕성 → 명왕성 → 은하 너머 → 다시 수성', () => {
+  const Z = D.ZONES, leg = D.ROUTE.leg, zoneAt = RN.World.zoneAt, placeOf = RN.World.placeOf;
+  const names = ['수성', '금성', '지구', '화성', '목성', '토성', '천왕성', '해왕성', '명왕성', '은하 너머'];
+  assert(Z.length === 10 && Z.map(z => z.name).join() === names.join(), 'order ' + Z.map(z => z.name).join());
+  assert(Z.every((z, i) => z.at === i * leg && z.line && !/[\u2014\u2013]/.test(z.name + z.line)), 'at and lines');
+  assert(leg >= 300 && leg <= 400 && Z[8].at >= 2800 && Z[8].at <= 3200, 'pluto at ' + Z[8].at);
+  // 짝수 번째 도착은 기념 아치 자리와 겹친다 (아치에 이름이 적힌다)
+  assert(Z[2].at % D.MILESTONE.every === 0 && Z[8].at % D.MILESTONE.every === 0, 'arches line up');
+  for (let i = 0; i < 25; i++) {
+    const d = i * leg;
+    assert(zoneAt(d) === i && zoneAt(d - 0.1) === Math.max(0, i - 1) && zoneAt(d + leg - 0.1) === i, 'threshold ' + i);
+    const pl = placeOf(i);
+    assert(pl.name === names[i % 10] && pl.stop === i % 10 && pl.lap === Math.floor(i / 10) + 1, 'place ' + i + ' ' + pl.name);
+  }
+  assert(zoneAt(0) === 0 && placeOf(10).name === '수성' && placeOf(10).lap === 2, 'second lap');
   const W = empty();
-  W.dist = Z[1].at - 1;
+  W.dist = leg - 1;
   run(W, 0.5);
   assert(W.zone === 1 && W.events.includes('zone') && W.fx.some(f => f.kind === 'zone' && f.i === 1), 'zone event');
   const n = W.events.filter(e => e === 'zone').length;
   run(W, 0.5);
   assert(W.events.filter(e => e === 'zone').length === n, 'only once');
   assert(runStats(W).zone === 1, 'run stats zone');
+  // 한 판에 여러 바퀴도: 거리와 도착 수가 함께 는다
+  const V = empty();
+  V.dist = 10 * leg + 5; run(V, 0.1);
+  assert(runStats(V).zone === 10 && runStats(V).lap === 2, 'lap 2 stats');
 });
 
 test('기념 아치: 250m마다 지나가면 작은 보너스', () => {
@@ -584,38 +617,49 @@ test('하트 아이템: 하트 하나 채우기, 가득이면 더 안 늘고 나
   assert(D.DIFFICULTY.easy.item.w.heart < D.DIFFICULTY.easy.item.w.shield, 'rare');
 });
 
-test('처음 안내: 옆으로 밀기 → 안내용 문에서 위로 밀기, 그동안 느려지고 부딪혀도 괜찮다, 한 번만', () => {
+test('처음 안내: 옆으로 밀기 → 안내용 문에서 위로 밀기 → 안내용 막대에서 아래로 밀기, 그동안 느려지고 부딪혀도 괜찮다, 한 번만', () => {
   const W = create(3, { tutorial: true, wait: 0 });
   assert(W.tut.step === 'lane', 'lane first');
   run(W, 1);
   assert(W.tut.show === 'lane', 'lane hint');
   move(W, 'right');
   assert(W.tut.step === 'jump' && W.tut.want, 'then jump');
-  // 안내용 문이 다가올 때까지 달린다 (부딪혀도 계속)
-  let slowed = false, shown = false;
-  for (let i = 0; i < 120 * 30 && W.tut.step !== 'done'; i++) {
+  // 안내용 문·막대가 다가올 때까지 달린다 (부딪혀도 계속). 문 앞에서 뛰고, 막대 앞에서 미끄러진다
+  const shown = { jump: false, slide: false }, order = [];
+  let slowed = false, slideRows = 0;
+  const tutRows = new Set();
+  for (let i = 0; i < 120 * 60 && W.tut.step !== 'done'; i++) {
     W.inv = 99;
     tick(W);
-    if (W.tut.show === 'jump') {
-      shown = true;
+    for (const o of W.obs) if (o.tut && !tutRows.has(o.row)) { tutRows.add(o.row); if (o.kind === 'bar') slideRows++; }
+    const sh = W.tut.show;
+    if (sh === 'jump' || sh === 'slide') {
+      if (!shown[sh]) order.push(sh);
+      shown[sh] = true;
       if (W.slow < 0.8) slowed = true;
-      // 문 바로 앞에서 뛴다
-      const g = W.obs.find(o => o.tut && !o.done && o.x === 1);
-      if (g && g.z - W.dist < speed(W) * D.PLAYER.jumpT * 0.5 && W.p.y === 0) move(W, 'jump');
+      const kind = sh === 'jump' ? 'gate' : 'bar', T = sh === 'jump' ? D.PLAYER.jumpT : D.PLAYER.slideT;
+      const g = W.obs.find(o => o.tut && !o.done && o.x === 1 && o.kind === kind);
+      if (g && g.z - W.dist < speed(W) * T * 0.5) {
+        if (sh === 'jump' && W.p.y === 0) move(W, 'jump');
+        if (sh === 'slide' && W.p.sl <= 0) move(W, 'slide');
+      }
     }
   }
-  assert(shown && slowed, 'jump hint and slow ' + shown + ' ' + slowed);
-  assert(W.tut.step === 'done' && W.tut.ok && W.events.includes('tutDone'), 'tutorial done');
-  assert(W.hits === 0, 'no hits from tutorial gate');
+  assert(shown.jump && shown.slide && order.join() === 'jump,slide', 'jump then slide hints ' + order.join());
+  assert(slowed, 'slowed');
+  assert(W.tut.step === 'done' && W.tut.ok && W.tut.jumpOk && W.tut.slideOk && W.events.includes('tutDone'), 'tutorial done');
+  assert(slideRows === 1 && W.bars >= 1 && W.slides >= 1, 'slide step once ' + slideRows);
+  assert(W.hits === 0, 'no hits from tutorial gate or bar');
   run(W, 2);
   assert(W.slow > 0.97, 'speed back ' + W.slow);
-  // 안 뛰면: 하트를 잃지 않고 다시 한 번, tries번 뒤에는 끝낸다
+  // 아무것도 안 하면: 하트를 잃지 않고 다시 한 번, 단계마다 tries번 뒤에는 다음 단계로, 마지막엔 끝
   const V = create(4, { tutorial: true, wait: 0, diff: 'hard' });
   move(V, 'left');
-  for (let i = 0; i < 120 * 90 && V.tut.step !== 'done' && V.phase === 'play'; i++) { V.inv = 99; V.hearts = 1; tick(V); }
+  let sawSlide = false;
+  for (let i = 0; i < 120 * 150 && V.tut.step !== 'done' && V.phase === 'play'; i++) { V.inv = 99; V.hearts = 1; tick(V); if (V.tut.step === 'slide') sawSlide = true; }
   assert(V.phase === 'play' && V.hits === 0, 'tutorial gate never hurts');
-  assert(V.tut.step === 'done' && !V.tut.ok && V.tut.tries === D.TUTORIAL.tries, 'gave up after tries ' + V.tut.tries);
-  // 안내 없는 판에는 안내용 문이 없다
+  assert(sawSlide && V.tut.step === 'done' && !V.tut.ok && !V.tut.jumpOk && !V.tut.slideOk && V.tut.tries === D.TUTORIAL.tries, 'gave up after tries ' + V.tut.tries);
+  // 안내 없는 판에는 안내용 문·막대가 없다
   const X = create(3, { wait: 0 });
   move(X, 'right'); run(X, 20);
   assert(!X.tut && !X.obs.some(o => o.tut), 'no tutorial by default');
@@ -658,17 +702,23 @@ test('줄 바꾸기는 곡선으로 laneT초에 끝나고, 점프는 빨리 오�
   assert(J.p.y === 0 && J.events.includes('land'), 'landed');
 });
 
-test('메달: 새 메달 (어려움 · 성운 · 아슬아슬 · 완벽한 별길)', () => {
+test('메달: 새 메달 (어려움 · 화성 · 아슬아슬 · 완벽한 별길 · 명왕성 · 블랙홀 · 미끄럼), 옛 id는 그대로', () => {
   const rec = { total: { games: 0, stars: 0, dist: 0 } };
   const get = id => D.MEDALS.find(m => m.id === id);
   const W = empty({ diff: 'hard' });
   W.dist = 1300; W.nears = 10; W.perfects = 5;
   const r = runStats(W);
-  assert(r.zone === 2 && r.diff === 'hard', 'stats');
+  assert(r.zone === 3 && r.diff === 'hard', 'stats zone ' + r.zone);
   for (const id of ['hard', 'nebula', 'near10', 'perfect5', 'normal']) assert(get(id).check(r, rec), 'medal ' + id);
+  assert(!get('nebula').check(runStats(Object.assign(empty(), { dist: D.ZONES[3].at - 1 })), rec), 'mars medal needs mars');
   const E = runStats(Object.assign(empty(), { dist: 1300 }));
   assert(!get('hard').check(E, rec) && !get('normal').check(E, rec), 'easy does not get level medals');
-  assert(D.MEDALS.length === 16, 'medal count ' + D.MEDALS.length);
+  const far = runStats(Object.assign(empty(), { dist: D.ZONES[8].at + 1, bhPassed: 1, bars: 10 }));
+  for (const id of ['pluto', 'bhole', 'slide10', 'd3000']) assert(get(id).check(far, rec), 'medal ' + id);
+  assert(!get('pluto').check(E, rec) && !get('bhole').check(E, rec) && !get('slide10').check(E, rec), 'new medals need their thing');
+  // 예전에 딴 메달이 사라지지 않게 옛 id는 모두 남아 있다
+  for (const id of ['d500', 'd1500', 'd3000', 's50', 's150', 'gate10', 'shield', 'boost3', 'clean', 'normal', 'hard', 'nebula', 'near10', 'perfect5', 'games10', 'stars1k']) assert(get(id), 'old id ' + id);
+  assert(D.MEDALS.length === 19, 'medal count ' + D.MEDALS.length);
 });
 
 
@@ -677,9 +727,9 @@ const SH = RN.Shop;
 const memStore = init => { const m = Object.assign({}, init); return { m, get: (k, f) => (k in m ? JSON.parse(JSON.stringify(m[k])) : f), set: (k, v) => { m[k] = JSON.parse(JSON.stringify(v)); } }; };
 const fakeWallet = c => ({ c, coins() { return this.c; }, setCoins(n) { this.c = n; } });
 
-test('코인 계산: 거리·별·아치·구역, 난이도 배율, 보통 한 판 20~60개', () => {
+test('코인 계산: 거리·별·아치·도착한 행성, 난이도 배율, 보통 한 판 20~60개', () => {
   const st = SH.blank();
-  const typical = SH.coinsFor({ diff: 'easy', dist: 800, stars: 50, milestones: 3, zone: 1 }, st);
+  const typical = SH.coinsFor({ diff: 'easy', dist: 800, stars: 50, milestones: 3, zone: 2 }, st);
   assert(typical.total >= 20 && typical.total <= 60, 'typical ' + typical.total);
   assert(typical.parts.dist === 20 && typical.parts.stars === 12 && typical.parts.arch === 6 && typical.parts.zone === 10, JSON.stringify(typical.parts));
   const short = SH.coinsFor({ diff: 'easy', dist: 300, stars: 20, milestones: 1, zone: 0 }, st);
@@ -687,7 +737,7 @@ test('코인 계산: 거리·별·아치·구역, 난이도 배율, 보통 한 �
   const hard = SH.coinsFor({ diff: 'hard', dist: 800, stars: 50, milestones: 3, zone: 1 }, st);
   assert(hard.total > typical.total && hard.parts.diff > 0, 'hard pays more ' + hard.total);
   st.up.coin = 5;
-  const bonus = SH.coinsFor({ diff: 'easy', dist: 800, stars: 50, milestones: 3, zone: 1 }, st);
+  const bonus = SH.coinsFor({ diff: 'easy', dist: 800, stars: 50, milestones: 3, zone: 2 }, st);
   assert(bonus.parts.bonus === Math.floor(typical.total * 0.5) && bonus.total === typical.total + bonus.parts.bonus, 'coin upgrade ' + JSON.stringify(bonus));
   // 사람 같은 로봇 한 판 (보통) 값도 20~200 안
   const W = create(3, { diff: 'normal' }), h = makeHuman(3);
@@ -890,7 +940,7 @@ test('캐릭터마다: 어떤 줄이든 빈 줄이 있고, 줄 사이는 그 캐
         let prev = null;
         for (let i = 0; i < 40; i++) {
           const row = makeRow(W);
-          assert(row.free.length >= 1, 'free lane ' + c.id);
+          assert(row.open.length >= 1, 'passable lane ' + c.id);
           if (prev) { const sec = (row.z - prev.z - 2 * D.PLAYER.hitZ) / vmax; assert(sec >= need, c.id + ' ' + id + ' gap ' + sec.toFixed(2)); }
           prev = row;
         }
@@ -921,6 +971,240 @@ test('옛 꾸미기 저장본 옮기기: 비슷한 캐릭터를 주고, 없는 �
   // 지갑이 없을 때는 저장본 코인에 더한다
   const s4 = SH.load(memStore({ 'runner.shop1': { v: 1, coins: 10, skins: { comet: true } } }), null);
   assert(s4.coins === 510, 'no wallet refund ' + s4.coins);
+});
+
+
+// ─── 상하좌우 네 방향 (2026-09-27: 아래로 밀기 = 미끄러지기, 위쪽 막대) ───
+test('미끄러지기: 위쪽 막대는 미끄러지면 지나가고, 뛰거나 그냥 가면 부딪힌다. 레이저 문은 그 반대', () => {
+  const P = D.PLAYER;
+  const W = empty();
+  const b = put(W, 'bar', 1, speed(W) * P.slideT * 0.5);
+  assert(move(W, 'slide') && W.p.sl > 0 && W.slides === 1 && W.events.includes('slide'), 'slide starts');
+  run(W, P.slideT + 0.3);
+  assert(W.hits === 0 && b.under && W.bars === 1 && W.events.includes('bar'), 'slid under the bar');
+  assert(W.p.sl === 0, 'slide ends ' + W.p.sl);
+  // 뛰면 머리를 콩
+  const J = empty();
+  put(J, 'bar', 1, speed(J) * P.jumpT * 0.4);
+  move(J, 'jump');
+  run(J, P.jumpT + 0.3);
+  assert(J.hits === 1 && J.bars === 0, 'jumping into a bar hits');
+  // 그냥 가도 부딪힌다 · 어려움이면 끝, 까닭은 막대
+  const H = empty({ diff: 'hard' });
+  put(H, 'bar', 1, 5);
+  run(H, 1);
+  assert(H.phase === 'over' && H.cause === 'bar', 'bar ends hard game ' + H.cause);
+  // 레이저 문은 미끄러져도 부딪힌다 (뛰어야 한다)
+  const G = empty();
+  put(G, 'gate', 1, speed(G) * P.slideT * 0.5);
+  move(G, 'slide');
+  run(G, P.slideT + 0.3);
+  assert(G.hits === 1 && G.gates === 0, 'sliding into a low gate hits');
+  // 옆 줄의 막대는 상관없다
+  const X = empty();
+  put(X, 'bar', 0, 5); put(X, 'bar', 2, 8);
+  run(X, 1.5);
+  assert(X.hits === 0, 'bar in another lane');
+});
+
+test('미끄러지기 손맛: 떠 있을 때 아래로 밀면 빠르게 내려와 미끄러지고, 미끄러지다 위로 밀면 바로 뛴다', () => {
+  const P = D.PLAYER;
+  const W = empty();
+  move(W, 'jump');
+  run(W, P.jumpT * 0.4);
+  assert(W.p.y > 1, 'in the air ' + W.p.y);
+  assert(move(W, 'slide') && W.p.drop, 'drop');
+  run(W, P.jumpH / P.dropV + 0.03);
+  assert(W.p.y === 0 && !W.p.drop && W.p.sl > 0 && W.slides === 1, 'dropped and sliding');
+  // 바로 뒤의 막대도 지나간다 (점프 → 막대: 뛰는 중에 아래로 밀면 된다)
+  const V = empty();
+  put(V, 'gate', 1, speed(V) * P.jumpT * 0.5);
+  const bar = put(V, 'bar', 1, speed(V) * (P.jumpT * 0.5 + 0.45));
+  move(V, 'jump');
+  run(V, P.jumpT * 0.5 + 0.1);
+  move(V, 'slide');
+  run(V, 1);
+  assert(V.hits === 0 && V.gates === 1 && bar.under, 'gate then bar ' + V.hits);
+  // 미끄러지다 뛰기
+  const S = empty();
+  move(S, 'slide'); run(S, 0.1);
+  assert(S.p.sl > 0 && move(S, 'jump') && S.p.sl === 0 && S.p.jt >= 0, 'jump cancels slide');
+  // 뜬 채로 내려오는 중에 위로 밀면 닿자마자 뛴다
+  const U = empty();
+  move(U, 'jump'); run(U, 0.2); move(U, 'slide'); move(U, 'jump');
+  run(U, 0.2);
+  assert(U.p.jt >= 0 && U.p.sl === 0 && U.jumps === 2, 'buffered jump after drop');
+  // 'down'도 미끄러지기
+  const Dn = empty();
+  assert(move(Dn, 'down') && Dn.p.sl > 0, 'down = slide');
+});
+
+test('쉬움부터 네 방향: 몸풀기(운석 하나·별) 뒤에 레이저 문·위쪽 막대·레이저 벽·막대 벽이 나온다', () => {
+  for (const id of D.DIFF_ORDER) {
+    const C = D.DIFFICULTY[id];
+    for (const t of [C.speed.warm + 1, C.speed.warm + C.speed.ramp + 1]) {
+      const W = create(1, { diff: id });
+      const ws = RN.World.rowWeights(W, t), g = k => (ws.find(x => x.k === k) || { w: 0 }).w;
+      for (const k of ['one', 'gate', 'bar', 'g3', 'b3']) assert(g(k) > 0, id + ' ' + k + ' at ' + t);
+    }
+  }
+  // 실제 줄: 쉬움 첫 2분 안에 문·막대와 벽(레이저 벽이나 막대 벽)이 나온다 (씨앗마다), 모두 합치면 두 벽 다
+  const all = new Set();
+  for (let seed = 1; seed <= 20; seed++) {
+    const W = create(seed, { wait: 0 });
+    const seen = new Set();
+    for (let i = 0; i < 120 * 120; i++) { W.inv = 99; W.hearts = 9; tick(W); if (W.lastRow) { seen.add(W.lastRow.pat); all.add(W.lastRow.pat); } }
+    for (const k of ['gate', 'bar']) assert(seen.has(k), 'seed ' + seed + ' no ' + k + ' in 2 min: ' + [...seen].join());
+    assert(seen.has('g3') || seen.has('b3'), 'seed ' + seed + ' no wall in 2 min');
+  }
+  assert(all.has('g3') && all.has('b3'), 'both walls');
+  // 벽 줄: 옆으로만은 못 지나간다
+  const W = create(2, { diff: 'normal' });
+  W.runT = 1e6;
+  let walls = 0;
+  for (let i = 0; i < 400; i++) { const row = makeRow(W); if (!row.free.length) { walls++; assert(row.open.length >= 1, 'wall still passable'); } }
+  assert(walls > 20, 'walls ' + walls);
+});
+
+test('자동 운전: 문에서 뛰고 막대에서 미끄러진다 (쉬움 2분, 거의 안 부딪힘)', () => {
+  let gates = 0, bars = 0, slides = 0;
+  for (const seed of [4, 12, 21]) {
+    const W = create(seed, { auto: true });
+    run(W, 120);
+    assert(W.phase === 'play' && W.hits <= 1, 'seed ' + seed + ' hits ' + W.hits);
+    gates += W.gates; bars += W.bars; slides += W.slides;
+  }
+  assert(gates >= 8 && bars >= 8 && slides >= 8, 'gates ' + gates + ' bars ' + bars + ' slides ' + slides);
+});
+
+test('옆으로만 피하는 로봇은 쉬움에서도 멀리 못 간다 (다 쓰는 로봇의 절반도 안 됨, 숫자 출력)', () => {
+  const lazy = playHuman('easy', 24, 480, { lazy: true });
+  const full = HUMAN.easy || playHuman('easy', 24, 480);
+  console.log('       쉬움: 네 방향 로봇 평균 ' + full.time.toFixed(0) + '초 · 옆으로만 피하는 로봇 평균 ' + lazy.time.toFixed(0) + '초 (' + Math.round(lazy.dist) + 'm)');
+  assert(lazy.time <= full.time * 0.5, 'lazy ' + lazy.time.toFixed(0) + ' vs full ' + full.time.toFixed(0));
+});
+
+// ─── 블랙홀 ───
+test('블랙홀 구간: 지구 다음부터, 행성 구간마다 약 15% (두 구간 연달아 없음), 구간 안에 알맞은 길이', () => {
+  const B = D.BLACKHOLE, leg = D.ROUTE.leg;
+  let eligible = 0, got = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const W = create(seed, { wait: 0 });
+    RN.World.planBlackHoles(W, 40 * leg);
+    let prev = -9;
+    for (const b of W.bhs) {
+      assert(RN.World.placeOf(b.leg).stop >= B.from, 'after earth ' + b.leg);
+      assert(b.leg !== prev + 1, 'not twice in a row');
+      prev = b.leg;
+      const len = b.end - b.start;
+      assert(len >= B.len[0] && len <= B.len[1], 'len ' + len);
+      assert(b.start >= b.leg * leg + B.pad[0] - 1e-9 && b.end <= (b.leg + 1) * leg - B.pad[1] + 1e-9, 'inside its leg');
+      assert(b.side === 0 || b.side === 2, 'side');
+    }
+    for (let k = 0; k < 40; k++) if (RN.World.placeOf(k).stop >= B.from) eligible++;
+    got += W.bhs.length;
+  }
+  const rate = got / eligible;
+  console.log('       블랙홀이 나온 행성 구간: ' + (rate * 100).toFixed(1) + '% (연달아 없음 규칙 포함)');
+  assert(B.chance >= 0.1 && B.chance <= 0.2 && rate > 0.09 && rate < 0.17, 'rate ' + rate.toFixed(3));
+  // 같은 씨앗이면 같은 곳, 블랙홀이 있든 없든 같은 길(줄)이 나온다
+  const a = create(9, { bh: 1 }), b = create(9, { bh: 0 });
+  RN.World.planBlackHoles(a, 30 * leg); RN.World.planBlackHoles(b, 30 * leg);
+  assert(a.bhs.length > 0 && b.bhs.length === 0, 'forced on and off');
+  for (let i = 0; i < 50; i++) { const ra = makeRow(a), rb = makeRow(b); assert(ra.pat === rb.pat && ra.z === rb.z, 'same rows'); }
+  const c = create(9, { bh: 1 }); RN.World.planBlackHoles(c, 30 * leg);
+  assert(JSON.stringify(c.bhs) === JSON.stringify(a.bhs), 'same plan');
+});
+
+test('블랙홀은 처음 안내 중에는 나오지 않는다', () => {
+  const leg = D.ROUTE.leg;
+  const W = create(5, { tutorial: true, bh: 1, wait: 0 });
+  RN.World.planBlackHoles(W, 12 * leg);
+  assert(W.tut.step !== 'done' && W.bhs.length === 0, 'none while tutorial runs');
+  // 안내가 끝난 뒤에 정하는 구간에는 나온다
+  W.tut.step = 'done';
+  RN.World.planBlackHoles(W, 30 * leg);
+  assert(W.bhs.length > 0 && W.bhs.every(b => b.leg >= 12), 'after tutorial');
+  // 안내 중에 블랙홀 구간에 있어도 끌어당기지 않는다
+  const V = empty({ tutorial: true });
+  V.bhs = [{ leg: 3, start: V.dist + 1, end: V.dist + 500, side: 0 }]; V.bhLeg = 1e9;
+  run(V, 8);
+  assert(V.bh && !V.pull && V.pulls === 0, 'no pull during tutorial');
+});
+
+// 블랙홀 구간 하나를 바로 앞에 놓는다 (행성 구간 계획은 멈춘다)
+function withHole(W, side, len) {
+  W.bhs = [{ leg: 3, start: W.dist + 0.5, end: W.dist + (len || 2000), side }]; W.bhLeg = 1e9;
+  return W;
+}
+test('블랙홀 끌어당기기: 화살표로 알린 뒤 한 줄 끌려가고, 반대로 밀면 버틴다, 끝 줄이면 더 안 끌려간다', () => {
+  const B = D.DIFFICULTY.easy.bh;
+  const W = withHole(empty(), 0);
+  run(W, 0.1);
+  assert(W.bh && W.events.includes('bh') && W.fx.some(f => f.kind === 'bh' && f.side === 0), 'entered');
+  run(W, B.first);
+  assert(W.pull && W.pull.dir === -1 && W.events.includes('pullWarn'), 'warning first');
+  assert(W.p.lane === 1, 'not yet pulled during warning');
+  run(W, B.warn);
+  assert(W.p.lane === 0 && W.pulls === 1 && W.events.includes('pull') && W.laneMoves === 0, 'pulled one lane toward the hole');
+  // 반대로 밀면 버틴다 (한 줄 옮겨 가고 끌려가지 않는다)
+  run(W, B.every[1] - 0.2);
+  assert(W.pull, 'next warning');
+  move(W, 'right');
+  run(W, W.pull.t + 0.05);
+  assert(W.p.lane === 1 && W.resists === 1 && W.pulls === 1 && W.events.includes('resist'), 'resisted');
+  // 끝 줄이면 더 안 끌려간다
+  const E = withHole(empty(), 2);
+  move(E, 'right'); run(E, 0.3);
+  run(E, B.first + B.warn + 0.1);
+  assert(E.p.lane === 2 && E.pulls === 0 && E.events.includes('pullHold'), 'edge holds');
+  // 끝 줄에서 반대로 밀면(더 못 가도) 버틴 것으로 친다
+  const F = withHole(empty(), 2);
+  move(F, 'left'); run(F, 0.3);
+  run(F, B.first + 0.05); move(F, 'left'); run(F, B.warn);
+  assert(F.p.lane === 0 && F.resists === 1, 'edge counter-swipe counts');
+  // 구간을 빠져나오면 보너스, 블랙홀 탈출 기록
+  const G = withHole(empty(), 0, 30);
+  run(G, 4);
+  assert(!G.bh && G.bhPassed === 1 && G.bonus === D.BLACKHOLE.bonus && runStats(G).bhs === 1, 'passed');
+  // 세기: 쉬움은 드물고 알림이 길다, 어려움은 자주, 알림이 짧다
+  const e = D.DIFFICULTY.easy.bh, n = D.DIFFICULTY.normal.bh, h = D.DIFFICULTY.hard.bh;
+  assert(e.warn > n.warn && n.warn > h.warn && e.every[0] > n.every[0] && n.every[0] > h.every[0], 'strength order');
+  assert(e.warn >= 1.2, 'easy gives time to react');
+});
+
+test('블랙홀 안전한 줄 약속: 곧 장애물이 닿는 줄로는 끌지 않는다 (세 난이도, 캐릭터마다 실제로 달리며)', () => {
+  const leg = D.ROUTE.leg;
+  // 한 가지 상황: 끌려갈 줄에 운석이 가까이 있으면 그대로
+  const W = withHole(empty(), 0);
+  run(W, D.DIFFICULTY.easy.bh.first + 0.05);
+  put(W, 'meteor', 0, speed(W) * (W.pull.t + 0.6));
+  run(W, W.pull.t + 0.05);
+  assert(W.p.lane === 1 && W.pulls === 0 && W.events.includes('pullHold'), 'held because lane 0 is busy');
+  let pulls = 0;
+  for (const c of D.CHARS) {
+    for (const id of D.DIFF_ORDER) {
+      const B = D.DIFFICULTY[id].bh;
+      for (let seed = 1; seed <= 3; seed++) {
+        const V = create(seed, { diff: id, char: c.id, wait: 0, bh: 1 });
+        V.runT = 200; V.tut = null;
+        // 블랙홀이 있는 곳 가까이로 건너뛴다
+        V.obs.length = 0; V.dist = 3 * leg - 40; V.nextZ = V.dist + 50; V.nextArch = Math.ceil(V.dist / 250) * 250; RN.World.fill(V);
+        while (V.dist < 9 * leg) {
+          V.inv = 99; V.hearts = 9; V.eff.boost = 0;
+          tick(V);
+          if (V.events.includes('pull')) {
+            pulls++;
+            assert(RN.World.laneClear(V, V.p.lane, B.safe - 0.02), c.id + ' ' + id + ' pulled into a busy lane at ' + Math.floor(V.dist));
+            // 그 뒤로도 모든 줄에 지나갈 줄이 있다 (끌려가도 두 줄 건너갈 시간이 남는다: safe가 두 줄 건너기보다 길다)
+            assert(B.safe >= 2 * V.laneT + 0.3, 'safe time ' + B.safe);
+          }
+          V.events.length = 0; V.fx.length = 0;
+        }
+      }
+    }
+  }
+  assert(pulls > 30, 'pulls ' + pulls);
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');

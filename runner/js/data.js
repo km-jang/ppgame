@@ -7,69 +7,94 @@
   // speed: 초당 m. warm초 동안은 base 그대로(몸풀기), 그 뒤 ramp초에 걸쳐 max까지 부드럽게(처음·끝이 완만한 곡선) 오른다
   // gap: 장애물 줄 사이 간격(초). 몸풀기 끝에서 start, 다 빨라졌을 때 end (그 사이는 같은 곡선으로 옮겨 간다)
   // warmRows: 몸풀기 동안 줄 모양 · rows: 줄 모양 가중치, start에서 end로 옮겨 간다
-  //   one 운석 하나 · two 운석 둘 · gate 레이저 문 · mg 운석+문 · gg 문 둘 · mover 옆으로 미끄러지는 운석 · stars 별만
-  //   (레이저 문 비율 = gate·mg·gg, 움직이는 운석 비율 = mover)
+  //   one 운석 하나 · two 운석 둘 · mover 옆으로 미끄러지는 운석 · stars 별만
+  //   gate 레이저 문(바닥, 점프) · bar 위쪽 막대(떠 있음, 미끄러지기)
+  //   mg 운석+문 · mb 운석+막대 · gg 문 둘 · bb 막대 둘 · gb 문+막대
+  //   g3 레이저 벽(세 줄 모두 문, 점프해야 지나감) · b3 막대 벽(세 줄 모두 막대, 미끄러져야 지나감)
+  //   mgb 운석+문+막대 (빈 줄 없음: 점프나 미끄러지기 중 하나)
+  //   (벽 줄이 있어서 옆으로만 피해서는 멀리 못 간다: 쉬움부터 상하좌우 네 방향을 다 쓴다)
   // starLine: 장애물 줄에 별 한 줄이 붙을 확률
   // item: first초 뒤 처음, 그 뒤 gap초마다 안전한 줄에 하나. w: 종류별 가중치 (heart 0이면 하트 아이템 없음)
+  // bh: 블랙홀 구간에서 옆으로 끌어당기기. every초마다(범위) warn초 동안 화살표로 알리고, 반대로 밀지 않으면 한 줄 끌려간다.
+  //     끌려갈 줄에 safe초 안에 닿는 장애물이 있으면 끌지 않는다 (안전한 줄 약속)
   const DIFFICULTY = {
     easy: {
       id: 'easy', name: '쉬움', desc: '천천히 · 하트 3개',
       hearts: 3, inv: 2.4,
-      speed: { base: 12, max: 20, warm: 20, ramp: 260 },
-      gap: { start: [2.0, 2.7], end: [1.45, 2.0] },
+      speed: { base: 13, max: 22, warm: 20, ramp: 220 },
+      gap: { start: [1.8, 2.4], end: [1.25, 1.7] },
       warmRows: [{ k: 'one', w: 5 }, { k: 'stars', w: 3 }],
       rows: {
-        start: { one: 6, two: 1, gate: 2, mg: 0, gg: 0, mover: 0, stars: 3 },
-        end:   { one: 4, two: 3, gate: 2, mg: 2, gg: 0, mover: 0, stars: 2 },
+        start: { one: 5, two: 1, gate: 2, bar: 2, mg: 0, mb: 0, gg: 0, bb: 0, gb: 0, g3: 1, b3: 1, mgb: 0, mover: 0, stars: 3 },
+        end:   { one: 3, two: 3, gate: 1.5, bar: 1.5, mg: 1.5, mb: 1.5, gg: 0.5, bb: 0.5, gb: 1, g3: 1.2, b3: 1.2, mgb: 0.6, mover: 0, stars: 2 },
       },
       starLine: 0.85,
       item: { first: 7, gap: [9, 14], w: { shield: 3, magnet: 3, boost: 2, heart: 1.5 } },
+      bh: { every: [4.5, 6.5], warn: 1.5, safe: 1.3, first: 2 },
     },
     normal: {
       id: 'normal', name: '보통', desc: '빠르게 · 하트 2개',
       hearts: 2, inv: 1.8,
-      speed: { base: 16, max: 33, warm: 4, ramp: 90 },
-      gap: { start: [1.3, 1.8], end: [0.8, 1.1] },
+      speed: { base: 17, max: 36, warm: 4, ramp: 75 },
+      gap: { start: [1.1, 1.5], end: [0.7, 0.92] },
       rows: {
-        start: { one: 4, two: 3, gate: 2, mg: 1, gg: 0, mover: 1, stars: 1 },
-        end:   { one: 2, two: 4, gate: 1, mg: 3, gg: 1, mover: 4, stars: 1 },
+        start: { one: 3, two: 3, gate: 1, bar: 1, mg: 1.5, mb: 1.5, gg: 0.5, bb: 0.5, gb: 1, g3: 1, b3: 1, mgb: 1, mover: 1.5, stars: 1 },
+        end:   { one: 1, two: 4, gate: 0.5, bar: 0.5, mg: 2, mb: 2, gg: 1, bb: 1, gb: 1.5, g3: 1, b3: 1, mgb: 2, mover: 4, stars: 1 },
       },
       starLine: 0.65,
       item: { first: 8, gap: [11, 17], w: { shield: 3, magnet: 3, boost: 2, heart: 0.8 } },
+      bh: { every: [3.2, 4.5], warn: 1.1, safe: 1.0, first: 1.5 },
     },
     hard: {
       id: 'hard', name: '어려움', desc: '아주 빠르게 · 하트 1개',
       hearts: 1, inv: 1.4,
-      speed: { base: 20, max: 38, warm: 0, ramp: 80 },
-      gap: { start: [1.0, 1.4], end: [0.72, 1.0] },
+      speed: { base: 21, max: 40, warm: 0, ramp: 70 },
+      gap: { start: [0.96, 1.33], end: [0.68, 0.92] },
       rows: {
-        start: { one: 3, two: 3, gate: 2, mg: 2, gg: 1, mover: 2, stars: 1 },
-        end:   { one: 2, two: 4, gate: 1, mg: 3, gg: 2, mover: 4, stars: 1 },
+        start: { one: 2, two: 3, gate: 1, bar: 1, mg: 2, mb: 2, gg: 1, bb: 1, gb: 1.5, g3: 1, b3: 1, mgb: 1, mover: 2, stars: 1 },
+        end:   { one: 2, two: 3, gate: 1, bar: 1, mg: 2, mb: 2, gg: 1, bb: 1, gb: 2, g3: 1, b3: 1, mgb: 2, mover: 4, stars: 1 },
       },
       starLine: 0.55,
       item: { first: 9, gap: [12, 18], w: { shield: 4, magnet: 2, boost: 2, heart: 0 } },
+      bh: { every: [2.4, 3.4], warn: 0.85, safe: 0.8, first: 1 },
     },
   };
   const DIFF_ORDER = ['easy', 'normal', 'hard'];
 
-  // ─── 우주 구역: 달린 거리(m)에 따라 하늘·행성·길 색이 바뀐다 (그리기 색은 render.js ZONE_ART) ───
+  // ─── 태양계 여행: 달린 거리(m)에 따라 행성을 차례로 지나간다 (그리기는 render.js PLANET_ART) ───
+  // leg m마다 다음 곳에 도착한다. 수성 → … → 명왕성(3,000m) → 은하 너머 → 다시 수성(2바퀴째)
+  // 기념 아치(250m마다)와 짝수 번째 도착(750·1,500·2,250·3,000m)이 겹쳐서 그 아치에는 행성 이름도 적힌다
+  // line: 도착할 때 이름 아래에 뜨는 한 줄 (아이 눈높이)
+  const ROUTE = { leg: 375 };
   const ZONES = [
-    { at: 0,    id: 'dusk',   name: '노을 우주' },
-    { at: 500,  id: 'ice',    name: '얼음 행성' },
-    { at: 1250, id: 'nebula', name: '초록 성운' },
-    { at: 2000, id: 'core',   name: '은하 중심' },
-  ];
+    { id: 'mercury', name: '수성',   line: '해가 엄청 커요! 태양과 가장 가까운 행성' },
+    { id: 'venus',   name: '금성',   line: '두꺼운 노란 구름이 빙글빙글' },
+    { id: 'earth',   name: '지구',   line: '우리 집! 파란 바다와 달이 보여요' },
+    { id: 'mars',    name: '화성',   line: '빨간 모래 행성, 하얀 얼음 모자' },
+    { id: 'jupiter', name: '목성',   line: '제일 큰 행성, 커다란 빨간 점' },
+    { id: 'saturn',  name: '토성',   line: '반짝이는 넓은 고리' },
+    { id: 'uranus',  name: '천왕성', line: '옆으로 누운 하늘색 행성' },
+    { id: 'neptune', name: '해왕성', line: '깊고 파란 바람의 행성' },
+    { id: 'pluto',   name: '명왕성', line: '작은 얼음 행성, 하트 무늬가 있어요' },
+    { id: 'beyond',  name: '은하 너머', line: '태양계 밖! 반짝이는 은하' },
+  ].map((z, i) => Object.assign(z, { at: i * ROUTE.leg }));   // at: 첫 바퀴에서 도착하는 거리
 
-  RN.DATA = {
+  // ─── 블랙홀 구간: 지구 다음 행성부터, 행성 구간마다 chance 확률로 한 번 (두 구간 연달아 없음, 처음 안내 중에는 없음) ───
+  // len m 동안 하늘이 블랙홀로 바뀌고 옆으로 끌어당긴다 (세기는 난이도의 bh). from: 이 번째 곳(0 수성)부터
+  // pad: 구간이 행성 구간 앞뒤 끝에서 떨어져 있는 거리(m)
+  const BLACKHOLE = { chance: 0.15, from: 3, len: [150, 250], pad: [50, 40], bonus: 30 };
+
+    RN.DATA = {
     // 규칙은 1/120초 칸으로 돈다 (60·90·120Hz 화면에서 결과가 같게)
     TICK: 1 / 120,
     LANES: 3,
 
-    DIFFICULTY, DIFF_ORDER, ZONES,
+    DIFFICULTY, DIFF_ORDER, ZONES, ROUTE, BLACKHOLE,
 
     // 앞쪽 이만큼(m)까지 물체를 미리 만들어 둔다 (지평선 끝). 뒤로 behind m 지나면 지운다
+    // actGap: 빈 줄이 없는 줄(벽) 다음 줄까지 적어도 이만큼(초) 띄운다 (점프·미끄러지기 뒤 숨 돌리기)
     VIEW: 90,
-    GEN: { behind: 4, minGap: 14 },
+    GEN: { behind: 4, minGap: 14, actGap: 0.85 },
 
     // 시작: 잠깐 READY 뒤 출발, 첫 줄은 firstRow m 앞
     START: { wait: 1.2, firstRow: 55 },
@@ -81,11 +106,14 @@
     // 우주선: 줄 바꾸기 시간(laneT초, 처음 빠르고 끝이 부드러운 곡선), 점프 높이(m)·체공 시간(초),
     // 착지 직전 점프 기억(초). 점프는 빨리 오르고 꼭대기에서 잠깐 머문다(arc: 1보다 작을수록 둥실)
     // 부딪힘 판정: 옆으로 hitW 줄 안, 앞뒤로 hitZ m 안
-    PLAYER: { laneT: 0.17, jumpH: 1.7, jumpT: 0.6, arc: 0.6, buffer: 0.15, hitW: 0.55, hitZ: 0.9 },
+    // 미끄러지기(아래로 밀기): slideT초 동안 바닥에 납작 붙는다. 떠 있을 때 누르면 dropV(초당 m)로 빠르게 내려와서 미끄러진다.
+    // 미끄러지는 중에 점프하면 바로 뛴다
+    PLAYER: { laneT: 0.17, jumpH: 1.7, jumpT: 0.6, arc: 0.6, buffer: 0.15, hitW: 0.55, hitZ: 0.9, slideT: 0.7, dropV: 14 },
 
-    // 장애물: 운석은 너무 커서 점프로 못 넘는다. 레이저 문은 gateH m보다 높이 뛰면 지나간다
+    // 장애물: 운석은 너무 커서 점프로 못 넘는다. 레이저 문(바닥)은 gateH m보다 높이 뛰면 지나간다.
+    // 위쪽 막대는 barLo~barHi m 높이에 떠 있어서 미끄러져야 밑으로 지나간다 (뛰면 머리를 콩)
     // 움직이는 운석: moverAt m 앞까지 오면 옆 줄로 moverSpeed(초당 줄)만큼 미끄러진다
-    OBST: { meteorR: 1.15, gateH: 0.6, moverAt: 40, moverSpeed: 1.6 },
+    OBST: { meteorR: 1.15, gateH: 0.6, barLo: 0.62, barHi: 1.15, moverAt: 40, moverSpeed: 1.6 },
 
     // 별: 하나에 value점. chainGap초 안에 이어 먹으면 소리가 한 계단씩 오른다
     // 한 줄을 모두 먹으면 "완벽!" perfect점
@@ -112,8 +140,8 @@
     // 방패가 깨졌을 때·부스트가 끝났을 때·불사조가 다시 살아났을 때 잠깐 깜빡이는 시간 (부딪힌 뒤 시간은 난이도의 inv)
     HIT: { shieldInv: 1.0, boostGrace: 1.0, revive: 2.5, get inv() { return DIFFICULTY.easy.inv; } },
 
-    // 처음 한 번만 나오는 안내: 옆으로 밀기 → 레이저 문이 오면 위로 밀기 (그동안 slow배로 느려진다).
-    // 안내용 레이저 문은 세 줄 모두 막지만 부딪혀도 하트를 잃지 않는다. tries번 놓치면 안내를 마친다
+    // 처음 한 번만 나오는 안내: 옆으로 밀기 → 레이저 문이 오면 위로 밀기 → 위쪽 막대가 오면 아래로 밀기 (그동안 slow배로 느려진다).
+    // 안내용 문·막대는 세 줄 모두 막지만 부딪혀도 하트를 잃지 않는다. 한 단계에서 tries번 놓치면 다음 단계로 (마지막이면 끝)
     TUTORIAL: { slow: 0.5, showSec: 2.4, tries: 3, laneSec: 2.5 },
 
     // 메달. check(run, rec): run = 이번 판 기록, rec = 평생 기록 (main.js가 판이 끝날 때·게임 중에 확인)
@@ -130,11 +158,14 @@
       { id: 'clean',   tier: 3, name: '무사고 비행', desc: '안 부딪히고 1,000m',           check: r => r.hits === 0 && r.blocks === 0 && r.dist >= 1000 },
       { id: 'normal',  tier: 2, name: '보통도 거뜬', desc: '보통이나 어려움으로 1,000m',   check: r => r.diff !== 'easy' && r.dist >= 1000 },
       { id: 'hard',    tier: 3, name: '어려움 정복', desc: '어려움으로 1,000m',            check: r => r.diff === 'hard' && r.dist >= 1000 },
-      { id: 'nebula',  tier: 2, name: '성운 탐험가', desc: '한 판에 초록 성운 도착',       check: r => r.zone >= 2 },
+      { id: 'nebula',  tier: 2, name: '화성 탐험가', desc: '한 판에 화성 도착',            check: r => r.zone >= 3 },   // 옛 이름 성운 탐험가 (id 그대로)
       { id: 'near10',  tier: 1, name: '아슬아슬',    desc: '한 판에 아슬아슬 10번',        check: r => r.nears >= 10 },
       { id: 'perfect5', tier: 1, name: '완벽한 별길', desc: '한 판에 별 한 줄 다 먹기 5번', check: r => r.perfects >= 5 },
       { id: 'games10', tier: 1, name: '단골 조종사', desc: '10판 하기',                    check: (r, R) => R.total.games >= 10 },
       { id: 'stars1k', tier: 2, name: '별 부자',     desc: '모두 합쳐 별 1,000개',         check: (r, R) => R.total.stars >= 1000 },
+      { id: 'pluto',   tier: 3, name: '명왕성 탐험가', desc: '한 판에 명왕성 도착 (3,000m)', check: r => r.zone >= 8 },
+      { id: 'bhole',   tier: 2, name: '블랙홀 탈출', desc: '블랙홀 구간을 끝까지 지나기',   check: r => r.bhs >= 1 },
+      { id: 'slide10', tier: 1, name: '쏙쏙 미끄럼', desc: '한 판에 위쪽 막대 10번 미끄러져 지나기', check: r => r.bars >= 10 },
     ],
 
     // 연출 (그리기 전용, 규칙에는 영향 없음). 부딪힘은 분명하지만 무섭지 않게: 흔들림·번쩍임은 작게
@@ -203,9 +234,9 @@
     { id: 'sheart',  give: 'heart',  icon: 'heart',  name: '하트 +1',     desc: '하트 하나 더 (쉬움·보통)', price: 100, max: 3, not: ['hard'] },
   ];
 
-  // 판이 끝날 때 받는 코인 = 거리 ÷ perDist + 별 ÷ perStar + 기념 아치 × perArch + 새 구역 × perZone,
+  // 판이 끝날 때 받는 코인 = 거리 ÷ perDist + 별 ÷ perStar + 기념 아치 × perArch + 도착한 행성 수 × perZone,
   // 난이도 배율(diffMul)을 곱하고, 그 뒤 별 코인 보너스 강화만큼 더. 보통 한 판(500~1,000m) 20~60개
-  const COINS = { perDist: 40, perStar: 4, perArch: 2, perZone: 10, diffMul: { easy: 1, normal: 1.2, hard: 1.5 } };
+  const COINS = { perDist: 40, perStar: 4, perArch: 2, perZone: 5, diffMul: { easy: 1, normal: 1.2, hard: 1.5 } };
 
   // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름
   const MISSIONS = [
@@ -220,10 +251,12 @@
     { id: 'r1000',  kind: 'run',  stat: 'dist',     goal: 1000, reward: 120, text: '한 판에 1,000m' },
     { id: 'rs80',   kind: 'run',  stat: 'stars',    goal: 80,   reward: 120, text: '한 판에 별 80개' },
     { id: 'rg8',    kind: 'run',  stat: 'gates',    goal: 8,    reward: 100, text: '한 판에 레이저 문 8번' },
-    { id: 'rice',   kind: 'run',  stat: 'zone',     goal: 1,    reward: 90,  text: '한 판에 얼음 행성 도착' },
-    { id: 'rneb',   kind: 'run',  stat: 'zone',     goal: 2,    reward: 180, text: '한 판에 초록 성운 도착' },
+    { id: 'rice',   kind: 'run',  stat: 'zone',     goal: 2,    reward: 90,  text: '한 판에 지구 도착' },
+    { id: 'rneb',   kind: 'run',  stat: 'zone',     goal: 4,    reward: 180, text: '한 판에 목성 도착' },
     { id: 'rclean', kind: 'run',  stat: 'clean',    goal: 600,  reward: 150, text: '한 판에 안 부딪히고 600m' },
     { id: 'rnm5',   kind: 'run',  stat: 'nears',    goal: 5,    reward: 100, text: '한 판에 아슬아슬 5번' },
+    { id: 'br20',   kind: 'life', stat: 'bars',     goal: 20,   reward: 100, text: '위쪽 막대 20번 미끄러져 지나기 (누적)' },
+    { id: 'rsl10',  kind: 'run',  stat: 'slides',   goal: 10,   reward: 100, text: '한 판에 미끄러지기 10번' },
   ];
   const MISSION_SLOTS = 3;
 
