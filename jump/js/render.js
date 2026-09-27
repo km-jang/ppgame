@@ -1878,7 +1878,7 @@
     const fs = Math.round(Math.max(18, Math.min(30, v.cw * 0.058)));
     if (T && (!T.done || W.t - T.at < 1.6)) {
       let lines, a = 1;
-      if (T.done) { lines = [['잘했어요!', '#ffe66d'], ['이제 위로 위로!', '#bff8ff']]; a = Math.min(1, (1.6 - (W.t - T.at)) * 2); }
+      if (T.done) { lines = [['잘했어요!', '#ffe66d'], [v.touch ? '손가락으로 밀어도 돼요' : '이제 위로 위로!', '#bff8ff']]; a = Math.min(1, (1.6 - (W.t - T.at)) * 2); }
       else if (!T.left) lines = v.touch ? [['화면 왼쪽을 누르면', '#ffe66d'], ['왼쪽으로 가요', '#bff8ff']] : [['← 키를 누르면', '#ffe66d'], ['왼쪽으로 가요', '#bff8ff']];
       else lines = v.touch ? [['이번엔 화면 오른쪽!', '#ffe66d'], ['오른쪽으로 가요', '#bff8ff']] : [['이번엔 → 키!', '#ffe66d'], ['오른쪽으로 가요', '#bff8ff']];
       // 뒤에 어두운 판을 깔아 어느 배경에서도 잘 보이게
@@ -1897,7 +1897,7 @@
     if (a <= 0) return;
     ctx.globalAlpha = a;
     ctx.font = fs + 'px ' + DISP;
-    const lines = v.touch ? ['왼쪽·오른쪽을', '누르고 있으면 움직여요'] : ['← → 방향키로', '움직여요'];
+    const lines = v.touch ? ['왼쪽·오른쪽을 누르거나', '손가락으로 밀어 움직여요'] : ['← → 방향키로', '움직여요'];
     lines.forEach((t, i) => outlined(ctx, t, cx, cy + i * fs * 1.35, i ? '#bff8ff' : '#ffe66d'));
     if (!W.L.rescues) {
       ctx.font = Math.round(fs * 0.8) + 'px ' + DISP;

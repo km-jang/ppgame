@@ -258,6 +258,19 @@ async function until(page, fn, arg, ms) {
     assert(moved, '캐릭터가 안 움직임');
     assert(await until(J, () => JP.debug.world.input.dir === 0, null, 2000), '손을 뗐는데 계속 움직임');
   });
+  await test('손가락으로 옆으로 밀면 주인공이 따라가고, 손가락을 멈추면 주인공도 멈춘다', async () => {
+    const cdp = await J.context().newCDPSession(J);
+    const x0 = await J.evaluate(() => JP.debug.world.p.x);
+    const pt = x => [{ x, y: 520, id: 7 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(560) });
+    for (let i = 1; i <= 8; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(560 + i * 15) }); await J.waitForTimeout(16); }
+    assert(await until(J, () => JP.debug.world.input.dir > 0, null, 2000), '오른쪽으로 밀었는데 오른쪽으로 안 감');
+    // 손가락을 멈춘 채 누르고 있으면 곧 멈춘다 (누르기 방식이면 왼쪽 절반이라 왼쪽으로 갔을 것)
+    assert(await until(J, () => JP.debug.world.input.dir === 0, null, 2000), '손가락을 멈췄는데 계속 움직임');
+    const moved = await J.evaluate(x => { const WW = 400; let d = JP.debug.world.p.x - x; if (d < -WW / 2) d += WW; return d; }, x0);
+    assert(moved > 40 && moved < 200, '따라간 거리가 이상함: ' + moved.toFixed(1));
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  });
   await test('쉬움: 떨어지면 구조 구름이 3번 살려 주고, 그다음 떨어지면 게임 오버 → 다시 하기', async () => {
     await J.evaluate(() => { JP.debug.setEasy(true); JP.debug.newGame(5, { easy: true }); JP.debug.autopilot(false); });
     // 발판을 계속 치워 떨어지게 한다

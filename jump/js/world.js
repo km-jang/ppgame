@@ -575,10 +575,12 @@
       if (m.float) m.y = m.y0 + Math.sin(W.t * 2.2 + m.id) * m.float;
     }
 
-    // 좌우: 누르는 쪽으로 빠르게 붙고, 떼면 곧 멈춘다
-    const dir = W.input.dir > 0 ? 1 : W.input.dir < 0 ? -1 : 0;
+    // 좌우: 누르는 쪽으로 빠르게 붙고, 떼면 곧 멈춘다.
+    // input.dir은 -1 ~ 1: 버튼·키보드는 ±1, 손가락으로 끌면 그 사이 값(조금 끌면 천천히)
+    const dv = Math.max(-1, Math.min(1, +W.input.dir || 0));
+    const dir = dv > 0 ? 1 : dv < 0 ? -1 : 0;
     const C = W.ctl;
-    const target = dir * C.maxVx;
+    const target = dv * C.maxVx;
     const a = (dir === 0 || Math.sign(target) !== Math.sign(P.vx) && P.vx !== 0 ? C.decel : 0) + (dir ? C.accel : 0);
     if (P.vx < target) P.vx = Math.min(target, P.vx + a * H); else if (P.vx > target) P.vx = Math.max(target, P.vx - a * H);
     if (dir) P.face = dir;

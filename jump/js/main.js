@@ -551,7 +551,7 @@
     } else if (W) {
       fit(W);
       if (mode === 'play') {
-        W.input.dir = auto ? JP.World.botDir(W) : input.dir();
+        W.input.dir = auto ? JP.World.botDir(W) : input.dir(W, view);
         JP.World.step(W, dt);
         drainEvents(W, true);
         // 게임 중에 딸 수 있는 메달은 바로 알려 준다

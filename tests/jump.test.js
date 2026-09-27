@@ -38,6 +38,7 @@ function plat(W, kind, x, y, w) {
   return p;
 }
 // 주인공을 (x, y)에 두고 속도를 준다
+function W0ctl() { return empty().ctl; }
 function put(W, x, y, vy) { const P = W.p; P.x = P.px = x; P.y = P.py = y; P.vx = 0; P.vy = vy || 0; }
 function ticks(W, n) { for (let i = 0; i < n && W.phase === 'play'; i++) tick(W); }
 // 주인공을 화면 가운데 공중에 붙잡아 두고 n칸 돌린다 (발판만 지켜볼 때)
@@ -125,6 +126,16 @@ test('처음 상태: 바닥 위에서 시작, 점수 0, 발판이 위로 넉넉�
   assert(!X.easy && X.diff === 'hard' && X.rescues === 0, 'diff hard');
   assert(create(1, { diff: 'hard', easy: true }).diff === 'hard', 'diff wins over easy');
   assert(create(1, { diff: 'nope' }).diff === 'normal', 'unknown diff falls back');
+});
+
+test('손가락 끌기: 방향 값이 1보다 작으면 그만큼 천천히, 1을 넘으면 1로 친다', () => {
+  const speed = d => { const W = empty(); put(W, 100, 300, 0); W.input.dir = d; ticks(W, 60); return W.p.vx; };
+  const full = speed(1), half = speed(0.5), over = speed(3);
+  assert(Math.abs(full - W0ctl().maxVx) < 1, '최고 속도 ' + full);
+  assert(Math.abs(half - full / 2) < 1, '절반 속도 ' + half);
+  assert(Math.abs(over - full) < 1, '1을 넘으면 1 ' + over);
+  assert(Math.abs(speed(-0.25) + full / 4) < 1, '왼쪽 4분의 1');
+  assert(D.DRAG.start > 0 && D.DRAG.gain > 0 && D.DRAG.full > 0 && D.DRAG.max <= 1, 'DRAG 수치');
 });
 
 test('발판에 내려앉으면 위로 튄다', () => {
