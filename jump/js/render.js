@@ -1819,7 +1819,7 @@
     ctx.textBaseline = 'alphabetic';
   }
 
-  // 누르는 자리 안내: 양옆 큰 화살표. 누르고 있는 쪽이 밝아진다
+  // 누르는 자리 안내: 양옆 아래 작은 화살표 (D.PAD). 누르고 있는 쪽이 밝아진다
   function drawControls(ctx, W, v) {
     const I = v.pad, side = I ? I.side : 0;
     const T = W.tut && !W.tut.done ? W.tut : null;
@@ -1828,12 +1828,11 @@
     if (!show) return;
     const pulse = W.t < D.HINT_TIME && !v.calm ? 0.12 + Math.sin(W.t * 5) * 0.08 : 0;
     let size, lx, rx, y;
+    size = Math.min(D.PAD.max, D.PAD.size * Math.max(1, v.ui * 0.9));
     if (v.side) {
-      size = Math.min(70, v.cx * 0.28) * Math.max(1, v.ui * 0.9);
-      lx = v.cx / 2; rx = v.cx + v.cw + (v.w - v.cx - v.cw) / 2; y = v.h * 0.72;
+      lx = v.cx / 2; rx = v.cx + v.cw + (v.w - v.cx - v.cw) / 2; y = v.h - size * 2.4;
     } else {
-      size = Math.max(26, Math.min(44, v.cw * 0.07));
-      lx = v.cx + size * 1.2; rx = v.cx + v.cw - size * 1.2; y = v.cy + v.ch - size * 1.8;
+      lx = v.cx + size * 1.6; rx = v.cx + v.cw - size * 1.6; y = v.cy + v.ch - size * 1.8;
     }
     for (const d of [-1, 1]) {
       const on = side === d, x = d < 0 ? lx : rx, ask = want === d;
@@ -1852,7 +1851,7 @@
       ctx.beginPath(); ctx.arc(x, y, size, 0, TAU); ctx.fill();
       ctx.strokeStyle = ask ? '#ffe66d' : on ? '#bff8ff' : '#5ee7ff'; ctx.lineWidth = Math.max(2, size * 0.06);
       ctx.stroke();
-      ctx.strokeStyle = on ? '#ffffff' : '#bff8ff'; ctx.lineWidth = Math.max(3, size * 0.14); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.strokeStyle = on ? '#ffffff' : '#bff8ff'; ctx.lineWidth = Math.max(2, size * 0.14); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       const k = size * 0.32;
       for (const off of [-0.18, 0.2]) {
         const cx = x + d * size * off;
