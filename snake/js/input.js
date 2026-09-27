@@ -1,5 +1,5 @@
 'use strict';
-// 키보드·조이스틱(밀기 포함) 입력을 방향('up' 'down' 'left' 'right')으로 바꾼다.
+// 키보드·밀기(스와이프) 입력을 방향('up' 'down' 'left' 'right')으로 바꾼다.
 // 방향이 정해지면 onDir(dir), 그 밖의 키는 onKey(code)로 알린다 (main.js가 채운다).
 (function (SN) {
   const KEY_DIR = {
@@ -18,48 +18,49 @@
       else if (S.onKey) S.onKey(e.code);
     });
 
-    // 조이스틱 (N-GUN처럼 화면 안에 작게): 스틱 근처를 누르면 스틱 자리에서, 멀리 누르면 누른 자리에서 시작.
-    // 손잡이를 기준 거리 이상 밀면 큰 축 방향으로 꺾는다. 반경 밖으로 끌면 받침이 따라와서
-    // 반대로 틀 때 가운데까지 되돌아갈 필요가 없다. 빠르게 밀기(스와이프)도 그대로 된다.
-    // 스틱 모양은 render.js가 S.stick·S.home·S.radius를 읽어 그린다
-    S.home = { x: 0, y: 0 }; S.radius = 50; S.stick = null;
+    // 밀기(스와이프): 화면 아무 데서나 손가락으로 밀면 민 방향으로 꺾는다 (조이스틱은 없다, 2026-09-27 소유자 결정).
+    // 기준 거리만큼 움직일 때마다 그 자리를 새 기준으로 삼아, 손을 떼지 않고 ㄱ자로 밀어도 두 번 꺾인다.
+    // 아주 빠르게 튕기듯 밀어 움직임 신호가 모자라도 손을 뗄 때 한 번 더 살핀다.
+    // 그리기: render.js가 S.swipe(민 자리 화살표)를 읽는다
+    S.swipe = null;
     const ptrs = new Map();
     function local(e) { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    const axis = (dx, dy) => Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    function fire(s, dir, x, y, touch) {
+      if (dir === s.last) return; // 같은 방향으로 계속 미는 건 한 번만
+      s.last = dir; s.turned = true;
+      S.swipe = { dir, x, y, t: performance.now() };
+      if (S.onDir) S.onDir(dir, touch);
+    }
     el.addEventListener('pointerdown', e => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       S.used = S.used || e.pointerType !== 'mouse';
-      const p = local(e), R = S.radius, h = S.home;
-      const s = { ox: p.x, oy: p.y, kx: p.x, ky: p.y, last: null };
-      if (e.pointerType !== 'mouse' && Math.hypot(p.x - h.x, p.y - h.y) < R * 1.8) { s.ox = h.x; s.oy = h.y; }
-      ptrs.set(e.pointerId, s);
-      if (e.pointerType !== 'mouse') S.stick = s;
+      const p = local(e);
+      ptrs.set(e.pointerId, { ox: p.x, oy: p.y, sx: p.x, sy: p.y, last: null, turned: false, touch: e.pointerType !== 'mouse' });
       try { el.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
-      knob(s, p.x, p.y);
     });
-    function knob(s, x, y) {
-      const R = S.radius;
-      let dx = x - s.ox, dy = y - s.oy;
-      const d = Math.hypot(dx, dy);
-      if (d > R) { s.ox = x - dx / d * R; s.oy = y - dy / d * R; dx = dx / d * R; dy = dy / d * R; }
-      s.kx = s.ox + dx; s.ky = s.oy + dy;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < Math.min(S.threshold, R * 0.45)) return;
-      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-      if (dir === s.last) return; // 같은 방향으로 계속 미는 건 한 번만
-      s.last = dir;
-      if (S.onDir) S.onDir(dir);
-    }
     el.addEventListener('pointermove', e => {
       const s = ptrs.get(e.pointerId);
       if (!s) return;
-      const p = local(e);
-      knob(s, p.x, p.y);
+      const p = local(e), dx = p.x - s.ox, dy = p.y - s.oy;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < S.threshold) return;
+      s.ox = p.x; s.oy = p.y;
+      fire(s, axis(dx, dy), p.x, p.y, s.touch);
     });
-    const end = e => { const s = ptrs.get(e.pointerId); if (s && S.stick === s) S.stick = null; ptrs.delete(e.pointerId); };
+    const end = e => {
+      const s = ptrs.get(e.pointerId);
+      if (s && !s.turned) {
+        // 빠른 튕기기: 누른 자리에서 뗀 자리까지가 기준의 절반 이상이면 꺾는다
+        const p = local(e), dx = p.x - s.sx, dy = p.y - s.sy;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) >= S.threshold * 0.5) fire(s, axis(dx, dy), p.x, p.y, s.touch);
+      }
+      ptrs.delete(e.pointerId);
+    };
     el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
+    el.addEventListener('pointercancel', e => ptrs.delete(e.pointerId));
     el.addEventListener('contextmenu', e => e.preventDefault());
 
-    S.reset = () => { ptrs.clear(); S.stick = null; };
+    S.reset = () => { ptrs.clear(); S.swipe = null; };
     return S;
   }
 

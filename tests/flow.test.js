@@ -386,21 +386,42 @@ async function takeGift(page) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     assert(await until(Z, () => SN.debug.world.dir === 'down' || SN.debug.world.queue.includes('down')), '아래로 밀었는데 안 바뀜');
   });
-  await test('쉬움(기본): 화면 안 작은 조이스틱을 밀면 출발·방향 전환, 판은 거의 화면 가득, 판 끝을 넘으면 반대편', async () => {
+  await test('밀기: ㄱ자로 밀면 두 번 꺾이고 민 자리에 화살표가 뜬다', async () => {
+    await Z.evaluate(() => { SN.debug.setEasy(false); SN.debug.newGame(6, { mode: 'endless' }); });
+    await Z.waitForTimeout(200);
+    const cdp = await Z.context().newCDPSession(Z);
+    const pt = (x, y) => [{ x, y, id: 3 }];
+    const t0 = await Z.evaluate(() => SN.debug.world.turns);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(400, 300) });
+    for (let i = 1; i <= 3; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(400, 300 + i * 15) });
+    assert(await Z.evaluate(() => !!SN.debug.pad.swipe && SN.debug.pad.swipe.dir === 'down'), '민 자리에 화살표가 안 뜸');
+    for (let i = 1; i <= 3; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(400 - i * 15, 345) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert(await until(Z, t => SN.debug.world.turns - t >= 2 || SN.debug.world.phase === 'over', t0, 3000), 'ㄱ자 밀기에서 두 번 안 꺾임');
+  });
+  await test('밀기: 아주 짧게 튕기듯 밀어도 뗄 때 꺾인다', async () => {
+    await Z.evaluate(() => { SN.debug.setEasy(false); SN.debug.newGame(7, { mode: 'endless' }); });
+    await Z.waitForTimeout(200);
+    const cdp = await Z.context().newCDPSession(Z);
+    const th = await Z.evaluate(() => SN.debug.pad.threshold);
+    const pt = (x, y) => [{ x, y, id: 4 }];
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(500, 300) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(500, 300 - th * 0.7) });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert(await until(Z, () => SN.debug.world.dir === 'up' || SN.debug.world.queue.includes('up')), '짧은 튕기기를 못 알아들음');
+  });
+  await test('쉬움(기본): 조이스틱·버튼 없이 판이 화면 가득, 화면을 밀면 출발·방향 전환, 판 끝을 넘으면 반대편', async () => {
     await Z.evaluate(() => { SN.debug.setEasy(true); SN.debug.newGame(8, { mode: 'endless' }); });
     await Z.waitForTimeout(300);
-    const st = await Z.evaluate(() => { const P = SN.debug.pad, v = SN.debug.view; return { x: P.home.x, y: P.home.y, r: P.radius, w: innerWidth, h: innerHeight, bw: v.bw }; });
-    assert(st.r >= 40 && st.r <= 62 && st.x + st.r <= st.w && st.y + st.r <= st.h, '조이스틱 크기·위치 ' + JSON.stringify(st));
-    assert(st.bw >= st.w * 0.85, '판이 버튼 자리만큼 줄어듦 ' + st.bw + '/' + st.w);
+    const st = await Z.evaluate(() => ({ w: innerWidth, bw: SN.debug.view.bw, pad: !!document.getElementById('dpad') }));
+    assert(st.bw >= st.w * 0.85 && !st.pad, '판이 줄어들었거나 버튼이 남음 ' + JSON.stringify(st));
     assert(await Z.evaluate(() => SN.debug.world.wait > 0 && SN.debug.world.ticks === 0), '누르기 전에 출발함');
     const cdp = await Z.context().newCDPSession(Z);
     const pt = (x, y) => [{ x, y, id: 2 }];
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(st.x, st.y) });
-    for (let i = 1; i <= 5; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(st.x, st.y + i * st.r * 0.2) });
-    assert(await until(Z, () => SN.debug.pad.stick && SN.debug.pad.stick.ky > SN.debug.pad.stick.oy), '손잡이가 안 움직임');
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(900, 300) });
+    for (let i = 1; i <= 4; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(900, 300 + i * 15) });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    assert(await until(Z, () => SN.debug.world.dir === 'down' && SN.debug.world.ticks > 0), '조이스틱으로 출발·방향 전환 안 됨');
-    assert(await Z.evaluate(() => !SN.debug.pad.stick), '손을 떼도 손잡이가 남음');
+    assert(await until(Z, () => SN.debug.world.dir === 'down' && SN.debug.world.ticks > 0), '밀어서 출발·방향 전환 안 됨');
     await Z.evaluate(() => { const W = SN.debug.world; W.snake = W.snake.map((p, i) => ({ x: W.cols - 1 - i, y: 3 })); W.prev = W.snake.slice(); W.dir = 'right'; W.queue.length = 0; W.item = null; W.itemT = 99; });
     assert(await until(Z, () => SN.debug.world.snake[0].x < 3 && SN.debug.mode === 'play', null, 4000), '쉬움에서 판 끝을 넘지 못함');
   });
