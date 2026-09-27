@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#07080d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <meta name="description" content="발판을 밟고 통통 튀어 하늘 높이 올라가는 네온 점프 게임">
+  <title>통통 점프</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Rajdhani:wght@600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game" aria-label="게임 화면"></canvas>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1.2"/><rect x="14" y="4.5" width="4" height="15" rx="1.2"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9h3l5-4v14l-5-4H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zm12.5-1.9a1 1 0 0 1 1.4 0 7 7 0 0 1 0 9.8 1 1 0 1 1-1.4-1.4 5 5 0 0 0 0-7 1 1 0 0 1 0-1.4z"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9h3l5-4v14l-5-4H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1zm11.3.3a1 1 0 0 1 1.4 0L18.5 11l1.8-1.7a1 1 0 1 1 1.4 1.4L19.9 12.5l1.8 1.8a1 1 0 0 1-1.4 1.4l-1.8-1.8-1.8 1.8a1 1 0 0 1-1.4-1.4l1.8-1.8-1.8-1.8a1 1 0 0 1 0-1.4z"/></symbol>
+    <symbol id="i-fs" viewBox="0 0 24 24"><path d="M4 9V4h5v2H6v3zm11-5h5v5h-2V6h-3zM4 15h2v3h3v2H4zm14 3v-3h2v5h-5v-2z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z"/></symbol>
+    <symbol id="i-again" viewBox="0 0 24 24"><path d="M12 4V1.5a.5.5 0 0 0-.8-.4L6.6 4.6a.5.5 0 0 0 0 .8l4.6 3.5a.5.5 0 0 0 .8-.4V6a6 6 0 1 1-6 6 1 1 0 1 0-2 0 8 8 0 1 0 8-8z"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 15v3h3v3H8v-3h3v-3a5 5 0 0 1-3.7-3H7a4 4 0 0 1-4-4V6a1 1 0 0 1 1-1h3zm10 4v3a2 2 0 0 0 2-2V7zM5 7v1a2 2 0 0 0 2 2V7z"/></symbol>
+    <symbol id="i-lr" viewBox="0 0 24 24"><path d="M9 6 3 12l6 6v-4h2v-4H9zm6 0v4h-2v4h2v4l6-6z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/></symbol>
+    <symbol id="i-spring" viewBox="0 0 24 24"><path d="M4 19h16v3H4zM7 4h10v3H7zm1 5 8 2-8 2 8 2-1 2-9-2.2v-1.6L12 12 6 10.6V9z"/></symbol>
+    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M12 1c3 2.4 4.5 6 4.3 10.6l2.7 3.4v4l-3.6-2.2H8.6L5 19v-4l2.7-3.4C7.5 7 9 3.4 12 1zm0 6.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM10 19h4l-2 4z"/></symbol>
+    <symbol id="i-mine" viewBox="0 0 24 24"><path d="M12 1l1.6 4.1 4-1.9-1.4 4.2 4.3 1-3.4 2.8 3.4 2.8-4.3 1 1.4 4.2-4-1.9L12 23l-1.6-4.1-4 1.9 1.4-4.2-4.3-1 3.4-2.8-3.4-2.8 4.3-1-1.4-4.2 4 1.9z"/></symbol>
+    <symbol id="i-medal" viewBox="0 0 24 24"><path d="M7 2h4l1 4 1-4h4l-3 7.2A6 6 0 1 1 10 9.2zm5 9a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 1.6 1 2 2.2.3-1.6 1.5.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.5 2.2-.3z"/></symbol>
+  </svg>
+
+  <div id="topbar">
+    <button id="btn-pause" class="icon-btn" aria-label="일시정지"><svg class="i" aria-hidden="true"><use href="#i-pause"/></svg></button>
+    <button id="btn-mute" class="icon-btn" aria-label="소리 켜기/끄기"><svg class="i on" aria-hidden="true"><use href="#i-sound"/></svg><svg class="i off" aria-hidden="true"><use href="#i-mute"/></svg></button>
+    <button id="btn-fs" class="icon-btn" aria-label="전체 화면"><svg class="i" aria-hidden="true"><use href="#i-fs"/></svg></button>
+  </div>
+  <div id="toast" role="status"></div>
+
+  <!-- 시작 화면 -->
+  <section id="scr-title" class="screen">
+    <div class="panel">
+      <h1 class="logo ko">통통 <span>점프</span></h1>
+      <p class="tagline">발판을 밟고 하늘 높이 올라가요</p>
+      <p id="best" class="best"></p>
+      <div class="level-seg" role="group" aria-label="난이도">
+        <button type="button" data-easy="1" aria-pressed="true"><b>쉬움</b><small>구조 구름 3번 · 폭탄 없음</small></button>
+        <button type="button" data-easy="0" aria-pressed="false"><b>보통</b><small>가시 폭탄 · 떨어지면 끝</small></button>
+      </div>
+      <div class="modes">
+        <button id="btn-start" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>시작하기</span> <kbd class="only-pc">Enter</kbd></button>
+        <button id="btn-medals" class="mini-btn"><svg class="i" aria-hidden="true"><use href="#i-medal"/></svg><span>메달·기록 <b id="medal-count">0/0</b></span></button>
+      </div>
+      <ul class="help">
+        <li><svg class="i" aria-hidden="true"><use href="#i-lr"/></svg><span><b class="only-touch">화면 왼쪽·오른쪽을 누르고</b><b class="only-pc">← → 방향키로</b> 움직여요</span></li>
+        <li><svg class="i gold" aria-hidden="true"><use href="#i-star"/></svg><span><b>별</b> 모으면 점수가 쑥쑥</span></li>
+        <li><svg class="i green" aria-hidden="true"><use href="#i-spring"/></svg><span><b>스프링</b> 아주 높이 통! · <b class="orange">금 간 발판</b>은 한 번만</span></li>
+        <li><svg class="i orange" aria-hidden="true"><use href="#i-rocket"/></svg><span><b>로켓 · 방패 방울</b> 모두 좋은 것</span></li>
+        <li><svg class="i red" aria-hidden="true"><use href="#i-mine"/></svg><span><b class="danger">위험! 피해요</b> 빨간 가시 폭탄 (보통)</span></li>
+      </ul>
+      <p class="pc-line only-pc">PC: <kbd>P</kbd> 일시정지 · <kbd>M</kbd> 소리</p>
+    </div>
+  </section>
+
+  <!-- 메달 · 기록 -->
+  <section id="scr-medals" class="screen">
+    <div class="panel wide">
+      <h2>메달 · 기록</h2>
+      <p class="sub" id="medal-sub"></p>
+      <div id="medal-list"></div>
+      <dl id="record-list" class="records"></dl>
+      <button id="btn-medals-back" class="big-btn"><span>닫기</span></button>
+    </div>
+  </section>
+
+  <!-- 일시정지 -->
+  <section id="scr-pause" class="screen">
+    <div class="panel">
+      <h2>일시정지</h2>
+      <p class="sub">숨 고르고 다시 튀어 올라요</p>
+      <button id="btn-resume" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>계속하기</span></button>
+      <button id="btn-quit" class="text-btn">처음 화면으로</button>
+    </div>
+  </section>
+
+  <!-- 게임 오버 -->
+  <section id="scr-over" class="screen">
+    <div class="panel">
+      <h2 id="over-title">아래로 떨어졌다</h2>
+      <p id="over-sub" class="sub over-sub"></p>
+      <p class="score-big"><span id="over-score">0</span><small>점</small></p>
+      <p id="over-new" class="new-best"><svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg> 최고 점수 경신</p>
+      <dl class="stats">
+        <div><dt>높이</dt><dd id="over-height">0m</dd></div>
+        <div><dt>별</dt><dd id="over-stars">0</dd></div>
+        <div><dt>시간</dt><dd id="over-time">0:00</dd></div>
+      </dl>
+      <div id="over-records" class="chips"></div>
+      <div id="over-medals" class="new-medals"></div>
+      <button id="btn-retry" class="big-btn"><svg class="i" aria-hidden="true"><use href="#i-again"/></svg><span>다시 하기</span> <kbd class="only-pc">Enter</kbd></button>
+      <button id="btn-home" class="text-btn">처음 화면으로</button>
+    </div>
+  </section>
+
+  <script src="js/util.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

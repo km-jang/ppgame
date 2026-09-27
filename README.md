@@ -4,9 +4,11 @@
 |---|---|
 | [`game/`](game/) | **뿅뿅 우주선** (옛 이름 N-GUN) · 대포가 늘어나는 우주선 슈팅 (아래 설명) |
 | [`snake/`](snake/) | **냠냠 뱀** (옛 이름 N-SNAKE) · 화면을 밀어 구슬을 먹는 뱀 게임 ([기획서](snake/PLAN.md)) |
+| [`jump/`](jump/) | **통통 점프** · 발판을 통통 밟고 위로 ([기획서](jump/PLAN.md)) |
+| [`runner/`](runner/) | **슝슝 우주 달리기** · 줄을 바꿔 운석을 피하는 우주 달리기 ([기획서](runner/PLAN.md)) |
 | [`archive/robocar/`](archive/robocar/) | **뚝딱 로봇카** · 보류 (2026-09-27). 첫 화면에서 뺐고, 코드와 테스트는 그대로 보관 |
 
-저장소 첫 화면(`index.html`)에서 둘 중 하나를 고른다.
+저장소 첫 화면(`index.html`)에서 네 게임 중 하나를 고른다.
 
 ## 뿅뿅 우주선 (`game/`)
 
@@ -36,7 +38,9 @@
 ```
 node tests/sim.test.js       # 뿅뿅 우주선 규칙
 node tests/snake.test.js     # 냠냠 뱀 규칙
-node tests/flow.test.js      # 두 게임 화면 흐름 (Playwright 크로미움, 없으면 건너뜀)
+node tests/jump.test.js      # 통통 점프 규칙
+node tests/runner.test.js    # 슝슝 우주 달리기 규칙
+node tests/flow.test.js      # 네 게임 화면 흐름 (Playwright 크로미움, 없으면 건너뜀)
 # 보류 중인 뚝딱 로봇카: node archive/robocar/tests/robocar.test.js · park.test.js · flow.test.js
 ```
 

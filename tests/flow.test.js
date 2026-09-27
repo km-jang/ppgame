@@ -199,6 +199,36 @@ async function until(page, fn, arg, ms) {
   await test('N-SNAKE 콘솔 오류 없음', async () => { assert(!sn.errors.length, sn.errors.join(' | ')); });
   await sn.ctx.close();
 
+  console.log('통통 점프');
+  const jp = await open(browser, ROOT + '/jump/index.html');
+  const J = jp.page;
+  await test('시작 → 통통 뛰고, 화면 오른쪽을 누르고 있으면 오른쪽으로 간다', async () => {
+    assert(await on(J, 'scr-title'), '시작 화면 아님');
+    await J.tap('#btn-start');
+    assert(await until(J, () => JP.debug.mode === 'play'), '게임이 시작 안 됨');
+    const cdp = await J.context().newCDPSession(J);
+    const x0 = await J.evaluate(() => JP.debug.world.p.x);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 1180, y: 500, id: 6 }] });
+    assert(await until(J, () => JP.debug.world.input.dir === 1, null, 2000), '오른쪽을 눌렀는데 방향이 안 잡힘');
+    await J.waitForTimeout(300);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    const moved = await J.evaluate(x => { const d = JP.debug.world.p.x - x; return d !== 0; }, x0);
+    assert(moved, '캐릭터가 안 움직임');
+    assert(await until(J, () => JP.debug.world.input.dir === 0, null, 2000), '손을 뗐는데 계속 움직임');
+  });
+  await test('쉬움: 떨어지면 구조 구름이 3번 살려 주고, 그다음 떨어지면 게임 오버 → 다시 하기', async () => {
+    await J.evaluate(() => { JP.debug.setEasy(true); JP.debug.newGame(5, { easy: true }); JP.debug.autopilot(false); });
+    // 발판을 계속 치워 떨어지게 한다
+    assert(await until(J, () => { const W = JP.debug.world; W.plats.length = 0; return W.rescued >= 3 || JP.debug.mode === 'over'; }, null, 30000), '구조 구름이 3번 안 나옴');
+    assert(await until(J, () => { const W = JP.debug.world; W.plats.length = 0; return JP.debug.mode === 'over'; }, null, 20000), '게임 오버 안 됨');
+    assert(await J.evaluate(() => JP.debug.world.rescued === 3), '구조 횟수가 3이 아님');
+    assert(await until(J, () => document.getElementById('scr-over').classList.contains('on'), null, 4000), '게임 오버 화면 안 나옴');
+    await J.tap('#btn-retry');
+    assert(await until(J, () => JP.debug.mode === 'play'), '다시 하기 안 됨');
+  });
+  await test('통통 점프 콘솔 오류 없음', async () => { assert(!jp.errors.length, jp.errors.join(' | ')); });
+  await jp.ctx.close();
+
   console.log('슝슝 우주 달리기');
   const rn = await open(browser, ROOT + '/runner/index.html');
   const U = rn.page;
