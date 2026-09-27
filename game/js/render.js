@@ -638,7 +638,7 @@
     ctx.globalAlpha = 1;
   }
 
-  const NUM = '"Rajdhani", system-ui, sans-serif', DISP = '"Black Han Sans", system-ui, sans-serif';
+  const NUM = '"Rajdhani", system-ui, sans-serif', DISP = '"Jua", system-ui, sans-serif';
   // 켜져 있는 아이템 효과: 게이지 아래 작은 칸을 세로로 (방패 · 과열 남은 초 · 자석 남은 초, 남은 시간 막대)
   function drawEffectChips(ctx, W, x, y, s) {
     const p = W.player, I = D.ITEMS;

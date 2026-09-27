@@ -4,7 +4,7 @@
 (function (SN) {
   const TAU = Math.PI * 2;
   const D = SN.DATA;
-  const NUM = '"Rajdhani", system-ui, sans-serif', DISP = '"Black Han Sans", system-ui, sans-serif';
+  const NUM = '"Rajdhani", system-ui, sans-serif', DISP = '"Jua", system-ui, sans-serif';
 
   // 판 배치: 위쪽 HUD 줄(top) 아래 남는 자리에 판을 가운데 맞춰 넣는다. 칸은 정수 픽셀
   // right·bottom: 방향 버튼 자리만큼 비운다 (판이 버튼 밑에 깔리지 않게)
