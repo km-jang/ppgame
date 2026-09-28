@@ -92,6 +92,22 @@ const EXTRA = ['ground', 'sky', 'galaxy', 'title'];
     assert(JSON.parse(mem['play.sound1']).music === false, '저장');
   });
 
+  await test('소리 크기 상한: play.parent.volMax를 읽고, setCap으로 바로 바꾸고, 음소거면 0', () => {
+    const { S } = fresh();
+    assert(S.cap() === 1 && S.masterTarget() === 1, '기본 1');
+    for (const [v, want] of [[0.25, 0.25], [0.5, 0.5], ['x', 1], [3, 1], [-1, 0]]) assert(S.setCap(v) === want && S.cap() === want, 'setCap ' + v);
+    S.setCap(0.5); S.setMuted(true);
+    assert(S.masterTarget() === 0, '음소거');
+    const mem = { 'play.parent': JSON.stringify({ v: 1, volMax: 0.75 }) };
+    const b = fresh(mem).S;
+    assert(b.cap() === 0.75 && b.masterTarget() === 0.75, '저장된 상한 ' + b.cap());
+    mem['play.parent'] = JSON.stringify({ v: 1, volMax: 0.25 });
+    b.reload();
+    assert(b.cap() === 0.25, '다시 읽기');
+    assert(fresh({ 'play.parent': '{"v":1}' }).S.cap() === 1, '상한이 없으면 1');
+    assert(typeof b.setCap === 'function' && typeof b.cap === 'function', 'API');
+  });
+
   await test('같은 소리 간격 막기', () => {
     const { S } = fresh();
     assert(S.allow('x', 0.1, 1000) === true, '처음');
@@ -191,6 +207,23 @@ const EXTRA = ['ground', 'sky', 'galaxy', 'title'];
       }
       if (process.env.SNDLIB_VERBOSE) console.log('       ' + rows.join('\n       '));
       assert(!bad.length, bad.join(' | '));
+    });
+    await test('소리 크기 상한 25%: 같은 효과음이 약 12dB 작게, 마스터 크기가 0.25', async () => {
+      const r = await page.evaluate(async () => {
+        // renderUi는 설정을 다시 읽으므로(reload) 상한은 저장소에 둔다 (이 빈 페이지는 localStorage가 없어 메모리 저장소)
+        const mem = {};
+        SND.store = { get: (k, f) => (k in mem ? mem[k] : f), set: (k, v) => { mem[k] = v; } };
+        const full = await window.renderUi('claim', false);
+        await new Promise(r => setTimeout(r, 300)); // 같은 소리 간격(0.25초)
+        mem['play.parent'] = { v: 1, volMax: 0.25 };
+        const low = await window.renderUi('claim', false);
+        const g = SND._master().gain.value;
+        delete mem['play.parent']; SND.reload();
+        return { full: full.peak, low: low.peak, g };
+      });
+      const d = r.full - r.low;
+      assert(d > 10.5 && d < 13.5, '차이 ' + d.toFixed(1) + 'dB (' + r.full + ' / ' + r.low + ')');
+      assert(Math.abs(r.g - 0.25) < 0.001, '마스터 ' + r.g);
     });
     await test('끄기(음소거·음악 끔)면 음악이 안 난다', async () => {
       const r = await page.evaluate(() => { SND.setMusic(false); return window.renderMusic('snake', 'mars', {}, 2, false).then(x => { SND.setMusic(true); return x; }); });

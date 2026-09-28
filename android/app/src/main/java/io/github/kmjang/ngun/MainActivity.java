@@ -18,6 +18,7 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ServiceWorkerClient;
 import android.webkit.ServiceWorkerController;
@@ -61,6 +62,9 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private WebViewAssetLoader loader;
+    // 기록 불러오기의 "파일 고르기": 고른 파일을 웹 페이지에 돌려줄 자리
+    private ValueCallback<Uri[]> fileCallback;
+    private static final int PICK_FILE = 41;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,7 +114,25 @@ public class MainActivity extends Activity {
         s.setJavaScriptCanOpenWindowsAutomatically(false);
 
         w.addJavascriptInterface(new AppBridge(), "AndroidApp");
-        w.setWebChromeClient(new WebChromeClient());
+        w.setWebChromeClient(new WebChromeClient() {
+            // <input type=file>을 누르면 기기의 파일 고르기 화면을 연다 (기록 불러오기용 .json)
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (fileCallback != null) fileCallback.onReceiveValue(null);
+                fileCallback = callback;
+                Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
+                pick.addCategory(Intent.CATEGORY_OPENABLE);
+                pick.setType("*/*");
+                try {
+                    startActivityForResult(Intent.createChooser(pick, "기록 파일 고르기"), PICK_FILE);
+                } catch (ActivityNotFoundException e) {
+                    fileCallback = null;
+                    Toast.makeText(MainActivity.this, "파일을 고를 수 없어요. 코드를 붙여 넣어 주세요", Toast.LENGTH_LONG).show();
+                    return false;
+                }
+                return true;
+            }
+        });
         w.setWebViewClient(new GameClient());
         w.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) ->
                 saveBlobDownload(url, mimeType));
@@ -375,5 +397,19 @@ public class MainActivity extends Activity {
                 .setPositiveButton(R.string.exit_yes, (d, which) -> finish())
                 .setNegativeButton(R.string.exit_no, null)
                 .show();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == PICK_FILE) {
+            if (fileCallback != null) {
+                Uri[] result = null;
+                if (resultCode == RESULT_OK && data != null && data.getData() != null) result = new Uri[] { data.getData() };
+                fileCallback.onReceiveValue(result);
+                fileCallback = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 }

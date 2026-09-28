@@ -18,10 +18,12 @@
 | `snake/` | **냠냠 뱀** (옛 이름 N-SNAKE): 뿅뿅 우주선 그래픽의 네온 뱀 게임. 화면 밀기, 무한·스테이지, 아이템·콤보·메달 | 아이들 |
 | `jump/` | **통통 점프**: 저절로 통통 뛰는 로봇 공, 화면 왼쪽·오른쪽을 눌러 발판을 타고 끝없이 위로. 스프링·로켓·방패, 쉬움은 구조 구름 3번 | 아이들 |
 | `runner/` | **슝슝 우주 달리기**: 3줄 우주 길을 달리는 우주선, 밀어서 줄 바꾸기·위로 밀어 점프, 운석·레이저 문 피하고 별 먹기 | 아이들 |
-| `index.html` (최상위) | 게임을 고르는 첫 화면 (네 게임, 2칸 두 줄) + **놀이 본부**: 별코인·오늘의 미션 3개·기록실 | |
+| `index.html` (최상위) | 게임을 고르는 첫 화면 (네 게임, 2칸 두 줄) + **놀이 본부**: 별코인·오늘의 미션 3개·기록실 + 지금 아이 이름표("누가 놀아요?")·보호자 화면(오른쪽 아래 자물쇠 3초) | |
 | `common/worlds.js` | 우주 여행 도감: 태양계 날씨·외계 행성 여덟 (DOM 없음, `tests/worlds.test.js`). 네 게임이 `hub.js` 바로 뒤에 불러오고 `sw.js` FILES에 넣는다 |
 | `common/sound.js` | 공통 소리 `SND`: 리미터·소리 끄기(`play.sound1`)·소리 가족·배경 음악 (`tests/sound.test.js`). 네 게임이 `worlds.js` 뒤에 불러오고 `sw.js` FILES에 넣는다. 게임 소리는 `SND.out()`에 연결 |
 | `common/hub.js` | 네 게임이 함께 쓰는 별코인 지갑·기록 요약·오늘의 미션 (DOM 없음, `tests/hub.test.js`, 키 `play.hub1`) | |
+| `common/profile.js` | 아이 프로필(최대 4명)·보호자 설정(하루 놀이 시간·소리 크기 상한)·놀이 시간 세기와 남은 시간 알림·기록 옮기기(코드·파일) (전역 `PROFILE`, 핵심은 DOM 없음, `tests/profile.test.js`). **모든 페이지의 첫 번째 스크립트** (첫 화면 `index.html`, 네 게임 `index.html`의 `../common/hub.js` 앞), 네 게임 `sw.js` FILES에도 넣는다. 게임은 `main.js` frame에서 `PROFILE.setPlaying(판이 도는가)`만 부른다 | |
+| `android/` · `.github/workflows/apk.yml` | 안드로이드 APK: 웹뷰 한 화면(`MainActivity.java`)이 게임 파일을 앱 안에서 연다. GitHub가 빌드해 main이면 Releases `apk-latest`에 올린다. 서명 비밀 `ANDROID_KEYSTORE_B64`·`ANDROID_KEYSTORE_PASS`. 로컬 세션은 안드로이드 도구를 못 받으니 빌드 확인은 Actions "APK 만들기"로 | |
 | `archive/robocar/` | **뚝딱 로봇카**: 보류 (2026-09-27 소유자 결정). 첫 화면에서 뺐고 필수 테스트에서도 뺐다. `archive/README.md` | |
 
 - **이름 (2026-09-27 소유자 결정)**: 화면·설치 아이콘·첫 화면에 보이는 이름은 뿅뿅 우주선, 냠냠 뱀. 폴더 이름(`game/`·`snake/`)과
@@ -68,6 +70,7 @@
 | 2026-09-27 | 공통 | **행성 날씨·외계 행성**: 공통 도감 `common/worlds.js`, 행성마다 날씨(눈·불씨·비·모래바람 등), 명왕성 다음 외계 행성 여덟. 통통 점프는 땅에서 구름·대기권을 지나 우주로 (PR #14) |
 | 2026-09-27 | 공통 | **점검 후 다듬기**: 집 버튼, 멈춤에서 나가도 정산, 한글 쉬운 말, 결과 화면 맞춤·0.6초 눌림 막기, "한 번 더!" 이어하기, 뿅뿅 그림 카드·보스 스티커, 뱀 스테이지 별·대왕 뱀, 점프 워프 출발, 달리기 쉬운 첫 판 안내, 첫 화면 새 스티커 5장. 학습 요소 없음 확정 (각 `PLAN.md`, PR #14) |
 | 2026-09-27 | 공통 | **소리 정비**: 공통 `common/sound.js`(리미터·소리 끄기 하나·탭 나가면 멈춤·소리 가족·행성별 배경 음악), 네 게임 크기 맞춤·너무 잦은 소리와 안 들리는 소리 정리·날카로운 소리 없앰, 첫 화면 소리 버튼. 소리 파일 없음 (각 `PLAN.md`, main에 합침) |
+| 2026-09-28 | 공통 | **아이 프로필 + 보호자 화면**: 아이마다 기록 따로(`common/profile.js`, 최대 4명, 첫 화면 "누가 놀아요?"), 보호자 화면(자물쇠 3초 꾹): 아이 프로필·하루 놀이 시간(10분·5분 전·끝 알림, 멈추지 않음)·소리 크기 상한·기록 옮기기(코드·파일). 게임 시작 화면에 이름표. `ngun-v19`·`snake-v19`·`jump-v14`·`runner-v12` (브랜치) |
 | 2026-09-24 | 공통 | 작업 지침(`CLAUDE.md`)·인계 문서(`HANDOFF.md`), 화면 흐름 점검(`tests/flow.test.js`), N-GUN 오프라인, 로봇카 첫 방문 글꼴 저장, 보호자 화면 "놀이 기록"·"기기 점검" 탭 (브랜치) |
 
 새 작업을 main에 합치면 이 표에 한 줄 추가한다.
@@ -124,7 +127,7 @@
 냠냠 뱀과 같은 짜임: `js/util.js`(씨앗 난수) · `data.js`(모든 수치·메달) · `world.js`(규칙, DOM 없음, 1/120초 고정 간격, 자동 운전 봇) ·
 `render.js` · `input.js` · `audio.js`(합성음) · `main.js`(화면 전환, `JP.debug`·`RN.debug`) · `sw.js`(`jump-`·`runner-` 저장본만 지움) · `manifest.json` · `icon.svg` · `PLAN.md`.
 저장 키는 `jump.*`·`runner.*`. 상점·미션은 `js/shop.js`(DOM 없음, 코인은 `HUB` 지갑), 냠냠 뱀도 같은 짜임(`snake/js/shop.js`).
-**모든 게임은 `index.html`에서 `../common/hub.js`를 `js/util.js`보다 먼저 불러오고 `sw.js` FILES에도 넣는다.** 판이 끝나면 `HUB.report`(기록실)·`HUB.reportRun`(오늘의 미션)을 부른다. 기획과 수치 설명은 각 폴더 `PLAN.md`.
+**모든 게임은 `index.html`에서 `../common/profile.js`를 맨 처음, 그다음 `../common/hub.js`를 `js/util.js`보다 먼저 불러오고 `sw.js` FILES에도 넣는다.** 판이 끝나면 `HUB.report`(기록실)·`HUB.reportRun`(오늘의 미션)을 부른다. 기획과 수치 설명은 각 폴더 `PLAN.md`.
 
 ### 테스트 (`tests/`)
 | 파일 | 검사 |
@@ -133,6 +136,7 @@
 | `snake.test.js` | N-SNAKE 규칙 |
 | `jump.test.js` | 통통 점프 규칙 (튕김·스프링·부서지는 발판·구조 구름·폭탄·로켓·주사율별 같은 결과·봇) |
 | `hub.test.js` | 놀이 본부 (지갑·오늘의 미션·기록실) |
+| `profile.test.js` | 아이 프로필 (키 접두어·공통 키·첫째 무접두어·바꾸기·지우기·4명), 하루 놀이 시간·10분 더·날짜 바뀜·알림 순서(10분·5분·끝·5분마다), 소리 크기 상한, 기록 옮기기(내보내기·불러오기·망가진 코드 거절) |
 | `snakeshop.test.js` · `jumpshop.test.js` | 냠냠 뱀·통통 점프 상점과 미션 (슝슝 우주 달리기 상점은 `runner.test.js` 안) |
 | `runner.test.js` | 슝슝 우주 달리기 규칙 (줄 바꾸기·점프·하트·방패·자석·부스트·모든 줄 막힘 없음·봇) |
 | `flow.test.js` | 두 게임 화면 흐름을 실제 크로미움으로 (뿅뿅 우주선 시작 → 카드 → 필살기 → 게임 오버 → 상점, 냠냠 뱀 시작 → 밀기 → 위험 경고 → 게임 오버 → 스테이지). Playwright가 없으면 건너뜀. 통통 점프·슝슝 우주 달리기 흐름도 함께 |
@@ -151,7 +155,8 @@
    node tests/runner.test.js    # 슝슝 우주 달리기 규칙
    node tests/hub.test.js       # 놀이 본부 (지갑·오늘의 미션·기록실)
    node tests/worlds.test.js    # 우주 여행 도감 (행성 날씨)
-   node tests/sound.test.js     # 공통 소리 (설정·음악 패턴·크기)
+   node tests/sound.test.js     # 공통 소리 (설정·음악 패턴·크기·소리 크기 상한)
+   node tests/profile.test.js   # 아이 프로필·보호자 설정·놀이 시간 알림·기록 옮기기
    node tests/snakeshop.test.js # 냠냠 뱀 상점·미션
    node tests/jumpshop.test.js  # 통통 점프 상점·미션
    node tests/flow.test.js      # 네 게임 화면 흐름 (크로미움)
@@ -162,13 +167,19 @@
    글은 짧게 + 목소리로 읽어 주기. 외부 링크·데이터 수집·결제 금지. 하루 타이머와 보호자 자물쇠(3초 누르기)를 우회하는 기능 금지.
 5. **유아틱하지 않게.** 소유자 피드백(2026-09-24)으로 둥근 손글씨체·두꺼운 검정 테두리·파스텔 단색·왕눈이를 버렸다.
    광택 재질·굵은 디스플레이 서체(Black Han Sans)·어두운 유리 패널 방향을 유지한다 (`archive/robocar/VISUAL.md`).
-6. **게임 파일을 바꾸면 그 게임의 `sw.js` `VERSION`을 올린다** (N-GUN `ngun-v18` → `v19`, N-SNAKE `snake-v18` → `v19`, 통통 점프 `jump-v13` → `v14`, 슝슝 우주 달리기 `runner-v11` → `v12` …, 보류 중인 로봇카 `robocar-v14`).
+6. **게임 파일을 바꾸면 그 게임의 `sw.js` `VERSION`을 올린다** (N-GUN `ngun-v19` → `v20`, N-SNAKE `snake-v19` → `v20`, 통통 점프 `jump-v14` → `v15`, 슝슝 우주 달리기 `runner-v12` → `v13` …, 보류 중인 로봇카 `robocar-v14`).
    안 올리면 홈 화면에 설치한 태블릿이 옛 파일을 계속 연다. 새 파일을 추가하면 `FILES` 목록에도 넣는다.
    두 게임은 같은 주소(도메인)를 쓰므로 옛 저장본을 지울 때는 **자기 이름으로 시작하는 것만** 지운다 (`robocar-`, `ngun-`, `snake-`, `jump-`, `runner-`).
    다른 게임 것까지 지우면 그 게임이 인터넷 없이 안 열린다.
 7. **main 머지는 소유자가 요청할 때만.** 작업은 지정된 브랜치에 커밋·푸시하고, 먼저 미리보기로 해 보게 한다.
    PR도 요청이 있을 때만 만든다.
 8. **움직임을 줄이는 접근성 설정 존중.** `prefers-reduced-motion`이면 CSS 연출과 화면 넘김을 건너뛴다. 새 연출도 이 규칙을 따른다.
+9. **저장은 아이마다 따로 (2026-09-28).** 모든 페이지는 `common/profile.js`를 첫 번째 스크립트로 불러온다. 이 파일이 `localStorage`(getItem·setItem·removeItem·key·length)를 감싸
+   지금 아이의 키에 `p<id>:`를 붙인다 (첫째 id 1은 안 붙임: 예전 기록이 그대로 첫째 것). 게임은 평소처럼 `localStorage`만 쓰면 된다.
+   기기 공통 키(안 붙임): `play.profiles`(아이 목록·지금 아이) · `play.parent`(하루 놀이 시간·10분 더·소리 크기 상한 `volMax`) · `play.time`(오늘 논 초·알림 상태) ·
+   `play.sound1`, 그리고 `play.dev`·`sw.`·`fonts.`로 시작하는 키. 새 기기 공통 설정을 만들면 `profile.js`의 `SHARED`에 넣는다.
+   `localStorage` 속성 직접 접근(`localStorage.foo`, `Object.keys(localStorage)`)과 IndexedDB는 감싸지지 않으니 쓰지 않는다.
+   놀이 시간은 알림만 한다 (판을 멈추거나 끝내지 않는다). 소리 크기 상한은 `SND` 마지막 크기에 곱한다 (`SND.cap()`·`SND.setCap()`).
 
 ## 성능 원칙 (갤럭시탭)
 

@@ -376,7 +376,7 @@ test('기록 옮기기: 망가진 코드·다른 코드·새 버전 코드는 �
   assert(/새 버전/.test(P.decode(JSON.stringify(nv)).msg), '새 버전');
   const sh = a.P.exportData(1); sh.data.kids[0].keys['play.parent'] = '{}'; sh.sum = undefined;
   assert(!P.decode(JSON.stringify(sh)).ok, '공통 키가 든 코드');
-  assert(!/[—–]/.test(bad.msg), '줄표 없음');
+  assert(!/[\u2014\u2013]/.test(bad.msg), '줄표 없음');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
