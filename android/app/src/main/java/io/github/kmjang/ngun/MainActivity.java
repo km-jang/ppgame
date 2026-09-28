@@ -115,16 +115,19 @@ public class MainActivity extends Activity {
 
         w.addJavascriptInterface(new AppBridge(), "AndroidApp");
         w.setWebChromeClient(new WebChromeClient() {
-            // <input type=file>을 누르면 기기의 파일 고르기 화면을 연다 (기록 불러오기용 .json)
+            // <input type=file>을 누르면 기기의 파일 고르기 화면을 연다.
+            // accept에 image/*가 있으면(보호자 화면의 아이 사진) 사진만 보이게, 아니면(기록 불러오기용 .json) 모든 파일.
+            // 카메라 권한은 쓰지 않는다: 사진은 갤러리에서 고른다
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = callback;
+                boolean photo = wantsImage(params);
                 Intent pick = new Intent(Intent.ACTION_GET_CONTENT);
                 pick.addCategory(Intent.CATEGORY_OPENABLE);
-                pick.setType("*/*");
+                pick.setType(photo ? "image/*" : "*/*");
                 try {
-                    startActivityForResult(Intent.createChooser(pick, "기록 파일 고르기"), PICK_FILE);
+                    startActivityForResult(Intent.createChooser(pick, photo ? "사진 고르기" : "기록 파일 고르기"), PICK_FILE);
                 } catch (ActivityNotFoundException e) {
                     fileCallback = null;
                     Toast.makeText(MainActivity.this, "파일을 고를 수 없어요. 코드를 붙여 넣어 주세요", Toast.LENGTH_LONG).show();
@@ -136,6 +139,19 @@ public class MainActivity extends Activity {
         w.setWebViewClient(new GameClient());
         w.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) ->
                 saveBlobDownload(url, mimeType));
+    }
+
+    /** 파일 고르기 요청의 accept 목록에 image/* (또는 image/로 시작하는 종류)가 있는가 */
+    static boolean wantsImage(WebChromeClient.FileChooserParams params) {
+        String[] types = params == null ? null : params.getAcceptTypes();
+        if (types == null) return false;
+        for (String t : types) {
+            if (t == null) continue;
+            for (String one : t.split(",")) {
+                if (one.trim().toLowerCase().startsWith("image/")) return true;
+            }
+        }
+        return false;
     }
 
     /** 서비스 워커 스크립트 요청에 404를 돌려 등록이 조용히 실패하게 한다 (API 24+). */

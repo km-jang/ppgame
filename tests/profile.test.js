@@ -379,5 +379,79 @@ test('기록 옮기기: 망가진 코드·다른 코드·새 버전 코드는 �
   assert(!/[\u2014\u2013]/.test(bad.msg), '줄표 없음');
 });
 
+// 코드 검사값 (profile.js와 같은 FNV-1a): 손으로 만든 묶음에 붙인다
+function fnv(t) { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return ('0000000' + h.toString(16)).slice(-8); }
+// 아이 사진: 작은 가짜 JPEG·PNG data URL (진짜 그림이 아니어도 모양 검사만 한다)
+const JPG = 'data:image/jpeg;base64,' + '/9j/4AAQSkZJRgABAQAAAQABAAD'.padEnd(4000, 'A') + '==';
+const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+test('아이 사진: 넣기·빼기, play.profiles(기기 공통)에 저장, 첫째도 둘째도', () => {
+  const { P, ls, mem } = page();
+  assert(P.setPhoto(1, JPG) && P.get(1).photo === JPG && P.current().photo === JPG, '첫째 사진');
+  const b = P.add('민지', '🐱');
+  assert(P.setPhoto(b.id, PNG) && P.get(2).photo === PNG, '둘째 PNG');
+  P.switchTo(2);
+  assert(JSON.parse(ls.getItem('play.profiles')).list.find(p => p.id === 2).photo === PNG && !mem.has('p2:play.profiles'), '공통 키에 저장');
+  assert(P.removePhoto(2) && !('photo' in P.get(2)) && P.get(2).icon === '🐱', '빼면 그림으로');
+  assert(P.setPhoto(1, null) && !P.get(1).photo, 'null도 빼기');
+  assert(!P.setPhoto(9, JPG), '없는 아이');
+  // 다시 불러와도 남는다
+  P.setPhoto(1, JPG);
+  assert(page(mem).P.get(1).photo === JPG, '다시 열어도');
+  // 얼굴 HTML: 사진이면 <img>, 아니면 그림 글자
+  assert(/^<img class="pf-ph" src="data:image\/jpeg;base64,/.test(P.faceHtml(P.get(1))) && /data-ic="🚀"/.test(P.faceHtml(P.get(1))), P.faceHtml(P.get(1)).slice(0, 60));
+  assert(P.faceHtml(P.get(2)) === '🐱' && P.faceHtml({ icon: '<b>', photo: 'javascript:x' }) === '🚀', '그림 글자');
+});
+
+test('아이 사진: 이미지가 아니거나 너무 크거나 이상한 글자면 거절 (그대로 둔다)', () => {
+  const { P, mem } = page();
+  P.setPhoto(1, PNG);
+  const bad = [
+    'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=', 'data:text/html;base64,PGI+', 'data:image/gif;base64,R0lGODlh', 'https://example.com/a.jpg',
+    'data:image/jpeg;base64,' + 'A'.repeat(P.PHOTO_MAX), 'data:image/jpeg;base64,AA"onerror="x', 'data:image/jpeg,raw', 42, {}, 'data:image/png;base64,',
+  ];
+  for (const v of bad) assert(!P.setPhoto(1, v) && P.get(1).photo === PNG, '거절 ' + String(v).slice(0, 40));
+  assert(P.cleanPhoto('data:image/jpeg;base64,' + 'A'.repeat(P.PHOTO_MAX - 30)) !== '', '상한 안쪽은 받음');
+  // 저장소에 누가 이상한 사진을 넣어 두어도 읽을 때 빠진다
+  const s = JSON.parse(mem.get('play.profiles')); s.list[0].photo = 'data:image/svg+xml;base64,PHN2Zz4='; mem.set('play.profiles', J(s));
+  const q = page(mem);
+  assert(!q.P.get(1).photo && !('photo' in JSON.parse(q.mem.get('play.profiles')).list[0]), '망가진 사진은 지움');
+});
+
+test('기록 옮기기: 사진도 같이 (새 아이·모두 바꾸기), 덮어쓰기는 그 아이 사진 그대로, 이상한 사진은 빼고 받기', () => {
+  const a = page(new Map([['play.hub1', J({ coins: 7 })]]));
+  a.P.rename(1, '하준'); a.P.setPhoto(1, JPG);
+  a.P.add('민지', '🐱'); a.P.setPhoto(2, PNG);
+  const one = a.P.exportData(1);
+  assert(one.data.kids[0].photo === JPG, '내보내기에 사진');
+  const b = page();
+  const r = b.P.decode(a.P.exportCode(1));
+  assert(r.ok && b.P.preview(r.data)[0].photo === JPG, '미리 보기에 사진 ' + r.msg);
+  assert(b.P.importKid(r.data, 'new') === 2 && b.P.get(2).photo === JPG && b.P.get(2).name === '하준', '새 아이로 사진까지');
+  b.P.setPhoto(1, PNG);
+  assert(b.P.importKid(r.data, 1) === 1 && b.P.get(1).photo === PNG && b.P.get(1).name === '첫째', '덮어쓰기는 이름·사진 그대로');
+  const c = page();
+  const all = c.P.decode(a.P.exportCode('all'));
+  assert(all.ok && c.P.importReplace(all.data) === 2 && c.P.get(1).photo === JPG && c.P.get(2).photo === PNG, '모두 바꾸기에 사진');
+  // 이상한 사진이 든 코드: 사진만 빠지고 기록은 받는다
+  const ev = a.P.exportData(1); ev.data.kids[0].photo = 'data:image/svg+xml;base64,PHN2Zz4='; ev.sum = fnv(JSON.stringify(ev.data));
+  const d = page();
+  const rr = d.P.decode(JSON.stringify(ev));
+  assert(rr.ok && d.P.preview(rr.data)[0].photo === '', '미리 보기엔 사진 없음');
+  assert(d.P.importKid(rr.data, 'new') === 2 && !d.P.get(2).photo && JSON.parse(d.mem.get('p2:play.hub1')).coins === 7, '사진만 빼고 받음');
+});
+
+test('기록 옮기기: 사진 없는 옛 코드도 그대로 읽힌다', () => {
+  // 사진 기능 전에 만든 모양 그대로 (photo 칸 없음)
+  const data = { at: '2026-09-27T01:00:00.000Z', scope: 'one', kids: [{ name: '옛날', icon: '🐼', limit: 30, keys: { 'play.hub1': J({ coins: 12 }) } }] };
+  const payload = { app: 'ppyong-kids', v: 1, sum: fnv(JSON.stringify(data)), data };
+  const b = page();
+  const code = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
+  const r = b.P.decode(code);
+  assert(r.ok && b.P.preview(r.data)[0].photo === '' && b.P.preview(r.data)[0].icon === '🐼', '읽기 ' + r.msg);
+  assert(b.P.importKid(r.data, 'new') === 2 && b.P.get(2).icon === '🐼' && !b.P.get(2).photo && b.P.limit(2) === 30, '새 아이');
+  assert(b.P.importReplace(r.data) === 1 && !b.P.get(1).photo && b.P.get(1).name === '옛날', '모두 바꾸기');
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

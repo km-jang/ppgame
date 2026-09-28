@@ -12,7 +12,8 @@
 //   localStorage.clear()는 감싸지 않는다 (기기 전체를 지운다. 게임은 쓰지 않고 테스트만 쓴다).
 //
 // 저장 키 (모두 기기 공통)
-//   play.profiles : { v:1, list:[{id, name, icon}], active }       아이 최대 4명
+//   play.profiles : { v:1, list:[{id, name, icon, photo?}], active }       아이 최대 4명
+//     photo: 아이 사진 (보호자 화면에서 넣음, 160×160 JPEG data URL, 이 기기 안에만). 없거나 망가졌으면 그림(icon)으로
 //   play.parent   : { v:1, limits:{[id]: 분 또는 0}, extra:{[id]:{day, min}}, volMax: 0.25~1 }
 //   play.time     : { day:'YYYY-MM-DD', sec:{[id]: 초}, warn:{[id]:{f10, f5, f0, last}} }   오늘 논 시간(이 기기 날짜 기준)
 //
@@ -31,6 +32,10 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
   const EXTRA_MIN = 10;
   const WARN = { soon: 600, sooner: 300, again: 300 }; // 10분 · 5분 남았을 때, 끝난 뒤에는 논 시간 5분마다 다시
   const TICK = 5000, NAME_MAX = 8;
+  // 아이 사진: data:image/jpeg·png base64만, 글자 수 상한 (보호자 화면이 160×160 JPEG 약 25KB 아래로 만든다)
+  const PHOTO_MAX = 60000;
+  const PHOTO_RE = /^data:image\/(jpeg|png);base64,[A-Za-z0-9+/]+={0,2}$/;
+  function cleanPhoto(v) { return typeof v === 'string' && v.length <= PHOTO_MAX && PHOTO_RE.test(v) ? v : ''; }
 
   const isObj = v => v != null && typeof v === 'object' && !Array.isArray(v);
   const num = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
@@ -99,7 +104,10 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
       const id = Math.floor(Number(p.id));
       if (!(id >= 1) || seen[id]) continue;
       seen[id] = true;
-      out.list.push({ id, name: cleanName(p.name) || NAMES[Math.min(out.list.length, 3)], icon: ICONS.indexOf(p.icon) >= 0 ? p.icon : ICONS[0] });
+      const e = { id, name: cleanName(p.name) || NAMES[Math.min(out.list.length, 3)], icon: ICONS.indexOf(p.icon) >= 0 ? p.icon : ICONS[0] };
+      const ph = cleanPhoto(p.photo);
+      if (ph) e.photo = ph;
+      out.list.push(e);
     }
     if (!seen[1]) out.list.unshift({ id: 1, name: NAMES[0], icon: ICONS[0] });
     out.list.sort((a, b) => (a.id === 1 ? -1 : b.id === 1 ? 1 : 0));
@@ -144,6 +152,16 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     if (!p || ICONS.indexOf(icon) < 0) return false;
     p.icon = icon; jset(K_PROFILES, s); return true;
   }
+  // 사진 넣기 (올바른 사진이 아니면 false, 그대로 둔다) · 빼기(빈 값이나 null이면 그림으로)
+  function setPhoto(id, data) {
+    const s = loadProfiles(), p = s.list.find(x => x.id === id);
+    if (!p) return false;
+    if (data == null || data === '') { delete p.photo; jset(K_PROFILES, s); return true; }
+    const ph = cleanPhoto(data);
+    if (!ph) return false;
+    p.photo = ph; jset(K_PROFILES, s); return true;
+  }
+  const removePhoto = id => setPhoto(id, '');
   // 그 아이의 저장 키를 모두 지운다 (첫째는 접두어가 없어서 여기로 지울 수 없다)
   function wipe(id) {
     if (!(id > 1)) return 0;
@@ -302,6 +320,7 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
   // ─── 기록 옮기기: 내보내기 · 불러오기 (2026-09-28 소유자 승인) ───
   // 브라우저에서 앱(안드로이드 WebView)으로, 태블릿에서 태블릿으로. 글 코드(base64) 하나 또는 .json 파일.
   // 묶음(payload) = { app:'ppyong-kids', v:1, sum, data }, data = { at, scope:'one'|'all', kids:[{name, icon, limit, keys:{키: 저장된 글}}], device? }
+  //   kids[].photo(있을 때만): 아이 사진 data URL. 불러올 때 다시 검사하고, 이상하면 사진만 빼고 받는다 (사진 없는 옛 코드도 그대로)
   //   sum은 JSON.stringify(data)의 FNV-1a (복사하다 잘리거나 바뀐 코드를 알아챈다). device(소리 설정·소리 크기 상한)는 '모든 아이'일 때만
   const APP = 'ppyong-kids', XV = 1;
   // 그 아이 것인 저장 키 (원래 키 이름 목록). 첫째: 접두어 없는 키 중 공통 키가 아닌 것, 둘째부터: p<id>: 로 시작하는 것
@@ -338,7 +357,9 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     if (!p) return null;
     const pre = prefixOf(id), keys = {};
     for (const k of ownKeys(id)) { const v = raw.get(k); if (v != null) keys[pre ? k.slice(pre.length) : k] = v; }
-    return { name: p.name, icon: p.icon, limit: limit(id), keys };
+    const out = { name: p.name, icon: p.icon, limit: limit(id), keys };
+    if (p.photo) out.photo = p.photo;
+    return out;
   }
   // who: 아이 id 또는 'all'. 돌려주는 값: 묶음 (파일에 그대로 쓴다)
   function exportData(who, when) {
@@ -378,7 +399,7 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
       let medals = 0;
       if (isObj(hub) && isObj(hub.games)) for (const g of Object.keys(hub.games)) medals += Math.floor(num(hub.games[g] && hub.games[g].medals));
       return {
-        name: cleanName(k.name) || '친구', icon: ICONS.indexOf(k.icon) >= 0 ? k.icon : ICONS[0],
+        name: cleanName(k.name) || '친구', icon: ICONS.indexOf(k.icon) >= 0 ? k.icon : ICONS[0], photo: cleanPhoto(k.photo),
         coins: isObj(hub) ? Math.floor(num(hub.coins)) : 0, medals, stickers: isObj(hub) && isObj(hub.stickers) ? Object.keys(hub.stickers).length : 0,
         keys: Object.keys(k.keys).length, at: typeof d.at === 'string' ? d.at.slice(0, 10) : '',
       };
@@ -391,12 +412,12 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     const lim = Math.floor(Number(k.limit)) || 0;
     if (LIMITS.indexOf(lim) >= 0) setLimit(id, lim);
   }
-  // 한 아이 불러오기. target: 'new'(새 아이로 추가) 또는 덮어쓸 아이 id (이름·그림은 그 아이 것 그대로). 돌려주는 값: 받은 아이 id 또는 0
+  // 한 아이 불러오기. target: 'new'(새 아이로 추가, 사진도) 또는 덮어쓸 아이 id (이름·그림·사진은 그 아이 것 그대로). 돌려주는 값: 받은 아이 id 또는 0
   function importKid(d, target, i) {
     const k = d.kids[i || 0];
     if (!k) return 0;
     let id = target;
-    if (target === 'new') { const p = add(k.name, k.icon); if (!p) return 0; id = p.id; }
+    if (target === 'new') { const p = add(k.name, k.icon); if (!p) return 0; id = p.id; if (cleanPhoto(k.photo)) setPhoto(id, k.photo); }
     else if (!get(id)) return 0;
     writeKid(id, k);
     return id;
@@ -413,7 +434,7 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     for (const p of list()) wipeOwn(p.id);
     for (const k of raw.keys()) if (OWN.test(k)) raw.rm(k);
     const kids = d.kids.slice(0, MAX);
-    jset(K_PROFILES, { v: 1, list: kids.map((k, i) => ({ id: i + 1, name: cleanName(k.name) || NAMES[i], icon: ICONS.indexOf(k.icon) >= 0 ? k.icon : ICONS[0] })), active: 1 });
+    jset(K_PROFILES, cleanProfiles({ v: 1, list: kids.map((k, i) => ({ id: i + 1, name: cleanName(k.name) || NAMES[i], icon: ICONS.indexOf(k.icon) >= 0 ? k.icon : ICONS[0], photo: cleanPhoto(k.photo) || undefined })), active: 1 }));
     const pa = parent(); pa.limits = {}; pa.extra = {};
     if (isObj(d.device) && d.device.volMax != null) pa.volMax = capOf(d.device.volMax);
     jset(K_PARENT, pa);
@@ -439,6 +460,9 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     '.pf-badge{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px 0 8px;border-radius:999px;background:rgba(12,16,26,.85);',
     'border:1px solid rgba(255,255,255,.28);color:#fff;font:normal 16px "Jua","Noto Sans KR",sans-serif;white-space:nowrap;pointer-events:none}',
     '.pf-badge i{font-style:normal;font-size:18px;line-height:1}',
+    '.pf-av{display:inline-grid;place-items:center;font-style:normal;line-height:1}',
+    '.pf-ph{display:block;width:1.3em;height:1.3em;border-radius:50%;object-fit:cover;box-sizing:border-box;border:max(1.5px,.05em) solid rgba(255,255,255,.8);background:#1b2a55}',
+    '.pf-badge .pf-ph{width:24px;height:24px;border-width:1.5px}',
     '.pf-badge[hidden]{display:none}',
     '.tpanel>.pf-badge{position:absolute;top:0;right:22px;transform:translateY(-50%);z-index:2}',
     '#scr-title .panel.tpanel{position:relative}',
@@ -468,13 +492,21 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     toastTimer = setTimeout(() => toastEl && toastEl.classList.remove('on'), 4000);
     try { if (typeof SND !== 'undefined' && SND && SND.ui) SND.ui(kind === 'over' ? 'continueAsk' : 'sticker'); } catch (e) { /* 무시 */ }
   }
+  // 아이 얼굴 (사진이 있으면 동그란 사진, 없거나 못 읽으면 그림 글자). 돌려주는 값: 안쪽 HTML (감싸는 <i> 안에 넣는다)
+  //   사진을 못 그리면 onerror가 그 자리를 그림 글자로 바꾼다 (그림은 ICONS 목록 것만이라 안전)
+  function faceHtml(p) {
+    p = p || {};
+    const ic = ICONS.indexOf(p.icon) >= 0 ? p.icon : ICONS[0], ph = cleanPhoto(p.photo);
+    if (!ph) return esc(ic);
+    return '<img class="pf-ph" src="' + ph + '" alt="" draggable="false" data-ic="' + esc(ic) + '" onerror="this.outerHTML=this.getAttribute(\'data-ic\')">';
+  }
   // 게임 시작 화면의 작은 이름표 (읽기만): <span class="pf-badge" data-pf-badge hidden></span>
   function renderBadges() {
     if (!D) return;
     ensureCss();
     const p = current();
     D.querySelectorAll('[data-pf-badge]').forEach(el => {
-      el.innerHTML = '<i aria-hidden="true">' + esc(p.icon) + '</i><span>' + esc(p.name) + '</span>';
+      el.innerHTML = '<i class="pf-av" aria-hidden="true">' + faceHtml(p) + '</i><span>' + esc(p.name) + '</span>';
       el.setAttribute('aria-label', '지금 노는 친구: ' + p.name);
       el.hidden = false;
     });
@@ -507,9 +539,9 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
   }
 
   Object.assign(P, {
-    KEYS: { profiles: K_PROFILES, parent: K_PARENT, time: K_TIME }, SHARED, MAX, ICONS, NAMES, LIMITS, VOLS, EXTRA_MIN, WARN, NAME_MAX,
+    KEYS: { profiles: K_PROFILES, parent: K_PARENT, time: K_TIME }, SHARED, MAX, ICONS, NAMES, LIMITS, VOLS, EXTRA_MIN, WARN, NAME_MAX, PHOTO_MAX,
     dayKey, isShared: shared, prefixOf, mapKey, raw, visibleKeys,
-    cleanProfiles, list, get, current, activeId: () => cur, add, rename, setIcon, remove, switchTo, wipe,
+    cleanProfiles, list, get, current, activeId: () => cur, add, rename, setIcon, setPhoto, removePhoto, cleanPhoto, faceHtml, remove, switchTo, wipe,
     parent, limit, setLimit, extraMin, addExtra, volMax, setVolMax, capOf,
     loadTime, played, addPlayed, leftSec, leftMin, warnStep, warnText,
     setPlaying, playing: () => playing, check, toast, renderBadges,

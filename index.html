@@ -228,6 +228,36 @@
     .hub-top h1 { white-space: nowrap; min-width: 0; font-size: clamp(28px, 2.6vw, 40px); }
     @media (max-height: 600px), (max-width: 1000px) { #pf-lock { right: 6px; bottom: 6px; width: 40px; height: 40px; } #pf-lock svg { width: 40px; height: 40px; } }
     @media (max-width: 760px) { .icons { grid-template-columns: repeat(6, 1fr); } }
+    /* 아이 사진 (PROFILE.faceHtml: 사진이 있으면 동그란 <img class="pf-ph">, 없으면 그림 글자) */
+    .pf-av { display: inline-grid; place-items: center; vertical-align: middle; }
+    .pf-btn i .pf-ph { width: 38px; height: 38px; }
+    .who-card i .pf-ph { width: 88px; height: 88px; border-width: 3px; }
+    .prow .ic .pf-ph { width: 44px; height: 44px; margin: auto; }
+    .prow .ic .pf-av { width: 100%; height: 100%; }
+    .prow .pname { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 10px; }
+    .prow .pname span { font: normal 19px var(--display); color: #e6ddff; flex: none; }
+    .prow .pname input { height: 52px; font-size: 24px; border: 2px solid rgba(184, 164, 255, .65); background: rgba(0, 0, 0, .4); }
+    .prow .pname input:focus { outline: none; border-color: #ffe08a; }
+    .pphoto { width: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pphoto .pact { height: 42px; font-size: 17px; }
+    .pphoto small { font-size: 13px; color: #aeb7cc; }
+    .icons .ihint { grid-column: 1 / -1; font-size: 13px; color: #ffe08a; }
+    .pv .pvk i .pf-ph, .pseg button .pf-ph, .pact .pf-ph { margin-right: 2px; }
+    .pseg button, .pact { gap: 6px; }
+    .pseg button { display: inline-flex; align-items: center; justify-content: center; }
+    /* 사진 맞추기 */
+    #crop { z-index: 25; }
+    #crop .panel { width: auto; max-width: 96vw; }
+    .crop-body { display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+    #crop-cv { display: block; border-radius: 18px; touch-action: none; cursor: grab; background: #05070f; }
+    .crop-side { display: flex; flex-direction: column; gap: 10px; width: 250px; }
+    .crop-side .note { margin: 0; font-size: 15px; color: #c9d2e6; line-height: 1.45; word-break: keep-all; }
+    .crop-zoom { display: flex; align-items: center; gap: 8px; font: normal 16px var(--display); color: #c9d2e6; }
+    .crop-zoom input { flex: 1; height: 36px; accent-color: #b8a4ff; }
+    .crop-ok { height: 56px; border: 0; border-radius: 14px; font: normal 26px var(--display); background: linear-gradient(180deg, #fff3a8, #ffcf3a); color: #3a2600; box-shadow: 0 4px 0 #9a6b00; cursor: pointer; }
+    .crop-ok:disabled { opacity: .5; }
+    .crop-side .pact { justify-content: center; }
+    @media (max-height: 600px) { .pf-btn i .pf-ph { width: 32px; height: 32px; } .who-card i .pf-ph { width: 70px; height: 70px; } #crop h2 { font-size: 24px; margin-bottom: 8px; } .crop-side { gap: 8px; } .crop-ok { height: 50px; } }
     @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
     @keyframes sweep { 0% { background-position: 160% 0; } 30%, 100% { background-position: -70% 0; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
@@ -294,8 +324,9 @@
         <button type="button" role="tab" data-tab="move" aria-selected="false">기록 옮기기</button>
       </div>
       <div class="psec on" data-sec="kids">
-        <p class="note">아이마다 별코인·기록·스티커·미션·캐릭터가 따로 저장돼요. 최대 4명. 그림을 누르면 바꿀 수 있어요.</p>
+        <p class="note">아이마다 별코인·기록·스티커·미션·캐릭터가 따로 저장돼요. 최대 4명. 이름 칸을 눌러 이름을 고치고, 그림을 누르면 그림을 바꿔요. 사진도 넣을 수 있어요.</p>
         <div id="pk-list"></div>
+        <input id="pk-photo" type="file" accept="image/*" hidden>
         <button id="pk-add" type="button" class="padd">+ 새 친구 만들기</button>
       </div>
       <div class="psec" data-sec="time">
@@ -318,6 +349,24 @@
         <div id="pi-prev"></div>
       </div>
       <button id="parent-close" type="button" class="btn-close">닫기</button>
+    </div>
+  </section>
+
+  <!-- 사진 맞추기: 고른 사진을 밀어서 옮기고 크게 작게, 동그라미 안이 아이 사진이 된다 (이 기기 안에만 저장) -->
+  <section id="crop" class="ovl" aria-label="사진 맞추기">
+    <div class="panel">
+      <h2>사진 맞추기</h2>
+      <div class="crop-body">
+        <canvas id="crop-cv" width="300" height="300" aria-label="밀어서 얼굴을 동그라미 안에 맞춰요"></canvas>
+        <div class="crop-side">
+          <p class="note">사진을 밀어서 얼굴을 동그라미 안에 맞춰요. 막대나 두 손가락으로 크게·작게.</p>
+          <label class="crop-zoom"><span>작게</span><input id="crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="크기"><span>크게</span></label>
+          <button id="crop-ok" type="button" class="crop-ok">좋아요</button>
+          <button id="crop-again" type="button" class="pact">다시 고르기</button>
+          <button id="crop-cancel" type="button" class="pact">그만두기</button>
+          <span id="crop-msg" class="pmsg"></span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -447,9 +496,11 @@
       const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
       const HOLD = 3000;
+      const face = p => PROFILE.faceHtml(p);
+      const tag = p => '<i class="pf-av" aria-hidden="true">' + face(p) + '</i>' + esc(p.name);
       function renderMe() {
         const p = PROFILE.current(), left = PROFILE.leftMin(p.id);
-        $('pf-ic').textContent = p.icon; $('pf-name').textContent = p.name;
+        $('pf-ic').innerHTML = PROFILE.faceHtml(p); $('pf-name').textContent = p.name;
         const l = $('pf-left');
         l.textContent = left == null ? '' : left <= 0 ? '오늘 시간 끝!' : '오늘 남은 시간 ' + left + '분';
         l.classList.toggle('end', left === 0);
@@ -489,7 +540,7 @@
       // 누가 놀아요? (바꾸기만)
       function renderWho() {
         const list = PROFILE.list(), me = PROFILE.activeId();
-        $('who-grid').innerHTML = list.map(p => '<button type="button" class="who-card' + (p.id === me ? ' cur' : '') + '" data-id="' + p.id + '"><i aria-hidden="true">' + esc(p.icon) + '</i><span>' + esc(p.name) + '</span></button>').join('') +
+        $('who-grid').innerHTML = list.map(p => '<button type="button" class="who-card' + (p.id === me ? ' cur' : '') + '" data-id="' + p.id + '"><i class="pf-av" aria-hidden="true">' + face(p) + '</i><span>' + esc(p.name) + '</span></button>').join('') +
           (list.length < PROFILE.MAX ? '<button type="button" class="who-card new" id="who-new" aria-label="새 친구 (보호자가 3초 꾹)"><svg class="hold-ring" viewBox="0 0 156 176" preserveAspectRatio="none" aria-hidden="true"><rect x="2" y="2" width="152" height="172" rx="22" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><i aria-hidden="true">＋</i><span>새 친구</span><small>보호자가 3초 꾹</small></button>' : '');
         $('who-hint').textContent = '';
         const nb = $('who-new');
@@ -528,25 +579,29 @@
         const list = PROFILE.list();
         if (tab === 'kids') {
           $('pk-list').innerHTML = list.map(p => '<div class="prow" data-id="' + p.id + '">' +
-            '<button type="button" class="ic" data-act="icon" aria-label="그림 바꾸기">' + esc(p.icon) + '</button>' +
-            '<input type="text" maxlength="' + PROFILE.NAME_MAX + '" value="' + esc(p.name) + '" aria-label="이름" data-act="name">' +
+            '<button type="button" class="ic" data-act="icon" aria-label="그림 바꾸기"><i class="pf-av" aria-hidden="true">' + face(p) + '</i></button>' +
+            '<label class="pname"><span>이름</span><input type="text" maxlength="' + PROFILE.NAME_MAX + '" value="' + esc(p.name) + '" placeholder="이름 (' + PROFILE.NAME_MAX + '글자까지)" data-act="name" enterkeyhint="done" autocomplete="off"></label>' +
             (p.id === 1 ? '<span class="keep">첫 번째 친구는<br>지울 수 없어요</span>' :
               '<button type="button" class="del' + (delStep[p.id] ? ' s' + delStep[p.id] : '') + '" data-act="del">' + ['지우기', '정말 지울까요?', '기록도 다 지워져요 · 지우기'][delStep[p.id] || 0] + '</button>') +
-            '<div class="icons' + (iconOpen === p.id ? ' on' : '') + '">' + PROFILE.ICONS.map(ic => '<button type="button" data-icon="' + ic + '" aria-pressed="' + (ic === p.icon) + '">' + ic + '</button>').join('') + '</div>' +
+            '<div class="pphoto"><button type="button" class="pact" data-act="photo">📷 사진 넣기</button>' +
+              (p.photo ? '<button type="button" class="pact warn" data-act="nophoto">사진 빼기</button>' : '') +
+              '<small>사진은 이 기기 안에만 저장돼요</small></div>' +
+            '<div class="icons' + (iconOpen === p.id ? ' on' : '') + '">' + (p.photo ? '<span class="ihint">그림을 고르면 사진 대신 그림이 보여요</span>' : '') +
+              PROFILE.ICONS.map(ic => '<button type="button" data-icon="' + ic + '" aria-pressed="' + (!p.photo && ic === p.icon) + '">' + ic + '</button>').join('') + '</div>' +
             '</div>').join('');
           $('pk-add').disabled = list.length >= PROFILE.MAX;
           $('pk-add').textContent = list.length >= PROFILE.MAX ? '친구는 ' + PROFILE.MAX + '명까지예요' : '+ 새 친구 만들기';
         } else if (tab === 'time') {
           $('pt-list').innerHTML = list.map(p => {
             const lim = PROFILE.limit(p.id), sec = PROFILE.played(p.id), left = PROFILE.leftMin(p.id), ex = PROFILE.extraMin(p.id);
-            return '<div class="trow" data-id="' + p.id + '"><div class="top"><span class="who"><i aria-hidden="true">' + esc(p.icon) + '</i>' + esc(p.name) + '</span>' +
+            return '<div class="trow" data-id="' + p.id + '"><div class="top"><span class="who">' + tag(p) + '</span>' +
               '<span class="today">오늘 <b>' + mins(sec) + '분</b> 놀았어요' + (left == null ? '' : ' · 남은 시간 <b>' + left + '분</b>') + (ex ? ' · 오늘 더 준 시간 ' + ex + '분' : '') + '</span></div>' +
               '<div class="pseg">' + PROFILE.LIMITS.map(m => '<button type="button" data-limit="' + m + '" aria-pressed="' + (m === lim) + '">' + (m ? m + '분' : '제한 없음') + '</button>').join('') +
               (lim ? '<button type="button" class="more" data-act="extra">오늘 ' + PROFILE.EXTRA_MIN + '분 더</button>' : '') + '</div></div>';
           }).join('');
         } else if (tab === 'move') {
           if (!list.some(p => p.id === exWho) && exWho !== 'all') exWho = PROFILE.activeId();
-          $('px-who').innerHTML = list.map(p => '<button type="button" data-who="' + p.id + '" aria-pressed="' + (p.id === exWho) + '">' + esc(p.icon) + ' ' + esc(p.name) + '</button>').join('') +
+          $('px-who').innerHTML = list.map(p => '<button type="button" data-who="' + p.id + '" aria-pressed="' + (p.id === exWho) + '">' + tag(p) + '</button>').join('') +
             (list.length > 1 ? '<button type="button" data-who="all" aria-pressed="' + (exWho === 'all') + '">모든 아이</button>' : '');
           $('px-code').value = PROFILE.exportCode(exWho);
           renderPreview();
@@ -566,9 +621,11 @@
       $('pk-list').addEventListener('click', e => {
         const row = e.target.closest('.prow'); if (!row) return;
         const id = Number(row.dataset.id), ic = e.target.closest('[data-icon]'), act = e.target.closest('[data-act]');
-        if (ic) { PROFILE.setIcon(id, ic.dataset.icon); iconOpen = 0; SND.ui('tap'); renderParent(); renderMe(); return; }
+        if (ic) { PROFILE.setIcon(id, ic.dataset.icon); PROFILE.removePhoto(id); iconOpen = 0; SND.ui('tap'); renderParent(); renderMe(); return; }
         if (!act) return;
         if (act.dataset.act === 'icon') { iconOpen = iconOpen === id ? 0 : id; SND.ui('tap'); renderParent(); }
+        else if (act.dataset.act === 'photo') { photoFor = id; SND.ui('tap'); $('pk-photo').value = ''; $('pk-photo').click(); }
+        else if (act.dataset.act === 'nophoto') { PROFILE.removePhoto(id); SND.ui('close'); renderParent(); renderMe(); }
         else if (act.dataset.act === 'del') {
           // 세 번 눌러야 지운다: 지우기 → 정말 지울까요? → 기록도 다 지워져요 · 지우기. 5초 쉬면 처음으로
           delStep[id] = (delStep[id] || 0) + 1;
@@ -587,6 +644,123 @@
         renderMe();
       });
       $('pk-list').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
+
+      // ─── 아이 사진: 고르기 → 맞추기(밀기·크게 작게) → 160×160 JPEG로 play.profiles에 (이 기기 안에만) ───
+      // 태블릿 크롬은 accept="image/*"면 갤러리와 카메라를 같이 보여 준다. 앱(WebView)은 MainActivity가 사진 고르기를 연다
+      let photoFor = 0;
+      const CROP = { src: null, w: 0, h: 0, S: 300, D: 280, dpr: 1, base: 1, zoom: 1, ox: 0, oy: 0, pts: new Map(), pinch: null };
+      const cropSay = (t, bad) => { $('crop-msg').textContent = t; $('crop-msg').classList.toggle('bad', !!bad); };
+      // 사진 읽기: 가능하면 createImageBitmap(사진의 회전 정보 따름), 안 되면 <img>. 큰 사진은 긴 쪽 1200으로 줄여 둔다
+      async function readPhoto(file) {
+        let bmp = null, img = null, url = '';
+        try { if (window.createImageBitmap) bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { bmp = null; }
+        if (!bmp) {
+          url = URL.createObjectURL(file);
+          img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+        }
+        const src = bmp || img, w0 = bmp ? bmp.width : img.naturalWidth, h0 = bmp ? bmp.height : img.naturalHeight;
+        if (!(w0 > 0 && h0 > 0)) throw new Error('empty');
+        const k = Math.min(1, 1200 / Math.max(w0, h0)), c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w0 * k)); c.height = Math.max(1, Math.round(h0 * k));
+        const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height);
+        if (bmp && bmp.close) bmp.close();
+        if (url) URL.revokeObjectURL(url);
+        return c;
+      }
+      function cropSize() {
+        const S = Math.round(Math.max(200, Math.min(340, innerWidth * 0.8, innerHeight - 170)));
+        const cv = $('crop-cv'), dpr = Math.min(2, window.devicePixelRatio || 1);
+        CROP.S = S; CROP.D = S - 24; CROP.dpr = dpr;
+        cv.style.width = cv.style.height = S + 'px'; cv.width = cv.height = Math.round(S * dpr);
+        if (CROP.src) CROP.base = CROP.D / Math.min(CROP.w, CROP.h);
+      }
+      function cropClamp() {
+        const sc = CROP.base * CROP.zoom, mx = Math.max(0, (CROP.w * sc - CROP.D) / 2), my = Math.max(0, (CROP.h * sc - CROP.D) / 2);
+        CROP.ox = Math.max(-mx, Math.min(mx, CROP.ox)); CROP.oy = Math.max(-my, Math.min(my, CROP.oy));
+      }
+      function cropDraw() {
+        const cv = $('crop-cv'), x = cv.getContext('2d'), S = CROP.S, D = CROP.D;
+        x.setTransform(CROP.dpr, 0, 0, CROP.dpr, 0, 0);
+        x.fillStyle = '#05070f'; x.fillRect(0, 0, S, S);
+        if (!CROP.src) return;
+        const sc = CROP.base * CROP.zoom, iw = CROP.w * sc, ih = CROP.h * sc;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(CROP.src, S / 2 + CROP.ox - iw / 2, S / 2 + CROP.oy - ih / 2, iw, ih);
+        x.fillStyle = 'rgba(5, 7, 15, .68)';
+        x.beginPath(); x.rect(0, 0, S, S); x.arc(S / 2, S / 2, D / 2, 0, Math.PI * 2); x.fill('evenodd');
+        x.strokeStyle = '#ffe08a'; x.lineWidth = 3; x.beginPath(); x.arc(S / 2, S / 2, D / 2, 0, Math.PI * 2); x.stroke();
+      }
+      function setZoom(z) {
+        z = Math.max(1, Math.min(4, z));
+        const k = z / CROP.zoom; CROP.ox *= k; CROP.oy *= k; CROP.zoom = z;
+        $('crop-zoom').value = String(z); cropClamp(); cropDraw();
+      }
+      async function openCrop(file) {
+        if (!file) return;
+        if (file.type && !/^image\//.test(file.type)) { cropSay('사진 파일을 골라 주세요', true); SND.ui('deny'); return; }
+        $('crop-ok').disabled = true;
+        $('crop').classList.add('on'); cropSize(); cropSay('사진을 여는 중이에요'); cropDraw();
+        try {
+          const c = await readPhoto(file);
+          Object.assign(CROP, { src: c, w: c.width, h: c.height, zoom: 1, ox: 0, oy: 0 });
+          cropSize(); $('crop-zoom').value = '1'; cropSay(''); $('crop-ok').disabled = false; cropDraw(); SND.ui('open');
+        } catch (e) {
+          CROP.src = null; cropDraw(); cropSay('이 사진은 열 수 없어요 · 다른 사진을 골라 주세요', true); SND.ui('deny');
+        }
+      }
+      function closeCrop() { $('crop').classList.remove('on'); CROP.src = null; CROP.pts.clear(); CROP.pinch = null; }
+      // 동그라미 안을 160×160 JPEG로. 25KB쯤(data URL 약 34000글자)을 넘으면 화질·크기를 낮춰 다시
+      function cropExport() {
+        const sc = CROP.base * CROP.zoom, side = CROP.D / sc, cx = CROP.w / 2 - CROP.ox / sc, cy = CROP.h / 2 - CROP.oy / sc;
+        // 한 번에 크게 줄이면 거칠어서, 먼저 480 안쪽으로 줄인 뒤 마지막 크기로
+        const mid = document.createElement('canvas'), m = Math.max(1, Math.round(Math.min(480, side)));
+        mid.width = mid.height = m;
+        const mx = mid.getContext('2d'); mx.imageSmoothingQuality = 'high';
+        mx.fillStyle = '#1b2a55'; mx.fillRect(0, 0, m, m);
+        mx.drawImage(CROP.src, cx - side / 2, cy - side / 2, side, side, 0, 0, m, m);
+        let last = '';
+        for (const [n, q] of [[160, 0.8], [160, 0.7], [160, 0.6], [128, 0.7], [112, 0.6], [96, 0.55]]) {
+          const c = document.createElement('canvas'); c.width = c.height = n;
+          const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(mid, 0, 0, n, n);
+          last = c.toDataURL('image/jpeg', q);
+          if (last.length <= 34000) return last;
+        }
+        return last;
+      }
+      $('pk-photo').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && photoFor) openCrop(f); });
+      $('crop-zoom').addEventListener('input', e => setZoom(Number(e.target.value)));
+      $('crop-ok').addEventListener('click', () => {
+        if (!CROP.src || !photoFor) return;
+        let url = '';
+        try { url = cropExport(); } catch (e) { url = ''; }
+        if (!url || !PROFILE.setPhoto(photoFor, url)) { cropSay('사진을 저장하지 못했어요 · 다른 사진으로 해 보세요', true); SND.ui('deny'); return; }
+        closeCrop(); SND.ui('buy'); renderParent(); renderMe();
+      });
+      $('crop-again').addEventListener('click', () => { SND.ui('tap'); $('pk-photo').value = ''; $('pk-photo').click(); });
+      $('crop-cancel').addEventListener('click', () => { closeCrop(); SND.ui('close'); });
+      // 밀기(한 손가락·마우스) · 두 손가락 벌리기 · 휠
+      const cv = $('crop-cv');
+      const ptsMid = () => { const a = [...CROP.pts.values()]; return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1 }; };
+      cv.addEventListener('pointerdown', e => {
+        if (!CROP.src) return;
+        try { cv.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+        CROP.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        CROP.pinch = CROP.pts.size === 2 ? Object.assign(ptsMid(), { z: CROP.zoom }) : null;
+      });
+      cv.addEventListener('pointermove', e => {
+        const p = CROP.pts.get(e.pointerId);
+        if (!p || !CROP.src) return;
+        if (CROP.pts.size === 1) { CROP.ox += e.clientX - p.x; CROP.oy += e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; cropClamp(); cropDraw(); return; }
+        const before = ptsMid();
+        p.x = e.clientX; p.y = e.clientY;
+        const now = ptsMid();
+        CROP.ox += now.x - before.x; CROP.oy += now.y - before.y;
+        if (CROP.pinch) setZoom(CROP.pinch.z * now.d / CROP.pinch.d); else { cropClamp(); cropDraw(); }
+      });
+      const ptrUp = e => { CROP.pts.delete(e.pointerId); CROP.pinch = CROP.pts.size === 2 ? Object.assign(ptsMid(), { z: CROP.zoom }) : null; };
+      cv.addEventListener('pointerup', ptrUp); cv.addEventListener('pointercancel', ptrUp);
+      cv.addEventListener('wheel', e => { if (!CROP.src) return; e.preventDefault(); setZoom(CROP.zoom * Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+      window.addEventListener('resize', () => { if ($('crop').classList.contains('on')) { cropSize(); cropClamp(); cropDraw(); } });
       $('pt-list').addEventListener('click', e => {
         const row = e.target.closest('.trow'), b = e.target.closest('button');
         if (!row || !b) return;
@@ -653,13 +827,13 @@
         let acts = '';
         if (pv.length === 1) {
           acts = '<button type="button" class="pact" data-imp="new"' + (room < 1 ? ' disabled' : '') + '>' + (room < 1 ? '친구가 ' + PROFILE.MAX + '명이라 새로 못 만들어요' : '새 아이로 추가') + '</button>' +
-            list.map(p => { const s = impStep[p.id] || 0; return '<button type="button" class="pact warn' + (s ? ' s' + s : '') + '" data-imp="' + p.id + '">' + (s ? STEP[s] : esc(p.icon) + ' ' + esc(p.name) + ' 기록 덮어쓰기') + '</button>'; }).join('');
+            list.map(p => { const s = impStep[p.id] || 0; return '<button type="button" class="pact warn' + (s ? ' s' + s : '') + '" data-imp="' + p.id + '">' + (s ? STEP[s] : tag(p) + ' 기록 덮어쓰기') + '</button>'; }).join('');
         } else {
           const s = impStep.all || 0;
           acts = '<button type="button" class="pact" data-imp="allnew"' + (room < pv.length ? ' disabled' : '') + '>' + (room < pv.length ? '자리가 모자라요 (최대 ' + PROFILE.MAX + '명)' : '모두 새 아이로 추가') + '</button>' +
             '<button type="button" class="pact warn' + (s ? ' s' + s : '') + '" data-imp="all">' + (s ? STEP[s] : '이 기기 기록을 모두 바꾸기') + '</button>';
         }
-        box.innerHTML = '<div class="pv">' + pv.map(k => '<div class="pvk"><i aria-hidden="true">' + esc(k.icon) + '</i><span>' + esc(k.name) + ' <small>별코인 ' + k.coins.toLocaleString() + ' · 메달 ' + k.medals + ' · 스티커 ' + k.stickers + '</small></span></div>').join('') +
+        box.innerHTML = '<div class="pv">' + pv.map(k => '<div class="pvk"><i class="pf-av" aria-hidden="true">' + face(k) + '</i><span>' + esc(k.name) + ' <small>별코인 ' + k.coins.toLocaleString() + ' · 메달 ' + k.medals + ' · 스티커 ' + k.stickers + '</small></span></div>').join('') +
           '<div class="at">만든 날 ' + esc(pv[0].at || '모름') + '</div><div class="acts">' + acts + '</div></div>';
       }
       $('pi-prev').addEventListener('click', e => {

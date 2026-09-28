@@ -788,10 +788,48 @@ async function until(page, fn, arg, ms) {
     await PF.evaluate(() => HUB.addCoins(40));
     assert(await PF.evaluate(() => JSON.parse(localStorage.getItem('play.hub1')).coins === 40 && PROFILE.raw.get('p2:play.hub1') !== null && JSON.parse(PROFILE.raw.get('play.hub1')).coins === 100), '저장 키가 따로');
   });
-  await test('게임 시작 화면에 지금 아이 이름표 (읽기만)', async () => {
+  await test('아이 사진: 보호자 화면 → 사진 넣기 → 맞추기(밀기·크게) → 좋아요, 본부 이름표·고르기 카드에 동그란 사진', async () => {
+    // 만든 그림(웃는 얼굴)을 PNG로: 진짜 사람 사진은 쓰지 않는다
+    const png = Buffer.from(await PF.evaluate(() => {
+      const c = document.createElement('canvas'); c.width = 640; c.height = 480; const x = c.getContext('2d');
+      const g = x.createLinearGradient(0, 0, 640, 480); g.addColorStop(0, '#5ee7ff'); g.addColorStop(1, '#ff5fa8'); x.fillStyle = g; x.fillRect(0, 0, 640, 480);
+      x.fillStyle = '#ffd36b'; x.beginPath(); x.arc(320, 240, 170, 0, 7); x.fill();
+      x.fillStyle = '#1b2a55'; x.beginPath(); x.arc(260, 200, 22, 0, 7); x.arc(380, 200, 22, 0, 7); x.fill();
+      x.strokeStyle = '#b8340a'; x.lineWidth = 14; x.beginPath(); x.arc(320, 250, 90, 0.2, Math.PI - 0.2); x.stroke();
+      return c.toDataURL('image/png').split(',')[1];
+    }), 'base64');
+    await PF.evaluate(() => PF_UI.openParent('kids'));
+    assert(await PF.evaluate(() => { const i = document.querySelector('.prow[data-id="2"] .pname input'); return i && /이름/.test(i.closest('.pname').textContent) && i.getBoundingClientRect().height >= 44; }), '이름 칸이 크게');
+    assert(await PF.evaluate(() => /이 기기 안에만/.test(document.querySelector('.prow[data-id="2"] .pphoto').textContent) && !document.querySelector('.prow[data-id="2"] [data-act="nophoto"]')), '사진 넣기·안내, 빼기는 아직 없음');
+    const [fc] = await Promise.all([PF.waitForEvent('filechooser'), PF.tap('.prow[data-id="2"] [data-act="photo"]')]);
+    assert(fc.element() && await fc.element().getAttribute('accept') === 'image/*', 'image/* 고르기');
+    await fc.setFiles({ name: 'face.png', mimeType: 'image/png', buffer: png });
+    assert(await until(PF, () => document.getElementById('crop').classList.contains('on') && !document.getElementById('crop-ok').disabled), '맞추기 화면');
+    const b = await PF.locator('#crop-cv').boundingBox();
+    await PF.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await PF.mouse.down();
+    await PF.mouse.move(b.x + b.width / 2 + 40, b.y + b.height / 2 + 10, { steps: 4 }); await PF.mouse.up();
+    await PF.evaluate(() => { const z = document.getElementById('crop-zoom'); z.value = '1.6'; z.dispatchEvent(new Event('input', { bubbles: true })); });
+    await PF.tap('#crop-ok');
+    assert(await until(PF, () => !document.getElementById('crop').classList.contains('on')), '닫힘');
+    const ph = await PF.evaluate(() => PROFILE.get(2).photo || '');
+    assert(/^data:image\/jpeg;base64,/.test(ph) && ph.length < 34000 && ph.length > 1000, '사진 저장 ' + ph.length);
+    assert(await PF.evaluate(() => JSON.parse(PROFILE.raw.get('play.profiles')).list.find(p => p.id === 2).photo.length > 1000 && PROFILE.raw.get('p2:play.profiles') === null), '공통 키에');
+    const dim = await PF.evaluate(() => new Promise(r => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.src = PROFILE.get(2).photo; }));
+    assert(dim[0] === 160 && dim[1] === 160, '160x160 ' + dim);
+    assert(await PF.evaluate(() => !!document.querySelector('.prow[data-id="2"] .ic img.pf-ph') && !!document.querySelector('.prow[data-id="2"] [data-act="nophoto"]')), '보호자 목록에 사진·빼기 버튼');
+    await PF.evaluate(() => PF_UI.closeParent());
+    assert(await until(PF, () => { const im = document.querySelector('#pf-ic img.pf-ph'); return im && im.complete && im.naturalWidth === 160 && im.getBoundingClientRect().width >= 30; }), '본부 이름표 사진');
+    await PF.tap('#pf-btn');
+    assert(await until(PF, () => !!document.querySelector('.who-card[data-id="2"] img.pf-ph') && !document.querySelector('.who-card[data-id="1"] img')), '고르기 카드 사진');
+    await PF.tap('#who-close');
+    // 망가진 사진 글이면 그림 글자로 (onerror)
+    assert(await PF.evaluate(() => new Promise(r => { const d = document.createElement('i'); d.innerHTML = PROFILE.faceHtml({ icon: '🐱', photo: 'data:image/png;base64,AAAA' }); document.body.appendChild(d); setTimeout(() => { const ok = d.textContent === '🐱' && !d.querySelector('img'); d.remove(); r(ok); }, 400); })), '못 읽는 사진은 그림으로');
+  });
+  await test('게임 시작 화면에 지금 아이 이름표 (읽기만, 사진이 있으면 사진)', async () => {
     for (const g of ['game', 'snake', 'jump', 'runner']) {
       await PF.goto(ROOT + '/' + g + '/index.html');
       assert(await until(PF, () => { const b = document.querySelector('#scr-title [data-pf-badge]'); return b && !b.hidden && /민지/.test(b.textContent) && b.getBoundingClientRect().width > 20; }), g + ' 이름표');
+      assert(await until(PF, () => { const im = document.querySelector('#scr-title [data-pf-badge] img.pf-ph'); return im && im.complete && im.naturalWidth === 160; }), g + ' 이름표 사진');
       assert(await PF.evaluate(() => document.querySelector('script').getAttribute('src') === '../common/profile.js'), g + ' profile.js가 첫 스크립트');
     }
   });
@@ -843,9 +881,11 @@ async function until(page, fn, arg, ms) {
     await PF.fill('#pi-code', code);
     await PF.tap('#pi-check');
     assert(await PF.evaluate(() => /민지/.test(document.querySelector('#pi-prev .pv').textContent) && /별코인 40/.test(document.querySelector('#pi-prev .pv').textContent)), '미리 보기');
+    assert(await PF.evaluate(() => !!document.querySelector('#pi-prev .pvk img.pf-ph') && !!document.querySelector('#px-who [data-who="2"] img.pf-ph')), '미리 보기·내보내기 칸에 사진');
     await Promise.all([PF.waitForNavigation({ timeout: 5000 }), PF.tap('#pi-prev [data-imp="new"]')]);
     await PF.waitForTimeout(300);
     assert(await PF.evaluate(() => PROFILE.list().length === 3 && PROFILE.get(3).name === '민지' && JSON.parse(PROFILE.raw.get('p3:play.hub1')).coins === 40), '새 아이로');
+    assert(await PF.evaluate(() => PROFILE.get(3).photo === PROFILE.get(2).photo && PROFILE.get(3).photo.length > 1000), '사진도 같이');
   });
   await test('지우기: 세 번 눌러야 지워지고 그 아이 키만 사라진다', async () => {
     await PF.evaluate(() => PF_UI.openParent('kids'));

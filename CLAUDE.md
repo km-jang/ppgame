@@ -22,7 +22,7 @@
 | `common/worlds.js` | 우주 여행 도감: 태양계 날씨·외계 행성 여덟 (DOM 없음, `tests/worlds.test.js`). 네 게임이 `hub.js` 바로 뒤에 불러오고 `sw.js` FILES에 넣는다 |
 | `common/sound.js` | 공통 소리 `SND`: 리미터·소리 끄기(`play.sound1`)·소리 가족·배경 음악 (`tests/sound.test.js`). 네 게임이 `worlds.js` 뒤에 불러오고 `sw.js` FILES에 넣는다. 게임 소리는 `SND.out()`에 연결 |
 | `common/hub.js` | 네 게임이 함께 쓰는 별코인 지갑·기록 요약·오늘의 미션 (DOM 없음, `tests/hub.test.js`, 키 `play.hub1`) | |
-| `common/profile.js` | 아이 프로필(최대 4명)·보호자 설정(하루 놀이 시간·소리 크기 상한)·놀이 시간 세기와 남은 시간 알림·기록 옮기기(코드·파일) (전역 `PROFILE`, 핵심은 DOM 없음, `tests/profile.test.js`). **모든 페이지의 첫 번째 스크립트** (첫 화면 `index.html`, 네 게임 `index.html`의 `../common/hub.js` 앞), 네 게임 `sw.js` FILES에도 넣는다. 게임은 `main.js` frame에서 `PROFILE.setPlaying(판이 도는가)`만 부른다 | |
+| `common/profile.js` | 아이 프로필(최대 4명, 이름·그림·사진)·보호자 설정(하루 놀이 시간·소리 크기 상한)·놀이 시간 세기와 남은 시간 알림·기록 옮기기(코드·파일) (전역 `PROFILE`, 핵심은 DOM 없음, `tests/profile.test.js`). **모든 페이지의 첫 번째 스크립트** (첫 화면 `index.html`, 네 게임 `index.html`의 `../common/hub.js` 앞), 네 게임 `sw.js` FILES에도 넣는다. 게임은 `main.js` frame에서 `PROFILE.setPlaying(판이 도는가)`만 부른다. 아이 사진은 `play.profiles` 목록의 `photo`(160×160 JPEG data URL, `cleanPhoto`가 jpeg·png와 6만 글자 상한만 받음), 얼굴은 `PROFILE.faceHtml(p)`로 그린다(없거나 못 읽으면 그림 글자) | |
 | `android/` · `.github/workflows/apk.yml` | 안드로이드 APK: 웹뷰 한 화면(`MainActivity.java`)이 게임 파일을 앱 안에서 연다. GitHub가 빌드해 main이면 Releases `apk-latest`에 올린다. 서명 비밀 `ANDROID_KEYSTORE_B64`·`ANDROID_KEYSTORE_PASS`. 로컬 세션은 안드로이드 도구를 못 받으니 빌드 확인은 Actions "APK 만들기"로 | |
 | `archive/robocar/` | **뚝딱 로봇카**: 보류 (2026-09-27 소유자 결정). 첫 화면에서 뺐고 필수 테스트에서도 뺐다. `archive/README.md` | |
 
@@ -71,6 +71,7 @@
 | 2026-09-27 | 공통 | **점검 후 다듬기**: 집 버튼, 멈춤에서 나가도 정산, 한글 쉬운 말, 결과 화면 맞춤·0.6초 눌림 막기, "한 번 더!" 이어하기, 뿅뿅 그림 카드·보스 스티커, 뱀 스테이지 별·대왕 뱀, 점프 워프 출발, 달리기 쉬운 첫 판 안내, 첫 화면 새 스티커 5장. 학습 요소 없음 확정 (각 `PLAN.md`, PR #14) |
 | 2026-09-27 | 공통 | **소리 정비**: 공통 `common/sound.js`(리미터·소리 끄기 하나·탭 나가면 멈춤·소리 가족·행성별 배경 음악), 네 게임 크기 맞춤·너무 잦은 소리와 안 들리는 소리 정리·날카로운 소리 없앰, 첫 화면 소리 버튼. 소리 파일 없음 (각 `PLAN.md`, main에 합침) |
 | 2026-09-28 | 공통 | **아이 프로필 + 보호자 화면**: 아이마다 기록 따로(`common/profile.js`, 최대 4명, 첫 화면 "누가 놀아요?"), 보호자 화면(자물쇠 3초 꾹): 아이 프로필·하루 놀이 시간(10분·5분 전·끝 알림, 멈추지 않음)·소리 크기 상한·기록 옮기기(코드·파일). 게임 시작 화면에 이름표. `ngun-v19`·`snake-v19`·`jump-v14`·`runner-v12` (브랜치) |
+| 2026-09-28 | 공통 | **아이 사진**: 보호자 화면 아이 칸에 이름 칸(크게)·사진 넣기(갤러리·카메라)·사진 맞추기(밀기·크게 작게)·사진 빼기, 160×160 JPEG를 `play.profiles`에 (이 기기 안에만). 이름표·누가 놀아요?·보호자 화면·네 게임 시작 화면·기록 옮기기에 동그란 사진, 코드에 사진도. APK는 사진 고르기면 사진만 보이게. `ngun-v20`·`snake-v20`·`jump-v15`·`runner-v13` (브랜치) |
 | 2026-09-24 | 공통 | 작업 지침(`CLAUDE.md`)·인계 문서(`HANDOFF.md`), 화면 흐름 점검(`tests/flow.test.js`), N-GUN 오프라인, 로봇카 첫 방문 글꼴 저장, 보호자 화면 "놀이 기록"·"기기 점검" 탭 (브랜치) |
 
 새 작업을 main에 합치면 이 표에 한 줄 추가한다.
@@ -167,7 +168,7 @@
    글은 짧게 + 목소리로 읽어 주기. 외부 링크·데이터 수집·결제 금지. 하루 타이머와 보호자 자물쇠(3초 누르기)를 우회하는 기능 금지.
 5. **유아틱하지 않게.** 소유자 피드백(2026-09-24)으로 둥근 손글씨체·두꺼운 검정 테두리·파스텔 단색·왕눈이를 버렸다.
    광택 재질·굵은 디스플레이 서체(Black Han Sans)·어두운 유리 패널 방향을 유지한다 (`archive/robocar/VISUAL.md`).
-6. **게임 파일을 바꾸면 그 게임의 `sw.js` `VERSION`을 올린다** (N-GUN `ngun-v19` → `v20`, N-SNAKE `snake-v19` → `v20`, 통통 점프 `jump-v14` → `v15`, 슝슝 우주 달리기 `runner-v12` → `v13` …, 보류 중인 로봇카 `robocar-v14`).
+6. **게임 파일을 바꾸면 그 게임의 `sw.js` `VERSION`을 올린다** (N-GUN `ngun-v20` → `v21`, N-SNAKE `snake-v20` → `v21`, 통통 점프 `jump-v15` → `v16`, 슝슝 우주 달리기 `runner-v13` → `v14` …, 보류 중인 로봇카 `robocar-v14`).
    안 올리면 홈 화면에 설치한 태블릿이 옛 파일을 계속 연다. 새 파일을 추가하면 `FILES` 목록에도 넣는다.
    두 게임은 같은 주소(도메인)를 쓰므로 옛 저장본을 지울 때는 **자기 이름으로 시작하는 것만** 지운다 (`robocar-`, `ngun-`, `snake-`, `jump-`, `runner-`).
    다른 게임 것까지 지우면 그 게임이 인터넷 없이 안 열린다.
