@@ -18,7 +18,7 @@
 - 게임 본체: [`game/`](game/) · 기획서: [`game/PLAN.md`](game/PLAN.md)
 - 모바일(폰·태블릿) 우선. 크롬에서 열고 메뉴 → **홈 화면에 추가**하면 앱처럼 전체 화면으로 실행된다.
 - 설치·빌드 없음. `game/index.html`을 브라우저로 열면 바로 실행된다.
-- GitHub Pages를 켜면 저장소 주소 첫 화면(`index.html`)이 `game/`으로 넘겨 준다.
+- GitHub Pages를 켜면 `https://km-jang.github.io/n-gun/`이 네 게임을 고르는 첫 화면이고, 뿅뿅 우주선은 `…/n-gun/game/`이다.
 
 ## 조작
 
