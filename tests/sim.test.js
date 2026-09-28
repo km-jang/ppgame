@@ -591,7 +591,7 @@ test('보스 공격: 헥사 가디언 방패는 내 총알 일부를 막고, 여
   W.player.fireCd = 0;
   for (let i = 0; i < 60 * 6; i++) {
     step(W, { moveX: 0, moveY: 0, aimAngle: Math.atan2(e.y - W.player.y, e.x - W.player.x), dash: false }, DT);
-    blocked += W.events.filter(x => x === 'block').length; W.events.length = 0; W.player.hp = W.player.maxHp;
+    blocked += W.events.filter(x => x === 'hexBlock').length; W.events.length = 0; W.player.hp = W.player.maxHp;
     for (const b of W.eBullets) kinds.add(b.k);
   }
   assert(blocked > 3, 'shield blocked ' + blocked);
@@ -858,7 +858,7 @@ test('아이템: 방패는 딱 한 대를 막고, 두 번째는 맞는다', () =
   const hp = p.hp;
   W.eBullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
   step(W, IDLE, DT);
-  assert(p.hp === hp && p.shield === 0 && W.stats.blocks === 1 && W.events.includes('block') && !W.waveHit, 'blocked');
+  assert(p.hp === hp && p.shield === 0 && W.stats.blocks === 1 && W.events.includes('shieldBlock') && !W.waveHit, 'blocked');
   p.iframe = 0;
   W.eBullets.push({ x: p.x, y: p.y, vx: 0, vy: 0, r: 5, life: 5 });
   step(W, IDLE, DT);
@@ -2019,6 +2019,70 @@ test('파편은 상한을 넘지 않고, 내 기체 위 글자는 겹치지 않�
   const mine = W.texts.filter(t => t.mine);
   assert(mine.length === 2 && Math.abs(mine[0].y - mine[1].y) >= 16, 'stacked ' + mine.map(t => t.y).join());
   for (const t of mine) assert(t.y < W.player.y - W.player.r * 2, 'above the ship');
+});
+
+// ─── 소리 (audio.js, 공통 SND) ─────────────────────────────
+// AudioContext가 없는 node에서 audio.js를 불러 이름·연결만 검사한다 (실제 크기는 크로미움으로 재서 game/PLAN.md 소리 절에 적음)
+const AUDIO_SRC = fs.readFileSync(path.join(__dirname, '..', 'game', 'js', 'audio.js'), 'utf8');
+function audioCtx() {
+  const c = vm.createContext({ console, Math, Date, JSON, setTimeout, clearTimeout });
+  vm.runInContext('var HUB = { store: { get: (k, f) => f, set() {} } };', c);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'sound.js'), 'utf8'), c, { filename: 'sound.js' });
+  vm.runInContext('var NG = {};', c);
+  for (const f of ['samples.js', 'audio.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game', 'js', f), 'utf8'), c, { filename: f });
+  return { A: vm.runInContext('NG.Audio', c), S: vm.runInContext('SND', c) };
+}
+
+test('소리: 효과음 이름이 겹치지 않는다 (옛 block 두 번 정의 → shieldBlock·hexBlock)', () => {
+  const body = AUDIO_SRC.slice(AUDIO_SRC.indexOf('const SFX = {'), AUDIO_SRC.indexOf('\n  };', AUDIO_SRC.indexOf('const SFX = {')));
+  const keys = [...body.matchAll(/^    ([A-Za-z]+) ?:/mg)].map(m => m[1]);
+  const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
+  assert(keys.length > 40 && !dup.length, 'dup ' + dup.join());
+  assert(!keys.includes('block') && keys.includes('shieldBlock') && keys.includes('hexBlock'), 'block split');
+  const { A } = audioCtx();
+  assert(A.names.length === keys.length, 'names ' + A.names.length + ' vs ' + keys.length);
+});
+
+test('소리: 판 이벤트마다 소리가 있다 (방패 막기 shieldBlock, 헥사 방패 hexBlock, 터짐 down, 되살아남 continueGo)', () => {
+  const { A, S } = audioCtx();
+  const src = fs.readFileSync(path.join(__dirname, '..', 'game', 'js', 'world.js'), 'utf8');
+  const evs = new Set([...src.matchAll(/events\.push\('([A-Za-z]+)'\)/g)].map(m => m[1]).concat(['laser', 'beam', 'zap']));
+  for (const ev of evs) {
+    const s = A.soundOf(ev);
+    assert(s, 'no sound for ' + ev);
+    if (s.startsWith('ui.')) assert(S.UI_NAMES.includes(s.slice(3)), 'ui ' + s);
+  }
+  assert(A.soundOf('shieldBlock') === 'shieldBlock' && A.soundOf('hexBlock') === 'hexBlock', 'blocks');
+  assert(A.soundOf('over') === 'down' && A.soundOf('revive') === 'ui.continueGo' && A.soundOf('pick') === 'ui.tap', 'aliases');
+  // 방패 막기를 부르는 곳이 실제로 world.js에 있다
+  assert(evs.has('shieldBlock') && evs.has('hexBlock') && !evs.has('block'), 'world events');
+});
+
+test('소리: main.js가 부르는 공통 효과음(SND.ui)은 모두 있는 이름', () => {
+  const { S } = audioCtx();
+  const main = fs.readFileSync(path.join(__dirname, '..', 'game', 'js', 'main.js'), 'utf8');
+  const used = new Set([...main.matchAll(/NG\.Audio\.ui\('([A-Za-z]+)'/g)].map(m => m[1]));
+  for (const n of ['start', 'tap', 'open', 'close', 'buy', 'deny', 'claim', 'coin', 'medal', 'sticker', 'continueAsk', 'tick', 'fanfare']) assert(used.has(n), 'main.js uses ' + n);
+  assert(/'overSoft' : 'over'/.test(main), 'over / overSoft by difficulty');
+  for (const n of used) assert(S.UI_NAMES.includes(n), 'unknown ui ' + n);
+  // 옛 소리 설정 키는 SND가 이어받으므로 main.js가 더는 쓰지 않는다
+  assert(!/ngun\.muted|ngun\.audio|AUDIO_KEY|MUTE_KEY/.test(main.replace(/\/\/.*$/mg, '')), 'old keys');
+});
+
+test('소리: 날카로운 네모파·아주 높은 쉿 소리가 없다, 총소리 크기는 총열 수와 무관', () => {
+  assert(!/'square'/.test(AUDIO_SRC), 'square wave');
+  assert(!/noise\([^;]*'highpass'/.test(AUDIO_SRC), 'highpass noise sparkle');
+  const shoot = AUDIO_SRC.slice(AUDIO_SRC.indexOf('    shoot: {'), AUDIO_SRC.indexOf('    hit:'));
+  assert(/\[1, 0\.93, 1\.07\]/.test(shoot), 'three pitch variants');
+  // 크기(4번째 뒤 숫자)에 n이 들어가지 않는다
+  for (const m of shoot.matchAll(/(?:noise|tone)\(([^;]*)\);/g)) { const args = m[1].split(','); assert(!/\bn\b/.test(args.slice(6).join(',')), 'volume uses n: ' + m[1]); }
+  assert(!/ac\.createDynamicsCompressor|new AC\b|AudioContext/.test(AUDIO_SRC.replace(/\/\/.*$/mg, '')), 'no own context or compressor');
+});
+
+test('소리: AudioContext가 없어도 소리 함수가 조용히 아무것도 안 한다', () => {
+  const { A } = audioCtx();
+  A.unlock(); A.play('shoot', { n: 3 }); A.event('over'); A.event('revive'); A.event('shieldBlock'); A.ui('tap');
+  A.title(); A.startPlay('mars'); A.planet('saturn', true); A.boss(false); A.fever(true); A.duck(true); A.duck(false); A.stopMusic();
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -12,7 +12,23 @@
   const calmQuery = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   const input = RN.createInput(canvas);
   const PF = RN.Prefs;
-  const MUTE_KEY = PF.KEYS.muted;
+
+  // ─── 소리: 네 게임이 함께 쓰는 common/sound.js (SND). 화면 소리·배경 음악·소리 끄기는 SND, 게임 효과음은 RN.Audio ───
+  const HAS_SND = typeof SND !== 'undefined' && SND;
+  const ui = (name, o) => { if (HAS_SND) SND.ui(name, o); };
+  // 배경 음악 행성 id: 은하 너머(beyond)는 공통 음악의 galaxy
+  const planetOf = zone => { const id = RN.World.placeOf(zone).id; return id === 'beyond' ? 'galaxy' : id; };
+  // 음악 분위기는 바뀔 때만 보낸다 (매 프레임 부르지 않게)
+  const mood = { fever: false, boss: false, calm: false };
+  function musicMood(o) {
+    if (!HAS_SND) return;
+    const ch = {};
+    for (const k in o) if (mood[k] !== o[k]) { mood[k] = o[k]; ch[k] = o[k]; }
+    if (Object.keys(ch).length) SND.music.setMood(ch);
+  }
+  function musicPlay(planet) { if (HAS_SND) { SND.music.duck(1); SND.music.play('runner', planet); } }
+  const musicDuck = v => { if (HAS_SND) SND.music.duck(v); };
+  const musicStop = sec => { if (HAS_SND) SND.music.stop(sec); };
 
   const view = { dpr: 1, w: 0, h: 0, ui: 1, hudMid: 32, hudLeft: 150, hudRight: 14, touch: isTouch, calm: false, best: 0 };
   view.pad = input;   // 밀기 화살표 그리기용 (render.js가 읽기만 한다)
@@ -131,7 +147,7 @@
     }
     if (fresh.length) {
       saveRec();
-      if (live) { toast('메달 획득: ' + fresh.map(m => m.name).join(', ')); RN.Audio.play('medal'); vibrate([20, 40, 20]); }
+      if (live) { toast('메달 획득: ' + fresh.map(m => m.name).join(', ')); ui('medal'); vibrate([20, 40, 20]); }
     }
     return fresh;
   }
@@ -149,6 +165,7 @@
       ['모두 한 판', T.games], ['모은 별', T.stars.toLocaleString()], ['모두 달린 거리', Math.floor(T.dist).toLocaleString() + 'm'],
     ]);
     $('record-list').innerHTML = rows.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + v + '</dd></div>').join('');
+    ui('open');
     show('scr-medals');
   }
 
@@ -178,7 +195,10 @@
     wakeLock(true);
     show(null);
     pushHistory();
-    RN.Audio.play('start');
+    ui('start');
+    // 배경 음악: 첫 행성(수성)부터. 쉬움은 차분하게
+    musicMood({ fever: false, boss: false, calm: diff === 'easy' });
+    musicPlay(planetOf(W.zone));
     return W;
   }
 
@@ -191,6 +211,8 @@
     renderBest();
     renderTitleShop();
     show('scr-title');
+    musicMood({ fever: false, boss: false, calm: false });
+    musicPlay('title');
   }
 
   // ─── 상점 · 미션 화면 ──────────────────────────────────────
@@ -269,12 +291,14 @@
     mode = 'shop';
     if (tab) shopTab = TAB_ALIAS[tab] || tab;
     renderShop();
+    ui('open');
     show('scr-shop');
   }
   function closeShop() {
     if (mode !== 'shop') return;
     mode = 'title';
     renderBest(); renderTitleShop();
+    ui('close');
     show('scr-title');
   }
   const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 캐릭터예요', max: '더는 살 수 없어요' };
@@ -282,11 +306,11 @@
     const r = SH.buy(shop, id);
     if (r.ok) {
       SH.save(shop);
-      RN.Audio.play('buy');
+      ui('buy');
       vibrate(20);
       if (SH.charDef(id)) toast('새 캐릭터: ' + SH.charDef(id).name + '!');
     } else {
-      RN.Audio.play('deny');
+      ui('deny');
       toast(NAMES[r.reason] || '살 수 없어요');
     }
     if (mode === 'shop') renderShop();
@@ -295,7 +319,7 @@
   }
   function useChar(id) {
     const ok = SH.selectChar(shop, id);
-    if (ok) { SH.save(shop); RN.Audio.play('pick'); }
+    if (ok) { SH.save(shop); ui('tap'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
     return ok;
@@ -305,7 +329,7 @@
     const got = SH.claim(shop, i);
     if (!got) return 0;
     SH.save(shop);
-    RN.Audio.play('claim');
+    ui('claim');
     vibrate([15, 30, 15]);
     if (btn && !view.calm) {
       const r = btn.getBoundingClientRect(), pop = document.createElement('span');
@@ -339,7 +363,7 @@
       const k = Math.min(1, (now - t0) / dur), v = Math.round(total * (1 - Math.pow(1 - k, 3)));
       el.textContent = '+' + fmt(v);
       const st = Math.floor(k * 12);
-      if (st !== lastTick) { lastTick = st; RN.Audio.play('coin'); }
+      if (st !== lastTick) { lastTick = st; ui('coin'); }
       if (k < 1 && mode === 'over') requestAnimationFrame(tick);
       else { el.textContent = '+' + fmt(total); el.classList.add('done'); }
     };
@@ -375,6 +399,8 @@
     if (mode !== 'play') return;
     mode = 'paused';
     frozenDrawn = false;
+    ui('open');
+    musicDuck(0.3);   // 멈춤 화면에서는 음악을 작게
     show('scr-pause');
   }
 
@@ -382,6 +408,8 @@
     if (mode !== 'paused') return;
     input.reset();
     mode = 'play';
+    ui('close');
+    musicDuck(1);
     show(null);
   }
 
@@ -429,6 +457,7 @@
       input.active = false;
       overAt = performance.now();
       wakeLock(false);
+      musicDuck(0.3);
       // 부딪힌 연출을 잠깐 보여 준 뒤 물어본다
       clearTimeout(contTimer);
       contTimer = setTimeout(askContinue, D.CONTINUE.show * 1000);
@@ -444,9 +473,15 @@
     ring.style.animation = 'none'; void ring.getBoundingClientRect(); ring.style.animation = '';
     ring.style.animationDuration = ask + 's';
     show('scr-cont');
-    RN.Audio.play('medal');
+    ui('continueAsk');
     clearInterval(contTick);
-    contTick = setInterval(() => { left--; if (mode === 'cont') $('cont-num').textContent = Math.max(0, left); else clearInterval(contTick); }, 1000);
+    // 초 세기: 한 칸마다 똑딱, 마지막 1은 높은 소리
+    contTick = setInterval(() => {
+      left--;
+      if (mode !== 'cont') { clearInterval(contTick); return; }
+      $('cont-num').textContent = Math.max(0, left);
+      if (left >= 1) ui('tick', { hi: left === 1 });
+    }, 1000);
     clearTimeout(contTimer);
     contTimer = setTimeout(() => { clearInterval(contTick); if (mode === 'cont') gameOver(); }, ask * 1000);
   }
@@ -458,7 +493,8 @@
     mode = 'play';
     wakeLock(true);
     show(null);
-    RN.Audio.play('start');
+    ui('continueGo');
+    musicDuck(1);
     vibrate([20, 30, 20]);
     return true;
   }
@@ -476,6 +512,10 @@
     mode = 'over';
     input.active = false;
     overAt = performance.now();
+    // 끝 소리: 쉬움은 더 부드럽게. 음악은 천천히 멈춘다
+    ui(W.diff === 'easy' ? 'overSoft' : 'over');
+    musicStop(0.8);
+    musicMood({ fever: false, boss: false });
     const r = settle(false) || { newRec: [], isBest: false, fresh: [], dist: Math.floor(W.dist), B: bestOf(W.diff) };
     renderEarn();
     $('over-records').innerHTML = r.newRec.map(x => '<span>신기록 · ' + x + '</span>').join('');
@@ -484,7 +524,10 @@
     const MC = 6, shown = r.fresh.length > MC ? r.fresh.slice(0, MC - 1) : r.fresh;
     $('over-medals').innerHTML = shown.map(m => '<span class="mchip t' + m.tier + '"><i>' + TIER[m.tier] + '</i>' + esc(m.name) + '</span>').join('') +
       (r.fresh.length > shown.length ? '<span class="mchip more">새 메달 ' + (r.fresh.length - shown.length) + '개 더</span>' : '');
-    if (r.fresh.length) setTimeout(() => { if (mode === 'over') RN.Audio.play('medal'); }, 900);
+    // 신기록이면 결과 화면이 뜰 때 팡파르, 새 메달 소리는 그 뒤에
+    const best = r.isBest || r.newRec.length > 0, showMs = fromCont ? 0 : 900;
+    if (best) setTimeout(() => { if (mode === 'over') ui('fanfare'); }, showMs);
+    if (r.fresh.length) setTimeout(() => { if (mode === 'over') ui('medal'); }, showMs + (best ? 1700 : 0));
     $('over-title').textContent = causeText(W.cause);
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = r.isBest ? '' : 'none';
@@ -502,8 +545,10 @@
     for (const ev of world.events) {
       if (!sound) continue;
       if (ev === 'star') RN.Audio.play('star', { k: (world.chain - 1) % 10 });
-      else if (ev === 'zone') RN.Audio.play('zone', { i: world.zone });
-      else RN.Audio.play(ev);
+      else if (ev === 'zone') { RN.Audio.play('zone', { i: world.zone }); if (HAS_SND) SND.music.setMood({ planet: planetOf(world.zone) }); }
+      else if (ev === 'perfect') RN.Audio.play('perfect', { n: world.perfects });
+      else if (ev === 'over') RN.Audio.play('crash');   // 끝 알림(over·overSoft)은 gameOver가
+      else if (ev !== 'continue') RN.Audio.play(ev);   // 이어하기 소리는 contYes의 continueGo
       if (ev === 'over') vibrate(180);
       else if (ev === 'hit') vibrate([40, 30, 40]);
       else if (ev === 'shield' || ev === 'smash') vibrate(30);
@@ -525,7 +570,7 @@
     RN.Audio.unlock();
     if (move(dir) && touch) vibrate(10);
   };
-  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { RN.Audio.unlock(); setDiff(b.dataset.diff); RN.Audio.play('lane'); });
+  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { RN.Audio.unlock(); setDiff(b.dataset.diff); ui('tap'); });
   input.onKey = code => {
     RN.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
@@ -537,13 +582,15 @@
     if (mode === 'paused' && (code === 'Enter' || code === 'Space')) return resume();
   };
 
+  // 소리 끄기: 네 게임·첫 화면이 함께 쓰는 설정 하나 (SND, 키 play.sound1)
   function toggleMute() {
     RN.Audio.unlock();
-    RN.Audio.setMuted(!RN.Audio.muted);
-    RN.store.set(MUTE_KEY, RN.Audio.muted);
-    $('btn-mute').classList.toggle('muted', RN.Audio.muted);
+    if (HAS_SND) SND.toggleMuted();
+    showMute();
     toast(RN.Audio.muted ? '소리 끔' : '소리 켬');
   }
+  const showMute = () => $('btn-mute').classList.toggle('muted', RN.Audio.muted);
+  if (HAS_SND) SND.onChange(showMute);   // 다른 게임·다른 창에서 바꿔도 버튼이 따라온다
 
   // 브라우저는 첫 터치·클릭 뒤에야 소리를 허락한다
   window.addEventListener('pointerdown', () => RN.Audio.unlock(), { passive: true });
@@ -556,7 +603,7 @@
   $('btn-shop').addEventListener('click', () => openShop('chars'));
   $('btn-ship').addEventListener('click', () => openShop('chars'));
   $('btn-shop-back').addEventListener('click', closeShop);
-  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); RN.Audio.play('lane'); });
+  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); ui('tap'); });
   $('shop-list').addEventListener('click', e => {
     const b = e.target.closest('[data-buy],[data-use]');
     if (!b) return;
@@ -565,7 +612,7 @@
   for (const id of ['title-missions', 'over-missions']) {
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) claimMission(+b.dataset.claim, b); });
   }
-  $('btn-medals-back').addEventListener('click', toTitle);
+  $('btn-medals-back').addEventListener('click', () => { ui('close'); toTitle(); });
   $('btn-retry').addEventListener('click', () => { if (!guarded()) newGame(); });
   $('btn-home').addEventListener('click', () => { if (!guarded()) toTitle(); });
   $('btn-resume').addEventListener('click', resume);
@@ -647,7 +694,6 @@
     lastTs = ts;
 
     if (mode === 'title' || mode === 'shop') {
-      RN.Audio.feverBeat(false);
       // 시연: 자동 운전 우주선이 시작 화면 뒤에서 달린다. 끝나면(드물게) 새로
       if (!demo || demo.phase !== 'play' || demo.dist > 3400) demo = RN.World.create(777 + Math.floor(Math.random() * 1000), { diff: 'easy', auto: true, wait: 0, char: shop.char });
       RN.World.step(demo, dt);
@@ -665,8 +711,8 @@
         if (W.phase === 'over') crashed();
         frozenDrawn = false;
       }
-      // 피버 동안 빠른 배경 박자 (멈춤·결과 화면에서는 멈춘다)
-      RN.Audio.feverBeat(mode === 'play' && W.phase === 'play' && W.fever > 0);
+      // 배경 음악 분위기: 피버는 빠르고 반짝, 해적 추격은 단조로 힘차게, 쉬움·블랙홀 구간은 차분하게
+      if (mode === 'play') musicMood({ fever: W.phase === 'play' && W.fever > 0, boss: W.phase === 'play' && !!W.pir, calm: W.diff === 'easy' || !!W.bh });
       // 결과 화면이 뜨고 연출이 끝나면 그리기를 쉰다 (배터리)
       const idle = mode === 'paused' || ((mode === 'over' || mode === 'cont') && performance.now() - overAt > 1300 && !RN.Render.busy());
       if (!idle || !frozenDrawn) {
@@ -688,8 +734,7 @@
   renderDiff();
   tellRefund();
   reportSummary();
-  RN.Audio.setMuted(RN.store.get(MUTE_KEY, false));
-  $('btn-mute').classList.toggle('muted', RN.Audio.muted);
+  showMute();
   resize();
   toTitle();
   requestAnimationFrame(ts => { lastTs = ts - 20; frame(ts); });

@@ -1917,5 +1917,82 @@ test('아이 말: 미션 글에 "(누적)" 같은 말 없음, 처음 몇 판은 
   for (const x of [].concat(D.UPGRADES, D.CHARS, D.START_ITEMS)) assert(!/%|\d+(\.\d+)?\s*배|\+\d/.test(x.desc), 'kid words ' + x.desc);
 });
 
+// ─── 소리: 공통 소리 장치(common/sound.js, SND) 연결 ───
+const RD = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+function audioCtx(withSnd) {
+  const c = vm.createContext({ console, Math, Date, JSON, setTimeout, clearTimeout, RN: {} });
+  if (withSnd) vm.runInContext(RD('common/sound.js'), c, { filename: 'sound.js' });
+  vm.runInContext(RD('runner/js/audio.js'), c, { filename: 'audio.js' });
+  return { A: vm.runInContext('RN.Audio', c), S: withSnd ? vm.runInContext('SND', c) : null };
+}
+
+test('소리: SND가 있든 없든(AudioContext 없는 곳) 조용히 아무것도 안 하고 멈추지 않는다', () => {
+  for (const withSnd of [true, false]) {
+    const { A, S } = audioCtx(withSnd);
+    A.unlock();
+    for (const n of A.NAMES) assert(A.play(n, { k: 3, i: 2, n: 3 }) === false, 'play ' + n);
+    assert(A.play('없는소리') === false, 'unknown');
+    // 소리 끄기는 SND 설정 하나 (소리 장치가 없어도 설정은 남는다). SND가 아예 없으면 늘 켬으로 본다
+    A.setMuted(true);
+    assert(A.muted === withSnd && (!S || S.muted() === true), 'mute follows SND ' + withSnd);
+    A.setMuted(false);
+    assert(A.muted === false, 'unmute');
+    assert(typeof A.feverBeat === 'undefined', 'fever beat moved to SND music');
+  }
+});
+
+test('소리: 규칙이 내는 모든 소리 이름에 효과음이 있다 (over·continue는 main.js가 공통 소리로)', () => {
+  const { A } = audioCtx(true);
+  const src = RD('runner/js/world.js');
+  const evs = [...new Set([...src.matchAll(/events\.push\('([A-Za-z]+)'\)/g)].map(m => m[1]))];
+  assert(evs.length > 30, 'events found ' + evs.length);
+  const byMain = { over: 'crash', continue: null };
+  for (const e of evs) {
+    if (e in byMain) { if (byMain[e]) assert(A.NAMES.includes(byMain[e]), e + ' -> ' + byMain[e]); continue; }
+    assert(A.NAMES.includes(e), 'no sound for ' + e);
+  }
+  assert(A.NAMES.includes('pullHold'), 'black hole hold has a sound');
+  // 화면 소리는 공통 SND.ui 가족으로 (게임 안에 따로 두지 않는다)
+  for (const n of ['medal', 'claim', 'buy', 'deny', 'coin', 'pick', 'start', 'over']) assert(!A.NAMES.includes(n), 'shared ui sound kept locally: ' + n);
+});
+
+test('소리: 날카로운 네모파·아주 높은 쉿 소리 없음, 게임 압축기 없음 (공통 리미터 하나)', () => {
+  const src = RD('runner/js/audio.js');
+  assert(!/'square'/.test(src), 'no square waves');
+  assert(!/'highpass'/.test(src), 'no high hiss');
+  assert(!/createDynamicsCompressor|new AC\(|AudioContext\(/.test(src), 'no own context or compressor');
+  assert(/SND\.onReady\(/.test(src) && /master\.connect\(SND\.out\(\)\)/.test(src), 'connects to SND');
+  // 필터 소리의 가장 높은 주파수 5kHz 이하 (5 ~ 9kHz 쉿 소리를 뺐다)
+  const hz = [...src.matchAll(/noise\(t[^,]*, '[a-z]+', (\d+), (\d+)/g)].flatMap(m => [+m[1], +m[2]]);
+  assert(hz.length > 10 && Math.max(...hz) <= 5000, 'noise max ' + Math.max(...hz));
+});
+
+test('소리: 배경 음악 행성 이름이 공통 음악 테마와 맞는다 (은하 너머 = galaxy)', () => {
+  const { S } = audioCtx(true);
+  const known = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto',
+    'frost', 'lava', 'ocean', 'glass', 'gem', 'twin', 'shroom', 'rogue', 'galaxy'];
+  const main = RD('runner/js/main.js');
+  assert(/id === 'beyond' \? 'galaxy'/.test(main), 'beyond -> galaxy');
+  for (const z of D.ZONES) {
+    const id = z.id === 'beyond' ? 'galaxy' : z.id;
+    assert(known.includes(id), 'theme for ' + z.id);
+    const th = S.themeFor('runner', id);
+    assert(th.planet === id && th.game === 'runner' && th.bpm > 0, 'themeFor ' + id);
+  }
+});
+
+test('소리: 화면 흐름 연결 (공통 끄기·음악·이어하기 소리, 옛 runner.muted 저장 없음)', () => {
+  const main = RD('runner/js/main.js');
+  assert(!/MUTE_KEY|runner\.muted|feverBeat/.test(main), 'old mute key / fever beat gone');
+  for (const k of ["SND.toggleMuted()", "SND.onChange(", "SND.music.play('runner'", "ui('continueAsk')", "ui('continueGo')", "ui('tick', { hi: left === 1 })",
+    "ui('fanfare')", "'overSoft' : 'over'", "ui('open')", "ui('close')", "ui('tap')", "musicDuck(0.3)", "musicStop(", "boss: W.phase === 'play' && !!W.pir"]) assert(main.includes(k), 'main.js ' + k);
+  assert(!/Audio\.play\('(medal|start|buy|deny|pick|claim|coin|lane)'/.test(main), 'menus use shared sounds');
+  const html = RD('runner/index.html');
+  const i = n => html.indexOf('<script src="' + n + '"');
+  assert(i('../common/worlds.js') >= 0 && i('../common/worlds.js') < i('../common/sound.js') && i('../common/sound.js') < i('js/util.js'), 'script order');
+  const sw = RD('runner/sw.js');
+  assert(sw.includes("'../common/sound.js'"), 'sw caches sound.js');
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 if (failed) process.exit(1);

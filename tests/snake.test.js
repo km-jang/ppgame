@@ -1510,5 +1510,60 @@ test('놀이 본부·메달: 대왕 뱀 이김, 별 메달 (별 셋 · 별 부�
   assert(D.MEDALS.find(m => m.id === 'star3').check({}, { stage: {} }) === false, 'old record without stars ok');
 });
 
+// ─── 소리 (snake/js/audio.js + common/sound.js). 실제 소리 크기 재기는 tests/sound.test.js 방식으로 따로 (snake/PLAN.md 소리 절) ───
+const AUDIO_SRC = fs.readFileSync(path.join(__dirname, '..', 'snake', 'js', 'audio.js'), 'utf8');
+function audioIn(withSnd) {
+  const c = vm.createContext({ console, Math, Date, JSON, Object, Array, setTimeout, clearTimeout });
+  if (withSnd) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'sound.js'), 'utf8'), c, { filename: 'sound.js' });
+  vm.runInContext('var SN = {};', c);
+  vm.runInContext(AUDIO_SRC, c, { filename: 'audio.js' });
+  return vm.runInContext('SN.Audio', c);
+}
+
+test('소리: AudioContext가 없어도(공통 소리 있든 없든) 모든 사건 소리가 조용히 넘어간다', () => {
+  for (const withSnd of [false, true]) {
+    const A = audioIn(withSnd);
+    A.unlock(); A.setMuted(true); A.setMuted(false);
+    assert(A.muted === false, 'muted');
+    for (const n of A.SFX_NAMES.concat(Object.keys(A.UI_MAP), Object.keys(A.SILENT), ['없는소리'])) assert(A.play(n, { k: 2, m: 3 }) === false, n + ' ' + withSnd);
+  }
+});
+
+test('소리: world.js의 모든 사건에 소리(게임 효과음·공통 효과음)가 있거나 일부러 조용하다', () => {
+  const A = audioIn(true);
+  const src = fs.readFileSync(path.join(__dirname, '..', 'snake', 'js', 'world.js'), 'utf8');
+  const evs = new Set([...src.matchAll(/events\.push\('([a-z]+)'\)/g)].map(m => m[1]));
+  evs.add('eat'); evs.add('gold');   // W.events.push(gold ? 'gold' : 'eat')
+  // main.js가 부딪힘(over)은 crash로 바꿔 튼다 (결과 소리는 gameOver에서 공통 over·overSoft)
+  const known = n => A.SFX_NAMES.includes(n) || n in A.UI_MAP || n in A.SILENT;
+  const miss = [...evs].filter(n => !known(n));
+  assert(!miss.length, '소리 없는 사건 ' + miss.join());
+  assert(A.SFX_NAMES.includes('crash'), 'crash');
+  assert(A.SILENT.turn && !A.SFX_NAMES.includes('turn'), '방향 전환 소리는 없앴다');
+  assert(A.SILENT.revive, '한 번 더는 continueGo 하나만');
+  for (const [a, b] of [['clear', 'fanfare'], ['bossdown', 'fanfare'], ['win', 'fanfare'], ['pick', 'tap'], ['medal', 'medal'], ['coin', 'coin'], ['buy', 'buy'], ['deny', 'deny'], ['claim', 'claim'], ['over', 'over'], ['overSoft', 'overSoft'], ['continueAsk', 'continueAsk'], ['continueGo', 'continueGo'], ['tick', 'tick']])
+    assert(A.UI_MAP[a] === b, a + ' -> ' + A.UI_MAP[a]);
+  const SND = (() => { const c = vm.createContext({ console, Math, Date, JSON }); vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'common', 'sound.js'), 'utf8'), c); return vm.runInContext('SND', c); })();
+  for (const v of new Set(Object.values(A.UI_MAP))) assert(SND.UI_NAMES.includes(v), '공통 효과음에 없음 ' + v);
+});
+
+test('소리: 냠은 5개 묶음 차례와 콤보로 조금씩 높아지고, 상한이 있다', () => {
+  const A = audioIn(false);
+  let prev = -1;
+  for (let k = 0; k < 5; k++) { const s = A.eatSemis({ k }); assert(s > prev, 'k 오름 ' + k); prev = s; }
+  assert(A.eatSemis({ k: 0, m: 3 }) === A.eatSemis({ k: 0 }) + 2, '콤보 x3 = +2반음');
+  assert(A.eatSemis({ k: 9, m: 99 }) === 9 + 5, '상한 ' + A.eatSemis({ k: 9, m: 99 }));
+  assert(A.eatSemis() === 0 && A.eatSemis({ k: -3, m: 0 }) === 0, '이상한 값');
+  // 가장 높은 냠의 윗소리(1.5배)도 2kHz 아래
+  assert(494 * Math.pow(2, 14 / 12) * 1.5 < 2000, 'too high');
+});
+
+test('소리: 귀가 따가운 소리 없음 (네모파는 1.3kHz 아래, 잡음 필터는 5kHz 아래, 톱니파는 400Hz 아래에서 시작)', () => {
+  const body = AUDIO_SRC.slice(AUDIO_SRC.indexOf('const SFX = {'), AUDIO_SRC.indexOf('\n  };', AUDIO_SRC.indexOf('const SFX = {')));
+  for (const m of body.matchAll(/'square',\s*([\d.]+),\s*([\d.]+)/g)) assert(+m[1] <= 1300 && +m[2] <= 1300, 'square ' + m[0]);
+  for (const m of body.matchAll(/noise\(t[^,]*,\s*'(\w+)',\s*([\d.]+),\s*([\d.]+)/g)) assert(+m[2] <= 5000 && +m[3] <= 5000, 'noise ' + m[0]);
+  for (const m of body.matchAll(/'sawtooth',\s*([\d.]+)/g)) assert(+m[1] < 400, 'saw ' + m[0]);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

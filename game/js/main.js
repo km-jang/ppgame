@@ -15,9 +15,8 @@
   const view = { dpr: 1, hudTop: 14, hudLeft: 104, hudRight: 12, ui: 1, touchHint: isTouch, calm: !!(calmQ && calmQ.matches) };
   if (calmQ && calmQ.addEventListener) calmQ.addEventListener('change', () => { view.calm = calmQ.matches; });
   const demoView = Object.create(view, { hud: { value: false } });
-  const MUTE_KEY = 'ngun.muted';
   const DIFF_KEY = 'ngun.diff';
-  const AUDIO_KEY = 'ngun.audio';
+  // 소리 끄기·음악·효과음 설정은 공통 소리 장치 SND(play.sound1, 네 게임 함께). 옛 ngun.muted·ngun.audio는 SND가 이어받는다
 
   let W = null;        // 실제 판
   let demo = null;     // 시작 화면 뒤에서 혼자 도는 시연 판
@@ -124,7 +123,7 @@
     for (const m of fresh) runMedals.push(m);
     if (live) {
       for (const m of fresh) medalToast(m);
-      NG.Audio.play('medal');
+      NG.Audio.ui('medal');
       vibrate([20, 40, 20]);
     }
     return fresh;
@@ -172,12 +171,14 @@
   function openMedals() {
     if (mode !== 'title') return;
     mode = 'medals';
+    NG.Audio.ui('open');
     renderMedalBoard();
     show('scr-medals');
   }
   function closeMedals() {
     if (mode !== 'medals') return;
     mode = 'title';
+    NG.Audio.ui('close');
     renderBest();
     show('scr-title');
   }
@@ -232,7 +233,8 @@
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
 
-  function setDiff(d) {
+  function setDiff(d, tap) {
+    if (tap && d !== diff) NG.Audio.ui('tap');
     diff = d;
     NG.store.set(DIFF_KEY, d);
     for (const b of document.querySelectorAll('[data-diff]')) b.setAttribute('aria-pressed', String(b.dataset.diff === d));
@@ -241,19 +243,19 @@
 
   function renderAudioToggles() {
     for (const b of document.querySelectorAll('[data-audio]')) {
-      const on = b.dataset.audio === 'music' ? NG.Audio.musicOn : NG.Audio.sfxOn;
+      const on = b.dataset.audio === 'music' ? SND.musicOn() : SND.fxOn();
       b.setAttribute('aria-pressed', String(on));
       b.querySelector('.state').textContent = on ? '켬' : '끔';
     }
-    $('btn-mute').classList.toggle('muted', NG.Audio.muted);
+    $('btn-mute').classList.toggle('muted', SND.muted());
   }
 
+  // 음악·효과음 켜고 끄기 (공통 설정, 다른 게임에도 그대로). 아이콘은 SND.onChange가 다시 그린다
   function toggleAudio(kind) {
     NG.Audio.unlock();
-    if (kind === 'music') NG.Audio.setMusic(!NG.Audio.musicOn);
-    else NG.Audio.setSfx(!NG.Audio.sfxOn);
-    NG.store.set(AUDIO_KEY, { music: NG.Audio.musicOn, sfx: NG.Audio.sfxOn });
-    renderAudioToggles();
+    if (kind === 'music') SND.setMusic(!SND.musicOn());
+    else SND.setFx(!SND.fxOn());
+    NG.Audio.ui('tap');
   }
 
   // ─── 기체 · 상점 · 미션 ───────────────────────────────────
@@ -371,6 +373,7 @@
   function openShop(tab) {
     if (mode !== 'title') return;
     mode = 'shop';
+    NG.Audio.ui('open');
     if (tab) shopTab = tab;
     renderShop();
     show('scr-shop');
@@ -378,6 +381,7 @@
   function closeShop() {
     if (mode !== 'shop') return;
     mode = 'title';
+    NG.Audio.ui('close');
     renderBest();
     show('scr-title');
   }
@@ -387,11 +391,11 @@
     const r = SH.buy(shop, id);
     if (r.ok) {
       SH.save(shop);
-      NG.Audio.play('buy');
+      NG.Audio.ui('buy');
       vibrate(20);
       if (SH.shipDef(id)) toast(SH.shipDef(id).name + ' 구입! 이제 이 기체로 출격합니다');
     } else {
-      NG.Audio.play('deny');
+      NG.Audio.ui('deny');
       toast(NAMES[r.reason] || '살 수 없어요');
     }
     if (mode === 'shop') renderShop();
@@ -400,7 +404,7 @@
   }
   function useShip(id) {
     const ok = SH.selectShip(shop, id);
-    if (ok) { SH.save(shop); NG.Audio.play('pick'); }
+    if (ok) { SH.save(shop); NG.Audio.ui('tap'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
     return ok;
@@ -411,7 +415,7 @@
     const got = SH.claim(shop, i);
     if (!got) return 0;
     SH.save(shop);
-    NG.Audio.play('claim');
+    NG.Audio.ui('claim');
     vibrate([15, 30, 15]);
     if (btn && !view.calm) {
       const r = btn.getBoundingClientRect();
@@ -454,7 +458,7 @@
       const k = Math.min(1, (now - t0) / dur), v = Math.round(total * (1 - Math.pow(1 - k, 3)));
       el.textContent = '+' + fmt(v);
       const step = Math.floor(k * 12);
-      if (step !== lastTick) { lastTick = step; NG.Audio.play('coin'); }
+      if (step !== lastTick) { lastTick = step; NG.Audio.ui('coin'); }
       if (k < 1 && mode === 'over') requestAnimationFrame(tick);
       else { el.textContent = '+' + fmt(total); el.classList.add('done'); }
     };
@@ -486,9 +490,8 @@
     medalCheckT = 0;
     clearMedalToasts();
     mode = 'play';
-    NG.Audio.setDuck(false);
-    NG.Audio.setFever(false);
-    NG.Audio.music('play');
+    NG.Audio.ui('start');
+    NG.Audio.startPlay(W.place ? W.place.planet.id : 'mercury');
     wakeLock(true);
     show(null);
   }
@@ -523,9 +526,7 @@
     hideSticker();
     W = null;
     mode = 'title';
-    NG.Audio.setDuck(false);
-    NG.Audio.setFever(false);
-    NG.Audio.music('title');
+    NG.Audio.title();
     wakeLock(false);
     renderBest();
     show('scr-title');
@@ -543,7 +544,8 @@
     if (mode !== 'play') return;
     mode = 'paused';
     $('pause-aim').textContent = input.aimMode === 'mouse' ? '마우스' : '자동';
-    NG.Audio.setDuck(true);
+    NG.Audio.duck(true);
+    NG.Audio.ui('open');
     show('scr-pause');
   }
 
@@ -551,7 +553,8 @@
     if (mode !== 'paused') return;
     input.clearButtons(); // 댄 엄지는 그대로 (손을 떼지 않고 바로 이어서 움직인다)
     mode = 'play';
-    NG.Audio.setDuck(false);
+    NG.Audio.duck(false);
+    NG.Audio.ui('close');
     show(null);
   }
 
@@ -610,7 +613,9 @@
     mode = 'continue';
     contShownAt = performance.now();
     contT = 0;
-    NG.Audio.setDuck(true);
+    NG.Audio.duck(true);
+    // 기체가 터지는 소리 뒤에 "한 번 더?" 소리
+    setTimeout(() => { if (mode === 'continue') NG.Audio.ui('continueAsk'); }, 450);
     const wait = NG.DATA.REVIVE.wait;
     $('cont-num').textContent = String(wait);
     const ring = $('cont-ring');
@@ -625,9 +630,9 @@
     if (!NG.World.revive(W)) return false;
     input.clearButtons();
     mode = 'play';
-    NG.Audio.setDuck(false);
+    NG.Audio.duck(false);
     show(null);
-    drainEvents(W);
+    drainEvents(W); // world 'revive' → 공통 continueGo
     vibrate([20, 30, 40]);
     return true;
   }
@@ -635,7 +640,6 @@
     if (mode !== 'continue') return false;
     if (!force && performance.now() - contShownAt < GUARD) return false;
     NG.World.giveUp(W);
-    NG.Audio.setDuck(false);
     gameOver(true);
     return true;
   }
@@ -643,7 +647,8 @@
     contT += dt;
     const wait = NG.DATA.REVIVE.wait, left = Math.max(0, Math.ceil(wait - contT));
     const el = $('cont-num');
-    if (el.textContent !== String(left)) el.textContent = String(left);
+    // 숫자가 바뀔 때마다 똑딱, 마지막 1은 높게
+    if (el.textContent !== String(left)) { el.textContent = String(left); if (left > 0) NG.Audio.ui('tick', { hi: left === 1 }); }
     if (contT >= wait) giveUpContinue(true);
   }
 
@@ -655,8 +660,10 @@
     wakeLock(false);
     runLoadout = {};
     clearMedalToasts(); // 이번 판 메달은 결과 화면에 모아 보여 준다
-    NG.Audio.setFever(false);
-    NG.Audio.music('off');
+    // 음악은 멈추고 게임 오버 소리 (쉬움은 부드러운 overSoft)
+    NG.Audio.stopMusic(1.2);
+    const overSnd = W.diff.id === 'easy' ? 'overSoft' : 'over';
+    setTimeout(() => { if (mode === 'over') NG.Audio.ui(overSnd); }, quick ? 0 : 600);
     $('over-diff').textContent = W.diff.name;
     $('over-score').textContent = W.score.toLocaleString();
     $('over-new').style.display = broken.indexOf('score') >= 0 ? '' : 'none';
@@ -679,7 +686,6 @@
     }
     // 이번 판에 딴 메달 (게임 중에 딴 것 포함)
     renderOverMedals();
-    if (runMedals.length) setTimeout(() => { if (mode === 'over') NG.Audio.play('medal'); }, 1100);
     const counts = {};
     for (const id of W.stats.picks) counts[id] = (counts[id] || 0) + 1;
     const all = NG.DATA.CARDS.concat([NG.DATA.FALLBACK_CARD]);
@@ -690,7 +696,14 @@
           return '<span class="pick">' + esc(t.pic) + ' ' + esc(t.words) + (counts[id] > 1 ? ' ×' + counts[id] : '') + '</span>';
         }).join('')
       : '<span class="pick">없음</span>';
-    setTimeout(() => { if (mode === 'over') { overShownAt = performance.now(); show('scr-over'); countCoins(); } }, quick ? 0 : 900);
+    // 결과 화면이 뜨면: 코인 세기(똑딱) → 새 최고 점수면 팡파르 → 새 메달이면 메달 소리 (겹치지 않게 차례로)
+    const record = broken.indexOf('score') >= 0, medals = runMedals.length > 0;
+    setTimeout(() => {
+      if (mode !== 'over') return;
+      overShownAt = performance.now(); show('scr-over'); countCoins();
+      if (record) setTimeout(() => { if (mode === 'over') NG.Audio.ui('fanfare'); }, 1200);
+      if (medals) setTimeout(() => { if (mode === 'over') NG.Audio.ui('medal'); }, record ? 2800 : 1200);
+    }, quick ? 0 : 900);
   }
 
   // 이번 판에 딴 메달: 3개까지는 카드로, 더 많으면 동그란 메달만 한 줄로 (작은 화면에서도 다시 하기 버튼이 늘 보이게)
@@ -706,18 +719,21 @@
 
   function drainEvents(world) {
     for (const ev of world.events) {
-      if (ev === 'shoot') NG.Audio.play(ev, { n: world.player.gun.barrels });
-      else NG.Audio.play(ev);
+      // 소리: NG.Audio.event (이름이 다른 것은 audio.js ALIAS·UI_EVENT)
+      if (ev === 'shoot') NG.Audio.event(ev, { n: world.player.gun.barrels });
+      else NG.Audio.event(ev);
       if (world === W) {
-        if (ev === 'boss') NG.Audio.music('boss');
-        else if (ev === 'bossDown') { NG.Audio.music('play'); bossSticker(world); }
+        // 웨이브 시작: 행성이 바뀌면 그 행성 음악으로, 보스 웨이브면 힘찬 보스 분위기
+        if (ev === 'wave' || ev === 'boss') NG.Audio.planet(world.place && world.place.planet.id, ev === 'boss');
+        if (ev === 'boss') NG.Audio.boss(true);
+        else if (ev === 'bossDown') { NG.Audio.boss(false); bossSticker(world); }
         else if (ev === 'hurt' || ev === 'over') vibrate(ev === 'over' ? 300 : 60);
         else if (ev === 'ult') vibrate([30, 40, 90]);
         else if (ev === 'ultReady') vibrate(25);
-        else if (ev === 'block' || ev === 'bomb') vibrate(ev === 'bomb' ? [20, 30, 60] : 40);
+        else if (ev === 'shieldBlock' || ev === 'bomb') vibrate(ev === 'bomb' ? [20, 30, 60] : 40);
         // 피버 타임: 음악이 빨라진다 · 선물 상자·동료 구출: 짧은 진동
-        else if (ev === 'fever') { NG.Audio.setFever(true); vibrate([20, 30, 20, 30, 40]); }
-        else if (ev === 'feverEnd') NG.Audio.setFever(false);
+        else if (ev === 'fever') { NG.Audio.fever(true); vibrate([20, 30, 20, 30, 40]); }
+        else if (ev === 'feverEnd') NG.Audio.fever(false);
         else if (ev === 'gift' || ev === 'wingman') vibrate([15, 25, 30]);
       }
     }
@@ -748,7 +764,7 @@
     el.classList.remove('on');
     void el.offsetWidth;
     el.classList.add('on');
-    NG.Audio.play('medal');
+    NG.Audio.ui('sticker');
     vibrate([20, 40, 20, 40, 60]);
     clearTimeout(stickerTimer);
     stickerTimer = setTimeout(hideSticker, NG.DATA.STICKER.show * 1000);
@@ -775,18 +791,18 @@
     }
   };
 
+  // 소리 끄기·켜기 (네 게임과 첫 화면이 함께 따른다). 켤 때는 톡 소리로 알려 준다
   function toggleMute() {
     NG.Audio.unlock();
-    NG.Audio.setMuted(!NG.Audio.muted);
-    NG.store.set(MUTE_KEY, NG.Audio.muted);
-    renderAudioToggles();
+    SND.toggleMuted();
+    NG.Audio.ui('tap');
   }
 
   function vibrate(ms) {
     try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* 지원 안 하면 무시 */ }
   }
 
-  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => setDiff(b.dataset.diff));
+  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => setDiff(b.dataset.diff, true));
   for (const b of document.querySelectorAll('[data-audio]')) b.addEventListener('click', () => toggleAudio(b.dataset.audio));
   // 브라우저는 첫 터치·클릭 뒤에야 소리를 허락한다. 시작 화면 음악도 그때 시작
   window.addEventListener('pointerdown', () => NG.Audio.unlock(), { passive: true });
@@ -808,7 +824,7 @@
   $('btn-shop').addEventListener('click', () => { NG.Audio.unlock(); openShop('ships'); });
   $('btn-ship').addEventListener('click', () => { NG.Audio.unlock(); openShop('ships'); });
   $('btn-shop-back').addEventListener('click', closeShop);
-  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); });
+  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { if (shopTab !== b.dataset.tab) NG.Audio.ui('tap'); shopTab = b.dataset.tab; renderShop(); });
   $('shop-list').addEventListener('click', e => {
     const b = e.target.closest('[data-buy],[data-use]');
     if (!b) return;
@@ -959,11 +975,8 @@
   }
 
   // ─── 시작 ──────────────────────────────────────────────────
-  NG.Audio.setMuted(NG.store.get(MUTE_KEY, false));
-  const audioPref = NG.store.get(AUDIO_KEY, { music: true, sfx: true });
-  NG.Audio.setMusic(audioPref.music !== false);
-  NG.Audio.setSfx(audioPref.sfx !== false);
   renderAudioToggles();
+  SND.onChange(renderAudioToggles); // 다른 게임·다른 창에서 바꿔도 아이콘이 따라온다
   setDiff(diff);
   resize();
   toTitle();

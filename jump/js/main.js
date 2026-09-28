@@ -11,7 +11,6 @@
   if (isTouch) document.body.classList.add('touch');
   const calmQuery = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   const input = JP.createInput(canvas);
-  const MUTE_KEY = 'jump.muted';
   const RC = JP.Records;
 
   const view = { dpr: 1, w: 0, h: 0, ui: 1, hudMid: 32, hudLeft: 150, hudRight: 14, hudH: 64, touch: isTouch, calm: false, bestH: 0 };
@@ -29,6 +28,8 @@
   let lastSeed;        // 다시 하기용 (시드를 정해 시작했으면 같은 판)
   let shownAt = 0;     // 결과·한 번 더 화면이 뜬 때 (처음 잠깐은 누름을 무시한다: 떨어지며 누르던 손가락)
   let contT = 0, contOn = false;   // 한 번 더: 화면이 뜬 뒤 지난 시간 · 떠 있는지
+  let contNum = 0;     // 한 번 더: 지금 보이는 숫자 (바뀔 때 똑딱)
+  let cheered = false; // 이번 판에 신기록·새 장소 팡파르를 울렸나 (한 판에 한 번만)
 
   // 기록 장부: 난이도별 최고 높이·점수, 모두 합친 수, 받은 메달 (이 기기 안에만, records.js)
   let rec = RC.load(JP.store);
@@ -166,7 +167,7 @@
     }
     if (fresh.length) {
       saveRec();
-      if (live) { toast('메달 획득: ' + fresh.map(m => m.name).join(', ')); JP.Audio.play('medal'); vibrate([20, 40, 20]); }
+      if (live) { toast('메달 획득: ' + fresh.map(m => m.name).join(', ')); JP.Audio.ui('medal'); vibrate([20, 40, 20]); }
     }
     return fresh;
   }
@@ -181,6 +182,7 @@
       ['모두 한 판', T.games], ['모은 별', T.stars.toLocaleString()], ['모두 오른 높이', T.height.toLocaleString() + 'm'],
     ]);
     $('record-list').innerHTML = rows.map(([k, v]) => '<div><dt>' + k + '</dt><dd>' + v + '</dd></div>').join('');
+    JP.Audio.ui('open');
     show('scr-medals');
   }
 
@@ -264,12 +266,14 @@
     SH.sync(shop);
     if (tab) shopTab = tab;
     renderShop();
+    JP.Audio.ui('open');
     show('scr-shop');
   }
   function closeShop() {
     if (mode !== 'shop') return;
     mode = 'title';
     renderBest(); renderTitleShop();
+    JP.Audio.ui('close');
     show('scr-title');
   }
 
@@ -278,11 +282,11 @@
     const r = SH.buy(shop, id);
     if (r.ok) {
       SH.save(shop);
-      JP.Audio.play('buy');
+      JP.Audio.ui('buy');
       vibrate(20);
       if (SH.charDef(id)) toast(SH.charDef(id).name + ' 출동!');
     } else {
-      JP.Audio.play('deny');
+      JP.Audio.ui('deny');
       toast(NAMES[r.reason] || '살 수 없어요');
     }
     if (mode === 'shop') renderShop();
@@ -291,7 +295,7 @@
   }
   function useChar(id) {
     const ok = SH.selectChar(shop, id);
-    if (ok) { SH.save(shop); JP.Audio.play('pick'); }
+    if (ok) { SH.save(shop); JP.Audio.ui('tap'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
     return ok;
@@ -302,7 +306,7 @@
     const got = SH.claim(shop, i);
     if (!got) return 0;
     SH.save(shop);
-    JP.Audio.play('claim');
+    JP.Audio.ui('claim');
     vibrate([15, 30, 15]);
     if (btn && !view.calm) {
       const r = btn.getBoundingClientRect();
@@ -342,7 +346,7 @@
       const k = Math.min(1, (now - t0) / dur), v = Math.round(total * (1 - Math.pow(1 - k, 3)));
       el.textContent = '+' + fmt(v);
       const step = Math.floor(k * 12);
-      if (step !== lastTick) { lastTick = step; JP.Audio.play('coin'); }
+      if (step !== lastTick) { lastTick = step; JP.Audio.ui('coin'); }
       if (k < 1 && mode === 'over') requestAnimationFrame(tick);
       else { el.textContent = '+' + fmt(total); el.classList.add('done'); }
     };
@@ -396,12 +400,13 @@
     W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial, start, adapt: opts.adapt != null ? opts.adapt : adaptMul(diff) }, SH.worldOpts(shop, lo)));
     view.bestH = rec.byDiff[diff].height;
     medalCheckT = 0;
-    contOn = false;
+    contOn = false; cheered = false;
     input.soft();
     mode = 'play';
     wakeLock(true);
     show(null);
-    JP.Audio.play('start');
+    JP.Audio.ui('start');
+    JP.Audio.musicStart(W);   // 배경 음악: 출발한 높이의 테마 (땅·하늘·우주·행성)
     return W;
   }
 
@@ -412,6 +417,7 @@
     SH.sync(shop);
     renderBest();
     renderTitleShop();
+    JP.Audio.musicTitle();
     show('scr-title');
   }
 
@@ -420,6 +426,8 @@
     mode = 'paused';
     frozenDrawn = false;
     input.soft();   // 누른 쪽 화살표 불 끄기 (손가락은 그대로 기억)
+    JP.Audio.duck(0.3);   // 멈춘 동안 음악은 작게
+    if (!document.hidden) JP.Audio.ui('open');
     show('scr-pause');
   }
 
@@ -427,6 +435,8 @@
     if (mode !== 'paused') return;
     input.soft();
     mode = 'play';
+    JP.Audio.duck(1);
+    JP.Audio.ui('close');
     show(null);
   }
 
@@ -471,13 +481,18 @@
     contT = 0; contOn = false;
     overAt = performance.now();
     wakeLock(false);
-    setTimeout(() => { if (mode === 'cont') { contOn = true; renderCont(); show('scr-cont'); } }, 800);
+    JP.Audio.duck(0.4);
+    setTimeout(() => { if (mode === 'cont') { contOn = true; contNum = 0; renderCont(); show('scr-cont'); JP.Audio.ui('continueAsk'); } }, 800);
   }
   function renderCont() {
     const k = Math.max(0, 1 - contT / D.CONTINUE.ask);
     const ring = $('cont-ring');
     if (ring) ring.style.strokeDashoffset = String((1 - k) * 100);
-    $('cont-num').textContent = String(Math.max(1, Math.ceil(D.CONTINUE.ask - contT)));
+    const num = Math.max(1, Math.ceil(D.CONTINUE.ask - contT));
+    $('cont-num').textContent = String(num);
+    // 숫자가 줄 때마다 똑딱 (처음 숫자는 continueAsk가 알린다, 마지막 1은 높게)
+    if (contNum && num !== contNum) JP.Audio.ui('tick', { hi: num === 1 });
+    contNum = num;
     $('cont-height').textContent = W ? W.height + 'm' : '';
   }
   function doContinue() {
@@ -487,7 +502,8 @@
     input.soft();
     wakeLock(true);
     show(null);
-    JP.Audio.play('rescue');
+    JP.Audio.duck(1);
+    JP.Audio.ui('continueGo');
     vibrate([15, 30, 25]);
   }
   function stopContinue() {
@@ -507,7 +523,11 @@
       names.map(n => '<span class="place">새 출발 장소 · ' + esc(n) + '</span>').join('') + (W.stomps ? '<span>꾹 밟은 몬스터 ' + W.stomps + '</span>' : '');
     $('over-medals').innerHTML = fresh.map(m => medalHtml(m, false)).join('');
     $('over-medals').classList.toggle('many', fresh.length > 2);
-    if (fresh.length) setTimeout(() => { if (mode === 'over') JP.Audio.play('medal'); }, 900);
+    // 소리: 음악은 멈추고, 결과 화면이 뜰 때 신기록·새 출발 장소면 팡파르(판 중에 울렸으면 건너뜀), 새 메달이면 그다음 메달 소리
+    JP.Audio.musicStop(0.8);
+    const cheer = !cheered && !auto && ((fin.places || []).length > 0 || (isBest && W.height - (W.start || 0) >= 30));
+    if (cheer) setTimeout(() => { if (mode === 'over') JP.Audio.ui('fanfare'); }, 900);
+    if (fresh.length) setTimeout(() => { if (mode === 'over') JP.Audio.ui('medal'); }, cheer ? 2500 : 900);
     // 모든 난이도가 부드럽게 끝난다 (칭찬하는 말, 빨간색 없음)
     $('scr-over').classList.add('soft');
     const good = W.height - (W.start || 0) >= 30;
@@ -529,17 +549,30 @@
     if (now) go(); else setTimeout(go, 900);
   }
 
+  // 처음 닿은 출발 장소(구름 위·우주·외계 행성)면 그 장소 id (장부에는 판이 끝날 때 적는다)
+  function freshPlace(world) {
+    const Z = D.ZONES[world.zone], S = Z && D.STARTS.find(x => x.id === Z.id);
+    return S && S.at > (world.start || 0) && !(rec.places && rec.places[S.id]) ? S.id : null;
+  }
   function drainEvents(world, sound) {
     const zoneNow = world.events.includes('zone'), planetNow = world.events.includes('planet');
+    // 처음 닿은 곳이면 구역·행성·눈금 소리 대신 팡파르 (한 판에 한 번, 다음 판부터는 평소 소리)
+    const cheerNow = sound && zoneNow && !cheered && !auto && freshPlace(world);
+    if (cheerNow) { cheered = true; JP.Audio.ui('fanfare'); }
     for (const ev of world.events) {
       if (!sound) continue;
+      if (cheerNow && (ev === 'zone' || ev === 'planet' || ev === 'leg' || ev === 'mile')) { vibrate([20, 40, 20, 40, 30]); continue; }
+      if (ev === 'revive') continue;   // 이어 하기 소리는 doContinue가 (continueGo)
       if (ev === 'tut') { tutNeed = false; RC.tutorialDone(JP.store); }
       if (ev === 'mile' && (zoneNow || planetNow)) continue;   // 구역·행성 축하와 겹치면 그 소리만
       if (ev === 'zone' && planetNow) continue;
       if (ev === 'leg' && (zoneNow || planetNow)) continue;
       if (ev === 'bounce') JP.Audio.play('bounce', { k: world.combo + (world.feverT > 0 ? 5 : 0), fever: world.feverT > 0 });
       else if (ev === 'over') {
-        JP.Audio.play((world.cause === 'fall' || world.cause === 'storm') && !world.easy ? 'fall' : 'over', { soft: world.easy });
+        // 쉬움은 부드럽게 내려오는 소리, 보통·어려움은 떨어지면 휘이잉, 가시 폭탄·몬스터면 공통 끝 소리
+        if (world.easy) JP.Audio.ui('overSoft');
+        else if (world.cause === 'fall' || world.cause === 'storm') JP.Audio.play('fall');
+        else JP.Audio.ui('over');
         vibrate(world.easy ? 60 : 220);
       } else JP.Audio.play(ev);
       if (ev === 'spring' || ev === 'rescue') vibrate([15, 30, 25]);
@@ -562,7 +595,7 @@
 
   // ─── 입력 연결 ─────────────────────────────────────────────
   input.onPress = () => JP.Audio.unlock();
-  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { JP.Audio.unlock(); setDiff(b.dataset.diff); });
+  for (const b of document.querySelectorAll('[data-diff]')) b.addEventListener('click', () => { JP.Audio.unlock(); JP.Audio.ui('tap'); setDiff(b.dataset.diff); });
   input.onKey = code => {
     JP.Audio.unlock();
     if (code === 'KeyM') return toggleMute();
@@ -573,13 +606,15 @@
     if (code === 'KeyP' || code === 'Escape' || code === 'Space') return mode === 'play' ? pause() : resume();
   };
 
+  // 소리 끄기: 네 게임·첫 화면이 함께 쓰는 설정 (common/sound.js, 키 play.sound1)
   function toggleMute() {
     JP.Audio.unlock();
-    JP.Audio.setMuted(!JP.Audio.muted);
-    JP.store.set(MUTE_KEY, JP.Audio.muted);
-    $('btn-mute').classList.toggle('muted', JP.Audio.muted);
-    toast(JP.Audio.muted ? '소리 끔' : '소리 켬');
+    const m = JP.Audio.toggleMuted();
+    $('btn-mute').classList.toggle('muted', m);
+    toast(m ? '소리 끔' : '소리 켬');
   }
+  // 다른 게임·게임 고르기에서 바꿔도 단추가 따라온다
+  JP.Audio.onChange(s => $('btn-mute').classList.toggle('muted', !!s.muted));
 
   // 브라우저는 첫 터치·클릭 뒤에야 소리를 허락한다
   window.addEventListener('pointerdown', () => JP.Audio.unlock(), { passive: true });
@@ -589,11 +624,11 @@
   const keep = () => { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* 무시 */ } };
   $('btn-start').addEventListener('click', () => { keep(); newGame(); });
   $('btn-medals').addEventListener('click', () => { JP.Audio.unlock(); openMedals(); });
-  $('btn-medals-back').addEventListener('click', toTitle);
+  $('btn-medals-back').addEventListener('click', () => { JP.Audio.ui('close'); toTitle(); });
   $('btn-shop').addEventListener('click', () => { JP.Audio.unlock(); openShop('chars'); });
   $('btn-char').addEventListener('click', () => { JP.Audio.unlock(); openShop('chars'); });
   $('btn-shop-back').addEventListener('click', closeShop);
-  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { shopTab = b.dataset.tab; renderShop(); });
+  for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { JP.Audio.ui('tap'); shopTab = b.dataset.tab; renderShop(); });
   $('shop-list').addEventListener('click', e => {
     const b = e.target.closest('[data-buy],[data-use]');
     if (!b) return;
@@ -611,7 +646,7 @@
   $('btn-quit').addEventListener('click', quitRun);
   $('btn-cont').addEventListener('click', doContinue);
   $('btn-cont-no').addEventListener('click', stopContinue);
-  $('start-row').addEventListener('click', e => { const b = e.target.closest('[data-start]'); if (b && !b.disabled) { JP.Audio.unlock(); JP.Audio.play('pick'); setStart(b.dataset.start); } });
+  $('start-row').addEventListener('click', e => { const b = e.target.closest('[data-start]'); if (b && !b.disabled) { JP.Audio.unlock(); JP.Audio.ui('tap'); setStart(b.dataset.start); } });
   $('btn-pause').addEventListener('click', () => (mode === 'play' ? pause() : resume()));
   $('btn-mute').addEventListener('click', toggleMute);
 
@@ -683,6 +718,9 @@
         W.input.dir = auto ? JP.World.botDir(W) : input.dir(W, view);
         JP.World.step(W, dt);
         drainEvents(W, true);
+        // 판 중 신기록 높이를 처음 넘으면 팡파르 (한 판에 한 번, 지난 최고가 30m 넘을 때만)
+        if (!cheered && !auto && view.bestH >= 30 && W.height > view.bestH && W.phase === 'play') { cheered = true; JP.Audio.ui('fanfare'); }
+        JP.Audio.follow(W);   // 배경 음악: 높이·행성·피버·비밀 방을 따라
         // 게임 중에 딸 수 있는 메달은 바로 알려 준다
         if ((medalCheckT += dt) > 0.5 && W.phase === 'play') { medalCheckT = 0; checkMedals(true); }
         // 끝: 한 판에 한 번 "한 번 더?" (자동 운전은 묻지 않는다)
@@ -710,7 +748,6 @@
   renderDiff();
   renderTitleShop();
   reportSummary();
-  JP.Audio.setMuted(JP.store.get(MUTE_KEY, false));
   $('btn-mute').classList.toggle('muted', JP.Audio.muted);
   resize();
   toTitle();
