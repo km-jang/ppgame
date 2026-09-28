@@ -428,8 +428,8 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
   const still = () => { try { return !!(W && W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const CSS = [
-    '#pf-toast{position:fixed;left:50%;top:max(8px,env(safe-area-inset-top));z-index:9999;display:flex;align-items:center;gap:10px;max-width:min(92vw,620px);',
-    'padding:8px 18px 8px 12px;border-radius:999px;background:rgba(18,24,44,.94);border:2px solid #ffe08a;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.45);',
+    '#pf-toast{position:fixed;left:50%;top:calc(max(8px,env(safe-area-inset-top)) + var(--pf-toast-y,0px));z-index:9999;display:flex;align-items:center;gap:10px;max-width:min(92vw,560px);',
+    'padding:8px 18px 8px 12px;border-radius:24px;background:rgba(18,24,44,.94);border:2px solid #ffe08a;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.45);',
     'font:normal 22px/1.25 "Jua","Noto Sans KR",sans-serif;cursor:pointer;opacity:0;transform:translate(-50%,-140%);transition:opacity .25s,transform .35s cubic-bezier(.2,1.3,.4,1);pointer-events:none;word-break:keep-all}',
     '#pf-toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}',
     '#pf-toast.over{border-color:#b8a4ff;background:rgba(30,20,60,.95)}',

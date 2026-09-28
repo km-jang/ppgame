@@ -1040,3 +1040,7 @@ body.at-title #topbar .hub-btn { display: grid; }
 }
 /* 시작 화면에서는 윗줄 버튼(집·소리·전체 화면)이 화면 덮개 위에 와야 누를 수 있다 */
 body.at-title #topbar { z-index: 11; }
+
+/* 놀이 시간 알림(common/profile.js)은 위쪽 체력·게이지 줄 아래에 (HUD를 가리지 않게) */
+:root { --pf-toast-y: 92px; }
+@media (max-height: 600px) { :root { --pf-toast-y: 84px; } }

@@ -746,6 +746,118 @@ async function until(page, fn, arg, ms) {
   await test('슝슝 우주 달리기 콘솔 오류 없음', async () => { assert(!rn.errors.length, rn.errors.join(' | ')); });
   await rn.ctx.close();
 
+  console.log('프로필·보호자');
+  const pf = await open(browser, ROOT + '/index.html');
+  const PF = pf.page;
+  // 자물쇠를 ms 동안 꾹 누른다 (손가락처럼 누르고 기다렸다 뗀다)
+  const hold = async (sel, ms) => {
+    const b = await PF.locator(sel).boundingBox();
+    await PF.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await PF.mouse.down(); await PF.waitForTimeout(ms); await PF.mouse.up();
+  };
+  await test('처음엔 첫째 한 명, 게임 고르기 위에 이름표', async () => {
+    await PF.evaluate(() => { localStorage.clear(); location.reload(); });
+    await PF.waitForTimeout(400);
+    assert(await PF.evaluate(() => PROFILE.list().length === 1 && PROFILE.activeId() === 1 && document.getElementById('pf-name').textContent === '첫째'), '첫째');
+    assert(await PF.evaluate(() => document.getElementById('pf-left').textContent === ''), '제한 없으면 남은 시간 글 없음');
+    assert(await PF.evaluate(() => document.querySelector('script').getAttribute('src') === 'common/profile.js'), 'profile.js가 첫 스크립트');
+  });
+  await test('보호자 화면: 자물쇠를 짧게 누르면 안 열리고, 3초 꾹 누르면 열린다 → 새 친구 만들기', async () => {
+    await hold('#pf-lock', 900);
+    assert(!(await on(PF, 'parent')), '1초 만에 열림');
+    await hold('#pf-lock', 3200);
+    assert(await until(PF, () => document.getElementById('parent').classList.contains('on')), '3초 눌러도 안 열림');
+    await PF.tap('#pk-add');
+    assert(await PF.evaluate(() => PROFILE.list().length === 2 && document.querySelectorAll('#pk-list .prow').length === 2), '새 친구');
+    await PF.fill('.prow[data-id="2"] input', '민지');
+    await PF.evaluate(() => document.querySelector('.prow[data-id="2"] input').dispatchEvent(new Event('change', { bubbles: true })));
+    await PF.tap('.prow[data-id="2"] [data-act="icon"]');
+    await PF.tap('.prow[data-id="2"] [data-icon="🐱"]');
+    assert(await PF.evaluate(() => PROFILE.get(2).name === '민지' && PROFILE.get(2).icon === '🐱'), '이름·그림');
+    assert(await PF.evaluate(() => !document.querySelector('.prow[data-id="1"] [data-act="del"]')), '첫째는 지우기 버튼 없음');
+    await PF.tap('#parent-close');
+  });
+  await test('누가 놀아요?: 민지로 바꾸면 다시 불러오고, 별코인이 아이마다 따로', async () => {
+    await PF.evaluate(() => { HUB.addCoins(100); renderHub(); });
+    await PF.tap('#pf-btn');
+    assert(await until(PF, () => document.getElementById('who').classList.contains('on') && document.querySelectorAll('.who-card[data-id]').length === 2), '고르기 창');
+    await Promise.all([PF.waitForNavigation(), PF.tap('.who-card[data-id="2"]')]);
+    await PF.waitForTimeout(300);
+    assert(await PF.evaluate(() => PROFILE.activeId() === 2 && document.getElementById('pf-name').textContent === '민지'), '민지로');
+    assert(await PF.evaluate(() => HUB.coins() === 0 && document.getElementById('hub-coins').textContent === '0'), '민지 지갑은 0');
+    await PF.evaluate(() => HUB.addCoins(40));
+    assert(await PF.evaluate(() => JSON.parse(localStorage.getItem('play.hub1')).coins === 40 && PROFILE.raw.get('p2:play.hub1') !== null && JSON.parse(PROFILE.raw.get('play.hub1')).coins === 100), '저장 키가 따로');
+  });
+  await test('게임 시작 화면에 지금 아이 이름표 (읽기만)', async () => {
+    for (const g of ['game', 'snake', 'jump', 'runner']) {
+      await PF.goto(ROOT + '/' + g + '/index.html');
+      assert(await until(PF, () => { const b = document.querySelector('#scr-title [data-pf-badge]'); return b && !b.hidden && /민지/.test(b.textContent) && b.getBoundingClientRect().width > 20; }), g + ' 이름표');
+      assert(await PF.evaluate(() => document.querySelector('script').getAttribute('src') === '../common/profile.js'), g + ' profile.js가 첫 스크립트');
+    }
+  });
+  await test('남은 시간 알림: 20분 제한에서 10분·5분·끝 알림이 뜨고, 판은 멈추지 않는다', async () => {
+    await PF.evaluate(() => PROFILE.setLimit(2, 20));
+    await PF.goto(ROOT + '/jump/index.html');
+    assert(await until(PF, () => typeof JP !== 'undefined' && JP.debug), '통통 점프');
+    await PF.tap('#btn-start');
+    assert(await until(PF, () => JP.debug.mode === 'play' && PROFILE.playing()), '판이 돌면 세기 시작');
+    await PF.evaluate(() => PROFILE.debug.addPlayed(PROFILE.leftSec(2) - 598));
+    assert(await until(PF, () => { const t = document.getElementById('pf-toast'); return t && t.classList.contains('on') && /10분 남았어요/.test(t.textContent); }), '10분 알림');
+    const box = await PF.evaluate(() => { const r = document.getElementById('pf-toast').getBoundingClientRect(); return { top: r.top, h: r.height, w: r.width }; });
+    assert(box.top < 120 && box.h < 90 && box.w < 900, '위쪽 작은 띠 ' + JSON.stringify(box));
+    await PF.tap('#pf-toast');
+    assert(await until(PF, () => !document.getElementById('pf-toast').classList.contains('on')), '누르면 닫힘');
+    await PF.evaluate(() => PROFILE.debug.addPlayed(300));
+    assert(await until(PF, () => /5분 남았어요/.test(document.getElementById('pf-toast').textContent)), '5분 알림');
+    await PF.evaluate(() => PROFILE.debug.addPlayed(400));
+    assert(await until(PF, () => /이 판을 마치고 쉬어요/.test(document.getElementById('pf-toast').textContent)), '끝 알림');
+    assert(await PF.evaluate(() => JP.debug.mode === 'play'), '판을 멈추면 안 됨');
+    assert(await until(PF, () => !document.getElementById('pf-toast').classList.contains('on'), null, 6000), '4초 뒤 저절로 닫힘');
+    await PF.goto(ROOT + '/index.html');
+    assert(await until(PF, () => document.getElementById('pf-left').textContent === '오늘 시간 끝!'), '게임 고르기에 시간 끝');
+    await PF.evaluate(() => { PROFILE.addExtra(2); PF_UI.renderMe(); });
+    assert(await until(PF, () => /^오늘 남은 시간 \d+분$/.test(document.getElementById('pf-left').textContent)), '10분 더 받으면 남은 시간');
+  });
+  await test('소리 크기 상한: 보호자 화면에서 25%를 고르면 SND 마지막 크기가 0.25', async () => {
+    await PF.evaluate(() => PF_UI.openParent('vol'));
+    await PF.tap('#pv-seg [data-vol="0.25"]');
+    assert(await PF.evaluate(() => PROFILE.volMax() === 0.25 && SND.cap() === 0.25 && SND.masterTarget() === 0.25), '상한');
+    assert(await until(PF, () => SND.ready()), '소리 판');
+    assert(await until(PF, () => SND._master() && Math.abs(SND._master().gain.value - 0.25) < 0.02, null, 3000), '마스터 크기 ' + await PF.evaluate(() => SND._master() && SND._master().gain.value));
+    // 게임 페이지도 처음부터 상한을 읽는다
+    await PF.evaluate(() => PF_UI.closeParent());
+    await PF.goto(ROOT + '/snake/index.html');
+    assert(await until(PF, () => typeof SND !== 'undefined' && SND.cap() === 0.25), '게임에서도 상한');
+  });
+  await test('기록 옮기기: 민지 코드를 내보내 새 아이로 불러오면 별코인까지 그대로', async () => {
+    await PF.goto(ROOT + '/index.html');
+    await PF.evaluate(() => PF_UI.openParent('move'));
+    await PF.tap('#px-who [data-who="2"]');
+    const code = await PF.inputValue('#px-code');
+    assert(code.length > 40 && /^[A-Za-z0-9+/=]+$/.test(code), '코드');
+    await PF.tap('#px-copy');
+    assert(await until(PF, () => document.getElementById('px-msg').textContent.length > 0), '복사 안내');
+    await PF.fill('#pi-code', code.slice(0, -10));
+    await PF.tap('#pi-check');
+    assert(await PF.evaluate(() => /망가졌어요/.test(document.getElementById('pi-msg').textContent) && !document.querySelector('#pi-prev .pv')), '망가진 코드 거절');
+    await PF.fill('#pi-code', code);
+    await PF.tap('#pi-check');
+    assert(await PF.evaluate(() => /민지/.test(document.querySelector('#pi-prev .pv').textContent) && /별코인 40/.test(document.querySelector('#pi-prev .pv').textContent)), '미리 보기');
+    await Promise.all([PF.waitForNavigation({ timeout: 5000 }), PF.tap('#pi-prev [data-imp="new"]')]);
+    await PF.waitForTimeout(300);
+    assert(await PF.evaluate(() => PROFILE.list().length === 3 && PROFILE.get(3).name === '민지' && JSON.parse(PROFILE.raw.get('p3:play.hub1')).coins === 40), '새 아이로');
+  });
+  await test('지우기: 세 번 눌러야 지워지고 그 아이 키만 사라진다', async () => {
+    await PF.evaluate(() => PF_UI.openParent('kids'));
+    for (let i = 0; i < 2; i++) await PF.tap('.prow[data-id="3"] [data-act="del"]');
+    assert(await PF.evaluate(() => PROFILE.list().length === 3), '두 번에 지워짐');
+    await PF.tap('.prow[data-id="3"] [data-act="del"]');
+    assert(await PF.evaluate(() => PROFILE.list().length === 2 && PROFILE.raw.get('p3:play.hub1') === null && PROFILE.raw.get('p2:play.hub1') !== null), '셋째 키');
+    await PF.evaluate(() => PF_UI.closeParent());
+  });
+  await test('프로필·보호자 콘솔 오류 없음', async () => { assert(!pf.errors.length, pf.errors.join(' | ')); });
+  await pf.ctx.close();
+
   await browser.close();
   console.log('\n' + passed + ' passed, ' + failed + ' failed');
   process.exit(failed ? 1 : 0);

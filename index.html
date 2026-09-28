@@ -166,7 +166,8 @@
     .hold-ring { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events: none; }
     .hold-ring rect { fill: none; stroke: #ffe08a; stroke-width: 4; stroke-linecap: round; }
     /* 보호자 화면 */
-    #parent .panel { width: min(96vw, 820px); }
+    #parent .panel { width: min(96vw, 820px); padding-bottom: 0; }
+    #parent .btn-close { position: sticky; bottom: 0; margin-bottom: 0; border-radius: 14px 14px 0 0; box-shadow: 0 -10px 18px rgba(8, 11, 19, .95); }
     .ptabs { display: flex; gap: 8px; margin-bottom: 14px; }
     .ptabs button { flex: 1; padding: 10px 8px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .05); color: #c9d2e6; font: normal 19px var(--display); cursor: pointer; }
     .ptabs button[aria-selected="true"] { background: rgba(184, 164, 255, .25); border-color: #b8a4ff; color: #fff; }
@@ -197,6 +198,22 @@
     .pseg button[aria-pressed="true"] { background: linear-gradient(180deg, #e6ddff, #9d86ff); color: #150c33; border-color: #e6ddff; }
     .pseg .more { flex: 1.4; background: rgba(255, 224, 138, .12); border-color: rgba(255, 224, 138, .5); color: #ffe08a; }
     .vseg button { height: 64px; font-size: 24px; }
+    .ph { margin: 12px 0 6px; font: normal 19px var(--display); color: #e6ddff; }
+    .pcode { display: block; width: 100%; margin: 8px 0 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(0, 0, 0, .35); color: #cfe; font: 12px/1.35 ui-monospace, monospace; resize: vertical; user-select: text; -webkit-user-select: text; word-break: break-all; }
+    .pbtns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pbtns button, .pfile, .pact { height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid rgba(184, 164, 255, .55); background: rgba(184, 164, 255, .15); color: #fff; font: normal 18px var(--display); cursor: pointer; display: inline-flex; align-items: center; }
+    .pmsg { font: normal 16px var(--display); color: #ffe08a; }
+    .pmsg.bad { color: #ffb0c8; }
+    .pv { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 224, 138, .07); border: 1px solid rgba(255, 224, 138, .35); }
+    .pv .pvk { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font: normal 19px var(--display); }
+    .pv .pvk i { font-style: normal; font-size: 28px; }
+    .pv .pvk small { font: 700 13px "Noto Sans KR", sans-serif; color: #c9d2e6; }
+    .pv .at { font-size: 13px; color: #aeb7cc; margin-bottom: 8px; }
+    .pv .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pact:disabled { opacity: .45; cursor: default; }
+    .pact.warn { border-color: rgba(255, 120, 150, .6); background: rgba(255, 80, 120, .12); color: #ffd0dc; }
+    .pact.s1 { background: rgba(255, 80, 120, .3); color: #fff; }
+    .pact.s2 { background: #e0335e; color: #fff; }
     @media (max-height: 600px) {
       .pf-btn { height: 46px; font-size: 18px; } .pf-btn i { width: 32px; height: 32px; font-size: 24px; }
       .ovl h2 { font-size: 26px; margin-bottom: 10px; }
@@ -208,6 +225,8 @@
       .ptabs { margin-bottom: 10px; } .ptabs button { padding: 7px 6px; }
       .btn-close { margin-top: 10px; padding: 9px; }
     }
+    .hub-top h1 { white-space: nowrap; min-width: 0; font-size: clamp(28px, 2.6vw, 40px); }
+    @media (max-height: 600px), (max-width: 1000px) { #pf-lock { right: 6px; bottom: 6px; width: 40px; height: 40px; } #pf-lock svg { width: 40px; height: 40px; } }
     @media (max-width: 760px) { .icons { grid-template-columns: repeat(6, 1fr); } }
     @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
     @keyframes sweep { 0% { background-position: 160% 0; } 30%, 100% { background-position: -70% 0; } }
@@ -272,6 +291,7 @@
         <button type="button" role="tab" data-tab="kids" aria-selected="true">아이 프로필</button>
         <button type="button" role="tab" data-tab="time" aria-selected="false">하루 놀이 시간</button>
         <button type="button" role="tab" data-tab="vol" aria-selected="false">소리 크기 상한</button>
+        <button type="button" role="tab" data-tab="move" aria-selected="false">기록 옮기기</button>
       </div>
       <div class="psec on" data-sec="kids">
         <p class="note">아이마다 별코인·기록·스티커·미션·캐릭터가 따로 저장돼요. 최대 4명. 그림을 누르면 바꿀 수 있어요.</p>
@@ -285,6 +305,17 @@
       <div class="psec" data-sec="vol">
         <p class="note">네 게임과 이 화면의 모든 소리가 이 크기를 넘지 않아요. 이 기기 전체에 같이 적용돼요.</p>
         <div id="pv-seg" class="pseg vseg"></div>
+      </div>
+      <div class="psec" data-sec="move">
+        <p class="note">브라우저에서 앱으로, 다른 태블릿으로 기록을 옮겨요. 여기서 코드를 복사하거나 파일로 받고, 옮길 곳의 보호자 화면 → 기록 옮기기 → 불러오기에 넣어요.</p>
+        <h3 class="ph">내보내기</h3>
+        <div id="px-who" class="pseg"></div>
+        <textarea id="px-code" class="pcode" rows="2" readonly aria-label="내보낸 기록 코드"></textarea>
+        <div class="pbtns"><button id="px-copy" type="button">복사하기</button><button id="px-file" type="button">파일로 받기</button><span id="px-msg" class="pmsg"></span></div>
+        <h3 class="ph">불러오기</h3>
+        <textarea id="pi-code" class="pcode" rows="2" placeholder="여기에 코드를 붙여 넣어요" aria-label="불러올 기록 코드"></textarea>
+        <div class="pbtns"><button id="pi-check" type="button">확인하기</button><label class="pfile">파일 고르기<input id="pi-file" type="file" accept=".json,.txt,application/json,text/plain" hidden></label><span id="pi-msg" class="pmsg"></span></div>
+        <div id="pi-prev"></div>
       </div>
       <button id="parent-close" type="button" class="btn-close">닫기</button>
     </div>
@@ -513,6 +544,12 @@
               '<div class="pseg">' + PROFILE.LIMITS.map(m => '<button type="button" data-limit="' + m + '" aria-pressed="' + (m === lim) + '">' + (m ? m + '분' : '제한 없음') + '</button>').join('') +
               (lim ? '<button type="button" class="more" data-act="extra">오늘 ' + PROFILE.EXTRA_MIN + '분 더</button>' : '') + '</div></div>';
           }).join('');
+        } else if (tab === 'move') {
+          if (!list.some(p => p.id === exWho) && exWho !== 'all') exWho = PROFILE.activeId();
+          $('px-who').innerHTML = list.map(p => '<button type="button" data-who="' + p.id + '" aria-pressed="' + (p.id === exWho) + '">' + esc(p.icon) + ' ' + esc(p.name) + '</button>').join('') +
+            (list.length > 1 ? '<button type="button" data-who="all" aria-pressed="' + (exWho === 'all') + '">모든 아이</button>' : '');
+          $('px-code').value = PROFILE.exportCode(exWho);
+          renderPreview();
         } else {
           const v = PROFILE.volMax();
           $('pv-seg').innerHTML = PROFILE.VOLS.map(x => '<button type="button" data-vol="' + x + '" aria-pressed="' + (x === v) + '">' + Math.round(x * 100) + '%</button>').join('');
@@ -563,6 +600,88 @@
         const b = e.target.closest('[data-vol]'); if (!b) return;
         PROFILE.setVolMax(Number(b.dataset.vol));
         renderParent(); SND.ui('coin');
+      });
+
+      // 기록 옮기기: 내보내기(코드·파일) · 불러오기(코드 붙여 넣기·파일 고르기 → 미리 보기 → 새 아이로 추가 또는 덮어쓰기)
+      // 안드로이드 앱(WebView)에서는 파일 받기가 안 될 수 있어서 코드 칸을 늘 같이 보여 준다
+      let exWho = 0, imp = null, impStep = {}, impTimer = 0;
+      const say = (id, t, bad) => { $(id).textContent = t; $(id).classList.toggle('bad', !!bad); };
+      $('px-who').addEventListener('click', e => { const b = e.target.closest('[data-who]'); if (!b) return; exWho = b.dataset.who === 'all' ? 'all' : Number(b.dataset.who); say('px-msg', ''); SND.ui('tap'); renderParent(); });
+      $('px-copy').addEventListener('click', async () => {
+        const ta = $('px-code');
+        let ok = false;
+        try { await navigator.clipboard.writeText(ta.value); ok = true; } catch (e) { ok = false; }
+        if (!ok) { ta.focus(); ta.select(); try { ta.setSelectionRange(0, ta.value.length); ok = document.execCommand('copy'); } catch (e) { ok = false; } }
+        say('px-msg', ok ? '복사했어요' : '코드 칸을 길게 눌러 모두 선택 → 복사해 주세요', !ok);
+        SND.ui(ok ? 'claim' : 'deny');
+      });
+      $('px-file').addEventListener('click', () => {
+        try {
+          const blob = new Blob([JSON.stringify(PROFILE.exportData(exWho))], { type: 'application/json' });
+          const url = URL.createObjectURL(blob), a = document.createElement('a');
+          a.href = url; a.download = PROFILE.exportFileName(); a.style.display = 'none';
+          document.body.appendChild(a); a.click();
+          setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+          say('px-msg', '파일을 받았어요 · 안 보이면 위 코드를 복사해요');
+        } catch (e) { say('px-msg', '파일 받기가 안 돼요 · 위 코드를 복사해요', true); }
+        SND.ui('tap');
+      });
+      function checkImport(text) {
+        const r = PROFILE.decode(text);
+        imp = r.ok ? r.data : null; impStep = {};
+        say('pi-msg', r.ok ? '' : r.msg, !r.ok);
+        SND.ui(r.ok ? 'open' : 'deny');
+        renderPreview();
+        const pv = $('pi-prev').firstElementChild;
+        if (pv && pv.scrollIntoView) pv.scrollIntoView({ block: 'nearest' });
+      }
+      $('pi-check').addEventListener('click', () => checkImport($('pi-code').value));
+      $('pi-file').addEventListener('change', e => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const rd = new FileReader();
+        rd.onload = () => { $('pi-code').value = String(rd.result || ''); checkImport($('pi-code').value); };
+        rd.onerror = () => say('pi-msg', '파일을 못 읽었어요 · 코드를 붙여 넣어 주세요', true);
+        rd.readAsText(f);
+        e.target.value = '';
+      });
+      const STEP = ['', '정말 할까요?', '지금 기록이 지워져요 · 계속'];
+      function renderPreview() {
+        const box = $('pi-prev');
+        if (!imp) { box.innerHTML = ''; return; }
+        const pv = PROFILE.preview(imp), list = PROFILE.list(), room = PROFILE.MAX - list.length;
+        let acts = '';
+        if (pv.length === 1) {
+          acts = '<button type="button" class="pact" data-imp="new"' + (room < 1 ? ' disabled' : '') + '>' + (room < 1 ? '친구가 ' + PROFILE.MAX + '명이라 새로 못 만들어요' : '새 아이로 추가') + '</button>' +
+            list.map(p => { const s = impStep[p.id] || 0; return '<button type="button" class="pact warn' + (s ? ' s' + s : '') + '" data-imp="' + p.id + '">' + (s ? STEP[s] : esc(p.icon) + ' ' + esc(p.name) + ' 기록 덮어쓰기') + '</button>'; }).join('');
+        } else {
+          const s = impStep.all || 0;
+          acts = '<button type="button" class="pact" data-imp="allnew"' + (room < pv.length ? ' disabled' : '') + '>' + (room < pv.length ? '자리가 모자라요 (최대 ' + PROFILE.MAX + '명)' : '모두 새 아이로 추가') + '</button>' +
+            '<button type="button" class="pact warn' + (s ? ' s' + s : '') + '" data-imp="all">' + (s ? STEP[s] : '이 기기 기록을 모두 바꾸기') + '</button>';
+        }
+        box.innerHTML = '<div class="pv">' + pv.map(k => '<div class="pvk"><i aria-hidden="true">' + esc(k.icon) + '</i><span>' + esc(k.name) + ' <small>별코인 ' + k.coins.toLocaleString() + ' · 메달 ' + k.medals + ' · 스티커 ' + k.stickers + '</small></span></div>').join('') +
+          '<div class="at">만든 날 ' + esc(pv[0].at || '모름') + '</div><div class="acts">' + acts + '</div></div>';
+      }
+      $('pi-prev').addEventListener('click', e => {
+        const b = e.target.closest('[data-imp]');
+        if (!b || b.disabled || !imp) return;
+        const k = b.dataset.imp;
+        let done = 0;
+        if (k === 'new') done = PROFILE.importKid(imp, 'new');
+        else if (k === 'allnew') done = PROFILE.importAllNew(imp);
+        else {
+          // 덮어쓰기·모두 바꾸기는 세 번 눌러야 한다 (5초 쉬면 처음으로)
+          impStep[k] = (impStep[k] || 0) + 1;
+          clearTimeout(impTimer); impTimer = setTimeout(() => { impStep = {}; if (tab === 'move') renderPreview(); }, 5000);
+          if (impStep[k] < 3) { SND.ui('deny'); renderPreview(); return; }
+          impStep = {};
+          done = k === 'all' ? PROFILE.importReplace(imp) : PROFILE.importKid(imp, Number(k));
+        }
+        if (!done) { say('pi-msg', '불러오지 못했어요', true); SND.ui('deny'); return; }
+        imp = null; renderPreview();
+        say('pi-msg', '불러왔어요! 잠깐 뒤 새로 열어요');
+        SND.ui('fanfare');
+        setTimeout(() => location.reload(), 1200);
       });
 
       PROFILE.onSwitchElsewhere = () => location.reload();

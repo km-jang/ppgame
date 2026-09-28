@@ -259,11 +259,8 @@ test('판 도는 동안 세기: setPlaying·debug.addPlayed로 알림이 한 번
 });
 
 test('시계로 세기: 판이 돌 때만, 5초마다 저장', () => {
-  const { P, ctx } = page();
   let t = 1000000;
-  ctx.Date = { now: () => t };
-  vm.runInContext('0', ctx);
-  // profile.js는 Date.now를 쓰므로 가짜 시계로 바꾼 새 페이지를 연다
+  // profile.js는 Date.now를 쓰므로 가짜 시계를 넣은 페이지를 연다
   const Storage = makeStorageClass();
   const ls = new Storage();
   const c2 = vm.createContext({ console, Math, JSON, Number, String, Object, Array, Map, setTimeout, clearTimeout, setInterval() { return 1; }, clearInterval() {}, Storage, localStorage: ls,
@@ -281,7 +278,6 @@ test('시계로 세기: 판이 돌 때만, 5초마다 저장', () => {
   Q.setPlaying(true);
   t += 600000; Q.debug.tick(); // 오래 멈췄다 온 한 번은 15초까지만
   assert(Q.played(1) <= 7 + 15 + 0.01, '큰 틈은 잘라 냄 ' + Q.played(1));
-  void P;
 });
 
 test('소리 크기 상한: 보호자 설정 저장·가까운 칸으로·SND에 바로', () => {
@@ -298,6 +294,89 @@ test('소리 크기 상한: 보호자 설정 저장·가까운 칸으로·SND에
   // 새 페이지도 상한을 읽는다
   const again = page(mem, ['snd']);
   assert(again.run('SND.cap()') === 0.25, '다시 불러도 25%');
+});
+
+test('기록 옮기기: 한 아이 내보내기 → 다른 기기에서 새 아이로 추가 (코드와 파일 둘 다)', () => {
+  const a = page(new Map([['play.hub1', J({ coins: 321, stickers: { ng_first: '2026-09-28', jp_first: '2026-09-28' }, games: { ngun: { medals: 3 }, jump: { medals: 2 } } })], ['ngun.shop1', '{"ship":"twin"}'], ['play.sound1', '{"muted":true}']]));
+  a.P.rename(1, '하준'); a.P.setIcon(1, '🦖'); a.P.setLimit(1, 45);
+  a.P.add('민지', '🐱');
+  a.mem.set('p2:play.hub1', J({ coins: 9 }));
+  const code = a.P.exportCode(1, new Date(2026, 8, 28, 10, 0));
+  assert(/^[A-Za-z0-9+/=]+$/.test(code), '코드는 base64 글자만');
+  const file = JSON.stringify(a.P.exportData(1));
+  assert(a.P.exportFileName(new Date(2026, 8, 28)) === 'ppyong-kids-20260928.json', a.P.exportFileName(new Date(2026, 8, 28)));
+  const payload = JSON.parse(file);
+  assert(payload.app === 'ppyong-kids' && payload.v === 1 && typeof payload.sum === 'string', '묶음 모양');
+  assert(payload.data.kids.length === 1 && payload.data.kids[0].name === '하준' && !payload.data.device, '한 아이, 기기 설정 없음');
+  const keys = Object.keys(payload.data.kids[0].keys);
+  assert(keys.includes('play.hub1') && keys.includes('ngun.shop1') && !keys.includes('play.sound1') && !keys.includes('play.profiles') && !keys.some(k => /^p\d+:/.test(k)), '첫째 키만 ' + J(keys));
+  for (const text of [code, file, '  ' + code.replace(/(.{60})/g, '$1\n') + '\n']) {
+    const b = page();
+    const r = b.P.decode(text);
+    assert(r.ok, '읽기 ' + r.msg);
+    const pv = b.P.preview(r.data);
+    assert(pv.length === 1 && pv[0].name === '하준' && pv[0].icon === '🦖' && pv[0].coins === 321 && pv[0].medals === 5 && pv[0].stickers === 2, '미리 보기 ' + J(pv));
+    const id = b.P.importKid(r.data, 'new');
+    assert(id === 2 && b.P.get(2).name === '하준' && b.P.limit(2) === 45, '새 아이 ' + id);
+    assert(JSON.parse(b.mem.get('p2:play.hub1')).coins === 321 && b.mem.get('p2:ngun.shop1') === '{"ship":"twin"}', '키가 둘째 접두어로');
+    assert(!b.mem.has('play.hub1') || JSON.parse(b.mem.get('play.hub1')).coins !== 321, '첫째는 그대로');
+  }
+  // 둘째(접두어 있는 아이) 내보내기는 접두어 없이 담긴다
+  const two = a.P.exportData(2).data.kids[0];
+  assert(two.name === '민지' && J(Object.keys(two.keys)) === J(['play.hub1']), '둘째 ' + J(two));
+});
+
+test('기록 옮기기: 덮어쓰기는 그 아이 키만 바꾸고 이름·그림은 그대로', () => {
+  const a = page(new Map([['play.hub1', J({ coins: 50 })], ['snake.best', '9']]));
+  const code = a.P.exportCode(1);
+  const b = page(new Map([['play.hub1', J({ coins: 1 })], ['jump.rec', 'old']]));
+  b.P.add('둘'); b.mem.set('p2:play.hub1', J({ coins: 2 })); b.mem.set('p2:runner.rec', 'x');
+  const d = b.P.decode(code).data;
+  assert(b.P.importKid(d, 2) === 2, '둘째 덮어쓰기');
+  assert(JSON.parse(b.mem.get('p2:play.hub1')).coins === 50 && b.mem.get('p2:snake.best') === '9' && !b.mem.has('p2:runner.rec'), '둘째 키가 바뀜');
+  assert(b.P.get(2).name === '둘' && JSON.parse(b.mem.get('play.hub1')).coins === 1, '이름 그대로, 첫째 그대로');
+  assert(b.P.importKid(d, 1) === 1 && JSON.parse(b.mem.get('play.hub1')).coins === 50 && !b.mem.has('jump.rec') && b.mem.has('play.profiles'), '첫째 덮어쓰기(공통 키는 남음)');
+  assert(b.P.importKid(d, 7) === 0, '없는 아이');
+  b.P.add(); b.P.add();
+  assert(b.P.importKid(d, 'new') === 0, '4명이면 새 아이 안 됨');
+});
+
+test('기록 옮기기: 모든 아이 내보내기 → 기기 기록 모두 바꾸기 (소리 설정·상한도)', () => {
+  const a = page(new Map([['play.hub1', J({ coins: 10 })], ['play.sound1', '{"muted":false,"music":false,"fx":true}']]));
+  a.P.add('둘', '🐼'); a.mem.set('p2:play.hub1', J({ coins: 20 }));
+  a.P.add('셋', '🐸'); a.mem.set('p3:play.hub1', J({ coins: 30 }));
+  a.P.remove(2); // 번호에 빈칸이 있어도
+  a.P.setVolMax(0.5); a.P.setLimit(3, 60);
+  const d0 = a.P.exportData('all');
+  assert(d0.data.scope === 'all' && d0.data.kids.length === 2 && d0.data.device.volMax === 0.5, '모든 아이 ' + J(d0.data.device));
+  const b = page(new Map([['play.hub1', J({ coins: 999 })], ['p2:x', '1']]));
+  b.P.add(); b.mem.set('p2:play.hub1', 'z');
+  const r = b.P.decode(a.P.exportCode('all'));
+  assert(r.ok && b.P.preview(r.data).map(x => x.coins).join() === '10,30', '미리 보기 ' + J(r.data && b.P.preview(r.data)));
+  assert(b.P.importAllNew(r.data) === 2 && b.P.list().length === 4, '모두 새 아이로');
+  assert(b.P.importAllNew(r.data) === 0, '자리가 모자라면 안 함');
+  assert(b.P.importReplace(r.data) === 2, '모두 바꾸기');
+  const l = b.P.list();
+  assert(J(l.map(p => [p.id, p.name, p.icon])) === J([[1, '첫째', '🚀'], [2, '셋', '🐸']]), J(l));
+  assert(JSON.parse(b.mem.get('play.hub1')).coins === 10 && JSON.parse(b.mem.get('p2:play.hub1')).coins === 30 && !b.mem.has('p3:play.hub1') && !b.mem.has('p2:x'), '키');
+  assert(b.P.limit(2) === 60 && b.P.volMax() === 0.5 && JSON.parse(b.mem.get('play.sound1')).music === false && b.P.activeId() === 1, '설정');
+});
+
+test('기록 옮기기: 망가진 코드·다른 코드·새 버전 코드는 친절하게 거절', () => {
+  const a = page(new Map([['play.hub1', J({ coins: 5 })]]));
+  const code = a.P.exportCode(1), P = page().P;
+  const bad = P.decode(code.slice(0, code.length - 12));
+  assert(!bad.ok && /망가졌어요/.test(bad.msg), '잘린 코드 ' + J(bad));
+  const obj = a.P.exportData(1); obj.data.kids[0].keys['play.hub1'] = J({ coins: 99999 });
+  assert(/망가졌어요/.test(P.decode(JSON.stringify(obj)).msg), '바꾼 코드');
+  assert(!P.decode('').ok && /붙여 넣거나/.test(P.decode('').msg), '빈 칸');
+  assert(/망가졌어요/.test(P.decode('안녕하세요').msg) && /망가졌어요/.test(P.decode('{oops').msg), '엉뚱한 글');
+  assert(/아니에요/.test(P.decode(J({ app: 'other', v: 1 })).msg), '다른 앱');
+  const nv = a.P.exportData(1); nv.v = 2;
+  assert(/새 버전/.test(P.decode(JSON.stringify(nv)).msg), '새 버전');
+  const sh = a.P.exportData(1); sh.data.kids[0].keys['play.parent'] = '{}'; sh.sum = undefined;
+  assert(!P.decode(JSON.stringify(sh)).ok, '공통 키가 든 코드');
+  assert(!/[—–]/.test(bad.msg), '줄표 없음');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
