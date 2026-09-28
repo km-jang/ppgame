@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 설치 아이콘 아래에 보이는 앱 이름. 바꾸려면 이 한 줄만 고친다 -->
+    <string name="app_name">뿅뿅 놀이터</string>
+    <string name="exit_question">놀이를 끝낼까요?</string>
+    <string name="exit_yes">끝내기</string>
+    <string name="exit_no">계속 놀기</string>
+    <string name="saved_downloads">다운로드 폴더에 저장했어요</string>
+    <string name="saved_app_folder">앱 폴더(Android/data/io.github.kmjang.ngun/files/Download)에 저장했어요</string>
+    <string name="save_failed">저장하지 못했어요. 코드 복사를 써 주세요</string>
+</resources>
