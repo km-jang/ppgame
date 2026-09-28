@@ -149,6 +149,28 @@ async function until(page, fn, arg, ms) {
       assert(!r.length, r.join(' | '));
       assert(!sm.errors.length, sm.errors.join(' | '));
     });
+    // 카드 그림 (common/thumbs/, tools/thumbs.js): 네 카드 모두 그림이 읽히고(pic), 카드를 꽉 채우고, 제목·설명이 그림 위에 보인다
+    await test('게임 고르기 카드 그림 ' + vp.width + 'x' + vp.height + ': 네 카드 그림이 읽힘, 카드를 채움, 글자가 위에', async () => {
+      assert(await until(sm.page, () => [...document.querySelectorAll('.pick a')].every(a => a.classList.contains('pic'))), '그림이 안 읽힌 카드가 있음');
+      const r = await sm.page.evaluate(() => [...document.querySelectorAll('.pick a')].map(a => {
+        const im = a.querySelector('img.thumb'), ar = a.getBoundingClientRect();
+        if (!im) return a.dataset.game + ' 그림 없음';
+        const ir = im.getBoundingClientRect(), cs = getComputedStyle(im);
+        const bad = [];
+        if (!(im.naturalWidth > 0 && im.complete)) bad.push('안 읽힘');
+        if (!/common\/thumbs\/[a-z]+-(640|960)\.webp$/.test(im.currentSrc)) bad.push('주소 ' + im.currentSrc);
+        if (im.getAttribute('alt') !== '') bad.push('alt');
+        if (cs.objectFit !== 'cover' || cs.opacity !== '1') bad.push('보임 ' + cs.objectFit + ' ' + cs.opacity);
+        if (Math.abs(ir.width - a.clientWidth) > 1 || Math.abs(ir.height - a.clientHeight) > 1) bad.push('크기 ' + Math.round(ir.width) + 'x' + Math.round(ir.height));
+        // 제목 한가운데에서 맨 위에 있는 것이 제목 글자여야 한다 (그림이 글자를 덮지 않게)
+        const b = a.querySelector('b').getBoundingClientRect();
+        const top = document.elementFromPoint(b.left + Math.min(20, b.width / 2), b.top + b.height / 2);
+        if (!top || !a.querySelector('b').contains(top)) bad.push('제목 위에 ' + (top && top.tagName));
+        if (ir.top < ar.top - 1 || ir.bottom > ar.bottom + 1) bad.push('카드 밖');
+        return bad.length ? a.dataset.game + ' ' + bad.join(', ') : '';
+      }).filter(Boolean));
+      assert(!r.length, r.join(' | '));
+    });
     await sm.ctx.close();
   }
 
