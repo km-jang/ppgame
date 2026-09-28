@@ -933,6 +933,8 @@
   }
 
   function frame(ts) {
+    // 놀이 시간 세기 (common/profile.js): 판이 도는 동안과 카드 고르는 동안만
+    if (typeof PROFILE !== 'undefined') PROFILE.setPlaying(mode === 'play' || (mode === 'cards' && !cardsIdle));
     const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
     lastTs = ts;
 

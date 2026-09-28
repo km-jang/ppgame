@@ -131,6 +131,84 @@
     @keyframes pop { from { transform: scale(.6); opacity: 0; } }
     .close-btn { display: block; width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 14px; font: normal 22px var(--display); background: linear-gradient(180deg, #ffd6e8, #ff5fa8); color: #2a0718; cursor: pointer; }
     @media (max-width: 760px) { .stk-row { grid-template-columns: repeat(3, 1fr); } }
+    /* ─── 아이 프로필 · 보호자 화면 (common/profile.js) ─── */
+    .pf-btn { display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 16px 0 8px; border-radius: 999px; flex: none; max-width: 230px;
+      font: normal 20px var(--display); color: #fff; background: rgba(12, 16, 26, .75); border: 2px solid rgba(184, 164, 255, .6); cursor: pointer; text-align: left; }
+    .pf-btn:active { transform: scale(.96); }
+    .pf-btn i { font-style: normal; font-size: 30px; line-height: 1; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: rgba(184, 164, 255, .18); }
+    .pf-btn span { display: flex; flex-direction: column; min-width: 0; }
+    .pf-btn b { font-weight: normal; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-btn small { font-size: 14px; line-height: 1.2; color: #ffe08a; white-space: nowrap; }
+    .pf-btn small:empty { display: none; }
+    .pf-btn small.end { color: #ffb0c8; }
+    #pf-lock { position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 15; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%;
+      background: rgba(12, 16, 26, .55); color: rgba(255, 255, 255, .55); cursor: pointer; touch-action: none; -webkit-touch-callout: none; }
+    #pf-lock svg { position: absolute; inset: 0; width: 48px; height: 48px; }
+    #pf-lock .ring { fill: none; stroke: #ffe08a; stroke-width: 3.5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 24px 24px; stroke-dasharray: 132; stroke-dashoffset: 132; }
+    #pf-lock .lk { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    #pf-lock.hold { color: #ffe08a; background: rgba(12, 16, 26, .85); }
+    .ovl { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(4, 7, 14, .8); }
+    .ovl.on { display: flex; }
+    .ovl .panel { width: min(94vw, 760px); max-height: 94vh; overflow-y: auto; padding: 20px 22px; border-radius: 20px; background: linear-gradient(180deg, rgba(16, 22, 36, .98), rgba(8, 11, 19, .98)); border: 1px solid rgba(184, 164, 255, .4); box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+    .ovl h2 { margin: 0 0 14px; font: normal 32px var(--display); letter-spacing: 1px; text-align: center; }
+    .who-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+    .who-card { position: relative; width: 150px; height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: 22px; cursor: pointer;
+      background: rgba(255, 255, 255, .06); border: 3px solid rgba(255, 255, 255, .15); color: #fff; font: normal 24px var(--display); touch-action: none; -webkit-touch-callout: none; }
+    .who-card i { font-style: normal; font-size: 64px; line-height: 1; }
+    .who-card.cur { border-color: #b8a4ff; background: radial-gradient(circle at 50% 35%, rgba(184, 164, 255, .3), rgba(255, 255, 255, .05)); }
+    .who-card.cur::after { content: "지금"; position: absolute; top: -10px; right: 10px; padding: 2px 10px; border-radius: 999px; background: #b8a4ff; color: #1b1240; font: normal 15px var(--display); }
+    .who-card.new { border-style: dashed; color: #c9d2e6; font-size: 20px; }
+    .who-card.new i { font-size: 44px; opacity: .8; }
+    .who-card.new small { font: normal 13px var(--display); opacity: .75; }
+    .who-card:active { transform: scale(.97); }
+    .who-hint { min-height: 24px; margin: 12px 0 0; text-align: center; font: normal 17px var(--display); color: #ffe08a; }
+    .btn-close { display: block; width: 100%; margin-top: 14px; padding: 12px; border: 0; border-radius: 14px; font: normal 22px var(--display); background: linear-gradient(180deg, #e6ddff, #9d86ff); color: #150c33; cursor: pointer; }
+    .hold-ring { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events: none; }
+    .hold-ring rect { fill: none; stroke: #ffe08a; stroke-width: 4; stroke-linecap: round; }
+    /* 보호자 화면 */
+    #parent .panel { width: min(96vw, 820px); }
+    .ptabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .ptabs button { flex: 1; padding: 10px 8px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .05); color: #c9d2e6; font: normal 19px var(--display); cursor: pointer; }
+    .ptabs button[aria-selected="true"] { background: rgba(184, 164, 255, .25); border-color: #b8a4ff; color: #fff; }
+    .psec { display: none; }
+    .psec.on { display: block; }
+    .psec p.note { margin: 0 0 10px; font-size: 14px; color: #aeb7cc; line-height: 1.45; word-break: keep-all; }
+    .prow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); flex-wrap: wrap; }
+    .prow .ic { width: 52px; height: 52px; flex: none; border-radius: 14px; border: 2px solid rgba(184, 164, 255, .5); background: rgba(184, 164, 255, .12); font-size: 32px; line-height: 1; padding: 0; cursor: pointer; }
+    .prow input { flex: 1; min-width: 120px; height: 46px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .3); color: #fff; font: normal 21px var(--display); user-select: text; }
+    .prow .del { height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid rgba(255, 120, 150, .5); background: rgba(255, 80, 120, .1); color: #ffb0c8; font: normal 17px var(--display); cursor: pointer; white-space: nowrap; }
+    .prow .del.s1 { background: rgba(255, 80, 120, .3); color: #fff; }
+    .prow .del.s2 { background: #e0335e; color: #fff; border-color: #ff8fab; }
+    .prow .keep { font-size: 13px; color: #8a93a8; }
+    .icons { display: none; width: 100%; grid-template-columns: repeat(12, 1fr); gap: 6px; padding-top: 4px; }
+    .icons.on { display: grid; }
+    .icons button { height: 46px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .05); font-size: 26px; line-height: 1; padding: 0; cursor: pointer; }
+    .icons button[aria-pressed="true"] { border-color: #ffe08a; background: rgba(255, 224, 138, .2); }
+    .padd { width: 100%; height: 50px; border-radius: 14px; border: 2px dashed rgba(184, 164, 255, .6); background: transparent; color: #e6ddff; font: normal 20px var(--display); cursor: pointer; }
+    .padd:disabled { opacity: .45; cursor: default; }
+    .trow { padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
+    .trow .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+    .trow .who { font: normal 21px var(--display); }
+    .trow .who i { font-style: normal; font-size: 24px; margin-right: 6px; }
+    .trow .today { font-size: 14px; color: #c9d2e6; }
+    .trow .today b { color: #ffe08a; font-weight: 700; }
+    .pseg { display: flex; gap: 6px; flex-wrap: wrap; }
+    .pseg button { flex: 1; min-width: 64px; height: 44px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .05); color: #dfe6f5; font: normal 18px var(--display); cursor: pointer; }
+    .pseg button[aria-pressed="true"] { background: linear-gradient(180deg, #e6ddff, #9d86ff); color: #150c33; border-color: #e6ddff; }
+    .pseg .more { flex: 1.4; background: rgba(255, 224, 138, .12); border-color: rgba(255, 224, 138, .5); color: #ffe08a; }
+    .vseg button { height: 64px; font-size: 24px; }
+    @media (max-height: 600px) {
+      .pf-btn { height: 46px; font-size: 18px; } .pf-btn i { width: 32px; height: 32px; font-size: 24px; }
+      .ovl h2 { font-size: 26px; margin-bottom: 10px; }
+      .who-card { width: 132px; height: 140px; } .who-card i { font-size: 52px; }
+      .ovl .panel { padding: 14px 16px; }
+      .prow { padding: 6px 10px; margin-bottom: 6px; } .prow .ic { width: 46px; height: 46px; } .prow input, .prow .del { height: 42px; }
+      .trow { padding: 8px 10px; margin-bottom: 6px; } .trow .top { margin-bottom: 6px; }
+      .pseg button { height: 40px; } .vseg button { height: 56px; }
+      .ptabs { margin-bottom: 10px; } .ptabs button { padding: 7px 6px; }
+      .btn-close { margin-top: 10px; padding: 9px; }
+    }
+    @media (max-width: 760px) { .icons { grid-template-columns: repeat(6, 1fr); } }
     @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
     @keyframes sweep { 0% { background-position: 160% 0; } 30%, 100% { background-position: -70% 0; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
@@ -139,6 +217,7 @@
 <body>
   <section class="hub" aria-label="놀이 본부">
     <div class="hub-top">
+      <button id="pf-btn" class="pf-btn" type="button" aria-label="누가 놀아요? 친구 바꾸기"><i id="pf-ic" aria-hidden="true"></i><span><b id="pf-name"></b><small id="pf-left"></small></span></button>
       <h1>게임 고르기</h1>
       <span class="coin-pill" title="네 게임에서 모은 별코인"><i class="cn" aria-hidden="true"></i><b id="hub-coins">0</b></span>
       <button id="stk-open" class="rec-btn stk-btn" type="button">스티커북<b id="stk-new" class="new-dot" hidden></b></button>
@@ -174,6 +253,44 @@
     </div>
   </section>
 
+  <!-- 누가 놀아요? 친구 고르기 (바꾸기만. 만들기·이름·지우기는 보호자 화면에서) -->
+  <section id="who" class="ovl" aria-label="누가 놀아요?">
+    <div class="panel">
+      <h2>누가 놀아요?</h2>
+      <div id="who-grid" class="who-grid"></div>
+      <p id="who-hint" class="who-hint"></p>
+      <button id="who-close" type="button" class="btn-close">닫기</button>
+    </div>
+  </section>
+
+  <!-- 보호자 화면: 오른쪽 아래 자물쇠를 3초 꾹 누르면 열린다 -->
+  <button id="pf-lock" type="button" aria-label="보호자 화면 (3초 꾹 누르기)" title="보호자 화면: 3초 꾹"><svg viewBox="0 0 48 48" aria-hidden="true"><circle class="ring" cx="24" cy="24" r="21"/><rect class="lk" x="16" y="22" width="16" height="12" rx="2.5"/><path class="lk" d="M19.5 22v-3.5a4.5 4.5 0 0 1 9 0V22"/></svg></button>
+  <section id="parent" class="ovl" aria-label="보호자 화면">
+    <div class="panel">
+      <h2>보호자 화면</h2>
+      <div class="ptabs" role="tablist">
+        <button type="button" role="tab" data-tab="kids" aria-selected="true">아이 프로필</button>
+        <button type="button" role="tab" data-tab="time" aria-selected="false">하루 놀이 시간</button>
+        <button type="button" role="tab" data-tab="vol" aria-selected="false">소리 크기 상한</button>
+      </div>
+      <div class="psec on" data-sec="kids">
+        <p class="note">아이마다 별코인·기록·스티커·미션·캐릭터가 따로 저장돼요. 최대 4명. 그림을 누르면 바꿀 수 있어요.</p>
+        <div id="pk-list"></div>
+        <button id="pk-add" type="button" class="padd">+ 새 친구 만들기</button>
+      </div>
+      <div class="psec" data-sec="time">
+        <p class="note">정한 시간이 다가오면 게임 위쪽에 10분 전·5분 전 알림, 끝나면 "이 판을 마치고 쉬어요" 알림이 떠요. 게임을 멈추지는 않아요. 판이 도는 동안만 세요.</p>
+        <div id="pt-list"></div>
+      </div>
+      <div class="psec" data-sec="vol">
+        <p class="note">네 게임과 이 화면의 모든 소리가 이 크기를 넘지 않아요. 이 기기 전체에 같이 적용돼요.</p>
+        <div id="pv-seg" class="pseg vseg"></div>
+      </div>
+      <button id="parent-close" type="button" class="btn-close">닫기</button>
+    </div>
+  </section>
+
+  <script src="common/profile.js"></script>
   <script src="common/hub.js"></script>
   <script src="common/sound.js"></script>
   <script>
@@ -291,6 +408,174 @@
       window.addEventListener('storage', e => { if (!e.key || e.key === HUB.KEY) renderHub(); });
       window.renderHub = () => renderHub();
       renderHub();
+    })();
+
+    // ─── 아이 프로필 · 보호자 화면 (common/profile.js) ───
+    (function () {
+      const $ = id => document.getElementById(id);
+      const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const HOLD = 3000;
+      function renderMe() {
+        const p = PROFILE.current(), left = PROFILE.leftMin(p.id);
+        $('pf-ic').textContent = p.icon; $('pf-name').textContent = p.name;
+        const l = $('pf-left');
+        l.textContent = left == null ? '' : left <= 0 ? '오늘 시간 끝!' : '오늘 남은 시간 ' + left + '분';
+        l.classList.toggle('end', left === 0);
+      }
+      // 3초 꾹 누르기: el을 누르고 있는 동안 둘레(ring)를 채우고, 다 차면 done(). 짧게 누르면 tap(). 움직임 줄이기면 1초마다 한 칸씩
+      function holdable(el, ringFor, done, tap) {
+        let t0 = 0, raf = 0, id = null, fired = false;
+        const setK = k => { const r = ringFor(); if (r) r.style.strokeDashoffset = String(r.dataset.len * (1 - k)); };
+        const stop = () => { cancelAnimationFrame(raf); raf = 0; t0 = 0; id = null; el.classList.remove('hold'); setK(0); };
+        const step = () => {
+          if (!t0) return;
+          const ms = performance.now() - t0;
+          let k = Math.min(1, ms / HOLD);
+          if (still) k = Math.floor(k * 3) / 3;
+          setK(k);
+          if (ms >= HOLD) { fired = true; stop(); done(); return; }
+          raf = requestAnimationFrame(step);
+        };
+        el.addEventListener('pointerdown', e => {
+          if (id != null) return;
+          id = e.pointerId; fired = false; t0 = performance.now(); el.classList.add('hold');
+          try { el.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+          raf = requestAnimationFrame(step);
+        });
+        el.addEventListener('pointerup', e => {
+          if (id == null || e.pointerId !== id) return;
+          const short = t0 && performance.now() - t0 < 400;
+          stop();
+          if (short && !fired && tap) tap();
+        });
+        el.addEventListener('pointercancel', e => { if (id != null && e.pointerId === id) stop(); });
+        el.addEventListener('contextmenu', e => e.preventDefault());
+      }
+      const lockRing = () => { const r = document.querySelector('#pf-lock .ring'); if (r) r.dataset.len = 132; return r; };
+      holdable($('pf-lock'), lockRing, () => openParent('kids'), () => SND.ui('deny'));
+
+      // 누가 놀아요? (바꾸기만)
+      function renderWho() {
+        const list = PROFILE.list(), me = PROFILE.activeId();
+        $('who-grid').innerHTML = list.map(p => '<button type="button" class="who-card' + (p.id === me ? ' cur' : '') + '" data-id="' + p.id + '"><i aria-hidden="true">' + esc(p.icon) + '</i><span>' + esc(p.name) + '</span></button>').join('') +
+          (list.length < PROFILE.MAX ? '<button type="button" class="who-card new" id="who-new" aria-label="새 친구 (보호자가 3초 꾹)"><svg class="hold-ring" viewBox="0 0 156 176" preserveAspectRatio="none" aria-hidden="true"><rect x="2" y="2" width="152" height="172" rx="22" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><i aria-hidden="true">＋</i><span>새 친구</span><small>보호자가 3초 꾹</small></button>' : '');
+        $('who-hint').textContent = '';
+        const nb = $('who-new');
+        if (nb) holdable(nb, () => { const r = nb.querySelector('rect'); if (r) r.dataset.len = 100; return r; }, () => openParent('kids'),
+          () => { $('who-hint').textContent = '새 친구는 보호자가 만들어요 · 새 친구 칸을 3초 꾹 눌러요'; SND.ui('deny'); });
+      }
+      function openWho() { renderWho(); $('who').classList.add('on'); SND.ui('open'); }
+      function closeWho(quiet) { if (!$('who').classList.contains('on')) return; $('who').classList.remove('on'); if (!quiet) SND.ui('close'); }
+      $('pf-btn').addEventListener('click', openWho);
+      $('who-close').addEventListener('click', () => closeWho());
+      $('who').addEventListener('click', e => {
+        if (e.target.id === 'who') { closeWho(); return; }
+        const c = e.target.closest('.who-card[data-id]');
+        if (!c) return;
+        const id = Number(c.dataset.id);
+        if (id === PROFILE.activeId()) { closeWho(); return; }
+        PROFILE.switchTo(id);
+        SND.ui('start');
+        // 새 친구 기록으로 모두 다시 읽는다
+        setTimeout(() => location.reload(), 150);
+      });
+
+      // 보호자 화면
+      let tab = 'kids', iconOpen = 0, delTimer = 0;
+      const delStep = {};
+      function openParent(t) {
+        closeWho(true);
+        tab = t || 'kids'; iconOpen = 0; for (const k in delStep) delete delStep[k];
+        renderParent(); $('parent').classList.add('on'); SND.ui('open');
+      }
+      function closeParent() { if (!$('parent').classList.contains('on')) return; $('parent').classList.remove('on'); SND.ui('close'); renderMe(); if (window.renderHub) window.renderHub(); }
+      const mins = s => Math.floor(s / 60);
+      function renderParent() {
+        document.querySelectorAll('.ptabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+        document.querySelectorAll('.psec').forEach(s => s.classList.toggle('on', s.dataset.sec === tab));
+        const list = PROFILE.list();
+        if (tab === 'kids') {
+          $('pk-list').innerHTML = list.map(p => '<div class="prow" data-id="' + p.id + '">' +
+            '<button type="button" class="ic" data-act="icon" aria-label="그림 바꾸기">' + esc(p.icon) + '</button>' +
+            '<input type="text" maxlength="' + PROFILE.NAME_MAX + '" value="' + esc(p.name) + '" aria-label="이름" data-act="name">' +
+            (p.id === 1 ? '<span class="keep">첫 번째 친구는<br>지울 수 없어요</span>' :
+              '<button type="button" class="del' + (delStep[p.id] ? ' s' + delStep[p.id] : '') + '" data-act="del">' + ['지우기', '정말 지울까요?', '기록도 다 지워져요 · 지우기'][delStep[p.id] || 0] + '</button>') +
+            '<div class="icons' + (iconOpen === p.id ? ' on' : '') + '">' + PROFILE.ICONS.map(ic => '<button type="button" data-icon="' + ic + '" aria-pressed="' + (ic === p.icon) + '">' + ic + '</button>').join('') + '</div>' +
+            '</div>').join('');
+          $('pk-add').disabled = list.length >= PROFILE.MAX;
+          $('pk-add').textContent = list.length >= PROFILE.MAX ? '친구는 ' + PROFILE.MAX + '명까지예요' : '+ 새 친구 만들기';
+        } else if (tab === 'time') {
+          $('pt-list').innerHTML = list.map(p => {
+            const lim = PROFILE.limit(p.id), sec = PROFILE.played(p.id), left = PROFILE.leftMin(p.id), ex = PROFILE.extraMin(p.id);
+            return '<div class="trow" data-id="' + p.id + '"><div class="top"><span class="who"><i aria-hidden="true">' + esc(p.icon) + '</i>' + esc(p.name) + '</span>' +
+              '<span class="today">오늘 <b>' + mins(sec) + '분</b> 놀았어요' + (left == null ? '' : ' · 남은 시간 <b>' + left + '분</b>') + (ex ? ' · 오늘 더 준 시간 ' + ex + '분' : '') + '</span></div>' +
+              '<div class="pseg">' + PROFILE.LIMITS.map(m => '<button type="button" data-limit="' + m + '" aria-pressed="' + (m === lim) + '">' + (m ? m + '분' : '제한 없음') + '</button>').join('') +
+              (lim ? '<button type="button" class="more" data-act="extra">오늘 ' + PROFILE.EXTRA_MIN + '분 더</button>' : '') + '</div></div>';
+          }).join('');
+        } else {
+          const v = PROFILE.volMax();
+          $('pv-seg').innerHTML = PROFILE.VOLS.map(x => '<button type="button" data-vol="' + x + '" aria-pressed="' + (x === v) + '">' + Math.round(x * 100) + '%</button>').join('');
+        }
+      }
+      document.querySelector('.ptabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; iconOpen = 0; renderParent(); SND.ui('tap'); });
+      $('parent-close').addEventListener('click', closeParent);
+      $('parent').addEventListener('click', e => { if (e.target.id === 'parent') closeParent(); });
+      $('pk-add').addEventListener('click', () => {
+        const p = PROFILE.add();
+        if (!p) { SND.ui('deny'); return; }
+        SND.ui('buy'); renderParent();
+      });
+      $('pk-list').addEventListener('click', e => {
+        const row = e.target.closest('.prow'); if (!row) return;
+        const id = Number(row.dataset.id), ic = e.target.closest('[data-icon]'), act = e.target.closest('[data-act]');
+        if (ic) { PROFILE.setIcon(id, ic.dataset.icon); iconOpen = 0; SND.ui('tap'); renderParent(); renderMe(); return; }
+        if (!act) return;
+        if (act.dataset.act === 'icon') { iconOpen = iconOpen === id ? 0 : id; SND.ui('tap'); renderParent(); }
+        else if (act.dataset.act === 'del') {
+          // 세 번 눌러야 지운다: 지우기 → 정말 지울까요? → 기록도 다 지워져요 · 지우기. 5초 쉬면 처음으로
+          delStep[id] = (delStep[id] || 0) + 1;
+          clearTimeout(delTimer);
+          delTimer = setTimeout(() => { for (const k in delStep) delete delStep[k]; if (tab === 'kids' && $('parent').classList.contains('on')) renderParent(); }, 5000);
+          if (delStep[id] >= 3) { delete delStep[id]; PROFILE.remove(id); SND.ui('close'); renderMe(); if (window.renderHub) window.renderHub(); }
+          else SND.ui('deny');
+          renderParent();
+        }
+      });
+      $('pk-list').addEventListener('change', e => {
+        const inp = e.target.closest('input[data-act="name"]'); if (!inp) return;
+        const id = Number(inp.closest('.prow').dataset.id);
+        if (!PROFILE.rename(id, inp.value)) inp.value = (PROFILE.get(id) || {}).name || '';
+        else SND.ui('tap');
+        renderMe();
+      });
+      $('pk-list').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
+      $('pt-list').addEventListener('click', e => {
+        const row = e.target.closest('.trow'), b = e.target.closest('button');
+        if (!row || !b) return;
+        const id = Number(row.dataset.id);
+        if (b.dataset.limit != null) PROFILE.setLimit(id, Number(b.dataset.limit));
+        else if (b.dataset.act === 'extra') PROFILE.addExtra(id);
+        else return;
+        SND.ui('tap'); renderParent(); renderMe();
+      });
+      $('pv-seg').addEventListener('click', e => {
+        const b = e.target.closest('[data-vol]'); if (!b) return;
+        PROFILE.setVolMax(Number(b.dataset.vol));
+        renderParent(); SND.ui('coin');
+      });
+
+      PROFILE.onSwitchElsewhere = () => location.reload();
+      window.addEventListener('pageshow', renderMe);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderMe(); });
+      window.addEventListener('storage', e => {
+        if (e.key && e.key !== PROFILE.KEYS.parent && e.key !== PROFILE.KEYS.time && e.key !== PROFILE.KEYS.profiles) return;
+        renderMe();
+        if ($('parent').classList.contains('on') && !(document.activeElement && document.activeElement.matches('input'))) renderParent();
+      });
+      setInterval(renderMe, 30000);
+      window.PF_UI = { openWho, openParent, closeParent, renderMe };
+      renderMe();
     })();
   </script>
 </body>

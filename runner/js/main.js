@@ -689,6 +689,7 @@
   const MIN_FRAME = 1000 / 60 - 2;
   function frame(ts) {
     requestAnimationFrame(frame);
+    if (typeof PROFILE !== 'undefined') PROFILE.setPlaying(mode === 'play'); // 놀이 시간 세기 (common/profile.js)
     if (ts - lastTs < MIN_FRAME) return;
     const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
     lastTs = ts;
