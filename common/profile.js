@@ -242,9 +242,9 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
   // left: 남은 초(null이면 제한 없음), playedSec: 오늘 논 초. 시간이 다시 늘면(10분 더·제한 바꿈) 알림을 다시 켠다
   function warnStep(st, left, playedSec) {
     if (left == null) return null;
+    if (left > 0 && st.f0) st.f0 = st.f5 = st.f10 = false; // 끝난 뒤 시간을 더 받았으면 처음부터
     if (left > WARN.soon) st.f10 = false;
     if (left > WARN.sooner) st.f5 = false;
-    if (left > 0) st.f0 = false;
     if (left <= 0) {
       if (!st.f0) { st.f0 = st.f5 = st.f10 = true; st.last = playedSec; return 'over'; }
       if (playedSec - st.last >= WARN.again) { st.last = playedSec; return 'over'; }
@@ -297,6 +297,131 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     settle();
     if (!timer && typeof setInterval !== 'undefined') timer = setInterval(tick, TICK);
     if (b) check(true);
+  }
+
+  // ─── 기록 옮기기: 내보내기 · 불러오기 (2026-09-28 소유자 승인) ───
+  // 브라우저에서 앱(안드로이드 WebView)으로, 태블릿에서 태블릿으로. 글 코드(base64) 하나 또는 .json 파일.
+  // 묶음(payload) = { app:'ppyong-kids', v:1, sum, data }, data = { at, scope:'one'|'all', kids:[{name, icon, limit, keys:{키: 저장된 글}}], device? }
+  //   sum은 JSON.stringify(data)의 FNV-1a (복사하다 잘리거나 바뀐 코드를 알아챈다). device(소리 설정·소리 크기 상한)는 '모든 아이'일 때만
+  const APP = 'ppyong-kids', XV = 1;
+  // 그 아이 것인 저장 키 (원래 키 이름 목록). 첫째: 접두어 없는 키 중 공통 키가 아닌 것, 둘째부터: p<id>: 로 시작하는 것
+  function ownKeys(id) {
+    const pre = prefixOf(id);
+    return raw.keys().filter(k => (pre ? k.indexOf(pre) === 0 : !shared(k)));
+  }
+  function wipeOwn(id) { const ks = ownKeys(id); for (const k of ks) raw.rm(k); return ks.length; }
+  function fnv(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return ('0000000' + h.toString(16)).slice(-8); }
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  function b64enc(bin) {
+    let out = '';
+    for (let i = 0; i < bin.length; i += 3) {
+      const a = bin.charCodeAt(i), b = bin.charCodeAt(i + 1), c = bin.charCodeAt(i + 2), n = (a << 16) | ((b || 0) << 8) | (c || 0);
+      out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + (i + 1 < bin.length ? B64[(n >> 6) & 63] : '=') + (i + 2 < bin.length ? B64[n & 63] : '=');
+    }
+    return out;
+  }
+  function b64dec(s) {
+    s = s.replace(/[^A-Za-z0-9+/]/g, '');
+    let out = '';
+    for (let i = 0; i < s.length; i += 4) {
+      const n = (B64.indexOf(s[i]) << 18) | (B64.indexOf(s[i + 1]) << 12) | ((B64.indexOf(s[i + 2]) & 63) << 6) | (B64.indexOf(s[i + 3]) & 63);
+      out += String.fromCharCode((n >> 16) & 255);
+      if (i + 2 < s.length) out += String.fromCharCode((n >> 8) & 255);
+      if (i + 3 < s.length) out += String.fromCharCode(n & 255);
+    }
+    return out;
+  }
+  const utf8 = s => unescape(encodeURIComponent(s));
+  const unutf8 = s => decodeURIComponent(escape(s));
+  function kidData(id) {
+    const p = get(id);
+    if (!p) return null;
+    const pre = prefixOf(id), keys = {};
+    for (const k of ownKeys(id)) { const v = raw.get(k); if (v != null) keys[pre ? k.slice(pre.length) : k] = v; }
+    return { name: p.name, icon: p.icon, limit: limit(id), keys };
+  }
+  // who: 아이 id 또는 'all'. 돌려주는 값: 묶음 (파일에 그대로 쓴다)
+  function exportData(who, when) {
+    const at = (when || new Date()).toISOString();
+    const all = who === 'all';
+    const kids = (all ? list().map(p => p.id) : [who]).map(kidData).filter(Boolean);
+    const data = { at, scope: all ? 'all' : 'one', kids };
+    if (all) data.device = { volMax: volMax(), sound1: raw.get('play.sound1') };
+    return { app: APP, v: XV, sum: fnv(JSON.stringify(data)), data };
+  }
+  const exportCode = (who, when) => b64enc(utf8(JSON.stringify(exportData(who, when))));
+  const exportFileName = d => { d = d || new Date(); return 'ppyong-kids-' + dayKey(d).replace(/-/g, '') + '.json'; };
+  // 코드(base64)나 파일 글(JSON)을 읽는다. 돌려주는 값: {ok:true, data} 또는 {ok:false, msg}
+  const BAD = '코드가 망가졌어요. 처음부터 다시 복사해 주세요';
+  function decode(text) {
+    let s = String(text == null ? '' : text).trim();
+    if (!s) return { ok: false, msg: '코드를 붙여 넣거나 파일을 골라 주세요' };
+    let o = null;
+    try { o = JSON.parse(s[0] === '{' ? s : unutf8(b64dec(s))); } catch (e) { return { ok: false, msg: BAD }; }
+    if (!isObj(o) || o.app !== APP) return { ok: false, msg: '이 게임 모음의 기록 코드가 아니에요' };
+    if (!(Number(o.v) >= 1)) return { ok: false, msg: BAD };
+    if (Number(o.v) > XV) return { ok: false, msg: '더 새 버전에서 만든 코드예요. 게임을 새로 고친 뒤 다시 해 보세요' };
+    if (!isObj(o.data) || o.sum !== fnv(JSON.stringify(o.data))) return { ok: false, msg: BAD };
+    const d = o.data;
+    if (!Array.isArray(d.kids) || !d.kids.length || d.kids.length > MAX) return { ok: false, msg: BAD };
+    for (const k of d.kids) {
+      if (!isObj(k) || !isObj(k.keys)) return { ok: false, msg: BAD };
+      for (const key of Object.keys(k.keys)) if (typeof k.keys[key] !== 'string' || shared(key)) return { ok: false, msg: BAD };
+    }
+    return { ok: true, data: d };
+  }
+  // 미리 보기: 아이마다 이름·그림·별코인·메달·스티커 수, 만든 날
+  function preview(d) {
+    return d.kids.map(k => {
+      let hub = null;
+      try { hub = JSON.parse(k.keys['play.hub1'] || 'null'); } catch (e) { hub = null; }
+      let medals = 0;
+      if (isObj(hub) && isObj(hub.games)) for (const g of Object.keys(hub.games)) medals += Math.floor(num(hub.games[g] && hub.games[g].medals));
+      return {
+        name: cleanName(k.name) || '친구', icon: ICONS.indexOf(k.icon) >= 0 ? k.icon : ICONS[0],
+        coins: isObj(hub) ? Math.floor(num(hub.coins)) : 0, medals, stickers: isObj(hub) && isObj(hub.stickers) ? Object.keys(hub.stickers).length : 0,
+        keys: Object.keys(k.keys).length, at: typeof d.at === 'string' ? d.at.slice(0, 10) : '',
+      };
+    });
+  }
+  function writeKid(id, k) {
+    const pre = prefixOf(id);
+    wipeOwn(id);
+    for (const key of Object.keys(k.keys)) raw.set(pre + key, k.keys[key]);
+    const lim = Math.floor(Number(k.limit)) || 0;
+    if (LIMITS.indexOf(lim) >= 0) setLimit(id, lim);
+  }
+  // 한 아이 불러오기. target: 'new'(새 아이로 추가) 또는 덮어쓸 아이 id (이름·그림은 그 아이 것 그대로). 돌려주는 값: 받은 아이 id 또는 0
+  function importKid(d, target, i) {
+    const k = d.kids[i || 0];
+    if (!k) return 0;
+    let id = target;
+    if (target === 'new') { const p = add(k.name, k.icon); if (!p) return 0; id = p.id; }
+    else if (!get(id)) return 0;
+    writeKid(id, k);
+    return id;
+  }
+  // 모두 새 아이로 추가 (자리가 모자라면 아무것도 안 하고 0)
+  function importAllNew(d) {
+    if (list().length + d.kids.length > MAX) return 0;
+    let n = 0;
+    for (let i = 0; i < d.kids.length; i++) if (importKid(d, 'new', i)) n++;
+    return n;
+  }
+  // 이 기기 기록을 모두 바꾸기: 지금 아이들 기록을 다 지우고 코드의 아이들로 (첫 아이가 첫째 자리). '모든 아이' 코드면 소리 설정도
+  function importReplace(d) {
+    for (const p of list()) wipeOwn(p.id);
+    for (const k of raw.keys()) if (OWN.test(k)) raw.rm(k);
+    const kids = d.kids.slice(0, MAX);
+    jset(K_PROFILES, { v: 1, list: kids.map((k, i) => ({ id: i + 1, name: cleanName(k.name) || NAMES[i], icon: ICONS.indexOf(k.icon) >= 0 ? k.icon : ICONS[0] })), active: 1 });
+    const pa = parent(); pa.limits = {}; pa.extra = {};
+    if (isObj(d.device) && d.device.volMax != null) pa.volMax = capOf(d.device.volMax);
+    jset(K_PARENT, pa);
+    jset(K_TIME, { day: dayKey(), sec: {}, warn: {} });
+    if (isObj(d.device) && typeof d.device.sound1 === 'string') raw.set('play.sound1', d.device.sound1);
+    kids.forEach((k, i) => writeKid(i + 1, k));
+    cur = 1;
+    return kids.length;
   }
 
   // ─── 화면 도구 (document가 있을 때만) ───
@@ -388,6 +513,7 @@ var PROFILE = (typeof PROFILE !== 'undefined' && PROFILE) || {};
     parent, limit, setLimit, extraMin, addExtra, volMax, setVolMax, capOf,
     loadTime, played, addPlayed, leftSec, leftMin, warnStep, warnText,
     setPlaying, playing: () => playing, check, toast, renderBadges,
+    ownKeys, exportData, exportCode, exportFileName, decode, preview, importKid, importAllNew, importReplace,
     onSwitchElsewhere: null,
     // 테스트·점검용: 놀이 시간을 빨리 감기
     debug: {
