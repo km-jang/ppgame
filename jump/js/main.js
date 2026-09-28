@@ -694,6 +694,7 @@
 
   // ─── 루프 ──────────────────────────────────────────────────
   function frame(ts) {
+    if (typeof PROFILE !== 'undefined') PROFILE.setPlaying(mode === 'play'); // 놀이 시간 세기 (common/profile.js)
     const raw = (ts - lastTs) / 1000 || 0;
     const dt = Math.min(0.05, raw);
     lastTs = ts;

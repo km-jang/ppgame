@@ -1,0 +1,62 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 버전 번호: GitHub Actions 실행 번호를 쓴다 (새 APK일수록 숫자가 커져야 덮어 설치된다)
+def runNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+
+// 서명 열쇠: CI가 ANDROID_KEYSTORE_FILE(파일 경로)과 ANDROID_KEYSTORE_PASS를 넘긴다.
+// 없으면 디버그 열쇠로 서명한다 (그 APK는 나중에 덮어 설치가 안 될 수 있다)
+def ksPath = System.getenv('ANDROID_KEYSTORE_FILE')
+def ksPass = System.getenv('ANDROID_KEYSTORE_PASS')
+def hasKeystore = ksPath != null && !ksPath.isEmpty() && ksPass != null && !ksPass.isEmpty() && new File(ksPath).exists()
+
+android {
+    namespace 'io.github.kmjang.ngun'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'io.github.kmjang.ngun'
+        minSdk 24
+        targetSdk 34
+        versionCode runNumber
+        versionName "1.${runNumber}"
+    }
+
+    signingConfigs {
+        release {
+            if (hasKeystore) {
+                storeFile new File(ksPath)
+                storePassword ksPass
+                keyAlias 'ppyong'
+                keyPassword ksPass
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig hasKeystore ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        // 스토어에 올리지 않으므로 릴리스 빌드의 lint 검사로 빌드가 멈추지 않게 한다
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
+
+dependencies {
+    // WebViewAssetLoader (앱 안의 웹 파일을 https 주소로 열어 준다)
+    implementation 'androidx.webkit:webkit:1.11.0'
+    // 코틀린 표준 라이브러리 버전이 섞여 "Duplicate class" 오류가 나지 않게 맞춘다
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
+}

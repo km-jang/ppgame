@@ -1,0 +1,8 @@
+# 빌드 결과와 CI가 복사해 넣는 웹 파일 (저장소 최상위가 원본)
+.gradle/
+build/
+app/build/
+app/src/main/assets/
+local.properties
+*.jks
+*.keystore

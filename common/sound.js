@@ -16,6 +16,8 @@
 //      옛 ngun.audio.music이 false면 음악 끔으로 시작)
 //   SND.muted() / setMuted(b) / toggleMuted()   SND.musicOn() / setMusic(b)   SND.fxOn() / setFx(b)
 //   SND.onChange(fn)  바뀌면 fn({muted, music, fx}). 다른 탭·다른 게임 페이지에서 바꿔도(storage 이벤트) 불린다
+// 소리 크기 상한 (보호자 화면, 2026-09-28): play.parent.volMax(0.25~1, 기본 1)를 처음과 저장 알림 때 읽어 마지막 master 크기에 곱한다.
+//   SND.cap() 지금 상한 · SND.setCap(x) 바로 바꾸기(저장은 PROFILE.setVolMax가 한다). 네 게임과 첫 화면이 모두 여기를 지나므로 전부 줄어든다
 // 공통 효과음: SND.ui(name, opt)
 //   tap open close start coin buy deny claim medal sticker star({k: 0~7 한 계단씩 높게}) tick({hi}) continueAsk continueGo fanfare over overSoft
 // 배경 음악
@@ -29,7 +31,7 @@
 // 마지막에 리미터(-4dB, 20:1)가 있어 겹쳐도 찢어지지 않지만, 게임 소리는 리미터에 기대지 말고 원래 크기를 맞춘다.
 var SND = (typeof SND !== 'undefined' && SND) || {};
 (function (S) {
-  const KEY = 'play.sound1', OLD = ['ngun.muted', 'snake.muted', 'jump.muted', 'runner.muted'];
+  const KEY = 'play.sound1', PKEY = 'play.parent', OLD = ['ngun.muted', 'snake.muted', 'jump.muted', 'runner.muted'];
   const W = typeof window !== 'undefined' ? window : null, D = typeof document !== 'undefined' ? document : null;
   const AC = W && (W.AudioContext || W.webkitAudioContext);
   const LV = { fx: 1, music: 0.45, ui: 0.45 }, XF = 1, LOOK = 0.1;
@@ -57,6 +59,14 @@ var SND = (typeof SND !== 'undefined' && SND) || {};
     return { muted: !!v.muted, music: v.music !== false, fx: v.fx !== false };
   }
   const cfg = () => cfgv || (cfgv = load());
+  // 소리 크기 상한 (보호자 화면)
+  const capOf = x => { const n = Number(x); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 1; };
+  function readCap() { const p = store().get(PKEY, null); return p && typeof p === 'object' && p.volMax != null ? capOf(p.volMax) : 1; }
+  let capv = null;
+  const capNow = () => (capv == null ? (capv = readCap()) : capv);
+  S.cap = () => capNow();
+  S.setCap = x => { capv = capOf(x); apply(); return capv; };
+  S.masterTarget = () => (cfg().muted ? 0 : capNow());
   function fire() { const s = Object.assign({}, cfg()); for (const f of subs.slice()) safe(f, s); }
   function put(k, b) { const s = cfg(); b = !!b; if (s[k] === b) return; s[k] = b; store().set(KEY, s); apply(); fire(); }
   S.KEY = KEY;
@@ -64,7 +74,7 @@ var SND = (typeof SND !== 'undefined' && SND) || {};
   S.musicOn = () => cfg().music; S.setMusic = b => put('music', b);
   S.fxOn = () => cfg().fx; S.setFx = b => put('fx', b);
   S.onChange = fn => { subs.push(fn); return () => { const i = subs.indexOf(fn); if (i >= 0) subs.splice(i, 1); }; };
-  S.reload = () => { cfgv = null; apply(); fire(); };
+  S.reload = () => { cfgv = null; capv = null; apply(); fire(); };
 
   // ─── 소리 판 ───
   let c = null, master = null, fxBus = null, uiBus = null, musBus = null, noiseBuf = null, ever = false, hidden = false, force = false, blip = false, duckV = 1;
@@ -81,7 +91,7 @@ var SND = (typeof SND !== 'undefined' && SND) || {};
     fxBus.connect(master); musBus.connect(master);
     uiBus = c.createGain(); uiBus.gain.value = LV.ui; uiBus.connect(fxBus);
     const s = cfg();
-    master.gain.value = s.muted ? 0 : 1; fxBus.gain.value = s.fx ? LV.fx : 0; musBus.gain.value = s.music ? LV.music : 0;
+    master.gain.value = s.muted ? 0 : capNow(); fxBus.gain.value = s.fx ? LV.fx : 0; musBus.gain.value = s.music ? LV.music : 0;
     S.fx = fxBus; S.music.bus = musBus;
     const on = () => { if (c.state === 'running') { ever = true; flush(); if (M.want && !M.layers.length) start(M.want); tick(); } };
     if (c.addEventListener) c.addEventListener('statechange', on); else c.onstatechange = on;
@@ -111,9 +121,10 @@ var SND = (typeof SND !== 'undefined' && SND) || {};
   function apply() {
     if (!c) return;
     const s = cfg();
-    ramp(master.gain, s.muted ? 0 : 1); ramp(fxBus.gain, s.fx ? LV.fx : 0); ramp(musBus.gain, s.music ? LV.music * duckV : 0);
+    ramp(master.gain, s.muted ? 0 : capNow()); ramp(fxBus.gain, s.fx ? LV.fx : 0); ramp(musBus.gain, s.music ? LV.music * duckV : 0);
   }
   // 테스트: OfflineAudioContext에 판을 새로 깐다 (늘 '돌아가는 중'으로 본다)
+  S._master = () => master;
   S._use = x => { c = null; M.layers = []; M.want = null; M.cur = null; noiseBuf = null; force = true; ever = true; build(x); };
 
   // 손가락·키·화면 가림
@@ -125,7 +136,7 @@ var SND = (typeof SND !== 'undefined' && SND) || {};
     if (D) D.addEventListener('visibilitychange', () => (D.visibilityState === 'hidden' ? hide() : show()));
     W.addEventListener('pagehide', hide);
     W.addEventListener('pageshow', () => { S.reload(); if (!D || D.visibilityState !== 'hidden') show(); });
-    W.addEventListener('storage', e => { if (!e.key || e.key === KEY) S.reload(); });
+    W.addEventListener('storage', e => { if (!e.key || e.key === KEY) S.reload(); else if (e.key === PKEY) { capv = null; apply(); } });
   }
 
   // ─── 합성 도구 ───

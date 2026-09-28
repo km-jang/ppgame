@@ -883,6 +883,7 @@
     }
   }
   function frame(ts) {
+    if (typeof PROFILE !== 'undefined') PROFILE.setPlaying(mode === 'play'); // 놀이 시간 세기 (common/profile.js)
     if (lastTs && ts - lastTs < D.DRAW.minGap * 1000) { requestAnimationFrame(frame); return; }
     const raw = (ts - lastTs) / 1000 || 0;
     const dt = Math.min(0.05, raw);

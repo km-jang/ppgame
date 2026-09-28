@@ -131,6 +131,133 @@
     @keyframes pop { from { transform: scale(.6); opacity: 0; } }
     .close-btn { display: block; width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 14px; font: normal 22px var(--display); background: linear-gradient(180deg, #ffd6e8, #ff5fa8); color: #2a0718; cursor: pointer; }
     @media (max-width: 760px) { .stk-row { grid-template-columns: repeat(3, 1fr); } }
+    /* ─── 아이 프로필 · 보호자 화면 (common/profile.js) ─── */
+    .pf-btn { display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 16px 0 8px; border-radius: 999px; flex: none; max-width: 230px;
+      font: normal 20px var(--display); color: #fff; background: rgba(12, 16, 26, .75); border: 2px solid rgba(184, 164, 255, .6); cursor: pointer; text-align: left; }
+    .pf-btn:active { transform: scale(.96); }
+    .pf-btn i { font-style: normal; font-size: 30px; line-height: 1; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: rgba(184, 164, 255, .18); }
+    .pf-btn span { display: flex; flex-direction: column; min-width: 0; }
+    .pf-btn b { font-weight: normal; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-btn small { font-size: 14px; line-height: 1.2; color: #ffe08a; white-space: nowrap; }
+    .pf-btn small:empty { display: none; }
+    .pf-btn small.end { color: #ffb0c8; }
+    #pf-lock { position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); z-index: 15; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 50%;
+      background: rgba(12, 16, 26, .55); color: rgba(255, 255, 255, .55); cursor: pointer; touch-action: none; -webkit-touch-callout: none; }
+    #pf-lock svg { position: absolute; inset: 0; width: 48px; height: 48px; }
+    #pf-lock .ring { fill: none; stroke: #ffe08a; stroke-width: 3.5; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 24px 24px; stroke-dasharray: 132; stroke-dashoffset: 132; }
+    #pf-lock .lk { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    #pf-lock.hold { color: #ffe08a; background: rgba(12, 16, 26, .85); }
+    .ovl { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(4, 7, 14, .8); }
+    .ovl.on { display: flex; }
+    .ovl .panel { width: min(94vw, 760px); max-height: 94vh; overflow-y: auto; padding: 20px 22px; border-radius: 20px; background: linear-gradient(180deg, rgba(16, 22, 36, .98), rgba(8, 11, 19, .98)); border: 1px solid rgba(184, 164, 255, .4); box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+    .ovl h2 { margin: 0 0 14px; font: normal 32px var(--display); letter-spacing: 1px; text-align: center; }
+    .who-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+    .who-card { position: relative; width: 150px; height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: 22px; cursor: pointer;
+      background: rgba(255, 255, 255, .06); border: 3px solid rgba(255, 255, 255, .15); color: #fff; font: normal 24px var(--display); touch-action: none; -webkit-touch-callout: none; }
+    .who-card i { font-style: normal; font-size: 64px; line-height: 1; }
+    .who-card.cur { border-color: #b8a4ff; background: radial-gradient(circle at 50% 35%, rgba(184, 164, 255, .3), rgba(255, 255, 255, .05)); }
+    .who-card.cur::after { content: "지금"; position: absolute; top: -10px; right: 10px; padding: 2px 10px; border-radius: 999px; background: #b8a4ff; color: #1b1240; font: normal 15px var(--display); }
+    .who-card.new { border-style: dashed; color: #c9d2e6; font-size: 20px; }
+    .who-card.new i { font-size: 44px; opacity: .8; }
+    .who-card.new small { font: normal 13px var(--display); opacity: .75; }
+    .who-card:active { transform: scale(.97); }
+    .who-hint { min-height: 24px; margin: 12px 0 0; text-align: center; font: normal 17px var(--display); color: #ffe08a; }
+    .btn-close { display: block; width: 100%; margin-top: 14px; padding: 12px; border: 0; border-radius: 14px; font: normal 22px var(--display); background: linear-gradient(180deg, #e6ddff, #9d86ff); color: #150c33; cursor: pointer; }
+    .hold-ring { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events: none; }
+    .hold-ring rect { fill: none; stroke: #ffe08a; stroke-width: 4; stroke-linecap: round; }
+    /* 보호자 화면 */
+    #parent .panel { width: min(96vw, 820px); padding-bottom: 0; }
+    #parent .btn-close { position: sticky; bottom: 0; margin-bottom: 0; border-radius: 14px 14px 0 0; box-shadow: 0 -10px 18px rgba(8, 11, 19, .95); }
+    .ptabs { display: flex; gap: 8px; margin-bottom: 14px; }
+    .ptabs button { flex: 1; padding: 10px 8px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .05); color: #c9d2e6; font: normal 19px var(--display); cursor: pointer; }
+    .ptabs button[aria-selected="true"] { background: rgba(184, 164, 255, .25); border-color: #b8a4ff; color: #fff; }
+    .psec { display: none; }
+    .psec.on { display: block; }
+    .psec p.note { margin: 0 0 10px; font-size: 14px; color: #aeb7cc; line-height: 1.45; word-break: keep-all; }
+    .prow { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); flex-wrap: wrap; }
+    .prow .ic { width: 52px; height: 52px; flex: none; border-radius: 14px; border: 2px solid rgba(184, 164, 255, .5); background: rgba(184, 164, 255, .12); font-size: 32px; line-height: 1; padding: 0; cursor: pointer; }
+    .prow input { flex: 1; min-width: 120px; height: 46px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .3); color: #fff; font: normal 21px var(--display); user-select: text; }
+    .prow .del { height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid rgba(255, 120, 150, .5); background: rgba(255, 80, 120, .1); color: #ffb0c8; font: normal 17px var(--display); cursor: pointer; white-space: nowrap; }
+    .prow .del.s1 { background: rgba(255, 80, 120, .3); color: #fff; }
+    .prow .del.s2 { background: #e0335e; color: #fff; border-color: #ff8fab; }
+    .prow .keep { font-size: 13px; color: #8a93a8; }
+    .icons { display: none; width: 100%; grid-template-columns: repeat(12, 1fr); gap: 6px; padding-top: 4px; }
+    .icons.on { display: grid; }
+    .icons button { height: 46px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .05); font-size: 26px; line-height: 1; padding: 0; cursor: pointer; }
+    .icons button[aria-pressed="true"] { border-color: #ffe08a; background: rgba(255, 224, 138, .2); }
+    .padd { width: 100%; height: 50px; border-radius: 14px; border: 2px dashed rgba(184, 164, 255, .6); background: transparent; color: #e6ddff; font: normal 20px var(--display); cursor: pointer; }
+    .padd:disabled { opacity: .45; cursor: default; }
+    .trow { padding: 10px 12px; margin-bottom: 8px; border-radius: 14px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .08); }
+    .trow .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+    .trow .who { font: normal 21px var(--display); }
+    .trow .who i { font-style: normal; font-size: 24px; margin-right: 6px; }
+    .trow .today { font-size: 14px; color: #c9d2e6; }
+    .trow .today b { color: #ffe08a; font-weight: 700; }
+    .pseg { display: flex; gap: 6px; flex-wrap: wrap; }
+    .pseg button { flex: 1; min-width: 64px; height: 44px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .05); color: #dfe6f5; font: normal 18px var(--display); cursor: pointer; }
+    .pseg button[aria-pressed="true"] { background: linear-gradient(180deg, #e6ddff, #9d86ff); color: #150c33; border-color: #e6ddff; }
+    .pseg .more { flex: 1.4; background: rgba(255, 224, 138, .12); border-color: rgba(255, 224, 138, .5); color: #ffe08a; }
+    .vseg button { height: 64px; font-size: 24px; }
+    .ph { margin: 12px 0 6px; font: normal 19px var(--display); color: #e6ddff; }
+    .pcode { display: block; width: 100%; margin: 8px 0 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(0, 0, 0, .35); color: #cfe; font: 12px/1.35 ui-monospace, monospace; resize: vertical; user-select: text; -webkit-user-select: text; word-break: break-all; }
+    .pbtns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pbtns button, .pfile, .pact { height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid rgba(184, 164, 255, .55); background: rgba(184, 164, 255, .15); color: #fff; font: normal 18px var(--display); cursor: pointer; display: inline-flex; align-items: center; }
+    .pmsg { font: normal 16px var(--display); color: #ffe08a; }
+    .pmsg.bad { color: #ffb0c8; }
+    .pv { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 224, 138, .07); border: 1px solid rgba(255, 224, 138, .35); }
+    .pv .pvk { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; font: normal 19px var(--display); }
+    .pv .pvk i { font-style: normal; font-size: 28px; }
+    .pv .pvk small { font: 700 13px "Noto Sans KR", sans-serif; color: #c9d2e6; }
+    .pv .at { font-size: 13px; color: #aeb7cc; margin-bottom: 8px; }
+    .pv .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pact:disabled { opacity: .45; cursor: default; }
+    .pact.warn { border-color: rgba(255, 120, 150, .6); background: rgba(255, 80, 120, .12); color: #ffd0dc; }
+    .pact.s1 { background: rgba(255, 80, 120, .3); color: #fff; }
+    .pact.s2 { background: #e0335e; color: #fff; }
+    @media (max-height: 600px) {
+      .pf-btn { height: 46px; font-size: 18px; } .pf-btn i { width: 32px; height: 32px; font-size: 24px; }
+      .ovl h2 { font-size: 26px; margin-bottom: 10px; }
+      .who-card { width: 132px; height: 140px; } .who-card i { font-size: 52px; }
+      .ovl .panel { padding: 14px 16px; }
+      .prow { padding: 6px 10px; margin-bottom: 6px; } .prow .ic { width: 46px; height: 46px; } .prow input, .prow .del { height: 42px; }
+      .trow { padding: 8px 10px; margin-bottom: 6px; } .trow .top { margin-bottom: 6px; }
+      .pseg button { height: 40px; } .vseg button { height: 56px; }
+      .ptabs { margin-bottom: 10px; } .ptabs button { padding: 7px 6px; }
+      .btn-close { margin-top: 10px; padding: 9px; }
+    }
+    .hub-top h1 { white-space: nowrap; min-width: 0; font-size: clamp(28px, 2.6vw, 40px); }
+    @media (max-height: 600px), (max-width: 1000px) { #pf-lock { right: 6px; bottom: 6px; width: 40px; height: 40px; } #pf-lock svg { width: 40px; height: 40px; } }
+    @media (max-width: 760px) { .icons { grid-template-columns: repeat(6, 1fr); } }
+    /* 아이 사진 (PROFILE.faceHtml: 사진이 있으면 동그란 <img class="pf-ph">, 없으면 그림 글자) */
+    .pf-av { display: inline-grid; place-items: center; vertical-align: middle; }
+    .pf-btn i .pf-ph { width: 38px; height: 38px; }
+    .who-card i .pf-ph { width: 88px; height: 88px; border-width: 3px; }
+    .prow .ic .pf-ph { width: 44px; height: 44px; margin: auto; }
+    .prow .ic .pf-av { width: 100%; height: 100%; }
+    .prow .pname { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 10px; }
+    .prow .pname span { font: normal 19px var(--display); color: #e6ddff; flex: none; }
+    .prow .pname input { height: 52px; font-size: 24px; border: 2px solid rgba(184, 164, 255, .65); background: rgba(0, 0, 0, .4); }
+    .prow .pname input:focus { outline: none; border-color: #ffe08a; }
+    .pphoto { width: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pphoto .pact { height: 42px; font-size: 17px; }
+    .pphoto small { font-size: 13px; color: #aeb7cc; }
+    .icons .ihint { grid-column: 1 / -1; font-size: 13px; color: #ffe08a; }
+    .pv .pvk i .pf-ph, .pseg button .pf-ph, .pact .pf-ph { margin-right: 2px; }
+    .pseg button, .pact { gap: 6px; }
+    .pseg button { display: inline-flex; align-items: center; justify-content: center; }
+    /* 사진 맞추기 */
+    #crop { z-index: 25; }
+    #crop .panel { width: auto; max-width: 96vw; }
+    .crop-body { display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+    #crop-cv { display: block; border-radius: 18px; touch-action: none; cursor: grab; background: #05070f; }
+    .crop-side { display: flex; flex-direction: column; gap: 10px; width: 250px; }
+    .crop-side .note { margin: 0; font-size: 15px; color: #c9d2e6; line-height: 1.45; word-break: keep-all; }
+    .crop-zoom { display: flex; align-items: center; gap: 8px; font: normal 16px var(--display); color: #c9d2e6; }
+    .crop-zoom input { flex: 1; height: 36px; accent-color: #b8a4ff; }
+    .crop-ok { height: 56px; border: 0; border-radius: 14px; font: normal 26px var(--display); background: linear-gradient(180deg, #fff3a8, #ffcf3a); color: #3a2600; box-shadow: 0 4px 0 #9a6b00; cursor: pointer; }
+    .crop-ok:disabled { opacity: .5; }
+    .crop-side .pact { justify-content: center; }
+    @media (max-height: 600px) { .pf-btn i .pf-ph { width: 32px; height: 32px; } .who-card i .pf-ph { width: 70px; height: 70px; } #crop h2 { font-size: 24px; margin-bottom: 8px; } .crop-side { gap: 8px; } .crop-ok { height: 50px; } }
     @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
     @keyframes sweep { 0% { background-position: 160% 0; } 30%, 100% { background-position: -70% 0; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
@@ -139,6 +266,7 @@
 <body>
   <section class="hub" aria-label="놀이 본부">
     <div class="hub-top">
+      <button id="pf-btn" class="pf-btn" type="button" aria-label="누가 놀아요? 친구 바꾸기"><i id="pf-ic" aria-hidden="true"></i><span><b id="pf-name"></b><small id="pf-left"></small></span></button>
       <h1>게임 고르기</h1>
       <span class="coin-pill" title="네 게임에서 모은 별코인"><i class="cn" aria-hidden="true"></i><b id="hub-coins">0</b></span>
       <button id="stk-open" class="rec-btn stk-btn" type="button">스티커북<b id="stk-new" class="new-dot" hidden></b></button>
@@ -174,6 +302,75 @@
     </div>
   </section>
 
+  <!-- 누가 놀아요? 친구 고르기 (바꾸기만. 만들기·이름·지우기는 보호자 화면에서) -->
+  <section id="who" class="ovl" aria-label="누가 놀아요?">
+    <div class="panel">
+      <h2>누가 놀아요?</h2>
+      <div id="who-grid" class="who-grid"></div>
+      <p id="who-hint" class="who-hint"></p>
+      <button id="who-close" type="button" class="btn-close">닫기</button>
+    </div>
+  </section>
+
+  <!-- 보호자 화면: 오른쪽 아래 자물쇠를 3초 꾹 누르면 열린다 -->
+  <button id="pf-lock" type="button" aria-label="보호자 화면 (3초 꾹 누르기)" title="보호자 화면: 3초 꾹"><svg viewBox="0 0 48 48" aria-hidden="true"><circle class="ring" cx="24" cy="24" r="21"/><rect class="lk" x="16" y="22" width="16" height="12" rx="2.5"/><path class="lk" d="M19.5 22v-3.5a4.5 4.5 0 0 1 9 0V22"/></svg></button>
+  <section id="parent" class="ovl" aria-label="보호자 화면">
+    <div class="panel">
+      <h2>보호자 화면</h2>
+      <div class="ptabs" role="tablist">
+        <button type="button" role="tab" data-tab="kids" aria-selected="true">아이 프로필</button>
+        <button type="button" role="tab" data-tab="time" aria-selected="false">하루 놀이 시간</button>
+        <button type="button" role="tab" data-tab="vol" aria-selected="false">소리 크기 상한</button>
+        <button type="button" role="tab" data-tab="move" aria-selected="false">기록 옮기기</button>
+      </div>
+      <div class="psec on" data-sec="kids">
+        <p class="note">아이마다 별코인·기록·스티커·미션·캐릭터가 따로 저장돼요. 최대 4명. 이름 칸을 눌러 이름을 고치고, 그림을 누르면 그림을 바꿔요. 사진도 넣을 수 있어요.</p>
+        <div id="pk-list"></div>
+        <input id="pk-photo" type="file" accept="image/*" hidden>
+        <button id="pk-add" type="button" class="padd">+ 새 친구 만들기</button>
+      </div>
+      <div class="psec" data-sec="time">
+        <p class="note">정한 시간이 다가오면 게임 위쪽에 10분 전·5분 전 알림, 끝나면 "이 판을 마치고 쉬어요" 알림이 떠요. 게임을 멈추지는 않아요. 판이 도는 동안만 세요.</p>
+        <div id="pt-list"></div>
+      </div>
+      <div class="psec" data-sec="vol">
+        <p class="note">네 게임과 이 화면의 모든 소리가 이 크기를 넘지 않아요. 이 기기 전체에 같이 적용돼요.</p>
+        <div id="pv-seg" class="pseg vseg"></div>
+      </div>
+      <div class="psec" data-sec="move">
+        <p class="note">브라우저에서 앱으로, 다른 태블릿으로 기록을 옮겨요. 여기서 코드를 복사하거나 파일로 받고, 옮길 곳의 보호자 화면 → 기록 옮기기 → 불러오기에 넣어요.</p>
+        <h3 class="ph">내보내기</h3>
+        <div id="px-who" class="pseg"></div>
+        <textarea id="px-code" class="pcode" rows="2" readonly aria-label="내보낸 기록 코드"></textarea>
+        <div class="pbtns"><button id="px-copy" type="button">복사하기</button><button id="px-file" type="button">파일로 받기</button><span id="px-msg" class="pmsg"></span></div>
+        <h3 class="ph">불러오기</h3>
+        <textarea id="pi-code" class="pcode" rows="2" placeholder="여기에 코드를 붙여 넣어요" aria-label="불러올 기록 코드"></textarea>
+        <div class="pbtns"><button id="pi-check" type="button">확인하기</button><label class="pfile">파일 고르기<input id="pi-file" type="file" accept=".json,.txt,application/json,text/plain" hidden></label><span id="pi-msg" class="pmsg"></span></div>
+        <div id="pi-prev"></div>
+      </div>
+      <button id="parent-close" type="button" class="btn-close">닫기</button>
+    </div>
+  </section>
+
+  <!-- 사진 맞추기: 고른 사진을 밀어서 옮기고 크게 작게, 동그라미 안이 아이 사진이 된다 (이 기기 안에만 저장) -->
+  <section id="crop" class="ovl" aria-label="사진 맞추기">
+    <div class="panel">
+      <h2>사진 맞추기</h2>
+      <div class="crop-body">
+        <canvas id="crop-cv" width="300" height="300" aria-label="밀어서 얼굴을 동그라미 안에 맞춰요"></canvas>
+        <div class="crop-side">
+          <p class="note">사진을 밀어서 얼굴을 동그라미 안에 맞춰요. 막대나 두 손가락으로 크게·작게.</p>
+          <label class="crop-zoom"><span>작게</span><input id="crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="크기"><span>크게</span></label>
+          <button id="crop-ok" type="button" class="crop-ok">좋아요</button>
+          <button id="crop-again" type="button" class="pact">다시 고르기</button>
+          <button id="crop-cancel" type="button" class="pact">그만두기</button>
+          <span id="crop-msg" class="pmsg"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="common/profile.js"></script>
   <script src="common/hub.js"></script>
   <script src="common/sound.js"></script>
   <script>
@@ -291,6 +488,387 @@
       window.addEventListener('storage', e => { if (!e.key || e.key === HUB.KEY) renderHub(); });
       window.renderHub = () => renderHub();
       renderHub();
+    })();
+
+    // ─── 아이 프로필 · 보호자 화면 (common/profile.js) ───
+    (function () {
+      const $ = id => document.getElementById(id);
+      const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const HOLD = 3000;
+      const face = p => PROFILE.faceHtml(p);
+      const tag = p => '<i class="pf-av" aria-hidden="true">' + face(p) + '</i>' + esc(p.name);
+      function renderMe() {
+        const p = PROFILE.current(), left = PROFILE.leftMin(p.id);
+        $('pf-ic').innerHTML = PROFILE.faceHtml(p); $('pf-name').textContent = p.name;
+        const l = $('pf-left');
+        l.textContent = left == null ? '' : left <= 0 ? '오늘 시간 끝!' : '오늘 남은 시간 ' + left + '분';
+        l.classList.toggle('end', left === 0);
+      }
+      // 3초 꾹 누르기: el을 누르고 있는 동안 둘레(ring)를 채우고, 다 차면 done(). 짧게 누르면 tap(). 움직임 줄이기면 1초마다 한 칸씩
+      function holdable(el, ringFor, done, tap) {
+        let t0 = 0, raf = 0, id = null, fired = false;
+        const setK = k => { const r = ringFor(); if (r) r.style.strokeDashoffset = String(r.dataset.len * (1 - k)); };
+        const stop = () => { cancelAnimationFrame(raf); raf = 0; t0 = 0; id = null; el.classList.remove('hold'); setK(0); };
+        const step = () => {
+          if (!t0) return;
+          const ms = performance.now() - t0;
+          let k = Math.min(1, ms / HOLD);
+          if (still) k = Math.floor(k * 3) / 3;
+          setK(k);
+          if (ms >= HOLD) { fired = true; stop(); done(); return; }
+          raf = requestAnimationFrame(step);
+        };
+        el.addEventListener('pointerdown', e => {
+          if (id != null) return;
+          id = e.pointerId; fired = false; t0 = performance.now(); el.classList.add('hold');
+          try { el.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+          raf = requestAnimationFrame(step);
+        });
+        el.addEventListener('pointerup', e => {
+          if (id == null || e.pointerId !== id) return;
+          const short = t0 && performance.now() - t0 < 400;
+          stop();
+          if (short && !fired && tap) tap();
+        });
+        el.addEventListener('pointercancel', e => { if (id != null && e.pointerId === id) stop(); });
+        el.addEventListener('contextmenu', e => e.preventDefault());
+      }
+      const lockRing = () => { const r = document.querySelector('#pf-lock .ring'); if (r) r.dataset.len = 132; return r; };
+      holdable($('pf-lock'), lockRing, () => openParent('kids'), () => SND.ui('deny'));
+
+      // 누가 놀아요? (바꾸기만)
+      function renderWho() {
+        const list = PROFILE.list(), me = PROFILE.activeId();
+        $('who-grid').innerHTML = list.map(p => '<button type="button" class="who-card' + (p.id === me ? ' cur' : '') + '" data-id="' + p.id + '"><i class="pf-av" aria-hidden="true">' + face(p) + '</i><span>' + esc(p.name) + '</span></button>').join('') +
+          (list.length < PROFILE.MAX ? '<button type="button" class="who-card new" id="who-new" aria-label="새 친구 (보호자가 3초 꾹)"><svg class="hold-ring" viewBox="0 0 156 176" preserveAspectRatio="none" aria-hidden="true"><rect x="2" y="2" width="152" height="172" rx="22" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg><i aria-hidden="true">＋</i><span>새 친구</span><small>보호자가 3초 꾹</small></button>' : '');
+        $('who-hint').textContent = '';
+        const nb = $('who-new');
+        if (nb) holdable(nb, () => { const r = nb.querySelector('rect'); if (r) r.dataset.len = 100; return r; }, () => openParent('kids'),
+          () => { $('who-hint').textContent = '새 친구는 보호자가 만들어요 · 새 친구 칸을 3초 꾹 눌러요'; SND.ui('deny'); });
+      }
+      function openWho() { renderWho(); $('who').classList.add('on'); SND.ui('open'); }
+      function closeWho(quiet) { if (!$('who').classList.contains('on')) return; $('who').classList.remove('on'); if (!quiet) SND.ui('close'); }
+      $('pf-btn').addEventListener('click', openWho);
+      $('who-close').addEventListener('click', () => closeWho());
+      $('who').addEventListener('click', e => {
+        if (e.target.id === 'who') { closeWho(); return; }
+        const c = e.target.closest('.who-card[data-id]');
+        if (!c) return;
+        const id = Number(c.dataset.id);
+        if (id === PROFILE.activeId()) { closeWho(); return; }
+        PROFILE.switchTo(id);
+        SND.ui('start');
+        // 새 친구 기록으로 모두 다시 읽는다
+        setTimeout(() => location.reload(), 150);
+      });
+
+      // 보호자 화면
+      let tab = 'kids', iconOpen = 0, delTimer = 0;
+      const delStep = {};
+      function openParent(t) {
+        closeWho(true);
+        tab = t || 'kids'; iconOpen = 0; for (const k in delStep) delete delStep[k];
+        renderParent(); $('parent').classList.add('on'); SND.ui('open');
+      }
+      function closeParent() { if (!$('parent').classList.contains('on')) return; $('parent').classList.remove('on'); SND.ui('close'); renderMe(); if (window.renderHub) window.renderHub(); }
+      const mins = s => Math.floor(s / 60);
+      function renderParent() {
+        document.querySelectorAll('.ptabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+        document.querySelectorAll('.psec').forEach(s => s.classList.toggle('on', s.dataset.sec === tab));
+        const list = PROFILE.list();
+        if (tab === 'kids') {
+          $('pk-list').innerHTML = list.map(p => '<div class="prow" data-id="' + p.id + '">' +
+            '<button type="button" class="ic" data-act="icon" aria-label="그림 바꾸기"><i class="pf-av" aria-hidden="true">' + face(p) + '</i></button>' +
+            '<label class="pname"><span>이름</span><input type="text" maxlength="' + PROFILE.NAME_MAX + '" value="' + esc(p.name) + '" placeholder="이름 (' + PROFILE.NAME_MAX + '글자까지)" data-act="name" enterkeyhint="done" autocomplete="off"></label>' +
+            (p.id === 1 ? '<span class="keep">첫 번째 친구는<br>지울 수 없어요</span>' :
+              '<button type="button" class="del' + (delStep[p.id] ? ' s' + delStep[p.id] : '') + '" data-act="del">' + ['지우기', '정말 지울까요?', '기록도 다 지워져요 · 지우기'][delStep[p.id] || 0] + '</button>') +
+            '<div class="pphoto"><button type="button" class="pact" data-act="photo">📷 사진 넣기</button>' +
+              (p.photo ? '<button type="button" class="pact warn" data-act="nophoto">사진 빼기</button>' : '') +
+              '<small>사진은 이 기기 안에만 저장돼요</small></div>' +
+            '<div class="icons' + (iconOpen === p.id ? ' on' : '') + '">' + (p.photo ? '<span class="ihint">그림을 고르면 사진 대신 그림이 보여요</span>' : '') +
+              PROFILE.ICONS.map(ic => '<button type="button" data-icon="' + ic + '" aria-pressed="' + (!p.photo && ic === p.icon) + '">' + ic + '</button>').join('') + '</div>' +
+            '</div>').join('');
+          $('pk-add').disabled = list.length >= PROFILE.MAX;
+          $('pk-add').textContent = list.length >= PROFILE.MAX ? '친구는 ' + PROFILE.MAX + '명까지예요' : '+ 새 친구 만들기';
+        } else if (tab === 'time') {
+          $('pt-list').innerHTML = list.map(p => {
+            const lim = PROFILE.limit(p.id), sec = PROFILE.played(p.id), left = PROFILE.leftMin(p.id), ex = PROFILE.extraMin(p.id);
+            return '<div class="trow" data-id="' + p.id + '"><div class="top"><span class="who">' + tag(p) + '</span>' +
+              '<span class="today">오늘 <b>' + mins(sec) + '분</b> 놀았어요' + (left == null ? '' : ' · 남은 시간 <b>' + left + '분</b>') + (ex ? ' · 오늘 더 준 시간 ' + ex + '분' : '') + '</span></div>' +
+              '<div class="pseg">' + PROFILE.LIMITS.map(m => '<button type="button" data-limit="' + m + '" aria-pressed="' + (m === lim) + '">' + (m ? m + '분' : '제한 없음') + '</button>').join('') +
+              (lim ? '<button type="button" class="more" data-act="extra">오늘 ' + PROFILE.EXTRA_MIN + '분 더</button>' : '') + '</div></div>';
+          }).join('');
+        } else if (tab === 'move') {
+          if (!list.some(p => p.id === exWho) && exWho !== 'all') exWho = PROFILE.activeId();
+          $('px-who').innerHTML = list.map(p => '<button type="button" data-who="' + p.id + '" aria-pressed="' + (p.id === exWho) + '">' + tag(p) + '</button>').join('') +
+            (list.length > 1 ? '<button type="button" data-who="all" aria-pressed="' + (exWho === 'all') + '">모든 아이</button>' : '');
+          $('px-code').value = PROFILE.exportCode(exWho);
+          renderPreview();
+        } else {
+          const v = PROFILE.volMax();
+          $('pv-seg').innerHTML = PROFILE.VOLS.map(x => '<button type="button" data-vol="' + x + '" aria-pressed="' + (x === v) + '">' + Math.round(x * 100) + '%</button>').join('');
+        }
+      }
+      document.querySelector('.ptabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; iconOpen = 0; renderParent(); SND.ui('tap'); });
+      $('parent-close').addEventListener('click', closeParent);
+      $('parent').addEventListener('click', e => { if (e.target.id === 'parent') closeParent(); });
+      $('pk-add').addEventListener('click', () => {
+        const p = PROFILE.add();
+        if (!p) { SND.ui('deny'); return; }
+        SND.ui('buy'); renderParent();
+      });
+      $('pk-list').addEventListener('click', e => {
+        const row = e.target.closest('.prow'); if (!row) return;
+        const id = Number(row.dataset.id), ic = e.target.closest('[data-icon]'), act = e.target.closest('[data-act]');
+        if (ic) { PROFILE.setIcon(id, ic.dataset.icon); PROFILE.removePhoto(id); iconOpen = 0; SND.ui('tap'); renderParent(); renderMe(); return; }
+        if (!act) return;
+        if (act.dataset.act === 'icon') { iconOpen = iconOpen === id ? 0 : id; SND.ui('tap'); renderParent(); }
+        else if (act.dataset.act === 'photo') { photoFor = id; SND.ui('tap'); $('pk-photo').value = ''; $('pk-photo').click(); }
+        else if (act.dataset.act === 'nophoto') { PROFILE.removePhoto(id); SND.ui('close'); renderParent(); renderMe(); }
+        else if (act.dataset.act === 'del') {
+          // 세 번 눌러야 지운다: 지우기 → 정말 지울까요? → 기록도 다 지워져요 · 지우기. 5초 쉬면 처음으로
+          delStep[id] = (delStep[id] || 0) + 1;
+          clearTimeout(delTimer);
+          delTimer = setTimeout(() => { for (const k in delStep) delete delStep[k]; if (tab === 'kids' && $('parent').classList.contains('on')) renderParent(); }, 5000);
+          if (delStep[id] >= 3) { delete delStep[id]; PROFILE.remove(id); SND.ui('close'); renderMe(); if (window.renderHub) window.renderHub(); }
+          else SND.ui('deny');
+          renderParent();
+        }
+      });
+      $('pk-list').addEventListener('change', e => {
+        const inp = e.target.closest('input[data-act="name"]'); if (!inp) return;
+        const id = Number(inp.closest('.prow').dataset.id);
+        if (!PROFILE.rename(id, inp.value)) inp.value = (PROFILE.get(id) || {}).name || '';
+        else SND.ui('tap');
+        renderMe();
+      });
+      $('pk-list').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('input')) e.target.blur(); });
+
+      // ─── 아이 사진: 고르기 → 맞추기(밀기·크게 작게) → 160×160 JPEG로 play.profiles에 (이 기기 안에만) ───
+      // 태블릿 크롬은 accept="image/*"면 갤러리와 카메라를 같이 보여 준다. 앱(WebView)은 MainActivity가 사진 고르기를 연다
+      let photoFor = 0;
+      const CROP = { src: null, w: 0, h: 0, S: 300, D: 280, dpr: 1, base: 1, zoom: 1, ox: 0, oy: 0, pts: new Map(), pinch: null };
+      const cropSay = (t, bad) => { $('crop-msg').textContent = t; $('crop-msg').classList.toggle('bad', !!bad); };
+      // 사진 읽기: 가능하면 createImageBitmap(사진의 회전 정보 따름), 안 되면 <img>. 큰 사진은 긴 쪽 1200으로 줄여 둔다
+      async function readPhoto(file) {
+        let bmp = null, img = null, url = '';
+        try { if (window.createImageBitmap) bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { bmp = null; }
+        if (!bmp) {
+          url = URL.createObjectURL(file);
+          img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+        }
+        const src = bmp || img, w0 = bmp ? bmp.width : img.naturalWidth, h0 = bmp ? bmp.height : img.naturalHeight;
+        if (!(w0 > 0 && h0 > 0)) throw new Error('empty');
+        const k = Math.min(1, 1200 / Math.max(w0, h0)), c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w0 * k)); c.height = Math.max(1, Math.round(h0 * k));
+        const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, c.width, c.height);
+        if (bmp && bmp.close) bmp.close();
+        if (url) URL.revokeObjectURL(url);
+        return c;
+      }
+      function cropSize() {
+        const S = Math.round(Math.max(200, Math.min(340, innerWidth * 0.8, innerHeight - 170)));
+        const cv = $('crop-cv'), dpr = Math.min(2, window.devicePixelRatio || 1);
+        CROP.S = S; CROP.D = S - 24; CROP.dpr = dpr;
+        cv.style.width = cv.style.height = S + 'px'; cv.width = cv.height = Math.round(S * dpr);
+        if (CROP.src) CROP.base = CROP.D / Math.min(CROP.w, CROP.h);
+      }
+      function cropClamp() {
+        const sc = CROP.base * CROP.zoom, mx = Math.max(0, (CROP.w * sc - CROP.D) / 2), my = Math.max(0, (CROP.h * sc - CROP.D) / 2);
+        CROP.ox = Math.max(-mx, Math.min(mx, CROP.ox)); CROP.oy = Math.max(-my, Math.min(my, CROP.oy));
+      }
+      function cropDraw() {
+        const cv = $('crop-cv'), x = cv.getContext('2d'), S = CROP.S, D = CROP.D;
+        x.setTransform(CROP.dpr, 0, 0, CROP.dpr, 0, 0);
+        x.fillStyle = '#05070f'; x.fillRect(0, 0, S, S);
+        if (!CROP.src) return;
+        const sc = CROP.base * CROP.zoom, iw = CROP.w * sc, ih = CROP.h * sc;
+        x.imageSmoothingQuality = 'high';
+        x.drawImage(CROP.src, S / 2 + CROP.ox - iw / 2, S / 2 + CROP.oy - ih / 2, iw, ih);
+        x.fillStyle = 'rgba(5, 7, 15, .68)';
+        x.beginPath(); x.rect(0, 0, S, S); x.arc(S / 2, S / 2, D / 2, 0, Math.PI * 2); x.fill('evenodd');
+        x.strokeStyle = '#ffe08a'; x.lineWidth = 3; x.beginPath(); x.arc(S / 2, S / 2, D / 2, 0, Math.PI * 2); x.stroke();
+      }
+      function setZoom(z) {
+        z = Math.max(1, Math.min(4, z));
+        const k = z / CROP.zoom; CROP.ox *= k; CROP.oy *= k; CROP.zoom = z;
+        $('crop-zoom').value = String(z); cropClamp(); cropDraw();
+      }
+      async function openCrop(file) {
+        if (!file) return;
+        if (file.type && !/^image\//.test(file.type)) { cropSay('사진 파일을 골라 주세요', true); SND.ui('deny'); return; }
+        $('crop-ok').disabled = true;
+        $('crop').classList.add('on'); cropSize(); cropSay('사진을 여는 중이에요'); cropDraw();
+        try {
+          const c = await readPhoto(file);
+          Object.assign(CROP, { src: c, w: c.width, h: c.height, zoom: 1, ox: 0, oy: 0 });
+          cropSize(); $('crop-zoom').value = '1'; cropSay(''); $('crop-ok').disabled = false; cropDraw(); SND.ui('open');
+        } catch (e) {
+          CROP.src = null; cropDraw(); cropSay('이 사진은 열 수 없어요 · 다른 사진을 골라 주세요', true); SND.ui('deny');
+        }
+      }
+      function closeCrop() { $('crop').classList.remove('on'); CROP.src = null; CROP.pts.clear(); CROP.pinch = null; }
+      // 동그라미 안을 160×160 JPEG로. 25KB쯤(data URL 약 34000글자)을 넘으면 화질·크기를 낮춰 다시
+      function cropExport() {
+        const sc = CROP.base * CROP.zoom, side = CROP.D / sc, cx = CROP.w / 2 - CROP.ox / sc, cy = CROP.h / 2 - CROP.oy / sc;
+        // 한 번에 크게 줄이면 거칠어서, 먼저 480 안쪽으로 줄인 뒤 마지막 크기로
+        const mid = document.createElement('canvas'), m = Math.max(1, Math.round(Math.min(480, side)));
+        mid.width = mid.height = m;
+        const mx = mid.getContext('2d'); mx.imageSmoothingQuality = 'high';
+        mx.fillStyle = '#1b2a55'; mx.fillRect(0, 0, m, m);
+        mx.drawImage(CROP.src, cx - side / 2, cy - side / 2, side, side, 0, 0, m, m);
+        let last = '';
+        for (const [n, q] of [[160, 0.8], [160, 0.7], [160, 0.6], [128, 0.7], [112, 0.6], [96, 0.55]]) {
+          const c = document.createElement('canvas'); c.width = c.height = n;
+          const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(mid, 0, 0, n, n);
+          last = c.toDataURL('image/jpeg', q);
+          if (last.length <= 34000) return last;
+        }
+        return last;
+      }
+      $('pk-photo').addEventListener('change', e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f && photoFor) openCrop(f); });
+      $('crop-zoom').addEventListener('input', e => setZoom(Number(e.target.value)));
+      $('crop-ok').addEventListener('click', () => {
+        if (!CROP.src || !photoFor) return;
+        let url = '';
+        try { url = cropExport(); } catch (e) { url = ''; }
+        if (!url || !PROFILE.setPhoto(photoFor, url)) { cropSay('사진을 저장하지 못했어요 · 다른 사진으로 해 보세요', true); SND.ui('deny'); return; }
+        closeCrop(); SND.ui('buy'); renderParent(); renderMe();
+      });
+      $('crop-again').addEventListener('click', () => { SND.ui('tap'); $('pk-photo').value = ''; $('pk-photo').click(); });
+      $('crop-cancel').addEventListener('click', () => { closeCrop(); SND.ui('close'); });
+      // 밀기(한 손가락·마우스) · 두 손가락 벌리기 · 휠
+      const cv = $('crop-cv');
+      const ptsMid = () => { const a = [...CROP.pts.values()]; return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) || 1 }; };
+      cv.addEventListener('pointerdown', e => {
+        if (!CROP.src) return;
+        try { cv.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+        CROP.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        CROP.pinch = CROP.pts.size === 2 ? Object.assign(ptsMid(), { z: CROP.zoom }) : null;
+      });
+      cv.addEventListener('pointermove', e => {
+        const p = CROP.pts.get(e.pointerId);
+        if (!p || !CROP.src) return;
+        if (CROP.pts.size === 1) { CROP.ox += e.clientX - p.x; CROP.oy += e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; cropClamp(); cropDraw(); return; }
+        const before = ptsMid();
+        p.x = e.clientX; p.y = e.clientY;
+        const now = ptsMid();
+        CROP.ox += now.x - before.x; CROP.oy += now.y - before.y;
+        if (CROP.pinch) setZoom(CROP.pinch.z * now.d / CROP.pinch.d); else { cropClamp(); cropDraw(); }
+      });
+      const ptrUp = e => { CROP.pts.delete(e.pointerId); CROP.pinch = CROP.pts.size === 2 ? Object.assign(ptsMid(), { z: CROP.zoom }) : null; };
+      cv.addEventListener('pointerup', ptrUp); cv.addEventListener('pointercancel', ptrUp);
+      cv.addEventListener('wheel', e => { if (!CROP.src) return; e.preventDefault(); setZoom(CROP.zoom * Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+      window.addEventListener('resize', () => { if ($('crop').classList.contains('on')) { cropSize(); cropClamp(); cropDraw(); } });
+      $('pt-list').addEventListener('click', e => {
+        const row = e.target.closest('.trow'), b = e.target.closest('button');
+        if (!row || !b) return;
+        const id = Number(row.dataset.id);
+        if (b.dataset.limit != null) PROFILE.setLimit(id, Number(b.dataset.limit));
+        else if (b.dataset.act === 'extra') PROFILE.addExtra(id);
+        else return;
+        SND.ui('tap'); renderParent(); renderMe();
+      });
+      $('pv-seg').addEventListener('click', e => {
+        const b = e.target.closest('[data-vol]'); if (!b) return;
+        PROFILE.setVolMax(Number(b.dataset.vol));
+        renderParent(); SND.ui('coin');
+      });
+
+      // 기록 옮기기: 내보내기(코드·파일) · 불러오기(코드 붙여 넣기·파일 고르기 → 미리 보기 → 새 아이로 추가 또는 덮어쓰기)
+      // 안드로이드 앱(WebView)에서는 파일 받기가 안 될 수 있어서 코드 칸을 늘 같이 보여 준다
+      let exWho = 0, imp = null, impStep = {}, impTimer = 0;
+      const say = (id, t, bad) => { $(id).textContent = t; $(id).classList.toggle('bad', !!bad); };
+      $('px-who').addEventListener('click', e => { const b = e.target.closest('[data-who]'); if (!b) return; exWho = b.dataset.who === 'all' ? 'all' : Number(b.dataset.who); say('px-msg', ''); SND.ui('tap'); renderParent(); });
+      $('px-copy').addEventListener('click', async () => {
+        const ta = $('px-code');
+        let ok = false;
+        try { await navigator.clipboard.writeText(ta.value); ok = true; } catch (e) { ok = false; }
+        if (!ok) { ta.focus(); ta.select(); try { ta.setSelectionRange(0, ta.value.length); ok = document.execCommand('copy'); } catch (e) { ok = false; } }
+        say('px-msg', ok ? '복사했어요' : '코드 칸을 길게 눌러 모두 선택 → 복사해 주세요', !ok);
+        SND.ui(ok ? 'claim' : 'deny');
+      });
+      $('px-file').addEventListener('click', () => {
+        try {
+          const blob = new Blob([JSON.stringify(PROFILE.exportData(exWho))], { type: 'application/json' });
+          const url = URL.createObjectURL(blob), a = document.createElement('a');
+          a.href = url; a.download = PROFILE.exportFileName(); a.style.display = 'none';
+          document.body.appendChild(a); a.click();
+          setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+          say('px-msg', '파일을 받았어요 · 안 보이면 위 코드를 복사해요');
+        } catch (e) { say('px-msg', '파일 받기가 안 돼요 · 위 코드를 복사해요', true); }
+        SND.ui('tap');
+      });
+      function checkImport(text) {
+        const r = PROFILE.decode(text);
+        imp = r.ok ? r.data : null; impStep = {};
+        say('pi-msg', r.ok ? '' : r.msg, !r.ok);
+        SND.ui(r.ok ? 'open' : 'deny');
+        renderPreview();
+        const pv = $('pi-prev').firstElementChild;
+        if (pv && pv.scrollIntoView) pv.scrollIntoView({ block: 'nearest' });
+      }
+      $('pi-check').addEventListener('click', () => checkImport($('pi-code').value));
+      $('pi-file').addEventListener('change', e => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const rd = new FileReader();
+        rd.onload = () => { $('pi-code').value = String(rd.result || ''); checkImport($('pi-code').value); };
+        rd.onerror = () => say('pi-msg', '파일을 못 읽었어요 · 코드를 붙여 넣어 주세요', true);
+        rd.readAsText(f);
+        e.target.value = '';
+      });
+      const STEP = ['', '정말 할까요?', '지금 기록이 지워져요 · 계속'];
+      function renderPreview() {
+        const box = $('pi-prev');
+        if (!imp) { box.innerHTML = ''; return; }
+        const pv = PROFILE.preview(imp), list = PROFILE.list(), room = PROFILE.MAX - list.length;
+        let acts = '';
+        if (pv.length === 1) {
+          acts = '<button type="button" class="pact" data-imp="new"' + (room < 1 ? ' disabled' : '') + '>' + (room < 1 ? '친구가 ' + PROFILE.MAX + '명이라 새로 못 만들어요' : '새 아이로 추가') + '</button>' +
+            list.map(p => { const s = impStep[p.id] || 0; return '<button type="button" class="pact warn' + (s ? ' s' + s : '') + '" data-imp="' + p.id + '">' + (s ? STEP[s] : tag(p) + ' 기록 덮어쓰기') + '</button>'; }).join('');
+        } else {
+          const s = impStep.all || 0;
+          acts = '<button type="button" class="pact" data-imp="allnew"' + (room < pv.length ? ' disabled' : '') + '>' + (room < pv.length ? '자리가 모자라요 (최대 ' + PROFILE.MAX + '명)' : '모두 새 아이로 추가') + '</button>' +
+            '<button type="button" class="pact warn' + (s ? ' s' + s : '') + '" data-imp="all">' + (s ? STEP[s] : '이 기기 기록을 모두 바꾸기') + '</button>';
+        }
+        box.innerHTML = '<div class="pv">' + pv.map(k => '<div class="pvk"><i class="pf-av" aria-hidden="true">' + face(k) + '</i><span>' + esc(k.name) + ' <small>별코인 ' + k.coins.toLocaleString() + ' · 메달 ' + k.medals + ' · 스티커 ' + k.stickers + '</small></span></div>').join('') +
+          '<div class="at">만든 날 ' + esc(pv[0].at || '모름') + '</div><div class="acts">' + acts + '</div></div>';
+      }
+      $('pi-prev').addEventListener('click', e => {
+        const b = e.target.closest('[data-imp]');
+        if (!b || b.disabled || !imp) return;
+        const k = b.dataset.imp;
+        let done = 0;
+        if (k === 'new') done = PROFILE.importKid(imp, 'new');
+        else if (k === 'allnew') done = PROFILE.importAllNew(imp);
+        else {
+          // 덮어쓰기·모두 바꾸기는 세 번 눌러야 한다 (5초 쉬면 처음으로)
+          impStep[k] = (impStep[k] || 0) + 1;
+          clearTimeout(impTimer); impTimer = setTimeout(() => { impStep = {}; if (tab === 'move') renderPreview(); }, 5000);
+          if (impStep[k] < 3) { SND.ui('deny'); renderPreview(); return; }
+          impStep = {};
+          done = k === 'all' ? PROFILE.importReplace(imp) : PROFILE.importKid(imp, Number(k));
+        }
+        if (!done) { say('pi-msg', '불러오지 못했어요', true); SND.ui('deny'); return; }
+        imp = null; renderPreview();
+        say('pi-msg', '불러왔어요! 잠깐 뒤 새로 열어요');
+        SND.ui('fanfare');
+        setTimeout(() => location.reload(), 1200);
+      });
+
+      PROFILE.onSwitchElsewhere = () => location.reload();
+      window.addEventListener('pageshow', renderMe);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderMe(); });
+      window.addEventListener('storage', e => {
+        if (e.key && e.key !== PROFILE.KEYS.parent && e.key !== PROFILE.KEYS.time && e.key !== PROFILE.KEYS.profiles) return;
+        renderMe();
+        if ($('parent').classList.contains('on') && !(document.activeElement && document.activeElement.matches('input'))) renderParent();
+      });
+      setInterval(renderMe, 30000);
+      window.PF_UI = { openWho, openParent, closeParent, renderMe };
+      renderMe();
     })();
   </script>
 </body>
