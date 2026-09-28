@@ -1,13 +1,20 @@
 'use strict';
-// 첫 화면(게임 고르기) 카드 그림 만들기: 네 게임을 실제 크로미움으로 잠깐 자동으로 돌려 한 장면을 찍고,
-// 2:1로 잘라 WebP 두 크기(640×320 · 960×480)로 common/thumbs/에 저장한다.
+// 첫 화면(게임 고르기) 카드 그림 만들기: 네 게임을 실제 크로미움으로 열고, 한 장면을 손으로 차려 놓고(주인공·적·별 자리를 정해 둠)
+// 세상을 멈춘 뒤 찍어, 2:1 WebP 두 크기(640×320 · 960×480)로 common/thumbs/에 저장한다.
 // 게임 그림이 크게 바뀌었을 때 다시 돌린다:
 //   node tools/thumbs.js            (네 게임 모두)
 //   node tools/thumbs.js jump       (하나만)
-//   SHOTS=/경로 node tools/thumbs.js (자르기 전 원본 PNG도 그 폴더에 남긴다, 확인용)
+//   SHOTS=/경로 node tools/thumbs.js (다듬기 전 원본 PNG도 그 폴더에 남긴다, 확인용)
 // Playwright 위치를 직접 줄 때: PW=/경로/playwright node tools/thumbs.js
-// 그림은 모두 우리 게임 화면이다 (내려받은 그림 없음). 글자(점수·안내)는 찍기 전에 숨긴다.
-// 자동 운전이라 돌릴 때마다 장면이 조금씩 다르다. 찍은 뒤 common/thumbs/*.webp를 꼭 눈으로 볼 것.
+// 그림은 모두 우리 게임 화면이다 (내려받은 그림 없음). 글자(점수·안내·이름표)는 찍지 않는다.
+//
+// 장면 짜는 법 (2026-09-28, 소유자: "스크린샷 이미지 조금 더 깔끔하게 다듬어줘"):
+//   · 자동 운전을 기다리지 않는다. 판을 열자마자 규칙 한 걸음(World.step)을 비워 세상을 멈추고, 주인공·적·별·발판을 정한 자리에 놓는다
+//   · 움직임 줄이기(reduced motion)로 열어 배경 시계·반짝임·찌그러짐이 멈춰 있고, Math.random도 고정 씨앗으로 바꿔 돌릴 때마다 같은 그림
+//   · 카드 아래쪽 약 45%는 제목·설명·그러데이션이 덮고, 작은 탭(893×533)에서는 위아래 12%씩 잘린다.
+//     그래서 주인공은 그림 높이 25 ~ 45%, 가로 가운데 ~ 오른쪽 3분의 1에 둔다. 왼쪽 위 모서리는 분류 이름표 자리
+//   · 가장자리에 잘리는 물체가 없게, 행성은 통째로 보이거나 아예 안 보이게
+//   · 마무리(finish): 네 장이 한 가족처럼 보이게 아주 약한 대비·채도·밝기와 가장자리 어둡게 (게임마다 조금씩)
 const path = require('path');
 const fs = require('fs');
 
@@ -20,152 +27,161 @@ if (!pw) { console.error('Playwright가 없어 그림을 만들 수 없어요');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'common', 'thumbs');
-const DSF = 1.5;            // 찍는 배율 (960px 그림을 선명하게. 게임 해상도 상한 약 240만 픽셀 안)
 const SIZES = [640, 960];   // 가로 px, 세로는 절반 (2:1)
 const QUALITY = 0.8;
+const BIG = 1152;           // 찍는 가로 픽셀 (960보다 조금 크게 찍어 줄이면 선이 곱다)
 
-// 게임마다: 어떤 판을 어떻게 차려 두고(setup), 언제 찍고(ready), 찍기 직전 무엇을 치우고(pre),
-// 어디를 중심으로 자를지(focus: 화면 CSS 좌표, crop: 자를 너비와 그 점이 올 자리 비율)
+// 게임마다: vp 화면 크기(CSS px), compose 장면 차리기(페이지 안에서 돈다, 끝에 자를 칸 {x, y, width, height}을 돌려준다),
+// finish 마무리 {b 밝기, c 대비, s 채도, vig 가장자리 어둡게 0 ~ 1}
 const GAMES = [
   {
-    id: 'ngun', ns: 'NG', folder: 'game', vp: [1280, 800], warm: 5000,
-    // 토성 앞에서 대포 9개로 쏘는 판 (체력은 넉넉히, 운석과 토성 조각 띠는 없앤다). 우주선은 토성 고리 왼쪽 위에 둔다 (카드 왼쪽 아래는 제목 자리)
-    setup: () => {
-      NG.debug.selectShip('viper');   // 세모 우주선 (처음부터 있는 기체)
+    // 뿅뿅 우주선: 토성 앞에서 대포 7개로 쏘는 둥근 코어 우주선. 부채꼴 총알이 오른쪽 적 쪽으로 날아간다
+    // 작은 화면(590×226)에서 찍어 우주선이 카드에서 크게 보이고, 토성이 고리까지 통째로 들어온다
+    id: 'ngun', ns: 'NG', folder: 'game', vp: [590, 226],
+    compose: () => {
+      NG.debug.selectShip('core');
       NG.debug.newGame();
+      NG.World.step = () => {};
+      NG.DATA.VIEW.planetDim = 0.9;   // 웨이브 중 어둡게 누르는 행성을 조금 밝게
       const W = NG.debug.world, p = W.player;
-      p.hp = p.maxHp = 99;
-      p.gun.barrels = 9; p.gun.rate *= 1.6; p.gun.dmg *= 0.15; p.drones = 2;
-      p.x = W.w * 0.52; p.y = W.h * 0.275;
-      W.wave = 11; W.place = NG.World.placeOf(11); W.spawnQueue = NG.World.buildWave(11, W.rand, W.diff);
+      W.wave = 11; W.place = NG.World.placeOf(11); W.bossWave = false; W.banner = 0; W.spawnQueue = [];
+      for (const k of ['enemies', 'bullets', 'eBullets', 'lasers', 'particles', 'drops', 'texts', 'tags', 'meteors', 'mists', 'booms', 'shocks']) if (W[k]) W[k].length = 0;
+      W.gift = W.capsule = W.wing = W.hole = null; W.shake = W.flash = W.whiteFlash = W.pulse = 0; W.feverT = 0;
+      NG.debug.view.hud = false;
+      // 자를 칸: 화면 오른쪽 437×218.5 (왼쪽은 버린다. 토성이 고리 끝까지 카드 안에 들어오게, 가장자리 판 테두리 빛은 빼고)
+      const C = { x: W.w - 440, y: 4, width: 437, height: 218.5 };
+      const X = f => C.x + C.width * f, Y = f => C.y + C.height * f;
+      p.x = X(0.3); p.y = Y(0.35); p.aim = -0.14; p.iframe = 0; p.drones = 0; p.muzzle = 0;
+      p.gun.barrels = 7;
+      // 대포 7개가 쏜 총알이 부채꼴로 퍼진다 (한 대포에 네 알씩)
+      const g = p.gun, n = g.barrels, spread = Math.min(g.spreadStep * (n - 1), g.spreadMax);
+      for (const d of [34, 55, 76, 97]) for (let i = 0; i < n; i++) {
+        const a = p.aim - spread / 2 + spread * i / (n - 1);
+        W.bullets.push({ x: p.x + Math.cos(a) * (p.r + d), y: p.y + Math.sin(a) * (p.r + d), vx: Math.cos(a) * g.speed, vy: Math.sin(a) * g.speed,
+          r: g.size, dmg: 0, life: 9, pierce: 0, bounce: 0, hits: [] });
+      }
+      const put = (t, fx, fy) => { const e = NG.World.spawnEnemy(W, t); e.x = X(fx); e.y = Y(fy); e.spawnT = 0; e.ang = 0.3; return e; };
+      put('grunt', 0.62, 0.28);
+      put('shooter', 0.87, 0.4);
+      W.tags.length = 0; W.texts.length = 0;
+      return C;
     },
-    // 자를 칸 안에 적 4마리 이상, 총알 12개 이상. 우주선이 잘 보이게 바로 옆 적은 없고, 맞은 직후·피버 아닐 때
-    ready: () => {
-      const W = NG.debug.world, p = W.player;
-      W.meteors.length = 0; W.meteorT = 99; W.enemies = W.enemies.filter(e => e.type !== 'shard');
-      const inBox = o => o.x > p.x - 216 && o.x < p.x + 324 && o.y > p.y - 86 && o.y < p.y + 184;
-      const near = W.enemies.some(e => Math.hypot(e.x - p.x, e.y - p.y) < 90);
-      return NG.debug.mode === 'play' && !(p.iframe > 0) && !(W.feverT > 0) && !near &&
-        W.enemies.filter(inBox).length >= 4 && W.bullets.filter(inBox).length >= 12;
-    },
-    pre: () => {
-      const W = NG.debug.world; NG.debug.view.hud = false;
-      // 떠오르는 숫자(피해 1! 등)와 이름표는 비우고 더 생기지 않게
-      for (const a of [W.texts, W.tags]) if (a) { a.length = 0; a.push = () => 0; }
-      W.meteors.length = 0; W.shake = 0; W.flash = 0; W.whiteFlash = 0;
-    },
-    focus: () => { const p = NG.debug.world.player; return { x: p.x, y: p.y }; },
-    crop: { w: 540, fx: 0.4, fy: 0.32 },
+    finish: { b: 1.08, c: 1.06, s: 1.12, vig: 0.28 },
   },
   {
-    id: 'snake', ns: 'SN', folder: 'snake', vp: [1280, 800], warm: 7000,
-    // 목성 앞, 무지개 애벌레가 길쭉하게 (라이벌 뱀도 함께)
-    setup: () => {
-      SN.store.set('snake.sky', 4);
-      SN.debug.setRival(true);
+    // 냠냠 뱀: 해왕성 하늘 판 안쪽만 잘라, 무지개 애벌레가 S자로 구불구불 오른쪽 구슬을 향해 간다. 판 테두리는 안 보인다
+    id: 'snake', ns: 'SN', folder: 'snake', vp: [640, 400],
+    compose: () => {
+      SN.store.set('snake.sky', 7);   // 해왕성 (판 뒤 오른쪽 아래에 파란 행성이 은은하게)
+      SN.debug.setRival(false);
       SN.debug.newGame();
-      SN.debug.autopilot(true);
-      const W = SN.debug.world;
-      W.grow = 12; W.char = 'bug'; SN.debug.view.char = 'bug';
-      W.space.step = 1e6;   // 목성에 머문다 (구슬을 먹어도 다음 행성으로 안 감)
+      SN.World.step = () => {};
+      const W = SN.debug.world, v = SN.debug.view;
+      v.hud = false;
+      W.char = 'bug'; v.char = 'bug';
+      // 자를 칸: 판의 (2, 1) 칸부터 가로 20칸 · 세로 10칸. 아래 좌표는 그 칸 안의 칸 번호.
+      // 가장 아래 줄(4)은 가운데 오른쪽에만 (작은 탭에서 왼쪽 제목 뒤로 숨지 않게)
+      const o = [2, 1];
+      const path = [[15, 2], [14, 2], [13, 2], [12, 2], [12, 3], [12, 4], [11, 4], [10, 4], [9, 4], [8, 4], [8, 3], [8, 2], [7, 2], [6, 2], [5, 2], [4, 2], [4, 3], [3, 3], [2, 3]];
+      W.snake = path.map(([x, y]) => ({ x: x + o[0], y: y + o[1] }));
+      W.prev = W.snake.map(s => ({ x: s.x, y: s.y }));
+      W.dir = 'right'; W.queue = []; W.alpha = 0; W.wait = 0; W.phase = 'play'; W.grow = 0;
+      W.food = { x: 17 + o[0], y: 2 + o[1], gold: false, born: W.t - 5 };
+      W.item = null; W.gift = null; W.bonus = null; W.fx = []; W.feverT = 0;
+      W.eff = { slow: 0, double: 0, ghost: 0, giant: 0 };
+      window.__clip = () => ({ x: v.bx + o[0] * v.cell, y: v.by + o[1] * v.cell, width: 20 * v.cell, height: 10 * v.cell });
+      return null;
     },
-    // 라이벌 머리가 가까이(부딪히지는 않게) 있고 이름표가 사라진 뒤, 라이벌을 물거나 구슬 먹은 글자가 사라졌을 때 (유령·거인·느린 시계·피버처럼 색이 바뀐 때는 빼고)
-    ready: () => {
-      const W = SN.debug.world, V = W.rival, h = W.snake[0], r = V && V.body[0];
-      // 점수가 오른 뒤(구슬·라이벌 냠냠) 떠오르는 글자가 사라질 때까지 기다린다
-      const B = window.__calm || (window.__calm = { n: -1, t: 0 });
-      const key = W.score + '/' + W.rivalBites;
-      if (key !== B.n) { B.n = key; B.t = W.time; }
-      const dx = r ? Math.abs(r.x - h.x) : 99, dy = r ? Math.abs(r.y - h.y) : 99;
-      // 12초가 지나도 라이벌이 가까이 안 오면 라이벌 없이도 찍는다
-      const t0 = window.__t0 || (window.__t0 = performance.now()), near = dx <= 8 && dy <= 4 && dx + dy >= 3;
-      return W.phase === 'play' && (near || performance.now() - t0 > 12000) &&
-        !(V && (V.phase === 'warn' || V.phase === 'play' && (V.stun > 0 || W.time - (V.shownAt || 0) < 3.2))) && W.time - B.t > 1.3 &&
-        !(W.eff && (W.eff.slow > 0 || W.eff.ghost > 0 || W.eff.giant > 0)) && !(W.feverT > 0);
-    },
-    why: () => { const W = SN.debug.world, V = W.rival; return JSON.stringify({ phase: W.phase, mode: SN.debug.mode, rival: V && V.phase, eff: W.eff, len: W.snake.length }); },
-    pre: () => { const W = SN.debug.world; SN.debug.view.hud = false; W.item = null; },
-    // 내 뱀 머리와 라이벌 머리의 가운데
-    focus: () => {
-      const W = SN.debug.world, v = SN.debug.view, h = W.snake[0], q = W.rival && W.rival.body[0];
-      const r = q && Math.abs(q.x - h.x) <= 8 && Math.abs(q.y - h.y) <= 4 ? q : h;
-      return { x: v.bx + ((h.x + r.x) / 2 + 0.5) * v.cell, y: v.by + ((h.y + r.y) / 2 + 0.5) * v.cell };
-    },
-    crop: { w: 900, fx: 0.55, fy: 0.32 },
+    finish: { b: 1.1, c: 1.06, s: 1.1, vig: 0.26 },
   },
   {
-    id: 'jump', ns: 'JP', folder: 'jump', vp: [800, 1280], warm: 2500,
-    // 세로 화면이면 발판 기둥이 화면 너비를 다 쓴다. 땅에서 출발해 저녁 하늘(열기구·연·구름)을 오를 때
-    setup: () => {
-      JP.debug.autopilot(true);
+    // 통통 점프: 저녁 하늘(40m, 소품 없이)에서 로봇 공이 아래 발판을 차고 오른쪽 위 발판과 별 두 개 쪽으로 튀어 오른다
+    // 세로 화면이면 발판 기둥이 화면 너비를 다 쓴다. 높이 눈금 글자·배경 소품(연·열기구·새)은 가장자리에서 잘리니 뺀다
+    id: 'jump', ns: 'JP', folder: 'jump', vp: [500, 800],
+    compose: () => {
       JP.debug.newGame(7, { tutorial: false, start: 'ground' });
-      JP.debug.autopilot(true);
+      JP.World.step = () => {};
+      JP.DATA.MILE.tick = 1e9;   // 높이 눈금 글자 없음
+      JP.DATA.SKY.deco = [];     // 배경 소품 없음
+      const W = JP.debug.world, v = JP.debug.view, M = JP.DATA.METER;
+      v.hud = false;
+      const H = 40 * M;
+      W.cam = W.pcam = H; W.alpha = 0; W.phase = 'play';
+      W.plats = []; W.stars = []; W.items = []; W.mines = []; W.monsters = []; W.gifts = []; W.doors = []; W.fx = []; W.storm = null;
+      W.room = null; W.rocket = 0; W.shield = false; W.feverT = 0;
+      W.maxY = H + 400; W.height = Math.floor(W.maxY / M);
+      // 자를 칸 (화면 CSS px): 기둥 안쪽, 위에서 조금 내려온 곳
+      const C = { x: v.cx + 30, y: v.cy + 230, width: v.cw - 60, height: (v.cw - 60) / 2 };
+      const at = (fx, fy) => ({ x: (C.x + fx * C.width - v.cx) / v.scale, y: H + (v.cy + v.ch - (C.y + fy * C.height)) / v.scale });
+      const plat = (kind, fx, fy, w) => {
+        const q = at(fx, fy);
+        W.plats.push({ id: ++W.ids, kind, x: q.x, y: q.y, w, px: q.x, vx: 0, broken: false, bt: 0, on: true, t: 0, hit: -9, main: true });
+      };
+      const star = (fx, fy) => { const q = at(fx, fy); W.stars.push({ id: ++W.ids, x: q.x, y: q.y, got: false }); };
+      plat('normal', 0.3, 0.76, 96);
+      plat('normal', 0.76, 0.46, 88);
+      star(0.64, 0.27); star(0.77, 0.23);
+      const b = at(0.52, 0.36);
+      Object.assign(W.p, { x: b.x, px: b.x, y: b.y, py: b.y, vx: 0, vy: 420, land: -9 });
+      return C;
     },
-    // 로켓 없이 위로 튀어 오르는 중 (비밀 방 말고),
-    // 자를 칸 안에 별이 둘 이상 있을 때
-    ready: () => {
-      const W = JP.debug.world, v = JP.debug.view, half = 180 / v.scale;
-      const stars = (W.stars || []).filter(s => !s.got && !s.dead && s.y > W.p.y - half * 0.9 && s.y < W.p.y + half * 1.1).length;
-      return W.phase === 'play' && !W.room && W.p.vy > 150 && W.p.vy < 900 && W.p.y > 500 && stars >= 2;
-    },
-    pre: () => { JP.debug.view.hud = false; },
-    focus: () => { const W = JP.debug.world, v = JP.debug.view; return { x: v.cx + W.p.x * v.scale, y: v.cy + v.ch - (W.p.y - W.cam) * v.scale }; },
-    // 왼쪽 가장자리의 높이 글자(20m 등)는 빼고 자른다
-    crop: { w: 720, fx: 0.6, fy: 0.34, minX: 80 },
+    finish: { b: 1.08, c: 1.08, s: 1.2, vig: 0.26 },
   },
   {
-    id: 'runner', ns: 'RN', folder: 'runner', vp: [1280, 560], warm: 5000,
-    // 넓은 화면(2.3:1)이면 우주선이 크고 조금 위에 보인다. 해 뜨는 지평선과 달, 우주선은 오른쪽 줄에서 점프 중
-    // (카드 왼쪽 아래는 제목 자리라 우주선을 오른쪽 위로)
-    setup: () => { RN.debug.newGame(); RN.debug.autopilot(true); },
-    ready: () => {
-      const W = RN.debug.world, p = W.p;
-      if (W.phase !== 'play') return false;
-      if (p.lane < 2) { RN.debug.autopilot(false); RN.debug.move('right'); return false; }
-      if (Math.abs(p.px - 2) > 0.05) return false;
-      if (p.y === 0 && W.t - (W.lastStar || 0) > 1.3) { RN.debug.move('up'); return false; }
-      return p.y > 1.0 && p.vy < 2;   // 점프 꼭대기 가까이
+    // 슝슝 우주 달리기: 수성 구간 해 뜨는 지평선. 우주선이 오른쪽 줄에서 높이 뛰어 해와 수성 사이에 뜨고,
+    // 가운데 줄에는 별이 지평선까지 줄지어 있다
+    id: 'runner', ns: 'RN', folder: 'runner', vp: [1120, 560],
+    compose: () => {
+      RN.debug.newGame();
+      RN.World.step = () => {};
+      const W = RN.debug.world, v = RN.debug.view;
+      v.hud = false;
+      W.wait = 0; W.phase = 'play'; W.tut = null;
+      W.obs = []; W.fx = []; W.pir = null; W.warp = null; W.bh = null; W.pull = null; W.feverM = 0;
+      const J = 2.7;   // 뛰는 높이 (m, 실제 꼭대기 1.7보다 조금 높게 해서 우주선이 제목 위에 오게)
+      Object.assign(W.p, { lane: 2, x: 1.84, px: 1.84, y: J, py: J, vy: 0, from: 2, fromLane: 2, sl: 0, drop: false, jt: 0.3 });
+      const d = W.dist;
+      for (let i = 0; i < 6; i++) W.obs.push({ kind: 'star', x: 1, y: 0.5, z: d + 8 + i * 5, row: 1, line: 1 });
+      RN.DATA.ZONES[0].weather = null;   // 수성 불씨 알갱이는 작은 점으로만 보여 뺀다
+      return { x: 0, y: 0, width: v.w, height: v.w / 2 };
     },
-    pre: () => { RN.debug.view.hud = false; },
-    focus: () => ({ x: 640, y: 280 }),
-    crop: { w: 1120, fx: 0.43, fy: 0.5 },
+    finish: { b: 1.02, c: 1.04, s: 1.06, vig: 0.22 },
   },
 ];
 
+// 페이지가 열리기 전에: Math.random을 고정 씨앗으로 (배경 별·먼지·날씨 알갱이가 돌릴 때마다 같게)
+const SEED_SCRIPT = `(() => { let s = 0x2f6b1d3; Math.random = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; })();`;
+
 async function shoot(browser, g) {
-  const ctx = await browser.newContext({ viewport: { width: g.vp[0], height: g.vp[1] }, deviceScaleFactor: DSF });
-  await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push(String(e)));
-  await page.goto('file://' + path.join(ROOT, g.folder, 'index.html'));
-  await page.waitForTimeout(600);
-  await page.evaluate(g.setup);
-  await page.waitForTimeout(g.warm);
-  // 글자·단추·창은 모두 숨기고 게임 그림(canvas)만 남긴다
-  await page.addStyleTag({ content: 'body > *:not(canvas) { display: none !important; }' });
-  const end = Date.now() + 20000;
-  let ok = false;
-  while (Date.now() < end && !(ok = await page.evaluate(g.ready))) await page.waitForTimeout(50);
-  if (!ok) console.log('  ' + g.id + ': 기다리던 장면이 안 와서 지금 장면으로 찍음' + (g.why ? ' (' + await page.evaluate(g.why) + ')' : ''));
-  // 그 순간에 세상을 멈춘다 (규칙 한 걸음을 비운다). 그림은 계속 그려서, 떠오르던 글자·반짝이가 사라진 뒤에 찍는다
-  await page.evaluate(g.pre);
-  await page.evaluate(ns => { window[ns].World.step = () => {}; }, g.ns);
-  await page.waitForTimeout(1200);
-  const f = await page.evaluate(g.focus);
-  const w = Math.min(g.crop.w, g.vp[0]), h = Math.round(w / 2);
-  const x = Math.max(g.crop.minX || 0, Math.min(g.vp[0] - w, Math.round(f.x - w * g.crop.fx)));
-  const y = Math.max(0, Math.min(g.vp[1] - h, Math.round(f.y - h * g.crop.fy)));
-  const png = await page.screenshot({ clip: { x, y, width: w, height: h } });
-  if (errors.length) console.log('  ' + g.id + ' 페이지 오류: ' + errors.join(' | '));
-  await ctx.close();
+  // 한 번 열어 자를 칸 크기를 보고, 그 칸이 BIG 픽셀이 되는 배율로 다시 연다
+  let clip = null, png = null;
+  for (let pass = 0; pass < 2; pass++) {
+    const dsf = clip ? BIG / clip.width : 1;
+    const ctx = await browser.newContext({ viewport: { width: g.vp[0], height: g.vp[1] }, deviceScaleFactor: dsf, reducedMotion: 'reduce' });
+    await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+    await ctx.addInitScript(SEED_SCRIPT);
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(String(e)));
+    await page.goto('file://' + path.join(ROOT, g.folder, 'index.html'));
+    await page.waitForTimeout(600);
+    let c = await page.evaluate(g.compose);
+    // 글자·단추·창은 모두 숨기고 게임 그림(canvas)만 남긴다
+    await page.addStyleTag({ content: 'body > *:not(canvas) { display: none !important; }' });
+    await page.waitForTimeout(1500);
+    if (!c) c = await page.evaluate(() => window.__clip());
+    clip = c;
+    if (pass === 1) png = await page.screenshot({ clip });
+    if (errors.length) console.log('  ' + g.id + ' 페이지 오류: ' + errors.join(' | '));
+    await ctx.close();
+  }
   return png;
 }
 
-// 브라우저 캔버스로 줄이고 WebP로 (Node에 WebP 도구가 없어도 되게)
-async function encode(browser, png) {
+// 브라우저 캔버스로 줄이고 마무리를 얹어 WebP로 (Node에 WebP 도구가 없어도 되게)
+async function encode(browser, png, finish) {
   const page = await browser.newPage();
-  const out = await page.evaluate(async ({ src, sizes, q }) => {
+  const out = await page.evaluate(async ({ src, sizes, q, f }) => {
     const img = new Image();
     img.src = src;
     await img.decode();
@@ -175,7 +191,15 @@ async function encode(browser, png) {
       c.width = W; c.height = W / 2;
       const g = c.getContext('2d');
       g.imageSmoothingQuality = 'high';
+      g.filter = 'brightness(' + f.b + ') contrast(' + f.c + ') saturate(' + f.s + ')';
       g.drawImage(img, 0, 0, c.width, c.height);
+      g.filter = 'none';
+      // 가장자리를 아주 살짝 어둡게 (가운데 주인공으로 눈이 가게)
+      const v = g.createRadialGradient(W / 2, W / 4, W * 0.2, W / 2, W / 4, W * 0.62);
+      v.addColorStop(0, 'rgba(0,0,0,0)');
+      v.addColorStop(1, 'rgba(0,0,0,' + f.vig + ')');
+      g.fillStyle = v;
+      g.fillRect(0, 0, c.width, c.height);
       const blob = await new Promise(r => c.toBlob(r, 'image/webp', q));
       if (!blob || blob.type !== 'image/webp') throw new Error('WebP를 못 만듦');
       const buf = new Uint8Array(await blob.arrayBuffer());
@@ -184,7 +208,7 @@ async function encode(browser, png) {
       res[W] = btoa(s);
     }
     return res;
-  }, { src: 'data:image/png;base64,' + png.toString('base64'), sizes: SIZES, q: QUALITY });
+  }, { src: 'data:image/png;base64,' + png.toString('base64'), sizes: SIZES, q: QUALITY, f: finish });
   await page.close();
   return out;
 }
@@ -198,7 +222,7 @@ async function encode(browser, png) {
   for (const g of list) {
     const png = await shoot(browser, g);
     if (process.env.SHOTS) fs.writeFileSync(path.join(process.env.SHOTS, 'thumb-' + g.id + '.png'), png);
-    const webp = await encode(browser, png);
+    const webp = await encode(browser, png, g.finish);
     for (const W of SIZES) {
       const file = path.join(OUT, g.id + '-' + W + '.webp');
       fs.writeFileSync(file, Buffer.from(webp[W], 'base64'));
