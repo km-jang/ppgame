@@ -11,7 +11,7 @@
 ## 태블릿에 설치하기 (처음 한 번)
 
 1. 갤럭시탭에서 **Chrome**(또는 삼성 인터넷)을 열고 이 주소로 간다:
-   https://github.com/km-jang/ppyong/releases/tag/apk-latest
+   https://github.com/km-jang/ppgame/releases/tag/apk-latest
 2. 아래쪽 **Assets**에서 **ppyong-noriteo.apk**를 누른다. "그래도 다운로드" 같은 안내가 나오면 **다운로드**를 누른다.
 3. 다 받아지면 화면 위 알림의 **열기**를 누른다. (알림을 놓쳤으면 **내 파일** 앱 → **다운로드** → **ppyong-noriteo.apk**)
 4. "보안을 위해 휴대전화에서 이 출처의 알 수 없는 앱을 설치할 수 없습니다" 같은 창이 나오면 **설정**을 누르고
@@ -32,7 +32,7 @@
 
 ## 기록은 브라우저와 따로다
 
-앱 안 기록과 Chrome에서 놀던 기록(https://km-jang.github.io/ppyong/)은 **서로 다른 곳에 저장**된다.
+앱 안 기록과 Chrome에서 놀던 기록(https://km-jang.github.io/ppgame/)은 **서로 다른 곳에 저장**된다.
 브라우저에서 모은 기록을 앱으로 옮기려면:
 
 1. Chrome으로 게임 첫 화면을 열고 **보호자 화면** → **기록 내보내기**를 누른다 (파일로 받거나 코드를 복사).
@@ -46,7 +46,7 @@
 서명 열쇠는 "이 앱은 같은 집에서 만든 것"이라는 도장이다. 한 번 등록해 두면 모든 새 APK가 같은 도장을 받아 덮어 설치가 된다.
 등록할 값 두 개(이름과 값)는 AI가 따로 전해 준 파일에 있다. **이 값은 저장소·채팅·메일 어디에도 붙이지 말 것.**
 
-1. 컴퓨터 브라우저로 https://github.com/km-jang/ppyong 을 연다.
+1. 컴퓨터 브라우저로 https://github.com/km-jang/ppgame 을 연다.
 2. 위쪽 메뉴의 **Settings**(톱니바퀴)를 누른다.
 3. 왼쪽 메뉴에서 **Secrets and variables** → **Actions**를 누른다.
 4. 초록색 **New repository secret** 버튼을 누른다.

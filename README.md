@@ -1,4 +1,4 @@
-# ppyong 게임 모음
+# ppgame 게임 모음
 
 | 폴더 | 게임 |
 |---|---|
@@ -31,7 +31,7 @@
 - 게임 본체: [`game/`](game/) · 기획서: [`game/PLAN.md`](game/PLAN.md)
 - 모바일(폰·태블릿) 우선. 크롬에서 열고 메뉴 → **홈 화면에 추가**하면 앱처럼 전체 화면으로 실행된다.
 - 설치·빌드 없음. `game/index.html`을 브라우저로 열면 바로 실행된다.
-- 인터넷 주소 `https://km-jang.github.io/ppyong/`이 다섯 게임을 고르는 첫 화면이고, 뿅뿅 우주선은 `…/ppyong/game/`이다.
+- 인터넷 주소 `https://km-jang.github.io/ppgame/`이 다섯 게임을 고르는 첫 화면이고, 뿅뿅 우주선은 `…/ppgame/game/`이다.
   저장소 옛 이름은 n-gun이다(2026-09-29 바꿈). 옛 주소 `https://km-jang.github.io/n-gun/`은 넘겨 주기 전용 저장소가 새 주소로 보낸다.
 
 ## 조작
@@ -70,10 +70,10 @@ node tests/flow.test.js      # 네 게임 화면 흐름 (Playwright 크로미움
 
 태블릿에서 앱으로 설치하고 인터넷 없이 하려면 https 주소가 필요하다. 한 번만 켜 두면 된다.
 
-1. github.com/km-jang/ppyong 에서 위쪽 **Settings** 누르기
+1. github.com/km-jang/ppgame 에서 위쪽 **Settings** 누르기
 2. 왼쪽 메뉴 **Pages** 누르기
 3. **Branch**에서 `main`, 폴더 `/ (root)` 고르고 **Save**
-4. 1~2분 뒤 같은 화면 위쪽에 주소가 뜬다: `https://km-jang.github.io/ppyong/`
+4. 1~2분 뒤 같은 화면 위쪽에 주소가 뜬다: `https://km-jang.github.io/ppgame/`
 5. 태블릿 크롬에서 그 주소 → 게임 고르기 → 크롬 메뉴(⋮) → **홈 화면에 추가**
 
 main에 합친 것만 이 주소에 나온다.
