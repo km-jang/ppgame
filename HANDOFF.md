@@ -82,6 +82,9 @@
 
 | 날짜 | 결정 |
 |---|---|
+| 2026-09-29 | 냠냠 뱀: "플레이어 뱀은 너무 단순", 첫 화면 카드 그림(무지개 애벌레)과 처음 게임 뱀이 달랐음. 1안(기본 네온 뱀을 꾸미고 카드 그림을 네온 뱀으로 다시 찍기), 길이 숫자는 나안(머리 바로 뒤 첫 마디). 다리 카드 그림도 다시 찍기 |
+| 2026-09-29 | 슥슥 우주 다리: "너무 굵어서 걸려". 1안(선 10px + 양 끝 비탈) |
+| 2026-09-29 | PC의 게임 쪽을 ppgame 하나로 묶음(교통정리 세션과 함께): `game` 폴더 옛 파일 9개(꼬마기사단·기획 둘·에셋 묶음 다섯·kr-idea 옛 판 차트 묶음)는 보관 폴더로 옮긴 뒤 소유자가 지움, ppgame은 `C:\Users\user\Claude\Projects\game\ppgame`에 받아 둠 |
 | 2026-09-29 | 저장소 이름을 n-gun에서 영문 ppgame으로 (후보 ppyong·playbox·orbit·spaceplay 중 ppyong을 골랐다가 ppgame으로 바꿈). 옛 주소는 처음에 1안(넘겨 주기 저장소)으로 정했다가, 태블릿에 설치한 적이 없어 넘겨 주기 없이 가기로 바꿈 |
 | 2026-09-29 | 다섯 번째 게임: 기획안 A~I 중 E(그린 선이 다리가 되는 퍼즐)를 목업 스크린샷으로 보고 1단계 진행, 이름 "슥슥 우주 다리" 그대로, 물리 엔진은 Planck.js |
 | 2026-09-29 | APK는 당분간 만들지 않음 (자동 빌드 끔) |
@@ -123,16 +126,25 @@
 
 ## 다음에 할 일
 
-- (2026-09-29) 저장소 이름 바꾸기: GitHub 이름 바꾸기와 새 주소 열림 확인은 끝남. 소유자 요청으로 main에 합쳤고 Pages 배포 성공, 새 주소 첫 화면과 게임 다섯 곳 열림 확인. 남은 것: 빈 km-jang/n-gun 저장소를 지울지 소유자가 정함, 태블릿에서는 새 주소를 처음으로 홈 화면에 추가하고 인터넷이 될 때 다섯 게임을 한 번씩 열기
+- (2026-09-29) 저장소 이름 바꾸기: GitHub 이름 바꾸기와 새 주소 열림 확인은 끝남. 소유자 요청으로 main에 합쳤고 Pages 배포 성공, 새 주소 첫 화면과 게임 다섯 곳 열림 확인. 남은 것: 빈 km-jang/n-gun 저장소(2026-09-29 끝 무렵 아직 있음, 지우는 것은 소유자가 GitHub Settings 맨 아래 Delete this repository로)를 지울지 소유자가 정함, 태블릿에서는 새 주소를 처음으로 홈 화면에 추가하고 인터넷이 될 때 다섯 게임을 한 번씩 열기
 - (2026-09-29 소유자) APK는 당분간 만들지 않음: 자동 빌드 끔, `android/`는 보관. 임시 서명 APK 릴리스와 `apk-latest` 꼬리표는 소유자가 GitHub 웹에서 지웠고 릴리스·꼬리표 0개를 확인함
 
 0. 소유자가 갤럭시탭에서 슥슥 우주 다리(https://km-jang.github.io/ppgame/bridge/)를 해 보고 반응 전달: 선 굵기는 2026-09-29 가늘게·끝 비탈로 고침(걸리는지 다시 보기), 남은 것은 잉크 양·판 난이도·첫 판 안내. 괜찮으면 그다음 2단계(얼음·버섯 행성, 장치 더) 검토 (`bridge/PLAN.md` 11절)
+0. 소유자가 갤럭시탭에서 냠냠 뱀 새 네온 뱀(https://km-jang.github.io/ppgame/snake/)을 해 보고 반응 전달: 얼굴·구슬 마디 크기, 목 마디 길이 숫자가 잘 읽히는지(세 자리면 글씨가 작아짐), 첫 화면 카드와 같아 보이는지
+0. 문서 숫자 불일치(2026-09-29 발견, 소유자 답 없음, 고치지 않음): 테스트 줄과 예전 기록은 소리 시험 14개라고 적었는데 `node tests/sound.test.js`는 9개(이번 세션 변경 전에도 9개). 고칠지 소유자에게 물을 것
 0. 소유자가 갤럭시탭에서 아이 프로필·보호자 화면을 해 보기: 자물쇠 3초, 둘째 만들기·바꾸기, 20분 제한으로 알림 보기, 소리 크기 25%, 기록 옮기기(브라우저 → 앱)
 1. 소유자가 갤럭시탭에서 네 게임 미리보기(위 주소)를 해 보고 반응 전달: 소리 크기·음악, "한 번 더!", 통통 점프 손가락 끌기(시작 22px)·워프 출발, 뱀 대왕 뱀 난이도, 달리기 첫 판 안내
 2. 실기기에서 소리 확인: 첫 터치에 소리가 나는지, 탭을 나가면 멈추는지, 소리 끄기가 네 게임에 같이 적용되는지 (`common/sound.js`, 키 `play.sound1`)
 3. (끝남 2026-09-28) GitHub Pages 켬: https://km-jang.github.io/n-gun/ 열림 확인(2026-09-29부터 https://km-jang.github.io/ppgame/). 남은 것: 태블릿 홈 화면에 추가 · 인터넷 끊고 열기 확인 → https 주소에서 앱 설치·오프라인 확인
 4. 점검에서 나중으로 미룬 아이디어: 최고 기록 유령 경주(달리기), 해적 선장 보스(달리기), 형제가 한 태블릿에서 같이 하기(뱀·뿅뿅)
 5. 로봇카를 되살리자고 하면 `archive/README.md` 순서로 되돌리기
+
+## 세션 인계 메모 (2026-09-29)
+
+- 로컬 복제본은 `C:\Users\user\Claude\Projects\game\ppgame`(core.autocrlf=false). 새 세션은 PC에서 `game` 폴더를 열고 `game\CLAUDE.md`, 이 문서, 이 저장소 `CLAUDE.md` 순으로 읽는다. 고치기 전에 `git pull`
+- 이 PC에는 Playwright가 없다. 그래서 `tests/flow.test.js`는 건너뛰고(skip), 화면 확인과 `tools/thumbs.js`는 설치된 크롬(`C:\Program Files\Google\Chrome\Application\chrome.exe`)을 `--headless=new --remote-debugging-port`로 띄워 노드 내장 WebSocket으로 CDP를 부려서 했다. 카드 그림은 thumbs.js가 쓰는 Playwright 기능(launch·newContext(viewport·deviceScaleFactor·reducedMotion)·route로 글꼴 막기·addInitScript·goto·waitForTimeout·evaluate·addStyleTag·screenshot(clip)·close)만 흉내 낸 임시 모듈을 `PW=<모듈 폴더> node tools/thumbs.js <게임>`으로 넘겨 돌렸다(모듈은 세션 임시 폴더라 사라짐, 저장소에 넣지 않음). screenshot의 자를 칸은 Playwright처럼 화면 안으로 줄여야 한다(다리 장면은 화면 아래로 10px 넘음, 안 줄이면 검은 띠). 수정 전 코드로 다시 만든 뱀 그림이 원래 그림과 눈으로 같은 것을 확인했고, 다시 찍을 때마다 WebP 바이트는 조금 달라진다
+- 크롬 시험 프로필(`--user-data-dir`)은 짧은 경로(예: `C:/Users/user/AppData/Local/Temp/cr1`)에 둔다. 세션 임시 폴더 같은 긴 경로에 두면 캐시 저장소가 망가져 오프라인 저장(sw.js 설치)이 "Entry already exists"로 실패한다(사이트 문제 아님)
+- 시험 서버는 게임 폴더에서 `python -m http.server 8771 --bind 127.0.0.1`로 띄웠고 끝나면 껐다. 내장 브라우저 창은 오프라인 저장(service worker)을 막아 두어 그 시험에는 못 쓴다
 
 ## 세션 인계 메모 (2026-09-27)
 
