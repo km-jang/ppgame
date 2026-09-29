@@ -221,8 +221,35 @@
     return W.strokes[W.strokes.length - 1];
   }
 
+  // 선 끝의 비탈 (판 좌표 세 점: 끝의 아래 면, 끝의 위 면, 비탈 끝). 아래 면은 그대로 이어지고 위 면만 내려와
+  // 땅에 누운 선에 공이 턱 없이 올라탄다. 가파른 끝이나 비탈 자리가 막혔으면 없음
+  function rampAt(W, pts, first) {
+    const n = pts.length, e = first ? pts[0] : pts[n - 1];
+    let q = first ? pts[n - 1] : pts[0];
+    for (let k = 1; k < n; k++) {
+      const p = first ? pts[k] : pts[n - 1 - k];
+      if (Math.hypot(p[0] - e[0], p[1] - e[1]) >= 20) { q = p; break; }
+    }
+    let dx = e[0] - q[0], dy = e[1] - q[1];
+    const l = Math.hypot(dx, dy);
+    if (l < 1) return null;
+    dx /= l; dy /= l;
+    if (Math.abs(dx) < PH.rampFlat) return null;
+    let nx = -dy, ny = dx;
+    if (ny < 0) { nx = -nx; ny = -ny; }   // 아래쪽 법선
+    const T = PH.lineHalf, lo = [e[0] + nx * T, e[1] + ny * T], hi = [e[0] - nx * T, e[1] - ny * T];
+    for (const L of [PH.rampLen, PH.rampLen / 2]) {
+      const tip = [lo[0] + dx * L, lo[1] + dy * L];
+      if (W.ground.some(g => inPoly(g.poly, tip[0], tip[1])) || !segFree(W, lo[0], lo[1], tip[0], tip[1])) continue;
+      return [lo, hi, tip];
+    }
+    return null;
+  }
+
   function makeBody(W, pts, kind) {
     const pl = lib(), x0 = pts[0][0], y0 = pts[0][1];
+    // 비탈 자리는 몸체를 만들기 전에 잰다 (제 몸에 부딪히지 않게)
+    const ramps = kind === 'dot' ? [] : [rampAt(W, pts, true), rampAt(W, pts, false)].filter(Boolean);
     const b = W.pl.createBody({ type: 'dynamic', position: V(x0, y0), bullet: false });
     const fx = { density: PH.lineDensity, friction: PH.lineFriction, restitution: 0.05 };
     const T = PH.lineHalf / S;
@@ -239,8 +266,9 @@
         if (l < 0.02) continue;
         b.createFixture(new pl.Box(l / 2, T, new pl.Vec2((ax + bx) / 2, (ay + by) / 2), Math.atan2(ay - by, ax - bx)), fx);
       }
+      for (const r of ramps) b.createFixture(new pl.Polygon(r.map(([x, y]) => new pl.Vec2((x - x0) / S, (y - y0) / S))), fx);
     }
-    b.setUserData({ kind: 'line', dot: kind === 'dot' });
+    b.setUserData({ kind: 'line', dot: kind === 'dot', ramps });
     return b;
   }
 
@@ -339,6 +367,13 @@
     const [ox, oy] = s.pts[0], pos = b.getPosition(), a = b.getAngle(), c = Math.cos(a), sn = Math.sin(a);
     return s.pts.map(([x, y]) => { const lx = (x - ox) / S, ly = (y - oy) / S; return [(pos.x + lx * c - ly * sn) * S, (pos.y + lx * sn + ly * c) * S]; });
   }
+  // 그린 선 끝 비탈의 지금 모양 (세 점 묶음 목록)
+  function rampPoints(W, i) {
+    const s = W.strokes[i], b = W.lines[i], u = b && b.getUserData();
+    if (!s || !u || !u.ramps) return [];
+    const [ox, oy] = s.pts[0];
+    return u.ramps.map(r => r.map(([x, y]) => bodyPoint(b, ox, oy, x, y)));
+  }
   function bodyState(b) { const p = b.getPosition(); return { x: p.x * S, y: p.y * S, a: b.getAngle() }; }
 
   // 판 요약 (상점·미션·메달·놀이 본부)
@@ -371,5 +406,5 @@
   }
 
   BR.World = { create, build, reset, beginStroke, drawTo, endStroke, undo, step, inkLeft, pointFree, segFree, inPoly, groundPoly,
-    ballState, bodyPoint, linePoints, bodyState, runStats, solve, DT };
+    ballState, bodyPoint, linePoints, rampPoints, bodyState, runStats, solve, DT };
 })(BR);
