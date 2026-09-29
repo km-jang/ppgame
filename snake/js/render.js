@@ -689,6 +689,27 @@
     });
   }
 
+  // 네온 뱀 마디 구슬: 머리 0 → 꼬리 1 색을 NEON_STEPS 단계로 미리 그려 둔다
+  const NEON_STEPS = 12;
+  function neonBeadSprite(c, k, col) {
+    const px = Math.round(c);
+    return sprite('neonbead' + px + '_' + k, px, (g, s) => {
+      const q = col(k / (NEON_STEPS - 1)), r = s / 2;
+      const gr = g.createRadialGradient(r * 0.65, r * 0.6, r * 0.08, r, r, r);
+      gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.38, rgb(q)); gr.addColorStop(1, rgb(mix(q, [8, 18, 60], 0.5)));
+      g.fillStyle = gr; g.beginPath(); g.arc(r, r, r * 0.95, 0, TAU); g.fill();
+      g.strokeStyle = 'rgba(210,250,255,0.75)'; g.lineWidth = Math.max(1, s * 0.05); g.stroke();
+    });
+  }
+  function paintNeonBeads(ctx, pts, c, lk) {
+    const n = pts.length;
+    for (let i = n - 1; i >= 1; i--) {
+      const t = i / Math.max(1, n - 1), r = c * (0.42 - 0.12 * t);
+      const k = Math.round(t * (NEON_STEPS - 1));
+      ctx.drawImage(neonBeadSprite(c, k, lk.col), pts[i].x - r, pts[i].y - r, r * 2, r * 2);
+    }
+  }
+
   // 작은 네 갈래 반짝이
   function sparkle(ctx, x, y, r) {
     ctx.moveTo(x, y - r); ctx.lineTo(x + r * 0.25, y - r * 0.25); ctx.lineTo(x + r, y); ctx.lineTo(x + r * 0.25, y + r * 0.25);
@@ -892,6 +913,7 @@
     else if (lk.body === 'beads') paintBeads(ctx, pts, c, tm, dirs, calm);
     else if (lk.body === 'nebula') paintNebula(ctx, pts, far, c, tm, dirs, calm);
     else paintTube(ctx, pts, far, c, lk, tm, dead);
+    if (lk.head === 'neon' && !dead) paintNeonBeads(ctx, pts, c, lk);
     if (lk.deco === 'dragon' && !dead) paintDragonDeco(ctx, pts, far, c, tm, dirs, calm);
     // 부딪혔다: 모양은 두고 붉게 덮는다 (네온 관은 이미 붉게 그렸다)
     if (dead && lk.body !== 'tube') {
@@ -909,28 +931,36 @@
     else if (d[1] > 0) ctx.rotate(Math.PI / 2);
   }
 
-  // 머리. 네온 뱀은 뿅뿅 우주선 주인공처럼 둥근 몸에 숫자(길이)와 노란 총열
-  function paintHead(ctx, h, d, c, lk, tm, dead, txt, dbl) {
+  // 머리. 네온 뱀은 광택 청록 머리에 눈·웃는 입·노란 코, 길이 숫자는 머리 바로 뒤 첫 마디(neck)에 쓴다
+  function paintHead(ctx, h, d, c, lk, tm, dead, txt, dbl, neck) {
     if (dbl) glow(ctx, 'rgba(255,230,109,0.8)', h.x, h.y, c * 2.2, 0.7);
     glow(ctx, dead ? 'rgba(255,77,109,0.8)' : lk.headGlow, h.x, h.y, c * 1.5, 0.9);
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     if (lk.head === 'neon') {
-      ctx.strokeStyle = '#ffe66d';
-      ctx.lineWidth = Math.max(2, c * 0.16);
-      ctx.beginPath();
-      ctx.moveTo(h.x + d[0] * c * 0.25, h.y + d[1] * c * 0.25);
-      ctx.lineTo(h.x + d[0] * c * 0.7, h.y + d[1] * c * 0.7);
-      ctx.stroke();
-      ctx.fillStyle = dead ? '#ff4d6d' : '#5ee7ff';
-      ctx.beginPath(); ctx.arc(h.x, h.y, c * 0.46, 0, TAU); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.beginPath(); ctx.arc(h.x - c * 0.12, h.y - c * 0.14, c * 0.14, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#07080d';
-      ctx.font = '700 ' + Math.round(c * (txt.length > 2 ? 0.44 : 0.58)) + 'px ' + NUM;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(txt, h.x, h.y + c * 0.04);
-      ctx.textBaseline = 'alphabetic';
+      if (neck) {
+        ctx.fillStyle = '#07080d';
+        ctx.font = '700 ' + Math.round(c * (txt.length > 2 ? 0.34 : 0.44)) + 'px ' + NUM;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(txt, neck.x, neck.y + c * 0.03);
+        ctx.textBaseline = 'alphabetic';
+      }
+      ctx.save();
+      faceTo(ctx, h, d);
+      ctx.scale(c, c);
+      ctx.fillStyle = '#ffe66d'; rrect(ctx, 0.36, -0.1, 0.3, 0.2, 0.09); ctx.fill();
+      const g = ctx.createRadialGradient(-0.14, -0.18, 0.04, 0, 0, 0.56);
+      g.addColorStop(0, dead ? '#ffd6dc' : '#e6fdff'); g.addColorStop(0.45, dead ? '#ff4d6d' : '#5ee7ff'); g.addColorStop(1, dead ? '#8a1020' : '#1f5fd0');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 0.54, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(6,30,70,0.8)'; ctx.lineWidth = 0.05; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.ellipse(-0.2, -0.26, 0.14, 0.08, -0.5, 0, TAU); ctx.fill();
+      for (const s of [1, -1]) {
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(0.16, s * 0.21, 0.13, 0.12, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#062036'; ctx.beginPath(); ctx.arc(0.21, s * 0.21, 0.07, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0.235, s * 0.21 - 0.03, 0.025, 0, TAU); ctx.fill();
+      }
+      ctx.strokeStyle = '#06324d'; ctx.lineWidth = 0.045;
+      ctx.beginPath(); ctx.arc(0.3, 0, 0.1, -0.9, 0.9); ctx.stroke();
+      ctx.restore();
       ctx.lineCap = 'butt';
       return;
     }
@@ -1061,7 +1091,7 @@
     }
     paintBody(ctx, pts, far, c * gk, lk, tm, dead, d, v.calm);
     if (ghost) ctx.globalAlpha = 0.45 + (v.calm ? 0 : Math.sin(W.t * 12) * 0.12);
-    paintHead(ctx, pts[0], d, c * gk, lk, tm, dead, String(n), W.eff && W.eff.double > 0);
+    paintHead(ctx, pts[0], d, c * gk, lk, tm, dead, String(n), W.eff && W.eff.double > 0, n > 1 && !far(1) ? pts[1] : null);
     ctx.globalAlpha = 1;
   }
 
@@ -1159,7 +1189,7 @@
     const pts = PREVIEW.map(([x, y]) => ({ x: ox + (x + 0.5) * c, y: oy + (y + 0.5) * c }));
     const lk = lookOf(id), t = tm == null ? 1.3 : tm;
     paintBody(g, pts, () => false, c, lk, t, false, [1, 0], true);
-    paintHead(g, pts[0], [1, 0], c, lk, t, false, String(PREVIEW.length), false);
+    paintHead(g, pts[0], [1, 0], c, lk, t, false, String(PREVIEW.length), false, pts[1]);
   }
 
   // ─── HUD: 위쪽 한 줄. 오른쪽 끝에 점수, 그 왼쪽에 작은 칸들 ─────
