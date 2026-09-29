@@ -344,11 +344,167 @@
     };
   }
 
+  // ─── 따라다니는 꼬마 펫 (D.PET · D.PETS, 2026-09-29) ─────────────
+  // 펫은 난수를 쓰지 않는다: 같은 판이면 늘 같은 자리·같은 줍기. 펫이 없으면(W.pet = null) 아래 함수들은 아무것도 하지 않아 예전 판과 똑같다.
+  // 상태: follow (주인공 뒤쪽 위 집 자리로 부드럽게) · fetch (별·선물·몬스터로 날아감) · back (집 자리로 날아 돌아옴)
+  const petOf = id => (id && id !== 'none' ? D.PETS.find(p => p.id === id) || null : null);
+  const wrapX = x => ((x % WW) + WW) % WW;
+  // 집 자리: 주인공이 보는 쪽의 반대(뒤쪽)로 조금, 위로 조금 (앞길 발판을 가리지 않게)
+  function petHome(W) {
+    const P = W.p, O = D.PET.off;
+    return { x: P.x - (P.face || 1) * O[0], y: P.y + O[1] };
+  }
+  function makePet(W, def) {
+    const h = petHome(W);
+    return { id: def.id, def, x: wrapX(h.x), y: h.y, px: wrapX(h.x), py: h.y, face: W.p.face || 1, state: 'follow', tgt: null, tkind: '',
+      wait: 0, cool: (def.perk && def.perk.first) || 0, cheer: '', cheerAt: -9, cheerCool: 0 };
+  }
+  // 순간 이동(비밀 방 들어가고 나올 때): 펫도 집 자리로
+  function petReset(W) {
+    const pet = W.pet;
+    if (!pet) return;
+    const h = petHome(W);
+    pet.x = pet.px = wrapX(h.x); pet.y = pet.py = h.y; pet.state = 'follow'; pet.tgt = null; pet.tkind = '';
+  }
+  // 응원: 하트 + 작은 소리. 신기록·새 장소는 늘, 그 밖(밟기·아슬아슬)은 cheerGap초에 한 번까지
+  function petCheer(W, what) {
+    const pet = W.pet;
+    if (!pet) return false;
+    const big = what === 'best' || what === 'place';
+    if (!big && pet.cheerCool > 0) return false;
+    pet.cheer = what; pet.cheerAt = W.t; pet.cheerCool = D.PET.cheerGap;
+    W.events.push('petCheer'); W.fx.push({ kind: 'petCheer', what, x: pet.x, y: pet.y });
+    return true;
+  }
+  // 아슬아슬: 가시 폭탄·몬스터 가까이(닿는 거리 + near) 들어왔다가 닿지 않고 빠져나가면 한 번 응원
+  function petNear(W, o, d2, hit) {
+    const lim = hit + D.PET.near;
+    if (d2 < lim * lim) { if (W.rocket <= 0 && W.safeT <= 0) o.nearIn = true; return; }
+    if (o.nearIn) { o.nearIn = false; if (!o.near) { o.near = true; petCheer(W, 'near'); } }
+  }
+  const petSeen = (W, y) => y > W.cam + 4 && y < W.cam + W.viewH - 4;
+  // 별을 먹는다 (주인공이든 펫이든 같은 점수: 콤보 배율, 피버 두 배)
+  function takeStar(W, s, byPet) {
+    s.got = true; W.starsGot++;
+    const pts = Math.round(D.STAR.points * comboMul(W.combo) * (W.feverT > 0 ? D.FEVER.starMul : 1));
+    W.starPts += pts;
+    if (byPet) { W.petStars++; W.events.push('petStar'); W.fx.push({ kind: 'star', x: s.x, y: s.y, pts, pet: true }); }
+    else { W.events.push('star'); W.fx.push({ kind: 'star', x: s.x, y: s.y, pts }); }
+  }
+  // 주우러 갈 것 고르기: 특기 몬스터 톡(준비됐을 때) → 가장 가까운 별·선물 (모두 화면 안, 주인공에게서 정해 둔 거리 안)
+  function petFind(W) {
+    const pet = W.pet, P = W.p, def = pet.def, K = def.perk || {};
+    const near = (o, lim) => { const dx = wrapDelta(P.x, o.x), dy = o.y - P.y; return dx * dx + dy * dy < lim * lim; };
+    const fromPet = o => { const dx = wrapDelta(pet.x, o.x), dy = o.y - pet.y; return dx * dx + dy * dy; };
+    let best = null, bd = Infinity, kind = '';
+    if (K.zap && pet.cool <= 0) {
+      for (const m of W.monsters) {
+        if (m.gone || !petSeen(W, m.y) || !near(m, K.zap)) continue;
+        const d = fromPet(m);
+        if (d < bd) { bd = d; best = m; kind = 'monster'; }
+      }
+      if (best) { pet.state = 'fetch'; pet.tgt = best; pet.tkind = kind; return true; }
+    }
+    for (const s of W.stars) {
+      if (s.got || !petSeen(W, s.y) || !near(s, def.reach)) continue;
+      const d = fromPet(s);
+      if (d < bd) { bd = d; best = s; kind = 'star'; }
+    }
+    if (K.gift) for (const g of W.gifts) {
+      if (g.got || !petSeen(W, g.y) || !near(g, K.gift)) continue;
+      const d = fromPet(g);
+      if (d < bd) { bd = d; best = g; kind = 'gift'; }
+    }
+    if (!best) return false;
+    pet.state = 'fetch'; pet.tgt = best; pet.tkind = kind;
+    return true;
+  }
+  // (x, y)로 빠르기 speed만큼 곧게 날아간다 (좌우가 이어진 기둥). 남은 거리를 돌려준다
+  function petFly(pet, x, y, speed) {
+    const dx = wrapDelta(pet.x, x), dy = y - pet.y, d = Math.hypot(dx, dy);
+    if (d < 1e-6) return 0;
+    const k = Math.min(1, speed * H / d);
+    pet.x += dx * k; pet.y += dy * k;
+    return d * (1 - k);
+  }
+  // 펫 한 칸: 줍기 · 날기 · 따라가기, 끈(leash) 안에, 기둥 안·화면 안에
+  function petStep(W) {
+    const pet = W.pet;
+    if (!pet) return;
+    const PT = D.PET, P = W.p, K = pet.def.perk || {};
+    pet.px = pet.x; pet.py = pet.y;
+    if (pet.wait > 0) pet.wait -= H;
+    if (pet.cool > 0) pet.cool -= H;
+    if (pet.cheerCool > 0) pet.cheerCool -= H;
+    if (pet.state !== 'fetch' && pet.wait <= 0) petFind(W);
+    if (pet.state === 'fetch') {
+      const T = pet.tgt, dx = wrapDelta(P.x, T.x), dy = T.y - P.y;
+      if (T.got || T.gone || T.used || !petSeen(W, T.y) || dx * dx + dy * dy > PT.leash * PT.leash) { pet.state = 'back'; pet.tgt = null; }
+      else {
+        const grab = PT.r + (pet.tkind === 'star' ? D.STAR.r : pet.tkind === 'gift' ? D.GIFT.r : D.MONSTER.r);
+        if (petFly(pet, T.x, T.y, PT.speed) <= grab) {
+          if (pet.tkind === 'star') takeStar(W, T, true);
+          else if (pet.tkind === 'gift') { W.petGifts++; openGift(W, T); }
+          else {
+            T.gone = true; T.hit = W.t; W.petZaps++; pet.cool = K.every || 0;
+            W.events.push('petZap'); W.fx.push({ kind: 'petZap', x: T.x, y: T.y, mk: T.kind });
+          }
+          pet.state = 'back'; pet.tgt = null; pet.wait = PT.wait;
+        }
+      }
+    }
+    const h = petHome(W);
+    if (pet.state === 'back' && petFly(pet, h.x, h.y, PT.speed) < 10) pet.state = 'follow';
+    if (pet.state === 'follow') {
+      pet.x += wrapDelta(pet.x, h.x) * Math.min(1, PT.ease[0] * H); pet.y += (h.y - pet.y) * Math.min(1, PT.ease[1] * H);
+    }
+    // 끈: 주인공에게서 leash보다 멀어지지 않는다 (로켓·구조 구름으로 훌쩍 가도 곧 따라온다)
+    const lx = wrapDelta(P.x, pet.x), ly = pet.y - P.y, ld = Math.hypot(lx, ly);
+    if (ld > PT.leash) { pet.x = P.x + lx * PT.leash / ld; pet.y = P.y + ly * PT.leash / ld; }
+    // 주인공 몸과 겹치지 않게 살짝 밀려난다 (주인공 뒤에 숨거나 얼굴을 가리지 않게)
+    const gap = P0.r + PT.r + 2;
+    if (ld < gap) {
+      const ux = ld > 0.5 ? lx / ld : -(P.face || 1), uy = ld > 0.5 ? ly / ld : 0;
+      pet.x = P.x + ux * gap; pet.y = P.y + uy * gap;
+    }
+    // 기둥 안(0 ~ WW, 끝으로 나가면 반대쪽) · 화면 안
+    pet.x = wrapX(pet.x);
+    pet.y = Math.max(W.cam + PT.r, Math.min(W.cam + W.viewH - PT.r, pet.y));
+    const mv = wrapDelta(pet.px, pet.x);
+    if (Math.abs(pet.x - pet.px) > WW / 2) pet.px = pet.x - mv;   // 끝을 넘어갔으면 그리기 보간이 기둥을 가로지르지 않게
+    if (Math.abs(mv) > 0.2) pet.face = mv > 0 ? 1 : -1;
+  }
+  // 아기 해파리 특기: 준비됐고, 튀어 오를 길 위(더 높이 튀는 만큼)에 가시 폭탄·몬스터가 없으면 폴짝 더 높이
+  function petBoostOk(W, p) {
+    const pet = W.pet, K = pet && pet.def.perk;
+    if (!K || !K.boost || pet.cool > 0 || p.kind === 'spring') return false;
+    const top = p.y + W.phys.jump * K.boost + P0.r * 2 + D.MONSTER.r + 20;
+    const clear = o => Math.abs(wrapDelta(W.p.x, o.x)) > D.MINE.clear * 0.7 || o.y < p.y || o.y > top;
+    return W.mines.every(m => m.gone || clear(m)) && W.monsters.every(m => m.gone || clear(m));
+  }
+  // 반딧불 특기 (그림 전용, 규칙은 그대로): 지금 뛰는 길에서 내려앉을 수 있는 길 발판 중 가장 높은 것 (화면 안).
+  //   위로는 이번에 튀어 오를 수 있는 꼭대기까지, 내려오는 중이면 발밑보다 낮은 것만, 옆으로는 내려앉기까지 걸리는 시간에 갈 수 있는 거리만
+  function petHint(W) {
+    const K = W.pet && W.pet.def.perk;
+    if (!K || !K.hint || W.phase !== 'play' || W.room || W.rocket > 0) return null;
+    const P = W.p, F = W.phys, apex = P.y + (P.vy > 0 ? P.vy * P.vy / (2 * F.gUp) : 0);
+    let best = null;
+    for (const p of W.plats) {
+      if (!p.main || p.broken || p.y <= W.cam || p.y > W.cam + W.viewH || p.y + P0.r > apex - 4) continue;
+      if (P.vy <= 0 && p.y > P.y - P0.r + 1) continue;
+      const tt = fallTime(P.y, P.vy, p.y + P0.r, F);
+      if (tt < 0 || Math.max(0, Math.abs(wrapDelta(P.x, p.x + p.vx * tt)) - p.w * 0.4) > W.ctl.maxVx * tt) continue;
+      if (!best || p.y > best.y) best = p;
+    }
+    return best;
+  }
+
   // opts: {diff: 'easy'|'normal'|'hard', easy (예전 방식), viewH, tutorial,
   //        upgrades: {speed, rocket, cloud} (상점 강화), loadout: {rocket, shield} (시작 아이템),
   //        char: 캐릭터 id (D.CHARS, 없으면 통통 로봇)}
   //        adapt: 알아서 맞춰 주는 난이도 배율 (common/hub.js adaptMul, 없으면 1),
-  //        start: 출발 장소 id 또는 높이 m (D.STARTS, 없으면 땅)}
+  //        start: 출발 장소 id 또는 높이 m (D.STARTS, 없으면 땅),
+  //        pet: 펫 id (D.PETS, 없거나 'none'이면 펫 없이) · best: 지난 최고 높이 m (펫 신기록 응원용, 없으면 0)}
   function create(seed, opts) {
     opts = opts || {};
     const s0 = seed == null ? (Date.now() ^ 0x5bd1e995) : seed;
@@ -401,7 +557,9 @@
       // 기록·메달용
       starsGot: 0, stomps: 0, bumps: 0, springs: 0, rockets: 0, saves: 0, bounces: 0, crumbles: 0, combo: 0, maxCombo: 0, lastLand: 0,
       botT: null,
-      events: [],   // 소리·진동용: bounce spring star item rocket shield save crumble rescue over zone mile tut stomp bump storm leg
+      // 펫 (D.PETS): 펫 상태 · 펫이 주운 별 · 물어 온 선물 · 톡 터뜨린 몬스터 · 폴짝 · 지난 최고 높이(m) · 신기록 응원 했는지
+      pet: null, petStars: 0, petGifts: 0, petZaps: 0, petBoosts: 0, best: Math.max(0, Number(opts.best) || 0), petBest: false,
+      events: [],   // 소리·진동용: bounce spring star item rocket shield save crumble rescue over zone mile tut stomp bump storm leg petStar petCheer petBoost petZap
       fx: [],       // 그리기 연출용: {kind, x, y}
     };
     W.pcam = W.cam;
@@ -411,6 +569,8 @@
     // 바닥: 기둥 가로 전체를 덮는 첫 발판 (높은 곳에서 출발하면 발사대)
     const ground = addPlat(W, 'ground', WW / 2, y0, WW);
     if (y0 > 0) ground.pad = true;
+    const pd = petOf(opts.pet);
+    if (pd) W.pet = makePet(W, pd);
     generate(W);
     // 높은 곳에서 출발: 발사대에서 짧게 로켓 (로켓 횟수·메달에는 세지 않는다)
     if (y0 > 0) { W.rocket = D.WARP.rocket; W.events.push('warp'); W.fx.push({ kind: 'warp', id: ST.id, x: W.p.x, y: W.p.y }); }
@@ -469,6 +629,7 @@
     W.starPts += pts;
     W.events.push('stomp');
     W.fx.push({ kind: 'stomp', x: m.x, y: m.y, mk: m.kind, pts });
+    petCheer(W, 'stomp');
   }
 
   // 피버 게이지를 채운다. 가득 차면 FEVER (보이는 길 발판 위에 별이 더 생긴다)
@@ -535,6 +696,7 @@
     }
     P.x = P.px = WW / 2; P.y = P.py = floor.y + P0.r; P.vx = 0; P.vy = jumpV(W.phys.jump);
     W.combo = 0; W.lastLand = floor.y;
+    petReset(W);
     W.events.push('room'); W.fx.push({ kind: 'room', x: door.x, y: door.y });
   }
   function leaveRoom(W) {
@@ -547,6 +709,7 @@
     W.cam = W.pcam = Rm.base;
     W.combo = 0; W.lastLand = Rm.door.y - D.ROOM.r;
     if (W.storm) W.storm.py = W.storm.y;
+    petReset(W);
     W.events.push('roomEnd'); W.fx.push({ kind: 'roomEnd', x: P.x, y: P.y });
   }
 
@@ -555,6 +718,12 @@
     P.y = p.y + P0.r;
     const spring = p.kind === 'spring';
     P.vy = jumpV(spring ? W.phys.spring : W.phys.jump);
+    // 아기 해파리 특기: 가끔 폴짝 더 높이 (펫이 없으면 그대로)
+    if (W.pet && petBoostOk(W, p)) {
+      const K = W.pet.def.perk;
+      P.vy = jumpV(W.phys.jump * K.boost); W.pet.cool = K.every; W.petBoosts++;
+      W.events.push('petBoost'); W.fx.push({ kind: 'petBoost', x: P.x, y: p.y });
+    }
     P.land = W.t;
     p.hit = W.t;
     W.bounces++;
@@ -659,14 +828,11 @@
     for (const s of W.stars) {
       if (s.got || Math.abs(s.y - P.y) > sd) continue;
       const dx = wrapDelta(P.x, s.x), dy = s.y - P.y;
-      if (dx * dx + dy * dy < sr) {
-        s.got = true; W.starsGot++;
-        // 콤보 중이면 별 점수가 조금 더 (배율 상한 D.COMBO.max), 피버 중이면 × starMul
-        const pts = Math.round(D.STAR.points * comboMul(W.combo) * (W.feverT > 0 ? D.FEVER.starMul : 1));
-        W.starPts += pts;
-        W.events.push('star'); W.fx.push({ kind: 'star', x: s.x, y: s.y, pts });
-      }
+      // 콤보 중이면 별 점수가 조금 더 (배율 상한 D.COMBO.max), 피버 중이면 × starMul
+      if (dx * dx + dy * dy < sr) takeStar(W, s, false);
     }
+    // 펫: 따라다니다가 가까운 별(·선물·몬스터)을 주워 온다 (펫이 없으면 아무것도 안 함)
+    petStep(W);
     // 아이템
     const ir = (r + D.ITEM.r) * (r + D.ITEM.r);
     for (const it of W.items) {
@@ -686,7 +852,7 @@
       if (m.gone) continue;
       if (m.seen < 0 && m.y < W.cam + W.viewH) m.seen = W.t;
       const dx = wrapDelta(P.x, m.x), dy = m.y - P.y;
-      if (dx * dx + dy * dy >= mr) continue;
+      if (dx * dx + dy * dy >= mr) { if (W.pet) petNear(W, m, dx * dx + dy * dy, r + D.MINE.r * 0.85); continue; }
       if (W.rocket > 0 || W.safeT > 0) { m.gone = true; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
       if (W.shield) {
         W.shield = false; W.saves++; m.gone = true;
@@ -704,7 +870,7 @@
       if (m.gone) continue;
       if (m.seen < 0 && m.y < W.cam + W.viewH) m.seen = W.t;
       const dx = wrapDelta(P.x, m.x), dy = P.y - m.y, d2 = dx * dx + dy * dy;
-      if (d2 >= gr) continue;
+      if (d2 >= gr) { if (W.pet && !W.easy) petNear(W, m, d2, r + MO.r); continue; }
       if (W.rocket > 0) { m.gone = true; m.hit = W.t; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
       if (P.vy <= 0 && dy > MO.r * MO.top) { stomp(W, m); continue; }
       if (W.safeT > 0) { m.gone = true; m.hit = W.t; W.fx.push({ kind: 'pop', x: m.x, y: m.y }); continue; }
@@ -761,13 +927,15 @@
     W.score = W.height + W.starPts;
     // 구역이 바뀌면 배너, 100m마다 축하 (한 번씩만)
     const zi = zoneAt(W.height);
-    if (zi > W.zone) { W.zone = zi; W.events.push('zone'); W.fx.push({ kind: 'zone', zone: zi, x: P.x, y: P.y }); }
+    if (zi > W.zone) { W.zone = zi; W.events.push('zone'); W.fx.push({ kind: 'zone', zone: zi, x: P.x, y: P.y }); petCheer(W, 'place'); }
     // 행성에 닿으면 한 번씩 알린다 (구역 배너와 같은 때면 render.js가 하나로 합친다)
     const pn = planetAt(W.height);
-    if (pn > W.planet) { W.planet = pn; W.events.push('planet'); W.fx.push({ kind: 'planet', i: pn - 1, x: P.x, y: P.y }); }
+    if (pn > W.planet) { W.planet = pn; W.events.push('planet'); W.fx.push({ kind: 'planet', i: pn - 1, x: P.x, y: P.y }); petCheer(W, 'place'); }
     // 땅에서 우주까지 여정 배너 (구름 속 · 높은 하늘 · 대기권 돌파)
     const lg = legAt(W.height);
-    if (lg > W.leg) { W.leg = lg; W.events.push('leg'); W.fx.push({ kind: 'leg', i: lg - 1, x: P.x, y: P.y }); }
+    if (lg > W.leg) { W.leg = lg; W.events.push('leg'); W.fx.push({ kind: 'leg', i: lg - 1, x: P.x, y: P.y }); petCheer(W, 'place'); }
+    // 펫: 지난 최고 높이를 처음 넘으면 신기록 응원 (한 판에 한 번)
+    if (W.pet && !W.petBest && W.best >= D.PET.best && W.height > W.best) { W.petBest = true; petCheer(W, 'best'); }
     const mb = Math.floor(W.height / D.MILE.big);
     if (mb > W.mile) { W.mile = mb; W.events.push('mile'); W.fx.push({ kind: 'mile', m: mb * D.MILE.big, x: P.x, y: mb * D.MILE.big * D.METER }); }
     // 카메라: 부드럽게 따라 올라가되(ease), 주인공이 화면 위쪽으로 너무 가지 않게(lead). 내려가지는 않는다
@@ -949,7 +1117,9 @@
   function runStats(W) {
     return {
       diff: W.diff, easy: W.easy, height: W.height, score: W.score, stars: W.starsGot, springs: W.springs,
-      rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo, rescued: W.rescued, bounces: W.bounces, time: W.t,
+      rockets: W.rockets, saves: W.saves, maxCombo: W.maxCombo,
+      // 펫: 데리고 다닌 펫 id(없으면 null) · 펫이 주운 별 · 물어 온 선물 · 톡 터뜨린 몬스터 · 폴짝
+      pet: W.pet ? W.pet.id : null, petStars: W.petStars || 0, petGifts: W.petGifts || 0, petZaps: W.petZaps || 0, petBoosts: W.petBoosts || 0, rescued: W.rescued, bounces: W.bounces, time: W.t,
       zone: W.zone, crumbles: W.crumbles, char: W.char, stomps: W.stomps, bumps: W.bumps, adapt: W.adapt, planet: W.planet, holes: W.holes,
       gifts: W.giftsGot, giftCoins: W.giftCoins, giftItems: W.giftItems.slice(), fevers: W.fevers, rooms: W.rooms,
       // 출발 장소: 출발 높이(m) · 이번 판에 오른 거리(m) · 출발할 때 이미 지나 있던 행성 수 · 한 번 더 했는지
@@ -960,5 +1130,6 @@
   // 테스트·봇용: W에서 높이 y에 내려와 닿기까지 시간
   const timeTo = (W, y) => fallTime(W.p.y, W.p.vy, y, W.phys);
 
-  JP.World = { create, startOf, canContinue, revive, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, legAt, holeAt, holesUpTo, feverAdd, placeGift, openGift, enterRoom, leaveRoom };
+  JP.World = { create, startOf, canContinue, revive, applyUpgrades, charOf, physOf, yAfter, fallTime, timeTo, step, tick, botDir, runStats, wrapDelta, cloudAlpha, diffAt, warmAt, zoneAt, comboMul, levelOf, jumpV, adaptOf, stormSpeed, monsterSpotOk, planetAt, legAt, holeAt, holesUpTo, feverAdd, placeGift, openGift, enterRoom, leaveRoom,
+    petOf, petHome, petStep, petCheer, petHint, petBoostOk };
 })(JP);

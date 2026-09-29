@@ -1457,6 +1457,216 @@ test('손가락: 멈춤 뒤에도 누르고 있던 손가락이 그대로, 모�
   assert(G.I.drag, 'a real slide becomes a drag');
 });
 
+// ─── 따라다니는 꼬마 펫 (D.PET · D.PETS, 2026-09-29) ─────────
+const PT = D.PET;
+// 펫을 데리고 빈 하늘에: 주인공을 (x, y)에 붙잡아 둔 채 n칸 (펫만 움직인다)
+function petWorld(pet, opts) { const W = empty(Object.assign({ pet }, opts)); W.cam = 0; W.pcam = 0; put(W, 200, 300, 0); return W; }
+function hold(W, n, x, y) { for (let i = 0; i < n && W.phase === 'play'; i++) { put(W, x == null ? 200 : x, y == null ? 300 : y, 0); tick(W); } }
+function botRun(W, sec, each) {
+  for (let i = 0; i < 60 * sec && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); if (each) each(W); clear(W); }
+  return W;
+}
+test('펫 다섯: 이름·값·특기가 모두 다르고, 꼬마 별만 공짜 (기본 능력: 별 줍기 거리)', () => {
+  assert(D.PETS.length === 5 && new Set(D.PETS.map(p => p.id)).size === 5 && new Set(D.PETS.map(p => p.name)).size === 5, 'five pets');
+  assert(D.PETS[0].id === 'star' && D.PETS[0].price === 0 && D.PETS.filter(p => !p.price).length === 1, 'star is the free one');
+  for (const p of D.PETS.slice(1)) assert(p.price >= 250 && p.price <= 700 && p.price < 1200, 'price ' + p.id + ' ' + p.price);
+  for (const p of D.PETS) assert(p.reach >= 60 && p.reach <= 110 && p.desc && p.short && p.look, 'pet ' + p.id);
+  const perks = D.PETS.map(p => Object.keys(p.perk || {}).filter(k => k !== 'every' && k !== 'first').join());
+  assert(perks.join('|') === '|gift|hint|boost|zap', 'one small perk each ' + perks.join('|'));
+  assert(JP.World.petOf('none') === null && JP.World.petOf(null) === null && JP.World.petOf('nope') === null && JP.World.petOf('dog').id === 'dog', 'petOf');
+});
+test('펫이 없으면 예전 판과 똑같다 (같은 시드, 세 난이도: 펫 넣기 전에 잰 값 그대로)', () => {
+  // 2026-09-29 펫을 넣기 전의 world.js로 잰 값: [높이, 별, 튄 수, 밟은 몬스터, 칸 수, 끝 가로 자리, 끝났나]
+  const before = { easy: [610, 174, 144, 2, 10800, 77.611, 'play'], normal: [461, 127, 155, 1, 10800, 176.308, 'play'], hard: [147, 43, 112, 2, 6821, 113.127, 'over'] };
+  [['easy', 11], ['normal', 12], ['hard', 13]].forEach(([diff, seed]) => {
+    for (const pet of [undefined, null, 'none']) {
+      const W = botRun(create(seed, { diff, viewH: 600, adapt: 1, pet }), 90);
+      const got = [W.height, W.starsGot, W.bounces, W.stomps, W.ticks, Math.round(W.p.x * 1000) / 1000, W.phase];
+      assert(JSON.stringify(got) === JSON.stringify(before[diff]) && W.pet === null && W.petStars === 0, diff + ' pet ' + pet + ': ' + JSON.stringify(got));
+    }
+  });
+});
+test('펫은 판(발판·별·몬스터 자리)을 바꾸지 않는다: 줄 모양이 펫이 있든 없든 같다', () => {
+  for (const diff of LEVELS) {
+    const a = create(5, { diff, viewH: 600 }), b = create(5, { diff, viewH: 600, pet: 'ufo' });
+    const sig = W => W.plats.map(p => p.kind + Math.round(p.x) + ':' + Math.round(p.y)).join() + '|' + W.monsters.map(m => m.kind + Math.round(m.x0)).join();
+    assert(sig(a) === sig(b), diff + ' layout');
+  }
+});
+test('펫이 따라다닌다: 늘 기둥 안·화면 안, 끈(leash) 안, 주인공 몸과 겹치지 않고, 주인공 뒤쪽 위가 집 자리', () => {
+  let n = 0, overlap = 0, far = 0;
+  for (const [diff, pet] of [['easy', 'star'], ['normal', 'dog'], ['hard', 'jelly'], ['easy', 'ufo'], ['easy', 'firefly']]) {
+    botRun(create(3, { diff, viewH: 600, pet }), 60, W => {
+      const q = W.pet, P = W.p;
+      assert(q.x >= 0 && q.x < WW, 'x in column ' + q.x);
+      assert(q.y >= W.cam + PT.r - 1e-6 && q.y <= W.cam + W.viewH - PT.r + 1e-6, 'y on screen ' + q.y + ' cam ' + W.cam);
+      const d = Math.hypot(wrapDelta(P.x, q.x), q.y - P.y);
+      assert(d <= PT.leash + 1e-6, 'leash ' + d);
+      n++; if (d < R + PT.r) overlap++; if (d > 90) far++;
+    });
+  }
+  console.log('       펫 ' + n + '칸 중 주인공과 겹친 칸 ' + overlap + ', 90점 넘게 떨어진 칸 ' + far);
+  assert(overlap / n < 0.01, 'rarely overlaps the hero ' + overlap + '/' + n);
+  // 가만히 있으면 집 자리(뒤쪽 = 보는 쪽의 반대, 위)로 부드럽게 간다
+  const W = petWorld('star');
+  W.p.face = 1; hold(W, 240);
+  const h = JP.World.petHome(W);
+  assert(Math.abs(wrapDelta(W.pet.x, h.x)) < 1 && Math.abs(W.pet.y - h.y) < 1 && W.pet.x < W.p.x && W.pet.y > W.p.y, 'rests at home ' + JSON.stringify([W.pet.x, W.pet.y, h]));
+  W.p.face = -1; hold(W, 3);
+  assert(W.pet.x < W.p.x, 'eases over (not a jump) when turning');
+  hold(W, 240);
+  assert(W.pet.x > W.p.x, 'now behind on the other side');
+});
+test('펫이 별을 주워 온다: reach 안·화면 안의 별만, 날아갔다 돌아오고, 점수·별 수·펫 별 수가 오른다', () => {
+  for (const def of D.PETS) {
+    const W = petWorld(def.id);
+    hold(W, 120);   // 집 자리에 자리 잡기
+    const inside = { id: ++W.ids, x: 200 + def.reach - 6, y: 300, got: false };
+    const outside = { id: ++W.ids, x: 200 - def.reach - 8, y: 300, got: false };
+    const offScreen = { id: ++W.ids, x: 210, y: W.cam + W.viewH + 20, got: false };
+    W.stars.push(inside, outside, offScreen);
+    clear(W);
+    let flew = false;
+    for (let i = 0; i < 120 && !inside.got; i++) { hold(W, 1); if (W.pet.state === 'fetch') flew = true; }
+    assert(inside.got && flew && W.petStars === 1 && W.starsGot === 1 && W.starPts === D.STAR.points, def.id + ' picked ' + JSON.stringify([inside.got, W.petStars, W.starPts]));
+    assert(W.events.includes('petStar') && !W.events.includes('star') && W.fx.some(f => f.kind === 'star' && f.pet), def.id + ' pet star event');
+    hold(W, 240);
+    assert(!outside.got && !offScreen.got && W.petStars === 1 && W.pet.state === 'follow', def.id + ' ignores far and off-screen stars');
+  }
+  // 늘 같은 결과 (난수를 쓰지 않는다)
+  const a = botRun(create(9, { diff: 'easy', viewH: 600, pet: 'star' }), 45), b = botRun(create(9, { diff: 'easy', viewH: 600, pet: 'star' }), 45);
+  assert(a.petStars === b.petStars && a.pet.x === b.pet.x && a.pet.y === b.pet.y && a.starsGot === b.starsGot, 'deterministic ' + a.petStars + ' ' + b.petStars);
+  assert(a.petStars > 5, 'the star pet picks stars in a real run ' + a.petStars);
+  const r = runStats(a);
+  assert(r.pet === 'star' && r.petStars === a.petStars && runStats(create(1, {})).pet === null && runStats(create(1, {})).petStars === 0, 'runStats');
+});
+test('펫 특기: 강아지는 선물 상자를 물어 오고, 다른 펫은 선물을 가져오지 않는다', () => {
+  for (const id of ['dog', 'star']) {
+    const W = petWorld(id);
+    hold(W, 60);
+    const g = { id: ++W.ids, x: 200 + 140, y: 330, got: false, seen: -1 };
+    W.gifts.push(g); clear(W);
+    hold(W, 240);
+    if (id === 'dog') assert(g.got && W.petGifts === 1 && W.giftsGot === 1 && W.events.includes('gift'), 'dog fetched the gift');
+    else assert(!g.got && W.petGifts === 0, 'star pet leaves gifts');
+  }
+});
+test('펫 특기: 반딧불은 이번 점프로 내려앉을 수 있는 가장 높은 길 발판을 비춘다 (그림 전용, 다른 펫은 없음)', () => {
+  const W = petWorld('firefly');
+  const low = plat(W, 'normal', 200, 150), mid = plat(W, 'normal', 230, 380), top = plat(W, 'normal', 200, 470), high = plat(W, 'normal', 200, 560), side = plat(W, 'normal', 50, 400);
+  for (const p of [low, mid, top, high]) p.main = true;
+  put(W, 200, 300, jumpV(200));   // 꼭대기 500
+  assert(JP.World.petHint(W) === top, 'highest reachable main platform (not the one above the apex, not a side platform)');
+  top.broken = true;
+  assert(JP.World.petHint(W) === mid, 'skips broken');
+  top.broken = false;
+  put(W, 200, 420, -200);         // 내려오는 중: 발밑보다 낮은 것만
+  assert(JP.World.petHint(W) === mid, 'falling: only below the feet');
+  put(W, 200 + WW / 2, 420, -50); mid.x = 230; top.x = 200;
+  assert(JP.World.petHint(W) === null || JP.World.petHint(W) === low, 'too far sideways is not pointed at');
+  W.rocket = 1;
+  assert(JP.World.petHint(W) === null, 'no hint during a rocket');
+  assert(side && JP.World.petHint(petWorld('star')) === null && JP.World.petHint(create(1, {})) === null, 'others: no hint');
+});
+test('펫 특기: 해파리는 30초마다 한 번 폴짝 더 높이 (스프링·위쪽 폭탄이면 기다림), 쓰면 식는다', () => {
+  const J = D.PETS.find(p => p.id === 'jelly').perk;
+  const W = petWorld('jelly', { diff: 'normal' });
+  assert(W.pet.cool === J.first, 'first charge after a few seconds');
+  const p = plat(W, 'normal', 200, 100, 120);
+  W.pet.cool = 0;
+  dropOn(W, p);
+  assert(W.petBoosts === 1 && Math.abs(W.p.vy - jumpV(W.phys.jump * J.boost) + D.PLAYER.gravity * H * 2) < 40 && W.events.includes('petBoost'), 'boosted ' + W.p.vy);
+  assert(Math.abs(W.pet.cool - (J.every - H * 2)) < 0.02, 'cools down ' + W.pet.cool);
+  clear(W); dropOn(W, p);
+  assert(W.petBoosts === 1 && W.p.vy < jumpV(W.phys.jump) + 1, 'normal bounce while cooling');
+  W.pet.cool = 0;
+  W.mines.push({ id: ++W.ids, x: 205, y: 100 + W.phys.jump * J.boost, gone: false, seen: -1 });
+  clear(W); dropOn(W, p);
+  assert(W.petBoosts === 1 && W.pet.cool <= 0, 'waits when a mine sits above');
+  W.mines.length = 0;
+  const s = plat(W, 'spring', 200, 100, 80); p.broken = true;
+  clear(W); dropOn(W, s);
+  assert(W.petBoosts === 1 && W.springs >= 1, 'not on springs');
+  // 튀는 높이는 조금만 더 (가볍게)
+  assert(J.boost > 1 && J.boost <= 1.25 && J.every >= 30, 'gentle');
+});
+test('펫 특기: UFO는 45초마다 가까운 몬스터 하나를 톡 (밟기·점수에는 안 셈), 식는 동안은 그냥 둔다', () => {
+  const Z = D.PETS.find(p => p.id === 'ufo').perk;
+  const W = petWorld('ufo', { diff: 'normal' });
+  hold(W, 30);
+  assert(W.pet.cool > 0, 'not ready at the very start');
+  W.pet.cool = 0;
+  const m1 = mon(W, 'balloon', 280, 360), m2 = mon(W, 'bird', 120, 380);
+  clear(W);
+  hold(W, 240);
+  const zapped = [m1, m2].filter(m => m.gone);
+  assert(zapped.length === 1 && W.petZaps === 1 && W.stomps === 0 && W.starPts === 0 && W.events.includes('petZap'), 'one zap ' + zapped.length);
+  assert(W.pet.cool > Z.every - 3, 'cooling ' + W.pet.cool);
+  hold(W, 240);
+  assert([m1, m2].filter(m => m.gone).length === 1, 'the other one stays while cooling');
+  const far = petWorld('ufo');
+  far.pet.cool = 0;
+  const m3 = mon(far, 'balloon', 200 + Z.zap + 20, 300);
+  hold(far, 240);
+  assert(!m3.gone && far.petZaps === 0, 'too far');
+});
+test('펫 응원: 밟기·아슬아슬·신기록·새 장소에서 하트 (작은 것은 cheerGap초에 한 번까지)', () => {
+  const W = petWorld('star', { diff: 'normal' });
+  const m = mon(W, 'slime', 200, 250);
+  put(W, 200, 250 + R + MO.r * 0.6, -300); clear(W); ticks(W, 2);
+  assert(W.stomps === 1 && W.events.includes('petCheer') && W.pet.cheer === 'stomp', 'stomp cheer');
+  const t0 = W.pet.cheerAt;
+  assert(!JP.World.petCheer(W, 'stomp') && W.pet.cheerAt === t0, 'small cheers wait');
+  assert(JP.World.petCheer(W, 'place') && W.pet.cheer === 'place', 'big cheers always');
+  // 아슬아슬: 가시 폭탄 옆을 스쳐 지나가면 한 번
+  const N = petWorld('star', { diff: 'normal' });
+  N.pet.cheerCool = 0;
+  const mine = { id: ++N.ids, x: 200, y: 300, gone: false, seen: -1 }; N.mines.push(mine);
+  const edge = R + D.MINE.r * 0.85 + PT.near * 0.5;
+  for (let i = 0; i < 12; i++) { put(N, 200 + edge, 300 - 30 + i * 5, 0); tick(N); }
+  for (let i = 0; i < 12; i++) { put(N, 200 + edge + 60, 300, 0); tick(N); }
+  assert(N.phase === 'play' && mine.near && N.pet.cheer === 'near', 'near miss cheer');
+  // 신기록: 지난 최고(30m 넘을 때)를 처음 넘으면 한 번
+  const B = create(2, { diff: 'easy', viewH: 600, pet: 'star', best: 40 });
+  let cheers = 0;
+  botRun(B, 60, w => { for (const f of w.fx) if (f.kind === 'petCheer' && f.what === 'best') cheers++; });
+  assert(B.height > 40 && cheers === 1 && B.petBest, 'best cheer once ' + cheers);
+  const L = create(2, { diff: 'easy', viewH: 600, pet: 'star', best: 10 });
+  botRun(L, 30);
+  assert(!L.petBest, 'no best cheer when the old best is tiny');
+  // 새 장소: 구역·행성·여정 배너 때
+  const Q = create(2, { diff: 'easy', viewH: 600, pet: 'star' });
+  let place = 0;
+  botRun(Q, 120, w => { for (const f of w.fx) if (f.kind === 'petCheer' && f.what === 'place') place++; });
+  assert(Q.height >= 100 && place >= 2, 'place cheers ' + place + ' at ' + Q.height);
+  // 펫이 없으면 응원도 없다
+  assert(!JP.World.petCheer(create(1, {}), 'place'), 'no pet no cheer');
+});
+test('펫: 비밀 방에 들어가고 나올 때 함께 가고, 움직임 줄이기 설정은 규칙을 바꾸지 않는다 (그림에서만)', () => {
+  const W = create(4, { diff: 'easy', viewH: 600, pet: 'firefly' });
+  botRun(W, 3);
+  JP.World.enterRoom(W, { id: 999, x: 120, y: W.p.y, used: false });
+  assert(Math.hypot(wrapDelta(W.p.x, W.pet.x), W.pet.y - W.p.y) < 60 && W.pet.state === 'follow', 'pet came into the room');
+  W.room.t = H; tick(W);
+  assert(!W.room && Math.hypot(wrapDelta(W.p.x, W.pet.x), W.pet.y - W.p.y) < 60, 'and back out');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'world.js'), 'utf8');
+  assert(!/calm|reduced/.test(src), 'rules never read the reduced motion setting');
+  const a = botRun(create(8, { diff: 'normal', viewH: 600, pet: 'jelly', calm: true }), 40), b = botRun(create(8, { diff: 'normal', viewH: 600, pet: 'jelly' }), 40);
+  assert(JSON.stringify(runStats(a)) === JSON.stringify(runStats(b)) && a.pet.x === b.pet.x, 'same run');
+});
+test('메달 "단짝 친구": 펫이 모두 합쳐 별 100개 (장부에 더해 간다)', () => {
+  const rec = RC.blank();
+  const M = D.MEDALS.find(m => m.id === 'pet100');
+  assert(M && M.name === '단짝 친구' && M.tier === 2, 'medal');
+  RC.finish(rec, { diff: 'easy', height: 10, score: 10, stars: 70, petStars: 60 });
+  assert(rec.total.petStars === 60 && !M.check({}, rec), 'not yet ' + rec.total.petStars);
+  RC.finish(rec, { diff: 'easy', height: 10, score: 10, stars: 50, petStars: 45 });
+  assert(rec.total.petStars === 105 && M.check({}, rec), 'got it');
+  assert(RC.clean({ total: { petStars: 'x' } }).total.petStars === 0 && RC.clean(JSON.parse(JSON.stringify(rec))).total.petStars === 105, 'saved and cleaned');
+  RC.finish(rec, { diff: 'easy', height: 1, score: 1, stars: 1 });
+  assert(rec.total.petStars === 105, 'old run shape without petStars');
+});
+
 // ─── 소리 (jump/js/audio.js + 공통 SND) ─────────────────────
 // 소리 판은 브라우저에서만 돈다. 여기서는 SND 없이 조용한지, 배경 음악 고르기(높이 → 테마), 이벤트마다 소리가 있는지만 본다
 function audioCtx(snd) {
@@ -1527,6 +1737,15 @@ test('소리: 판에서 나는 이벤트마다 소리가 있다 (끝·이어 하
   const main = fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'main.js'), 'utf8');
   for (const n of ['continueAsk', 'continueGo', 'fanfare', 'overSoft', 'tick', 'medal', 'coin', 'start']) assert(main.includes("ui('" + n + "'"), 'main.js does not use ' + n);
   assert(!/jump\.muted/.test(main), 'old jump.muted key still used');
+});
+test('소리: 펫 소리는 별 소리보다 약 6dB 작고, 같은 소리 최소 간격이 있다', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'jump', 'js', 'audio.js'), 'utf8');
+  const db = n => { const m = src.match(new RegExp('\\b' + n + ': \\{ gap: ([0-9.]+), db: (-?[0-9.]+)')); return m && { gap: +m[1], db: +m[2] }; };
+  const star = db('star');
+  for (const n of ['petStar', 'petCheer', 'petBoost', 'petZap']) {
+    const s = db(n);
+    assert(s && s.gap > 0 && s.db <= star.db - 5 && s.db >= star.db - 8, n + ' ' + JSON.stringify(s) + ' vs star ' + JSON.stringify(star));
+  }
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

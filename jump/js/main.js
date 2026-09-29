@@ -203,8 +203,14 @@
   function renderTitleShop() {
     const K = SH.charDef(shop.char) || D.CHARS[0];
     view.char = K.id;
-    if (demo && demo.char !== K.id) demo = null;   // 시연 판도 고른 캐릭터로 새로
+    const pet = shop.pet ? SH.petDef(shop.pet) : null;
+    if (demo && (demo.char !== K.id || (demo.pet ? demo.pet.id : null) !== (pet ? pet.id : null))) demo = null;   // 시연 판도 고른 캐릭터·펫으로 새로
     JP.Render.paintChar($('char-preview'), K.id);
+    // 데리고 다니는 펫: 캐릭터 그림 옆에 작게 (펫 없음이면 숨김)
+    const pv = $('pet-preview');
+    pv.hidden = !pet;
+    if (pet) JP.Render.paintPet(pv, pet.id);
+    $('char-small').textContent = pet ? '내 캐릭터 · 펫 ' + pet.name : '내 캐릭터';
     $('char-name').textContent = K.name;
     $('char-desc').textContent = K.desc;
     $('btn-char').style.setProperty('--sc', 'rgb(' + K.glow + ')');
@@ -237,6 +243,23 @@
           (cur ? '<span class="maxed on">사용 중</span>' : own ? '<button type="button" class="use" data-use="' + k.id + '">고르기</button>' : priceBtn(k.id, '')) +
         '</div>';
       }).join('');
+    } else if (shopTab === 'pets') {
+      // 펫: "펫 없음" + 다섯. 산 펫은 눌러서 고르고, 한 번에 하나만 데리고 다닌다
+      $('shop-sub').textContent = '펫이 옆에서 따라다니며 별을 주워 와요. 한 번에 하나만 데리고 다녀요';
+      const none = !shop.pet;
+      h = '<div class="sitem ship pet' + (none ? ' cur' : '') + '" style="--sc:#cfd8e6">' +
+          '<canvas class="ship-cv" width="128" height="128" data-pet="none" aria-hidden="true"></canvas>' +
+          '<b class="s-name">펫 없음</b><span class="s-desc"><i class="trait">혼자 뛰기</i> 펫 없이 놀아요</span>' +
+          (none ? '<span class="maxed on">사용 중</span>' : '<button type="button" class="use" data-pet-use="none">고르기</button>') + '</div>' +
+        D.PETS.map(k => {
+          const own = !!shop.pets[k.id], cur = shop.pet === k.id;
+          return '<div class="sitem ship pet' + (cur ? ' cur' : '') + (own ? '' : ' locked') + '" style="--sc:rgb(' + k.glow + ')">' +
+            '<canvas class="ship-cv" width="128" height="128" data-pet="' + k.id + '" aria-hidden="true"></canvas>' +
+            '<b class="s-name">' + esc(k.name) + '</b>' +
+            '<span class="s-desc"><i class="trait">' + esc(k.short) + '</i> ' + esc(k.desc) + '</span>' +
+            (cur ? '<span class="maxed on">사용 중</span>' : own ? '<button type="button" class="use" data-pet-use="' + k.id + '">고르기</button>' : priceBtn(k.id, '')) +
+          '</div>';
+        }).join('');
     } else if (shopTab === 'up') {
       $('shop-sub').textContent = '한 번 사면 모든 판에 계속 적용돼요 (5단계)';
       h = D.UPGRADES.map(u => {
@@ -258,6 +281,7 @@
     }
     list.innerHTML = h;
     for (const cv of list.querySelectorAll('canvas[data-char]')) JP.Render.paintChar(cv, cv.dataset.char);
+    for (const cv of list.querySelectorAll('canvas[data-pet]')) JP.Render.paintPet(cv, cv.dataset.pet);
   }
 
   function openShop(tab) {
@@ -277,7 +301,7 @@
     show('scr-title');
   }
 
-  const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 캐릭터예요', max: '더는 살 수 없어요' };
+  const NAMES = { coins: '코인이 모자라요', owned: '이미 가진 친구예요', max: '더는 살 수 없어요' };
   function buyThing(id) {
     const r = SH.buy(shop, id);
     if (r.ok) {
@@ -285,6 +309,7 @@
       JP.Audio.ui('buy');
       vibrate(20);
       if (SH.charDef(id)) toast(SH.charDef(id).name + ' 출동!');
+      else if (SH.petDef(id)) toast(SH.petDef(id).name + ', 반가워! 같이 가요');
     } else {
       JP.Audio.ui('deny');
       toast(NAMES[r.reason] || '살 수 없어요');
@@ -295,6 +320,15 @@
   }
   function useChar(id) {
     const ok = SH.selectChar(shop, id);
+    if (ok) { SH.save(shop); JP.Audio.ui('tap'); }
+    if (mode === 'shop') renderShop();
+    renderTitleShop();
+    return ok;
+  }
+
+  // 펫 고르기 (null·'none' = 펫 없음)
+  function usePet(id) {
+    const ok = SH.selectPet(shop, id);
     if (ok) { SH.save(shop); JP.Audio.ui('tap'); }
     if (mode === 'shop') renderShop();
     renderTitleShop();
@@ -377,7 +411,7 @@
       // 오늘의 미션·스티커북: 높이·별·스프링·밟은 몬스터·지나온 가장 먼 행성(1 수성 … 9 명왕성)·선물·피버·비밀 방 (이번 판)
       // 높이는 이번 판에 오른 거리, 행성은 출발한 뒤에 더 지나갔을 때만 (출발 장소에서 시작해 얻지 않게)
       const run = JP.World.runStats(W);
-      const fresh = HUB.reportRun('jump', { height: run.climb, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet > W.planet0 ? W.planet : 0, gifts: W.giftsGot, fevers: W.fevers, rooms: W.rooms, games: 1 }, W.t);
+      const fresh = HUB.reportRun('jump', { height: run.climb, stars: W.starsGot, springs: W.springs, stomps: W.stomps, planet: W.planet > W.planet0 ? W.planet : 0, gifts: W.giftsGot, fevers: W.fevers, rooms: W.rooms, petStars: W.petStars || 0, games: 1 }, W.t);
       if (fresh && fresh.length) setTimeout(() => toast('오늘의 미션 완료: ' + fresh[0]), 1200);
     } catch (e) { /* 본부 기록이 실패해도 게임은 계속 */ }
   }
@@ -397,7 +431,7 @@
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
     const start = tutorial ? 'ground' : opts.start && RC.placeOpen(rec, opts.start) ? opts.start : startId;
-    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial, start, adapt: opts.adapt != null ? opts.adapt : adaptMul(diff) }, SH.worldOpts(shop, lo)));
+    W = JP.World.create(seed, Object.assign({ diff, viewH: view.viewH, tutorial, start, adapt: opts.adapt != null ? opts.adapt : adaptMul(diff), best: rec.byDiff[diff].height }, SH.worldOpts(shop, lo)));
     view.bestH = rec.byDiff[diff].height;
     medalCheckT = 0;
     contOn = false; cheered = false;
@@ -630,10 +664,10 @@
   $('btn-shop-back').addEventListener('click', closeShop);
   for (const b of document.querySelectorAll('[data-tab]')) b.addEventListener('click', () => { JP.Audio.ui('tap'); shopTab = b.dataset.tab; renderShop(); });
   $('shop-list').addEventListener('click', e => {
-    const b = e.target.closest('[data-buy],[data-use]');
+    const b = e.target.closest('[data-buy],[data-use],[data-pet-use]');
     if (!b) return;
     JP.Audio.unlock();
-    if (b.dataset.buy) buyThing(b.dataset.buy); else useChar(b.dataset.use);
+    if (b.dataset.buy) buyThing(b.dataset.buy); else if (b.dataset.petUse) usePet(b.dataset.petUse); else useChar(b.dataset.use);
   });
   for (const id of ['title-missions', 'over-missions']) {
     $(id).addEventListener('click', e => { const b = e.target.closest('[data-claim]'); if (b) { JP.Audio.unlock(); claimMission(+b.dataset.claim, b); } });
@@ -705,7 +739,7 @@
     if (mode === 'title' || mode === 'shop') {
       // 시연: 자동 운전 로봇이 시작 화면 뒤에서 통통 튄다. 끝나면 잠시 뒤 새로
       fit(demo);
-      if (!demo) { demo = JP.World.create(777, { diff: 'easy', viewH: view.viewH, char: shop.char }); demoRest = 0; }
+      if (!demo) { demo = JP.World.create(777, { diff: 'easy', viewH: view.viewH, char: shop.char, pet: shop.pet }); demoRest = 0; }
       if (demo.phase === 'play') { demo.input.dir = JP.World.botDir(demo); JP.World.step(demo, dt); }
       else if ((demoRest += dt) > 1.5) demo = null;
       if (demo && demo.t > 90) demo = null;   // 너무 높이 가면 처음부터
@@ -778,7 +812,7 @@
     // 상점·미션 (shop.js)
     get shop() { return shop; }, get missions() { return SH.missionView(shop); }, get lastEarn() { return lastEarn; },
     giveCoins(n) { shop.coins += n; SH.save(shop); renderTitleShop(); if (mode === 'shop') renderShop(); return shop.coins; },
-    openShop, closeShop, claim: i => claimMission(i), buy: id => buyThing(id), selectChar: id => useChar(id), selectSkin: id => useChar(id),
+    openShop, closeShop, claim: i => claimMission(i), buy: id => buyThing(id), selectChar: id => useChar(id), selectSkin: id => useChar(id), selectPet: id => usePet(id),
     reload() { rec = RC.load(JP.store); shop = SH.load(); startId = RC.loadStart(JP.store, rec); renderBest(); renderTitleShop(); }, resetTutorial() { tutNeed = true; JP.store.set(RC.TUT_KEY, false); },
     newGame, pause, resume, toTitle, openMedals, adaptMul,
     autopilot(on) { auto = on !== false; return auto; },

@@ -4,7 +4,9 @@
 //
 // 저장 키
 //   jump.shop1 : { v:2, coins, char, chars:{id:true}, up:{speed,rocket,coin,cloud: 0~5},
-//                  items:{rocketStart,shieldStart: 개수}, missions:[{id,prog,done}], mseed, life:{earned,games,diffs:{easy,normal,hard}} }
+//                  items:{rocketStart,shieldStart: 개수}, missions:[{id,prog,done}], mseed, life:{earned,games,diffs:{easy,normal,hard}},
+//                  pet: 데리고 다니는 펫 id 또는 null(펫 없음), pets:{id:true} }
+//   펫(2026-09-29)이 없던 저장본은 꼬마 별(공짜)을 가진 채 데리고 다니는 것으로 연다 (누구나 펫을 본다)
 //   v:1 (예전 꾸미기 skin·skins)은 불러올 때 캐릭터로 옮긴다 (D.OLD_SKINS: 값이 같은 캐릭터로, 없으면 값만큼 코인 한 번 돌려줌)
 // 코인은 네 게임이 같이 쓰는 별코인 지갑(common/hub.js, HUB)에 둔다. 지갑은 바꿔 끼울 수 있다 (테스트는 가짜 지갑):
 //   wallet = { coins(), setCoins(n), moveIn(game, n) }. 지갑이 없으면 이 저장본의 coins만 쓴다
@@ -19,14 +21,17 @@
   const upDef = id => D.UPGRADES.find(u => u.id === id) || null;
   const itemDef = id => D.START_ITEMS.find(u => u.id === id) || null;
   const missionDef = id => D.MISSIONS.find(m => m.id === id) || null;
+  const petDef = id => D.PETS.find(p => p.id === id) || null;
+  const firstPet = () => (D.PETS.find(p => !p.price) || D.PETS[0]).id;
 
   function blank() {
-    const chars = {}, up = {}, items = {}, diffs = {};
+    const chars = {}, up = {}, items = {}, diffs = {}, pets = {};
     for (const c of D.CHARS) if (!c.price) chars[c.id] = true;
+    for (const p of D.PETS) if (!p.price) pets[p.id] = true;
     for (const u of D.UPGRADES) up[u.id] = 0;
     for (const it of D.START_ITEMS) items[it.id] = 0;
     for (const d of D.DIFF_ORDER) diffs[d] = false;
-    const st = { v: 2, coins: 0, char: D.CHARS[0].id, chars, up, items, missions: [], mseed: 1, life: { earned: 0, games: 0, diffs } };
+    const st = { v: 2, coins: 0, char: D.CHARS[0].id, chars, up, items, missions: [], mseed: 1, life: { earned: 0, games: 0, diffs }, pet: firstPet(), pets };
     fillMissions(st);
     return st;
   }
@@ -52,6 +57,10 @@
       if (was && was.to && st.chars[was.to]) st.char = was.to;
       if (refund) st.refund = refund;
     }
+    // 펫: 가진 펫 · 데리고 다니는 펫 (null = 펫 없음을 고름). 펫 칸이 없던 예전 저장본은 기본(꼬마 별)
+    if (isObj(raw.pets)) for (const p of D.PETS) if (raw.pets[p.id] === true) st.pets[p.id] = true;
+    if (raw.pet === null || raw.pet === 'none') st.pet = null;
+    else if (typeof raw.pet === 'string' && st.pets[raw.pet]) st.pet = raw.pet;
     if (isObj(raw.up)) for (const u of D.UPGRADES) st.up[u.id] = Math.min(D.UPGRADE_MAX, int(raw.up[u.id]));
     if (isObj(raw.items)) for (const it of D.START_ITEMS) st.items[it.id] = Math.min(it.max, int(raw.items[it.id]));
     st.mseed = int(raw.mseed) || 1;
@@ -104,6 +113,8 @@
   function price(st, id) {
     const c = charDef(id);
     if (c) return st.chars[id] ? null : c.price;
+    const pt = petDef(id);
+    if (pt) return st.pets[id] ? null : pt.price;
     const u = upDef(id);
     if (u) { const lv = st.up[id] || 0; return lv >= D.UPGRADE_MAX ? null : u.prices[lv]; }
     const it = itemDef(id);
@@ -111,15 +122,16 @@
     return null;
   }
 
-  // 무엇이든 산다 (캐릭터·강화·시작 아이템). 캐릭터는 사면 바로 고른다. {ok, reason: 'owned'|'max'|'coins'|'unknown', cost}
+  // 무엇이든 산다 (캐릭터·펫·강화·시작 아이템). 캐릭터·펫은 사면 바로 고른다. {ok, reason: 'owned'|'max'|'coins'|'unknown', cost}
   function buy(st, id) {
-    const s = charDef(id), u = upDef(id), it = itemDef(id);
-    if (!s && !u && !it) return { ok: false, reason: 'unknown' };
+    const s = charDef(id), pt = petDef(id), u = upDef(id), it = itemDef(id);
+    if (!s && !pt && !u && !it) return { ok: false, reason: 'unknown' };
     const cost = price(st, id);
-    if (cost == null) return { ok: false, reason: s ? 'owned' : 'max' };
+    if (cost == null) return { ok: false, reason: s || pt ? 'owned' : 'max' };
     if (st.coins < cost) return { ok: false, reason: 'coins', cost };
     st.coins -= cost;
     if (s) { st.chars[id] = true; st.char = id; }
+    else if (pt) { st.pets[id] = true; st.pet = id; }
     else if (u) st.up[id] = (st.up[id] || 0) + 1;
     else st.items[id] = (st.items[id] || 0) + 1;
     return { ok: true, cost };
@@ -132,6 +144,14 @@
     return true;
   }
 
+  // 펫 고르기: 가진 펫만, null·'none'이면 펫 없이
+  function selectPet(st, id) {
+    if (id == null || id === 'none') { st.pet = null; return true; }
+    if (!petDef(id) || !st.pets[id]) return false;
+    st.pet = id;
+    return true;
+  }
+
   // 판 시작: 가진 시작 아이템을 하나씩 꺼내 쓴다. 돌려준 값을 World.create opts.loadout으로
   function takeLoadout(st) {
     const lo = {};
@@ -140,7 +160,7 @@
   }
   // World.create에 더할 값
   function worldOpts(st, loadout) {
-    return { upgrades: Object.assign({}, st.up), loadout: loadout || {}, char: st.char };
+    return { upgrades: Object.assign({}, st.up), loadout: loadout || {}, char: st.char, pet: st.pet || null };
   }
 
   // ─── 판 요약 · 코인 ───────────────────────────────────────
@@ -151,6 +171,7 @@
       diff: r.diff, height: r.climb != null ? r.climb : r.height, top: r.height, start: r.start || 0, stars: r.stars, springs: r.springs, rockets: r.rockets, saves: r.saves,
       crumbles: r.crumbles || 0, bounces: r.bounces, maxCombo: r.maxCombo, time: Math.floor(r.time), zone: r.zone, stomps: r.stomps || 0, games: 1,
       gifts: r.gifts || 0, giftCoins: r.giftCoins || 0, giftItems: (r.giftItems || []).slice(), fevers: r.fevers || 0, rooms: r.rooms || 0,
+      petStars: r.petStars || 0,
     };
   }
 
@@ -181,7 +202,7 @@
   // ─── 미션 ─────────────────────────────────────────────────
   // 해 본 난이도의 미션만, 지금 걸린 것·방금 끝낸 것은 빼고 고른다 (씨앗으로 정해져 테스트가 같은 결과)
   function fillMissions(st, except) {
-    const ok = m => !m.diff || st.life.diffs[m.diff];
+    const ok = m => (!m.diff || st.life.diffs[m.diff]) && (!m.pet || !!st.pet);
     while (st.missions.length < D.MISSION_SLOTS) {
       const used = new Set(st.missions.map(m => m.id));
       let pool = D.MISSIONS.filter(m => !used.has(m.id) && m.id !== except && ok(m));
@@ -250,5 +271,5 @@
     });
   }
 
-  JP.Shop = { KEY, blank, clean, load, save, sync, price, buy, selectChar, selectSkin: selectChar, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, charDef, upDef, itemDef, missionDef };
+  JP.Shop = { KEY, blank, clean, load, save, sync, price, buy, selectChar, selectSkin: selectChar, selectPet, takeLoadout, worldOpts, runOf, coinsFor, fillMissions, progressMissions, claim, finishRun, missionView, charDef, petDef, upDef, itemDef, missionDef };
 })(JP);
