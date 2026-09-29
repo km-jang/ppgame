@@ -314,6 +314,8 @@
       { id: 'hard100',  tier: 3, name: '어려움 100',    desc: '어려움으로 100m',              check: r => r.diff === 'hard' && climbOf(r) >= 100 },
       // 2026-09-27 밟는 몬스터와 함께
       { id: 'stomp20',  tier: 2, name: '꾹꾹 20',       desc: '모두 합쳐 몬스터 20마리 밟기', check: (r, R) => (R.total.stomps || 0) >= 20 },
+      // 2026-09-29 따라다니는 꼬마 펫과 함께
+      { id: 'pet100',   tier: 2, name: '단짝 친구',     desc: '펫이 모두 합쳐 별 100개 주워 오기', check: (r, R) => (R.total.petStars || 0) >= 100 },
     ],
 
     // ─── 코인 · 상점 · 미션 (shop.js) ───────────────────────────
@@ -359,6 +361,36 @@
       berry: { refund: 150 },
     },
 
+    // ─── 따라다니는 꼬마 펫 (2026-09-29, 소유자 승인) ───────────────
+    // 주인공 뒤쪽 위에서 조금 늦게 따라다니다가, 가까운 별(reach 안, 화면 안)을 날아가 주워 오고 돌아온다 (펫 다섯 모두 같은 기본 능력).
+    // 규칙(자리·줍기·특기)은 world.js가 1/120초 칸마다 정한다 (난수를 쓰지 않아 늘 같은 결과). 펫이 없으면 예전 판과 똑같다.
+    //   r: 몸 반지름(점, 주인공 20) · off: 집 자리 [뒤쪽으로, 위로] (점) · ease: 따라가는 부드러움 (1초에 남은 거리의 몇 배)
+    //   speed: 주우러 날아가는 빠르기(점/초) · leash: 주인공에게서 이보다 멀어지지 않는다 · wait: 하나 주운 뒤 다음을 찾기까지(초)
+    //   cheerGap: 응원(하트)과 응원 사이 최소(초) · cheerTime: 응원 연출 길이(초) · near: 가시 폭탄·몬스터를 이만큼(점) 안으로 스쳐 지나가면 "아슬아슬" 응원
+    //   best: 지난 최고 높이가 이만큼(m) 넘을 때만 신기록 응원
+    // 2026-09-29 코인 맞추기: 아이 흉내 봇 1분 코인이 펫 없을 때의 +15% 안에 들게 reach를 정했다 (tests/jumpshop.test.js가 잰다)
+    PET: { r: 10, off: [30, 24], ease: 7, speed: 520, leash: 150, wait: 0.25, cheerGap: 1.2, cheerTime: 1.1, near: 14, best: 30 },
+    // 펫 다섯. 꼬마 별은 공짜이고 처음부터 데리고 다닌다 (누구나 펫을 본다). 한 번에 하나만, "펫 없음"도 고를 수 있다.
+    //   reach: 별을 주우러 가는 거리(주인공 가운데에서, 점) · perk: 작은 특기 (없으면 기본 능력만)
+    //     gift  : 이 거리(점) 안의 깜짝 선물 상자도 물어 와 열어 준다
+    //     hint  : 다음에 밟을 길 발판을 반짝 비춰 준다 (그림만, 규칙은 그대로)
+    //     boost : every초마다 한 번, 보통 발판에서 이 배율만큼 폴짝 더 높이 튀게 (위에 가시 폭탄·몬스터가 있으면 기다렸다가)
+    //     zap   : every초마다 한 번, 이 거리(점) 안의 가까운 몬스터에게 날아가 톡 터뜨린다 (점수·밟기 횟수에는 안 셈)
+    //     first : 판 시작 뒤 처음 특기를 쓸 수 있을 때까지(초)
+    //   look: 그리기 모양 (render.js) · color: 대표 색 · glow: 둘레 빛 r,g,b
+    PETS: [
+      { id: 'star',    name: '꼬마 별',     price: 0,   look: 'star',    reach: 92, perk: null,
+        desc: '반짝반짝 별 친구. 별을 조금 더 멀리서 주워 와요', short: '별을 멀리서 주워 와요', color: '#ffe66d', glow: '255,230,109' },
+      { id: 'dog',     name: '로봇 강아지', price: 250, look: 'dog',     reach: 78, perk: { gift: 170 },
+        desc: '멍멍! 별도 깜짝 선물 상자도 물어 와요', short: '선물 상자 물어 오기', color: '#7fd3ff', glow: '127,211,255' },
+      { id: 'firefly', name: '반짝 반딧불', price: 350, look: 'firefly', reach: 84, perk: { hint: true },
+        desc: '다음에 밟을 발판을 반짝 비춰 줘요', short: '다음 발판 비추기', color: '#b6ff5c', glow: '182,255,92' },
+      { id: 'jelly',   name: '아기 해파리', price: 500, look: 'jelly',   reach: 78, perk: { boost: 1.25, every: 30, first: 4 },
+        desc: '둥실둥실. 30초마다 한 번 폴짝 더 높이 튀게 해 줘요', short: '30초마다 폴짝', color: '#ff9ee0', glow: '255,158,224' },
+      { id: 'ufo',     name: '꼬마 UFO',    price: 700, look: 'ufo',     reach: 78, perk: { zap: 120, every: 45, first: 6 },
+        desc: '45초마다 가까운 몬스터를 톡 터뜨려요', short: '45초마다 몬스터 톡', color: '#b388ff', glow: '179,136,255' },
+    ],
+
     // 강화 (5단계, 한 번 사면 모든 판에). per: 한 단계 효과 (world.js create의 upgrades가 읽는다)
     UPGRADES: [
       { id: 'speed',  icon: '⇄', name: '좌우 속도',     desc: '옆으로 조금 더 빨리 가요',             per: 0.04, prices: [100, 200, 350, 550, 800] },
@@ -375,7 +407,7 @@
     ],
 
     // 미션: 늘 3개. kind 'life' = 여러 판 누적, 'run' = 한 판 안에서. stat: 판 요약(shop.js runOf)의 칸 이름.
-    // diff: 그 난이도로 할 때만 (그 난이도를 한 번이라도 해 봤을 때만 나온다). 다 채우면 받기 → reward 코인, 새 미션으로
+    // diff: 그 난이도로 할 때만 (그 난이도를 한 번이라도 해 봤을 때만 나온다). pet: 펫을 데리고 다닐 때만 나온다. 다 채우면 받기 → reward 코인, 새 미션으로
     MISSIONS: [
       { id: 'hsum1000', kind: 'life', stat: 'height',   goal: 1000, reward: 120, text: '모두 합쳐 1,000m 오르기 (누적)' },
       { id: 'star200',  kind: 'life', stat: 'stars',    goal: 200,  reward: 100, text: '별 200개 모으기 (누적)' },
@@ -395,6 +427,9 @@
       { id: 't120',     kind: 'run',  stat: 'time',     goal: 120,  reward: 100, text: '한 판에 2분 동안 오르기' },
       { id: 'n150',     kind: 'run',  stat: 'height',   goal: 150,  reward: 150, text: '보통으로 150m', diff: 'normal' },
       { id: 'x80',      kind: 'run',  stat: 'height',   goal: 80,   reward: 180, text: '어려움으로 80m', diff: 'hard' },
+      // 2026-09-29 펫: 펫을 데리고 다닐 때만 나온다 (pet: true)
+      { id: 'pet30',    kind: 'life', stat: 'petStars', goal: 30,   reward: 80,  text: '펫이 별 30개 주워 오기 (누적)', pet: true },
+      { id: 'pet8',     kind: 'run',  stat: 'petStars', goal: 8,    reward: 100, text: '한 판에 펫이 별 8개 주워 오기', pet: true },
     ],
     MISSION_SLOTS: 3,
 
