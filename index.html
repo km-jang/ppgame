@@ -18,8 +18,11 @@
       -webkit-tap-highlight-color: transparent; user-select: none;
     }
     h1 { margin: 0; font: normal 40px var(--display); letter-spacing: 2px; transform: skewX(-8deg); text-shadow: 0 4px 0 #0b1222, 0 0 24px rgba(57, 216, 255, .45); }
-    .pick { display: grid; grid-template-columns: repeat(2, min(44vw, 380px)); gap: 20px; justify-content: center; }
-    @media (max-width: 640px) { .pick { grid-template-columns: min(86vw, 360px); } }
+    /* 게임 카드 다섯 장: 위 세 장 · 아래 두 장(조금 넓게). 좁은 화면(세로 폰)은 한 줄에 하나 */
+    .pick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; width: min(94vw, 1080px); }
+    .pick a { grid-column: span 2; }
+    .pick a:nth-child(n+4) { grid-column: span 3; }
+    @media (max-width: 640px) { .pick { grid-template-columns: min(86vw, 360px); justify-content: center; } .pick a, .pick a:nth-child(n+4) { grid-column: auto; } }
     a {
       position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; overflow: hidden;
       width: 100%; height: clamp(150px, 30vh, 220px); padding: 20px 24px; border-radius: 22px; text-decoration: none; color: #fff;
@@ -30,9 +33,10 @@
     a:nth-child(2) { animation-delay: .08s; }
     a:nth-child(3) { animation-delay: .16s; }
     a:nth-child(4) { animation-delay: .24s; }
+    a:nth-child(5) { animation-delay: .32s; }
     a:active { transform: scale(.97); }
     /* 제목은 한 줄 (글꼴이 늦게 와서 넓은 기본 서체로 보여도 안 넘치게 크기를 칸 너비에 맞춘다), 설명은 두 줄까지 낱말 단위로 */
-    a b { font: normal clamp(26px, 3.3vw, 40px) var(--display); line-height: 1.05; white-space: nowrap; transform: skewX(-8deg); transform-origin: left; }
+    a b { font: normal clamp(24px, 2.9vw, 38px) var(--display); line-height: 1.05; white-space: nowrap; transform: skewX(-8deg); transform-origin: left; }
     a small { font-weight: 700; font-size: 16px; line-height: 1.35; opacity: .88; word-break: keep-all; }
     a::before { content: ""; position: absolute; inset: 0; opacity: .9; pointer-events: none; }
     a::after {
@@ -56,6 +60,9 @@
     .runner { background: linear-gradient(150deg, #2a1030, #07080d); border: 3px solid #ffb13d; color: #ffd08a; }
     .runner::before { background: radial-gradient(circle at 50% 20%, rgba(255, 120, 60, .4), transparent 40%), linear-gradient(rgba(255, 177, 61, .1) 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(90deg, rgba(255, 177, 61, .1) 1px, transparent 1px) 0 0 / 28px 28px; }
     .runner b { text-shadow: 0 0 18px rgba(255, 150, 60, .85); }
+    .bridge { background: linear-gradient(150deg, #1c1036, #07080d); border: 3px solid #b37dff; color: #dcc8ff; }
+    .bridge::before { background: radial-gradient(circle at 70% 30%, rgba(179, 125, 255, .35), transparent 45%), linear-gradient(rgba(179, 125, 255, .1) 1px, transparent 1px) 0 0 / 26px 26px, linear-gradient(90deg, rgba(179, 125, 255, .1) 1px, transparent 1px) 0 0 / 26px 26px; }
+    .bridge b { text-shadow: 0 0 18px rgba(179, 125, 255, .85); }
     /* 카드 그림 (common/thumbs/, tools/thumbs.js로 만든 게임 화면). 그림이 오면 a.pic: 그림 위 아래쪽에 어두운 그러데이션을 깔아 글자를 읽게 한다.
        그림을 못 읽으면 그림 없이 예전 카드 그대로 (img는 안 보이고 무늬·색이 그대로) */
     a { isolation: isolate; }
@@ -70,13 +77,13 @@
     .runner .thumb { object-position: 50% 72%; }
     .tag { position: absolute; top: 16px; left: 20px; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; background: rgba(0, 0, 0, .3); }
     /* ─── 놀이 본부: 별코인 · 오늘의 미션 · 기록실 (common/hub.js) ─── */
-    .hub { width: min(92vw, calc(2 * min(44vw, 380px) + 20px)); display: flex; flex-direction: column; gap: 10px; }
+    .hub { width: min(94vw, 1080px); display: flex; flex-direction: column; gap: 10px; }
     .hub-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .hub-top h1 { flex: 1; }
     .coin-pill, .rec-btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 999px; font: normal 20px var(--display); color: #ffe66d; background: rgba(12, 16, 26, .7); border: 2px solid rgba(255, 230, 109, .45); }
     .rec-btn { color: #bff8ff; border-color: rgba(94, 231, 255, .45); cursor: pointer; }
     .rec-btn:active { transform: scale(.96); }
-    /* 소리 단추: 네 게임 모두 함께 켜고 끈다 (common/sound.js, 키 play.sound1) */
+    /* 소리 단추: 다섯 게임 모두 함께 켜고 끈다 (common/sound.js, 키 play.sound1) */
     .snd-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
     .snd-btn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
     .snd-btn .x { display: none; }
@@ -280,7 +287,7 @@
     <div class="hub-top">
       <button id="pf-btn" class="pf-btn" type="button" aria-label="누가 놀아요? 친구 바꾸기"><i id="pf-ic" aria-hidden="true"></i><span><b id="pf-name"></b><small id="pf-left"></small></span></button>
       <h1>게임 고르기</h1>
-      <span class="coin-pill" title="네 게임에서 모은 별코인"><i class="cn" aria-hidden="true"></i><b id="hub-coins">0</b></span>
+      <span class="coin-pill" title="다섯 게임에서 모은 별코인"><i class="cn" aria-hidden="true"></i><b id="hub-coins">0</b></span>
       <button id="stk-open" class="rec-btn stk-btn" type="button">스티커북<b id="stk-new" class="new-dot" hidden></b></button>
       <button id="rec-open" class="rec-btn" type="button">기록실</button>
       <button id="snd-btn" class="rec-btn snd-btn" type="button" aria-label="소리 끄기" title="소리"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="w" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="x" d="M16 9l6 6M22 9l-6 6"/></svg></button>
@@ -289,13 +296,14 @@
     <div id="daily" class="daily"></div>
   </section>
   <div class="pick">
-    <a class="gun" data-game="ngun" href="game/index.html"><img class="thumb" src="common/thumbs/ngun-640.webp" srcset="common/thumbs/ngun-640.webp 640w, common/thumbs/ngun-960.webp 960w" sizes="(max-width: 640px) 86vw, 380px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">슈팅</span><b>뿅뿅 우주선</b><small>대포가 하나씩 늘어나는 우주선으로 적을 막아요</small></a>
-    <a class="snake" data-game="snake" href="snake/index.html"><img class="thumb" src="common/thumbs/snake-640.webp" srcset="common/thumbs/snake-640.webp 640w, common/thumbs/snake-960.webp 960w" sizes="(max-width: 640px) 86vw, 380px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">뱀</span><b>냠냠 뱀</b><small>화면을 밀어서 구슬을 냠냠, 먹을수록 쭉쭉 길어져요</small></a>
-    <a class="jump" data-game="jump" href="jump/index.html"><img class="thumb" src="common/thumbs/jump-640.webp" srcset="common/thumbs/jump-640.webp 640w, common/thumbs/jump-960.webp 960w" sizes="(max-width: 640px) 86vw, 380px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">점프</span><b>통통 점프</b><small>발판을 통통 밟고 하늘 끝까지 올라가요</small></a>
-    <a class="runner" data-game="runner" href="runner/index.html"><img class="thumb" src="common/thumbs/runner-640.webp" srcset="common/thumbs/runner-640.webp 640w, common/thumbs/runner-960.webp 960w" sizes="(max-width: 640px) 86vw, 380px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">달리기</span><b>슝슝 우주 달리기</b><small>밀어서 줄을 바꾸고 운석은 피하고 별은 냠</small></a>
+    <a class="gun" data-game="ngun" href="game/index.html"><img class="thumb" src="common/thumbs/ngun-640.webp" srcset="common/thumbs/ngun-640.webp 640w, common/thumbs/ngun-960.webp 960w" sizes="(max-width: 640px) 86vw, 360px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">슈팅</span><b>뿅뿅 우주선</b><small>대포가 하나씩 늘어나는 우주선으로 적을 막아요</small></a>
+    <a class="snake" data-game="snake" href="snake/index.html"><img class="thumb" src="common/thumbs/snake-640.webp" srcset="common/thumbs/snake-640.webp 640w, common/thumbs/snake-960.webp 960w" sizes="(max-width: 640px) 86vw, 360px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">뱀</span><b>냠냠 뱀</b><small>화면을 밀어서 구슬을 냠냠, 먹을수록 쭉쭉 길어져요</small></a>
+    <a class="jump" data-game="jump" href="jump/index.html"><img class="thumb" src="common/thumbs/jump-640.webp" srcset="common/thumbs/jump-640.webp 640w, common/thumbs/jump-960.webp 960w" sizes="(max-width: 640px) 86vw, 360px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">점프</span><b>통통 점프</b><small>발판을 통통 밟고 하늘 끝까지 올라가요</small></a>
+    <a class="runner" data-game="runner" href="runner/index.html"><img class="thumb" src="common/thumbs/runner-640.webp" srcset="common/thumbs/runner-640.webp 640w, common/thumbs/runner-960.webp 960w" sizes="(max-width: 640px) 86vw, 360px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">달리기</span><b>슝슝 우주 달리기</b><small>밀어서 줄을 바꾸고 운석은 피하고 별은 냠</small></a>
+    <a class="bridge" data-game="bridge" href="bridge/index.html"><img class="thumb" src="common/thumbs/bridge-640.webp" srcset="common/thumbs/bridge-640.webp 640w, common/thumbs/bridge-960.webp 960w" sizes="(max-width: 640px) 86vw, 520px" alt="" loading="eager" decoding="async" draggable="false"><span class="tag">그리기</span><b>슥슥 우주 다리</b><small>손가락으로 그린 선이 진짜 다리가 돼요</small></a>
   </div>
 
-  <!-- 기록실: 네 게임 기록을 한눈에 -->
+  <!-- 기록실: 다섯 게임 기록을 한눈에 -->
   <section id="records" aria-label="기록실">
     <div class="panel">
       <h2>기록실</h2>
@@ -305,7 +313,7 @@
     </div>
   </section>
 
-  <!-- 스티커북: 네 게임에서 특별한 일을 하면 붙는 스티커 -->
+  <!-- 스티커북: 다섯 게임에서 특별한 일을 하면 붙는 스티커 -->
   <section id="stickers" class="overlay" aria-label="스티커북">
     <div class="panel">
       <h2>스티커북 <small id="stk-count"></small></h2>
@@ -346,7 +354,7 @@
         <div id="pt-list"></div>
       </div>
       <div class="psec" data-sec="vol">
-        <p class="note">네 게임과 이 화면의 모든 소리가 이 크기를 넘지 않아요. 이 기기 전체에 같이 적용돼요.</p>
+        <p class="note">다섯 게임과 이 화면의 모든 소리가 이 크기를 넘지 않아요. 이 기기 전체에 같이 적용돼요.</p>
         <div id="pv-seg" class="pseg vseg"></div>
       </div>
       <div class="psec" data-sec="move">
@@ -476,7 +484,7 @@
       $('rec-open').addEventListener('click', () => { renderRecords(); $('records').classList.add('on'); SND.ui('open'); });
       $('rec-close').addEventListener('click', () => shut('records'));
       $('records').addEventListener('click', e => { if (e.target.id === 'records') shut('records'); });
-      // 소리 단추: 네 게임 모두 함께 (다른 탭·게임에서 바꿔도 SND.onChange로 따라 바뀐다)
+      // 소리 단추: 다섯 게임 모두 함께 (다른 탭·게임에서 바꿔도 SND.onChange로 따라 바뀐다)
       const sndIcon = () => { const off = SND.muted(); $('snd-btn').classList.toggle('off', off); $('snd-btn').setAttribute('aria-label', off ? '소리 켜기' : '소리 끄기'); $('snd-btn').setAttribute('aria-pressed', String(off)); };
       $('snd-btn').addEventListener('click', () => { SND.toggleMuted(); SND.ui('tap'); });
       SND.onChange(sndIcon); sndIcon();

@@ -18,12 +18,13 @@
 | `snake/` | **냠냠 뱀** (옛 이름 N-SNAKE): 뿅뿅 우주선 그래픽의 네온 뱀 게임. 화면 밀기, 무한·스테이지, 아이템·콤보·메달 | 아이들 |
 | `jump/` | **통통 점프**: 저절로 통통 뛰는 로봇 공, 화면 왼쪽·오른쪽을 눌러 발판을 타고 끝없이 위로. 스프링·로켓·방패, 쉬움은 구조 구름 3번 | 아이들 |
 | `runner/` | **슝슝 우주 달리기**: 3줄 우주 길을 달리는 우주선, 밀어서 줄 바꾸기·위로 밀어 점프, 운석·레이저 문 피하고 별 먹기 | 아이들 |
-| `index.html` (최상위) | 게임을 고르는 첫 화면 (네 게임, 2칸 두 줄) + **놀이 본부**: 별코인·오늘의 미션 3개·기록실 + 지금 아이 이름표("누가 놀아요?")·보호자 화면(오른쪽 아래 자물쇠 3초) | |
-| `common/worlds.js` | 우주 여행 도감: 태양계 날씨·외계 행성 여덟 (DOM 없음, `tests/worlds.test.js`). 네 게임이 `hub.js` 바로 뒤에 불러오고 `sw.js` FILES에 넣는다 |
-| `common/sound.js` | 공통 소리 `SND`: 리미터·소리 끄기(`play.sound1`)·소리 가족·배경 음악 (`tests/sound.test.js`). 네 게임이 `worlds.js` 뒤에 불러오고 `sw.js` FILES에 넣는다. 게임 소리는 `SND.out()`에 연결 |
-| `common/hub.js` | 네 게임이 함께 쓰는 별코인 지갑·기록 요약·오늘의 미션 (DOM 없음, `tests/hub.test.js`, 키 `play.hub1`) | |
-| `common/thumbs/` · `tools/thumbs.js` | 첫 화면 게임 카드 그림: 네 게임을 실제 크로미움으로 디버그 훅으로 꾸며서 찍은 장면(같은 씨앗·고정 배치라 다시 만들어도 같음)(내려받은 그림 없음), WebP 2:1 두 크기 `<게임>-640.webp`·`<게임>-960.webp`(카드 `srcset`, 모두 합쳐 약 100KB). 게임 그림이 크게 바뀌면 `node tools/thumbs.js`(하나만: `node tools/thumbs.js jump`)로 다시 찍고 눈으로 확인한다. 카드는 그림을 다 읽으면 `a.pic`(그림 + 글자 받침 그러데이션), 못 읽으면 그림 없이 예전 카드. 첫 화면은 어느 게임 `sw.js`에도 없으니 FILES에 넣지 않는다. APK는 `common/`을 통째로 복사해 따라 들어간다 | |
-| `common/profile.js` | 아이 프로필(최대 4명, 이름·그림·사진)·보호자 설정(하루 놀이 시간·소리 크기 상한)·놀이 시간 세기와 남은 시간 알림·기록 옮기기(코드·파일) (전역 `PROFILE`, 핵심은 DOM 없음, `tests/profile.test.js`). **모든 페이지의 첫 번째 스크립트** (첫 화면 `index.html`, 네 게임 `index.html`의 `../common/hub.js` 앞), 네 게임 `sw.js` FILES에도 넣는다. 게임은 `main.js` frame에서 `PROFILE.setPlaying(판이 도는가)`만 부른다. 아이 사진은 `play.profiles` 목록의 `photo`(160×160 JPEG data URL, `cleanPhoto`가 jpeg·png와 6만 글자 상한만 받음), 얼굴은 `PROFILE.faceHtml(p)`로 그린다(없거나 못 읽으면 그림 글자) | |
+| `bridge/` | **슥슥 우주 다리**: 손가락으로 그린 선이 그 모양 그대로 물건이 되어 떨어지고 구른다. 다리를 놓아 공을 외계인 친구에게. 달·화성 20판, 잉크를 아끼면 별. 물리는 Planck.js(MIT, `bridge/lib/`) | 아이들 |
+| `index.html` (최상위) | 게임을 고르는 첫 화면 (다섯 게임, 위 3칸·아래 2칸) + **놀이 본부**: 별코인·오늘의 미션 3개·기록실 + 지금 아이 이름표("누가 놀아요?")·보호자 화면(오른쪽 아래 자물쇠 3초) | |
+| `common/worlds.js` | 우주 여행 도감: 태양계 날씨·외계 행성 여덟 (DOM 없음, `tests/worlds.test.js`). 다섯 게임이 `hub.js` 바로 뒤에 불러오고 `sw.js` FILES에 넣는다 |
+| `common/sound.js` | 공통 소리 `SND`: 리미터·소리 끄기(`play.sound1`)·소리 가족·배경 음악 (`tests/sound.test.js`). 다섯 게임이 `worlds.js` 뒤에 불러오고 `sw.js` FILES에 넣는다. 게임 소리는 `SND.out()`에 연결 |
+| `common/hub.js` | 다섯 게임이 함께 쓰는 별코인 지갑·기록 요약·오늘의 미션 (DOM 없음, `tests/hub.test.js`, 키 `play.hub1`) | |
+| `common/thumbs/` · `tools/thumbs.js` | 첫 화면 게임 카드 그림: 다섯 게임을 실제 크로미움으로 디버그 훅으로 꾸며서 찍은 장면(같은 씨앗·고정 배치라 다시 만들어도 같음)(내려받은 그림 없음), WebP 2:1 두 크기 `<게임>-640.webp`·`<게임>-960.webp`(카드 `srcset`, 모두 합쳐 약 100KB). 게임 그림이 크게 바뀌면 `node tools/thumbs.js`(하나만: `node tools/thumbs.js jump`)로 다시 찍고 눈으로 확인한다. 카드는 그림을 다 읽으면 `a.pic`(그림 + 글자 받침 그러데이션), 못 읽으면 그림 없이 예전 카드. 첫 화면은 어느 게임 `sw.js`에도 없으니 FILES에 넣지 않는다. APK는 `common/`을 통째로 복사해 따라 들어간다 | |
+| `common/profile.js` | 아이 프로필(최대 4명, 이름·그림·사진)·보호자 설정(하루 놀이 시간·소리 크기 상한)·놀이 시간 세기와 남은 시간 알림·기록 옮기기(코드·파일) (전역 `PROFILE`, 핵심은 DOM 없음, `tests/profile.test.js`). **모든 페이지의 첫 번째 스크립트** (첫 화면 `index.html`, 다섯 게임 `index.html`의 `../common/hub.js` 앞), 다섯 게임 `sw.js` FILES에도 넣는다. 게임은 `main.js` frame에서 `PROFILE.setPlaying(판이 도는가)`만 부른다. 아이 사진은 `play.profiles` 목록의 `photo`(160×160 JPEG data URL, `cleanPhoto`가 jpeg·png와 6만 글자 상한만 받음), 얼굴은 `PROFILE.faceHtml(p)`로 그린다(없거나 못 읽으면 그림 글자) | |
 | `android/` · `.github/workflows/apk.yml` | 안드로이드 APK: 웹뷰 한 화면(`MainActivity.java`)이 게임 파일을 앱 안에서 연다. 2026-09-29부터 자동 빌드 끔(소유자: APK는 당분간 안 만든다). 필요하면 Actions "APK 만들기" → Run workflow로만, main이면 Releases `apk-latest`에 올린다. 서명 비밀 `ANDROID_KEYSTORE_B64`·`ANDROID_KEYSTORE_PASS`. 로컬 세션은 안드로이드 도구를 못 받으니 빌드 확인은 Actions "APK 만들기"로 | |
 | `archive/robocar/` | **뚝딱 로봇카**: 보류 (2026-09-27 소유자 결정). 첫 화면에서 뺐고 필수 테스트에서도 뺐다. `archive/README.md` | |
 
@@ -34,7 +35,7 @@
 
 - **주 기기: 갤럭시탭** (S9·S8 11인치, CSS 1280×800 가로). 보급형 탭 A 계열(893×533)과 12.4인치 S+ 계열도 확인한다. PC는 필수 아님.
 - 기술: 바닐라 JS + Canvas 2D, 빌드 없음. `index.html`을 브라우저로 바로 열면 실행된다 (file:// 포함).
-- 전역 이름공간: N-GUN은 `NG`, N-SNAKE는 `SN`, 통통 점프는 `JP`, 슝슝 우주 달리기는 `RN`, 로봇카(보류)는 `RC`. 모듈(import) 대신 일반 `<script>` 순서로 불러온다.
+- 전역 이름공간: N-GUN은 `NG`, N-SNAKE는 `SN`, 통통 점프는 `JP`, 슝슝 우주 달리기는 `RN`, 슥슥 우주 다리는 `BR`, 로봇카(보류)는 `RC`. 모듈(import) 대신 일반 `<script>` 순서로 불러온다.
 
 ## 버전 기록
 
@@ -75,6 +76,7 @@
 | 2026-09-28 | 공통 | **아이 사진**: 보호자 화면 아이 칸에 이름 칸(크게)·사진 넣기(갤러리·카메라)·사진 맞추기(밀기·크게 작게)·사진 빼기, 160×160 JPEG를 `play.profiles`에 (이 기기 안에만). 이름표·누가 놀아요?·보호자 화면·네 게임 시작 화면·기록 옮기기에 동그란 사진, 코드에 사진도. APK는 사진 고르기면 사진만 보이게. `ngun-v20`·`snake-v20`·`jump-v15`·`runner-v13` (브랜치) |
 | 2026-09-28 | 첫 화면 | **카드 그림**: 게임 고르기 네 카드에 그 게임 장면 그림(`common/thumbs/`, `tools/thumbs.js`로 찍음), 아래쪽 어두운 그러데이션 위에 제목·설명, 마우스를 올리거나 고르면 천천히 확대(움직임 줄이기면 안 함), 그림을 못 읽으면 예전 카드 (브랜치) |
 | 2026-09-29 | 통통 점프 | **따라다니는 꼬마 펫**: 펫 다섯(꼬마 별 공짜·로봇 강아지 250·반짝 반딧불 350·아기 해파리 500·꼬마 UFO 700)이 주인공 뒤쪽 위에서 따라다니며 가까운 별을 주워 오고, 저마다 작은 특기(선물 물어 오기·다음 발판 비추기·30초마다 폴짝·45초마다 몬스터 톡), 밟기·아슬아슬·신기록·새 장소에서 하트 응원. 상점 "펫" 칸·펫 없음, 시작 화면 내 캐릭터 칸에 펫, 펫 미션 둘·메달 "단짝 친구", 아이 흉내 봇 1분 코인 +3 ~ 8% (`jump/PLAN.md` 24절). `jump-v16` (브랜치) |
+| 2026-09-29 | 새 게임 | **슥슥 우주 다리** 1단계 (`bridge/`, `bridge/PLAN.md`): 그린 선이 물건이 되는 물리 퍼즐, Planck.js(MIT), 달·화성 20판, 잉크·별 3개, 시소·스프링·상자·얼음·바위, 캐릭터 3·펜 4, 미션 10·메달 14, 오늘의 미션·스티커 5장. 첫 화면 카드 다섯(위 3·아래 2). `bridge-v1`, 공통 파일이 바뀌어 `ngun-v21`·`snake-v21`·`jump-v17`·`runner-v14` (브랜치) |
 | 2026-09-24 | 공통 | 작업 지침(`CLAUDE.md`)·인계 문서(`HANDOFF.md`), 화면 흐름 점검(`tests/flow.test.js`), N-GUN 오프라인, 로봇카 첫 방문 글꼴 저장, 보호자 화면 "놀이 기록"·"기기 점검" 탭 (브랜치) |
 
 새 작업을 main에 합치면 이 표에 한 줄 추가한다.
@@ -131,7 +133,16 @@
 냠냠 뱀과 같은 짜임: `js/util.js`(씨앗 난수) · `data.js`(모든 수치·메달) · `world.js`(규칙, DOM 없음, 1/120초 고정 간격, 자동 운전 봇) ·
 `render.js` · `input.js` · `audio.js`(합성음) · `main.js`(화면 전환, `JP.debug`·`RN.debug`) · `sw.js`(`jump-`·`runner-` 저장본만 지움) · `manifest.json` · `icon.svg` · `PLAN.md`.
 저장 키는 `jump.*`·`runner.*`. 상점·미션은 `js/shop.js`(DOM 없음, 코인은 `HUB` 지갑), 냠냠 뱀도 같은 짜임(`snake/js/shop.js`).
-**모든 게임은 `index.html`에서 `../common/profile.js`를 맨 처음, 그다음 `../common/hub.js`를 `js/util.js`보다 먼저 불러오고 `sw.js` FILES에도 넣는다.** 판이 끝나면 `HUB.report`(기록실)·`HUB.reportRun`(오늘의 미션)을 부른다. 기획과 수치 설명은 각 폴더 `PLAN.md`.
+**모든 게임은 (슥슥 우주 다리 포함) `index.html`에서 `../common/profile.js`를 맨 처음, 그다음 `../common/hub.js`를 `js/util.js`보다 먼저 불러오고 `sw.js` FILES에도 넣는다.** 판이 끝나면 `HUB.report`(기록실)·`HUB.reportRun`(오늘의 미션)을 부른다. 기획과 수치 설명은 각 폴더 `PLAN.md`.
+
+### 슥슥 우주 다리 (`bridge/`)
+| 파일 | 역할 |
+|---|---|
+| `lib/planck.min.js` · `lib/LICENSE.md` | 물리 엔진 Planck.js 1.5.0 (MIT, 고치지 않고 그대로). `index.html`에서 `js/util.js`보다 먼저 |
+| `js/data.js` | 물리 수치(`PHYS`)·잉크와 별(`INK`)·판 20개(`add(행성, {...})`, 정답 선 `sol`)·캐릭터·펜·코인·미션·메달 |
+| `js/world.js` | 규칙 (DOM 없음, `tests/bridge.test.js`): 그리기(막힌 곳 건너뛰기·다듬기·구슬)·몸체 만들기·1/60초 고정 간격·만남·떨어짐·막힘·별. `solve(판, 선들)`로 풀어 보기 |
+| `js/shop.js` | 상점·미션·기록 장부(`bridge.shop1`·`bridge.rec1`)·판 열기·코인 (DOM 없음) |
+| `js/render.js` · `input.js` · `audio.js` · `main.js` | 그리기(하늘·땅 미리 그림) · 손가락 하나로 긋기 · 합성 소리 · 화면 흐름(`BR.debug`) |
 
 ### 테스트 (`tests/`)
 | 파일 | 검사 |
@@ -143,6 +154,7 @@
 | `profile.test.js` | 아이 프로필 (키 접두어·공통 키·첫째 무접두어·바꾸기·지우기·4명), 하루 놀이 시간·10분 더·날짜 바뀜·알림 순서(10분·5분·끝·5분마다), 소리 크기 상한, 기록 옮기기(내보내기·불러오기·망가진 코드 거절) |
 | `snakeshop.test.js` · `jumpshop.test.js` | 냠냠 뱀·통통 점프 상점과 미션 (슝슝 우주 달리기 상점은 `runner.test.js` 안) |
 | `runner.test.js` | 슝슝 우주 달리기 규칙 (줄 바꾸기·점프·하트·방패·자석·부스트·모든 줄 막힘 없음·봇) |
+| `bridge.test.js` | 슥슥 우주 다리 규칙·상점 (판마다 정답 선으로 풀림·흔들린 선 12개 중 8개 이상·선 없이는 안 풀림·주사율별 같은 결과·그리기·잉크·별·스프링·시소·코인·판 열기·메달) |
 | `flow.test.js` | 첫 화면(두 탭 크기에서 카드 글자·카드 그림이 읽히는지)과 두 게임 화면 흐름을 실제 크로미움으로 (뿅뿅 우주선 시작 → 카드 → 필살기 → 게임 오버 → 상점, 냠냠 뱀 시작 → 밀기 → 위험 경고 → 게임 오버 → 스테이지). Playwright가 없으면 건너뜀. 통통 점프·슝슝 우주 달리기 흐름도 함께 |
 | (보류) `archive/robocar/tests/` | 로봇카 규칙·놀이터·화면 흐름. 필수 아님, 로봇카를 되살릴 때 돌린다 |
 
@@ -157,23 +169,24 @@
    node tests/snake.test.js     # 냠냠 뱀 규칙
    node tests/jump.test.js      # 통통 점프 규칙
    node tests/runner.test.js    # 슝슝 우주 달리기 규칙
+   node tests/bridge.test.js    # 슥슥 우주 다리 규칙·상점
    node tests/hub.test.js       # 놀이 본부 (지갑·오늘의 미션·기록실)
    node tests/worlds.test.js    # 우주 여행 도감 (행성 날씨)
    node tests/sound.test.js     # 공통 소리 (설정·음악 패턴·크기·소리 크기 상한)
    node tests/profile.test.js   # 아이 프로필·보호자 설정·놀이 시간 알림·기록 옮기기
    node tests/snakeshop.test.js # 냠냠 뱀 상점·미션
    node tests/jumpshop.test.js  # 통통 점프 상점·미션
-   node tests/flow.test.js      # 네 게임 화면 흐름 (크로미움)
+   node tests/flow.test.js      # 다섯 게임 화면 흐름 (크로미움)
    ```
 3. **돈이 드는 것 금지.** 유료 API·유료 서비스·광고·결제·외부 추적(분석 도구) 모두 쓰지도 제안하지도 않는다.
-   외부에서 불러오는 것은 구글 글꼴뿐이다. 그림·소리 파일은 무료 라이선스(CC0·MIT 등)만 저장소에 넣고, 출처와 고지를 그 폴더 `LICENSE.md`에 적는다.
+   외부에서 불러오는 것은 구글 글꼴뿐이다. 코드 묶음(Planck.js 같은)은 무료 라이선스(MIT 등)만 저장소에 그대로 넣고 그 폴더 `LICENSE.md`에 고지한다. 그림·소리 파일은 무료 라이선스(CC0·MIT 등)만 저장소에 넣고, 출처와 고지를 그 폴더 `LICENSE.md`에 적는다.
 4. **로봇카는 아이 기준** (보류 중. 되살리면 다시 적용). 지는 일 없음(게임 오버 없음), 무섭지 않게, 아이가 누르는 버튼은 크게(탭 S9에서 약 2cm, CSS `--tap`)·개수는 적게,
    글은 짧게 + 목소리로 읽어 주기. 외부 링크·데이터 수집·결제 금지. 하루 타이머와 보호자 자물쇠(3초 누르기)를 우회하는 기능 금지.
 5. **유아틱하지 않게.** 소유자 피드백(2026-09-24)으로 둥근 손글씨체·두꺼운 검정 테두리·파스텔 단색·왕눈이를 버렸다.
    광택 재질·굵은 디스플레이 서체(Black Han Sans)·어두운 유리 패널 방향을 유지한다 (`archive/robocar/VISUAL.md`).
-6. **게임 파일을 바꾸면 그 게임의 `sw.js` `VERSION`을 올린다** (N-GUN `ngun-v20` → `v21`, N-SNAKE `snake-v20` → `v21`, 통통 점프 `jump-v16` → `v17`, 슝슝 우주 달리기 `runner-v13` → `v14` …, 보류 중인 로봇카 `robocar-v14`).
+6. **게임 파일을 바꾸면 그 게임의 `sw.js` `VERSION`을 올린다** (N-GUN `ngun-v21` → `v22`, N-SNAKE `snake-v21` → `v22`, 통통 점프 `jump-v17` → `v18`, 슝슝 우주 달리기 `runner-v14` → `v15`, 슥슥 우주 다리 `bridge-v1` → `v2` …, 보류 중인 로봇카 `robocar-v14`). `common/`의 파일을 바꾸면 다섯 게임 모두 올린다.
    안 올리면 홈 화면에 설치한 태블릿이 옛 파일을 계속 연다. 새 파일을 추가하면 `FILES` 목록에도 넣는다.
-   두 게임은 같은 주소(도메인)를 쓰므로 옛 저장본을 지울 때는 **자기 이름으로 시작하는 것만** 지운다 (`robocar-`, `ngun-`, `snake-`, `jump-`, `runner-`).
+   게임들은 같은 주소(도메인)를 쓰므로 옛 저장본을 지울 때는 **자기 이름으로 시작하는 것만** 지운다 (`robocar-`, `ngun-`, `snake-`, `jump-`, `runner-`, `bridge-`).
    다른 게임 것까지 지우면 그 게임이 인터넷 없이 안 열린다.
 7. **main 머지는 소유자가 요청할 때만.** 작업은 지정된 브랜치에 커밋·푸시하고, 먼저 미리보기로 해 보게 한다.
    PR도 요청이 있을 때만 만든다.
