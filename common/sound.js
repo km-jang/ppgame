@@ -21,7 +21,7 @@
 // 공통 효과음: SND.ui(name, opt)
 //   tap open close start coin buy deny claim medal sticker star({k: 0~7 한 계단씩 높게}) tick({hi}) continueAsk continueGo fanfare over overSoft
 // 배경 음악
-//   SND.themeFor(game, planetId)  game: ngun·snake·jump·runner, planetId: mercury~pluto, frost·lava·ocean·glass·gem·twin·shroom·rogue,
+//   SND.themeFor(game, planetId)  game: ngun·snake·jump·runner·bridge, planetId: mercury~pluto, frost·lava·ocean·glass·gem·twin·shroom·rogue,
 //                                  ground·sky·galaxy·title. 옵션 {bpm, bossBpm}로 빠르기를 바꿀 수 있다 (뿅뿅 우주선 128·146)
 //   SND.music.play(theme) 또는 play(game, planetId)   같은 테마면 그대로, 다르면 1초 동안 겹쳐 바꾼다
 //   SND.music.setMood({planet, fever, boss, calm})    planet이 바뀌면 같은 게임의 그 행성 음악으로, boss는 단조·힘차게, fever는 1.12배 빠르게 + 반짝이
@@ -220,7 +220,7 @@ var SND = (typeof SND !== 'undefined' && SND) || {};
     rogue: [-3, 'n', 's', 0, 1400, 4, 0],
   };
   PL.space = PL.galaxy;
-  const GM = { ngun: [128, 146, 2], snake: [98, 106, 0], jump: [106, 114, 1], runner: [112, 120, 1] };
+  const GM = { ngun: [128, 146, 2], snake: [98, 106, 0], jump: [106, 114, 1], runner: [112, 120, 1], bridge: [92, 100, 0] };
   function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
   S.themeFor = (game, planet, o) => {
     const gm = GM[game] || [104, 112, 1], id = String(planet || 'title'), h = hash(id);

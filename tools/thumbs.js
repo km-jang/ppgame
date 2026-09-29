@@ -1,8 +1,8 @@
 'use strict';
-// 첫 화면(게임 고르기) 카드 그림 만들기: 네 게임을 실제 크로미움으로 열고, 한 장면을 손으로 차려 놓고(주인공·적·별 자리를 정해 둠)
+// 첫 화면(게임 고르기) 카드 그림 만들기: 다섯 게임을 실제 크로미움으로 열고, 한 장면을 손으로 차려 놓고(주인공·적·별 자리를 정해 둠)
 // 세상을 멈춘 뒤 찍어, 2:1 WebP 두 크기(640×320 · 960×480)로 common/thumbs/에 저장한다.
 // 게임 그림이 크게 바뀌었을 때 다시 돌린다:
-//   node tools/thumbs.js            (네 게임 모두)
+//   node tools/thumbs.js            (다섯 게임 모두)
 //   node tools/thumbs.js jump       (하나만)
 //   SHOTS=/경로 node tools/thumbs.js (다듬기 전 원본 PNG도 그 폴더에 남긴다, 확인용)
 // Playwright 위치를 직접 줄 때: PW=/경로/playwright node tools/thumbs.js
@@ -146,6 +146,22 @@ const GAMES = [
       return { x: 0, y: 0, width: v.w, height: v.w / 2 };
     },
     finish: { b: 1.02, c: 1.04, s: 1.06, vig: 0.22 },
+  },
+  {
+    // 슥슥 우주 다리: 달 3판. 기둥에서 오른쪽 땅까지 그린 빛 다리로 떨어지는 공, 오른쪽에 외계인 친구, 뒤에 지구
+    id: 'bridge', ns: 'BR', folder: 'bridge', vp: [1120, 560],
+    compose: () => {
+      BR.debug.unlockAll();
+      BR.debug.startLevel('moon-3');
+      BR.debug.drawSol(0);
+      const W = BR.debug.world;
+      for (let i = 0; i < 600 && BR.World.ballState(W).y < 390; i++) BR.World.step(W, 1 / 60);
+      BR.World.step = () => {};
+      W.events.length = 0;
+      // 공·다리·친구 쪽으로 조금 당겨 자른다 (넓은 카드에서 위아래가 잘려도 공이 보이게)
+      return { x: 250, y: 150, width: 840, height: 420 };
+    },
+    finish: { b: 1.06, c: 1.05, s: 1.1, vig: 0.22 },
   },
 ];
 

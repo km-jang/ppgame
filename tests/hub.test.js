@@ -109,7 +109,7 @@ test('기록실: 게임별 최고·메달·판 수, 합계, 오늘 논 시간', 
   assert(sn.bestText === '최고 500점' && sn.best === 500 && sn.medals === 5 && sn.games === 8, JSON.stringify(sn));
   assert(s.medals === 7 && s.medalMax === H.GAMES.reduce((t, g) => t + H.MEDAL_MAX[g.id], 0) && s.games === 11, 'totals ' + JSON.stringify([s.medals, s.medalMax, s.games]));
   assert(s.todaySec === 120 && sn.sec === 90, 'time ' + s.todaySec);
-  assert(s.rows.length === 4 && s.rows.map(r => r.id).join() === 'ngun,snake,jump,runner', 'order');
+  assert(s.rows.length === 5 && s.rows.map(r => r.id).join() === 'ngun,snake,jump,runner,bridge', 'order');
 });
 
 test('날이 바뀌면 오늘 논 시간이 0부터', () => {
@@ -173,7 +173,7 @@ test('기록실 메달 합계: 아직 안 연 게임도 메달 수를 세고, �
 
 test('게임 주소는 index.html까지 (파일로 바로 열어도 열리게)', () => {
   const { H } = fresh();
-  assert(H.GAMES.map(g => g.path).join() === 'game/index.html,snake/index.html,jump/index.html,runner/index.html', H.GAMES.map(g => g.path).join());
+  assert(H.GAMES.map(g => g.path).join() === 'game/index.html,snake/index.html,jump/index.html,runner/index.html,bridge/index.html', H.GAMES.map(g => g.path).join());
 });
 
 test('오늘의 미션 글: 게임 이름을 되풀이하지 않고 짧게', () => {

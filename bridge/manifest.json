@@ -1,0 +1,20 @@
+{
+  "name": "슥슥 우주 다리",
+  "short_name": "슥슥 다리",
+  "description": "손가락으로 그린 선이 진짜 다리가 되는 우주 퍼즐",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07080d",
+  "theme_color": "#07080d",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

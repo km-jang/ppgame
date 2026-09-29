@@ -1,7 +1,7 @@
 'use strict';
-// 놀이 본부: 네 게임이 함께 쓰는 별코인 지갑 · 기록 요약 · 오늘의 미션.
+// 놀이 본부: 다섯 게임이 함께 쓰는 별코인 지갑 · 기록 요약 · 오늘의 미션.
 // DOM을 쓰지 않는다 (node 테스트가 그대로 불러 쓴다: tests/hub.test.js). 저장은 HUB.store를 통해서만.
-// 네 게임이 같은 주소(도메인)라 한 태블릿 안에서는 지갑 하나를 같이 쓴다.
+// 다섯 게임이 같은 주소(도메인)라 한 태블릿 안에서는 지갑 하나를 같이 쓴다.
 //
 // 저장 키
 //   play.hub1 : { v:1, coins, earned, spent, moved:{게임:true},
@@ -20,6 +20,7 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
     { id: 'snake', name: '냠냠 뱀', path: 'snake/index.html', color: '#ff5fa8' },
     { id: 'jump', name: '통통 점프', path: 'jump/index.html', color: '#7dff6a' },
     { id: 'runner', name: '슝슝 우주 달리기', path: 'runner/index.html', color: '#ffb13d' },
+    { id: 'bridge', name: '슥슥 우주 다리', path: 'bridge/index.html', color: '#b37dff' },
   ];
 
   // 오늘의 미션 후보. 게임이 판이 끝날 때 reportRun(게임, {stat: 값})으로 알려 준다.
@@ -51,8 +52,14 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
       { stat: 'jumps', goal: 10, sum: true, text: '레이저 문 10번 뛰어넘기', reward: 60 },
       { stat: 'games', goal: 3, sum: true, text: '3판 놀기', reward: 50 },
     ],
+    bridge: [
+      { stat: 'clears', goal: 3, sum: true, text: '3판 깨기', reward: 60 },
+      { stat: 'stars', goal: 7, sum: true, text: '별 7개 모으기', reward: 60 },
+      { stat: 'three', goal: 1, sum: true, text: '별 3개로 한 판 깨기', reward: 50 },
+      { stat: 'lines', goal: 10, sum: true, text: '선 10개 그리기', reward: 50 },
+    ],
   };
-  // 스티커북: 네 게임에서 특별한 일을 하면 한 장씩. 판이 끝날 때 reportRun의 stats로 확인한다
+  // 스티커북: 다섯 게임에서 특별한 일을 하면 한 장씩. 판이 끝날 때 reportRun의 stats로 확인한다
   // (s: 이번 판 stats). 게임이 그 값을 안 보내면 그냥 안 붙는다
   const STICKERS = [
     { id: 'ng_first', game: 'ngun', name: '첫 출격', desc: '뿅뿅 우주선 한 판', icon: '🚀', check: s => s.games >= 1 },
@@ -85,6 +92,12 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
     { id: 'sn_stars', game: 'snake', name: '별 모으기 대장', desc: '스테이지 별 15개 모으기', icon: '🌟', check: s => s.stageStars >= 15 },
     { id: 'jp_exo', game: 'jump', name: '외계 행성 도착', desc: '700m 오르기', icon: '👽', check: s => s.height >= 700 },
     { id: 'rn_exo', game: 'runner', name: '태양계 밖으로', desc: '3,375m 달리기', icon: '🌠', check: s => s.dist >= 3375 },
+    // 2026-09-29 슥슥 우주 다리
+    { id: 'br_first', game: 'bridge', name: '첫 다리', desc: '슥슥 다리 한 판 깨기', icon: '🌉', check: s => s.clears >= 1 },
+    { id: 'br_three', game: 'bridge', name: '반짝 별 셋', desc: '한 판을 별 3개로', icon: '🎇', check: s => s.three >= 1 },
+    { id: 'br_seesaw', game: 'bridge', name: '시소 타기', desc: '시소 판 깨기', icon: '🎢', check: s => s.seesaw >= 1 },
+    { id: 'br_moon', game: 'bridge', name: '달 정복', desc: '달 10판 모두 깨기', icon: '🌕', check: s => s.moonAll >= 10 },
+    { id: 'br_mars', game: 'bridge', name: '화성 정복', desc: '화성 10판 모두 깨기', icon: '🏜️', check: s => s.marsAll >= 10 },
   ];
 
   // 알아서 맞춰 주는 난이도: 판 결과(perf, 1 = 그 난이도에서 보통 잘함, 0.3 = 금방 짐, 2 = 아주 잘함)의 이동 평균으로
@@ -93,7 +106,7 @@ var HUB = (typeof HUB !== 'undefined' && HUB) || {};
 
   // 게임마다 메달 수 (기록실 '모은 메달 5 / 77'용). 아직 한 번도 안 연 게임도 0이 아니게.
   // 게임이 report로 더 큰 medalMax를 알려 주면 그쪽을 쓴다 (메달이 늘어도 여기를 꼭 안 고쳐도 됨)
-  const MEDAL_MAX = { ngun: 19, snake: 19, jump: 19, runner: 20 };
+  const MEDAL_MAX = { ngun: 19, snake: 19, jump: 19, runner: 20, bridge: 14 };
 
   const DAILY_COUNT = 3;       // 하루 미션 수 (서로 다른 게임에서 하나씩)
   const DAILY_BONUS = 150;     // 셋 다 받으면 보너스 상자

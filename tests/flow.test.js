@@ -45,17 +45,17 @@ async function until(page, fn, arg, ms) {
   console.log('놀이 본부 (게임 고르기)');
   const hb = await open(browser, ROOT + '/index.html');
   const HB = hb.page;
-  await test('게임 고르기: 네 게임 카드, 별코인, 오늘의 미션 3개, 기록실', async () => {
+  await test('게임 고르기: 다섯 게임 카드, 별코인, 오늘의 미션 3개, 기록실', async () => {
     await HB.evaluate(() => { localStorage.clear(); location.reload(); });
     await HB.waitForTimeout(400);
-    assert(await HB.evaluate(() => document.querySelectorAll('.pick a').length === 4), '카드 수');
+    assert(await HB.evaluate(() => document.querySelectorAll('.pick a').length === 5), '카드 수');
     assert(await HB.evaluate(() => document.getElementById('hub-coins').textContent === '0'), '처음 코인 0');
     assert(await HB.evaluate(() => document.querySelectorAll('#daily .dm').length === 3), '오늘의 미션 3개');
     // 카드는 폴더가 아니라 index.html로 (파일로 바로 열어도 열리게)
     const hrefs = await HB.evaluate(() => [...document.querySelectorAll('.pick a')].map(a => a.getAttribute('href')).join());
-    assert(hrefs === 'game/index.html,snake/index.html,jump/index.html,runner/index.html', '카드 주소 ' + hrefs);
+    assert(hrefs === 'game/index.html,snake/index.html,jump/index.html,runner/index.html,bridge/index.html', '카드 주소 ' + hrefs);
     await HB.tap('#rec-open');
-    assert(await HB.evaluate(() => document.getElementById('records').classList.contains('on') && document.querySelectorAll('#rec-rows .grow').length === 4), '기록실');
+    assert(await HB.evaluate(() => document.getElementById('records').classList.contains('on') && document.querySelectorAll('#rec-rows .grow').length === 5), '기록실');
     // 아직 한 게임도 안 열었어도 메달 합계는 네 게임 메달 수
     const tot = await HB.evaluate(() => document.querySelector('#rec-tot div:nth-child(2) dd').textContent);
     assert(/^0 \/ \d{2,}$/.test(tot) && Number(tot.split('/ ')[1]) >= 70, '메달 합계 ' + tot);
@@ -118,7 +118,7 @@ async function until(page, fn, arg, ms) {
     assert(d >= 0 && d < 150 + 100, '넘어가기까지 ' + d + 'ms');
     await HB.evaluate(() => { localStorage.removeItem('x.navAt'); localStorage.removeItem('x.navGone'); });
     await HB.goto(ROOT + '/index.html');
-    assert(await until(HB, () => document.querySelectorAll('.pick a').length === 4), '돌아오기');
+    assert(await until(HB, () => document.querySelectorAll('.pick a').length === 5), '돌아오기');
   });
   await test('게임 고르기 콘솔 오류 없음', async () => { assert(!hb.errors.length, hb.errors.join(' | ')); });
   await hb.ctx.close();
@@ -149,8 +149,8 @@ async function until(page, fn, arg, ms) {
       assert(!r.length, r.join(' | '));
       assert(!sm.errors.length, sm.errors.join(' | '));
     });
-    // 카드 그림 (common/thumbs/, tools/thumbs.js): 네 카드 모두 그림이 읽히고(pic), 카드를 꽉 채우고, 제목·설명이 그림 위에 보인다
-    await test('게임 고르기 카드 그림 ' + vp.width + 'x' + vp.height + ': 네 카드 그림이 읽힘, 카드를 채움, 글자가 위에', async () => {
+    // 카드 그림 (common/thumbs/, tools/thumbs.js): 다섯 카드 모두 그림이 읽히고(pic), 카드를 꽉 채우고, 제목·설명이 그림 위에 보인다
+    await test('게임 고르기 카드 그림 ' + vp.width + 'x' + vp.height + ': 다섯 카드 그림이 읽힘, 카드를 채움, 글자가 위에', async () => {
       assert(await until(sm.page, () => [...document.querySelectorAll('.pick a')].every(a => a.classList.contains('pic'))), '그림이 안 읽힌 카드가 있음');
       const r = await sm.page.evaluate(() => [...document.querySelectorAll('.pick a')].map(a => {
         const im = a.querySelector('img.thumb'), ar = a.getBoundingClientRect();
@@ -803,6 +803,117 @@ async function until(page, fn, arg, ms) {
   });
   await test('슝슝 우주 달리기 콘솔 오류 없음', async () => { assert(!rn.errors.length, rn.errors.join(' | ')); });
   await rn.ctx.close();
+
+  console.log('슥슥 우주 다리');
+  const br = await open(browser, ROOT + '/bridge/index.html');
+  const B = br.page;
+  // 판 좌표 → 화면 좌표 (판을 화면에 맞춰 늘린 배율로)
+  const toScreen = (x, y) => B.evaluate(([x, y]) => { const f = BR.Render.fitOf(innerWidth, innerHeight); return [f.ox + x * f.k, f.oy + y * f.k]; }, [x, y]);
+  // 마우스로 선 긋기 (손가락처럼 잘게)
+  async function drawLine(pts) {
+    let [sx, sy] = await toScreen(pts[0][0], pts[0][1]);
+    await B.mouse.move(sx, sy); await B.mouse.down();
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1], [bx, by] = pts[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 12));
+      for (let k = 1; k <= n; k++) { [sx, sy] = await toScreen(ax + (bx - ax) * k / n, ay + (by - ay) * k / n); await B.mouse.move(sx, sy); }
+    }
+    await B.mouse.up();
+  }
+  await test('시작 화면: 행성 두 개(화성은 잠김), 출발 버튼에 다음 판, 게임 고르기(집) 버튼', async () => {
+    await B.evaluate(() => { localStorage.clear(); location.reload(); });
+    await B.waitForTimeout(400);
+    await B.waitForLoadState('load');
+    assert(await until(B, () => typeof BR !== 'undefined' && BR.debug && BR.debug.mode === 'title'), '안 열림');
+    assert(await on(B, 'scr-title'), '시작 화면 아님');
+    assert(await B.evaluate(() => document.querySelectorAll('#planets .planet').length === 2 && document.querySelector('[data-planet="mars"]').classList.contains('locked')), '행성 카드');
+    assert(await B.evaluate(() => /달 1판/.test(document.getElementById('start-label').textContent)), '출발 글');
+    assert(await B.evaluate(() => { const b = document.getElementById('btn-hub').getBoundingClientRect(); return b.width >= 40 && b.top >= 0; }), '집 버튼');
+    await B.tap('[data-planet="mars"]');
+    assert(await B.evaluate(() => BR.debug.mode === 'title' && /달에서 5판/.test(document.getElementById('toast').textContent)), '잠긴 화성 안내');
+  });
+  await test('출발 → 첫 판 안내(점선과 손가락), 게임 버튼 줄이 크고 화면 안에', async () => {
+    await B.tap('#btn-start');
+    assert(await until(B, () => BR.debug.mode === 'play' && BR.debug.world.level.id === 'moon-1'), '판이 안 열림');
+    assert(await B.evaluate(() => document.getElementById('tip').classList.contains('on') && BR.debug.view.tutorial), '처음 안내');
+    const r = await B.evaluate(() => ['btn-back', 'btn-undo', 'btn-reset', 'btn-hint'].map(id => { const b = document.getElementById(id).getBoundingClientRect(); return b.width >= 54 && b.left >= 0 && b.right <= innerWidth && b.top >= 0 ? '' : id + ' ' + Math.round(b.width); }).filter(Boolean));
+    assert(!r.length, r.join(' | '));
+    assert(await B.evaluate(() => getComputedStyle(document.getElementById('topbar')).display === 'none'), '게임 중 위쪽 버튼 숨김');
+  });
+  await test('손가락으로 선을 그리면 잉크가 줄고, 되돌리기로 돌아온다', async () => {
+    await drawLine([[500, 150], [700, 150]]);
+    assert(await until(B, () => BR.debug.world.lines.length === 1), '선이 안 생김');
+    assert(await B.evaluate(() => !document.getElementById('tip').classList.contains('on') && parseFloat(document.getElementById('ink-fill').style.width) < 95), '잉크 줄음');
+    await B.tap('#btn-undo');
+    assert(await until(B, () => BR.debug.world.lines.length === 0 && parseFloat(document.getElementById('ink-fill').style.width) > 99.9), '되돌리기');
+    await B.tap('#btn-reset');
+    assert(await until(B, () => BR.debug.world.phase === 'ready'), '다시 하기');
+  });
+  await test('다리를 그리면 공이 굴러가 친구를 만나고, 결과 화면: 별 3개 · 코인 · 스티커', async () => {
+    const coins0 = await B.evaluate(() => HUB.coins());
+    const sol = await B.evaluate(() => BR.debug.world.level.sol[0]);
+    await drawLine(sol);
+    assert(await until(B, () => BR.debug.mode === 'clear', null, 15000), '결과 화면이 안 나옴 ' + await B.evaluate(() => BR.debug.world.phase));
+    assert(await B.evaluate(() => document.querySelectorAll('#clear-stars i.on').length === 3), '별 3개');
+    assert(await B.evaluate(c => HUB.coins() === c + BR.DATA.COINS.base + BR.DATA.COINS.perStar * 3, coins0), '코인');
+    assert(await B.evaluate(() => HUB.stickers().some(t => t.id === 'br_first' && t.got) && BR.debug.rec.levels['moon-1'].stars === 3), '스티커·기록');
+    const fit = await B.evaluate(() => { const r = document.querySelector('#scr-clear .panel').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
+    assert(fit, '결과 화면이 한 화면에');
+  });
+  await test('다음 판 → 달 2판, 판 고르기 버튼 → 1판 별 3개 · 2판 다음 · 3판 잠김', async () => {
+    await B.waitForTimeout(750);   // 막 뜬 결과 화면은 잠깐 누르기를 막는다
+    await B.tap('#btn-next', { force: true });
+    assert(await until(B, () => BR.debug.mode === 'play' && BR.debug.world.level.id === 'moon-2'), '다음 판');
+    await B.tap('#btn-back');
+    assert(await until(B, () => BR.debug.mode === 'levels'), '판 고르기');
+    assert(await B.evaluate(() => document.querySelectorAll('[data-lv="moon-1"] .st .i.on').length === 3 && document.querySelector('[data-lv="moon-2"]').classList.contains('next') && document.querySelector('[data-lv="moon-3"]').classList.contains('locked')), '판 칸');
+    await B.tap('[data-lv="moon-3"]');
+    assert(await B.evaluate(() => BR.debug.mode === 'levels'), '잠긴 판이 열림');
+    await B.tap('[data-lv="moon-2"]', { force: true });   // 다음 판 칸은 살짝 커졌다 작아졌다 한다
+    assert(await until(B, () => BR.debug.mode === 'play' && BR.debug.world.level.id === 'moon-2'), '판 열기');
+  });
+  await test('공이 떨어지면 "다시 해 볼까요?" 뒤 저절로 처음부터, 두 번째엔 힌트 전구가 반짝', async () => {
+    for (let k = 1; k <= 2; k++) {
+      await drawLine([[640, 120], [641, 121]]);   // 구슬 하나: 출발만
+      assert(await until(B, () => BR.debug.world.phase === 'fall', null, 12000), '안 떨어짐');
+      assert(await until(B, () => BR.debug.world.phase === 'ready' && BR.debug.world.lines.length === 0, null, 3000), '처음부터가 안 됨');
+    }
+    assert(await B.evaluate(() => document.getElementById('btn-hint').classList.contains('pulse')), '힌트 반짝');
+    await B.tap('#btn-hint', { force: true });   // 반짝이는 버튼
+    assert(await until(B, () => BR.debug.view.hint > 0 && !document.getElementById('btn-hint').classList.contains('pulse')), '힌트 점선');
+  });
+  await test('상점: 코인으로 펜을 사면 바로 그 펜, 캐릭터도 사서 고른다', async () => {
+    await B.evaluate(() => BR.debug.toTitle());
+    await B.evaluate(() => BR.debug.giveCoins(1000));
+    await B.tap('#btn-shop');
+    assert(await until(B, () => BR.debug.mode === 'shop'), '상점');
+    await B.tap('[data-tab="pens"]');
+    await B.tap('[data-buy="pink"]');
+    assert(await B.evaluate(() => BR.debug.shop.pen === 'pink' && BR.debug.shop.pens.pink), '펜');
+    await B.tap('[data-tab="chars"]');
+    await B.tap('[data-buy="sun"]');
+    assert(await B.evaluate(() => BR.debug.shop.char === 'sun' && JSON.parse(localStorage.getItem('bridge.shop1')).char === 'sun'), '캐릭터');
+    await B.tap('#btn-shop-back');
+    assert(await B.evaluate(() => BR.debug.mode === 'title' && document.getElementById('char-name').textContent === '해님이'), '시작 화면에 새 캐릭터');
+  });
+  await test('슥슥 우주 다리 콘솔 오류 없음', async () => { assert(!br.errors.length, br.errors.join(' | ')); });
+  await br.ctx.close();
+  // 작은 탭(893×533): 시작 화면·게임 버튼·판 고르기·결과 화면이 한 화면에
+  const brs = await open(browser, ROOT + '/bridge/index.html', Object.assign({}, TAB, { viewport: { width: 893, height: 533 } }));
+  await test('슥슥 우주 다리 작은 탭 893x533: 시작 화면·게임 버튼·판 고르기·결과 화면이 화면 안에', async () => {
+    const P = brs.page;
+    assert(await until(P, () => typeof BR !== 'undefined' && BR.debug && BR.debug.mode === 'title'), '안 열림');
+    const inView = sel => P.evaluate(s => { const r = document.querySelector(s).getBoundingClientRect(); return r.top >= -1 && r.left >= -1 && r.bottom <= innerHeight + 1 && r.right <= innerWidth + 1; }, sel);
+    assert(await inView('#scr-title .panel'), '시작 화면');
+    await P.evaluate(() => { BR.debug.unlockAll(); BR.debug.startLevel('mars-2'); });
+    for (const id of ['#btn-back', '#hud-level', '#ink', '#btn-undo', '#btn-reset', '#btn-hint']) assert(await inView(id), id);
+    await P.evaluate(() => BR.debug.openLevels('mars'));
+    assert(await inView('#scr-levels .panel'), '판 고르기');
+    await P.evaluate(() => { BR.debug.startLevel('mars-2'); BR.debug.drawSol(0); });
+    assert(await until(P, () => BR.debug.mode === 'clear', null, 15000), '결과');
+    assert(await inView('#scr-clear .panel'), '결과 화면');
+    assert(!brs.errors.length, brs.errors.join(' | '));
+  });
+  await brs.ctx.close();
 
   console.log('프로필·보호자');
   const pf = await open(browser, ROOT + '/index.html');
