@@ -1,4 +1,4 @@
-# 게임 모음
+# ppyong 게임 모음
 
 | 폴더 | 게임 |
 |---|---|
@@ -9,7 +9,7 @@
 | [`bridge/`](bridge/) | **슥슥 우주 다리** · 손가락으로 그린 선이 진짜 다리가 되는 물리 퍼즐 ([기획서](bridge/PLAN.md)) |
 | [`archive/robocar/`](archive/robocar/) | **뚝딱 로봇카** · 보류 (2026-09-27). 첫 화면에서 뺐고, 코드와 테스트는 그대로 보관 |
 
-저장소 첫 화면(`index.html`)에서 네 게임 중 하나를 고른다.
+저장소 첫 화면(`index.html`)에서 다섯 게임 중 하나를 고른다.
 
 ## 보호자 안내: 아이마다 기록 따로 · 놀이 시간 · 소리 크기
 
@@ -31,7 +31,8 @@
 - 게임 본체: [`game/`](game/) · 기획서: [`game/PLAN.md`](game/PLAN.md)
 - 모바일(폰·태블릿) 우선. 크롬에서 열고 메뉴 → **홈 화면에 추가**하면 앱처럼 전체 화면으로 실행된다.
 - 설치·빌드 없음. `game/index.html`을 브라우저로 열면 바로 실행된다.
-- GitHub Pages를 켜면 `https://km-jang.github.io/n-gun/`이 네 게임을 고르는 첫 화면이고, 뿅뿅 우주선은 `…/n-gun/game/`이다.
+- 인터넷 주소 `https://km-jang.github.io/ppyong/`이 다섯 게임을 고르는 첫 화면이고, 뿅뿅 우주선은 `…/ppyong/game/`이다.
+  저장소 옛 이름은 n-gun이다(2026-09-29 바꿈). 옛 주소 `https://km-jang.github.io/n-gun/`은 넘겨 주기 전용 저장소가 새 주소로 보낸다.
 
 ## 조작
 
@@ -69,10 +70,10 @@ node tests/flow.test.js      # 네 게임 화면 흐름 (Playwright 크로미움
 
 태블릿에서 앱으로 설치하고 인터넷 없이 하려면 https 주소가 필요하다. 한 번만 켜 두면 된다.
 
-1. github.com/km-jang/n-gun 에서 위쪽 **Settings** 누르기
+1. github.com/km-jang/ppyong 에서 위쪽 **Settings** 누르기
 2. 왼쪽 메뉴 **Pages** 누르기
 3. **Branch**에서 `main`, 폴더 `/ (root)` 고르고 **Save**
-4. 1~2분 뒤 같은 화면 위쪽에 주소가 뜬다: `https://km-jang.github.io/n-gun/`
+4. 1~2분 뒤 같은 화면 위쪽에 주소가 뜬다: `https://km-jang.github.io/ppyong/`
 5. 태블릿 크롬에서 그 주소 → 게임 고르기 → 크롬 메뉴(⋮) → **홈 화면에 추가**
 
 main에 합친 것만 이 주소에 나온다.
