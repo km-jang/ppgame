@@ -645,6 +645,42 @@ async function until(page, fn, arg, ms) {
     await J.tap('#btn-mute');
     assert(await J.evaluate(() => !SND.muted() && !document.getElementById('btn-mute').classList.contains('muted')), '다시 켜기');
   });
+  await test('펫: 시작 화면 내 캐릭터 칸에 꼬마 별 → 상점 펫 칸에서 로봇 강아지 사서 데리고 판 시작 → 펫이 기둥 안에 보인다 → 펫 없음', async () => {
+    await J.evaluate(() => { if (JP.debug.mode !== 'title') JP.debug.toTitle(); });
+    assert(await J.evaluate(() => !document.getElementById('pet-preview').hidden && /꼬마 별/.test(document.getElementById('char-small').textContent)), '처음부터 꼬마 별이 안 보임');
+    await J.evaluate(() => JP.debug.giveCoins(300));
+    await J.tap('#btn-shop');
+    assert(await until(J, () => JP.debug.mode === 'shop'), '상점이 안 열림');
+    await J.tap('[data-tab="pets"]');
+    assert(await J.evaluate(() => document.querySelectorAll('#shop-list.t-pets .sitem').length === 6 && document.querySelector('[data-tab="pets"]').getAttribute('aria-selected') === 'true'), '펫 칸 카드 6개가 아님');
+    // 모든 카드가 화면 안 (가로 스크롤 없이)
+    assert(await J.evaluate(() => [...document.querySelectorAll('#shop-list .sitem')].every(e => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; })), '펫 카드가 화면 밖');
+    await J.tap('[data-buy="dog"]');
+    assert(await J.evaluate(() => JP.debug.shop.pet === 'dog' && JP.debug.shop.pets.dog && document.querySelector('canvas[data-pet="dog"]').closest('.sitem').classList.contains('cur')), '강아지를 사도 안 데리고 감');
+    await J.tap('[data-pet-use="none"]');
+    assert(await J.evaluate(() => JP.debug.shop.pet === null), '펫 없음이 안 됨');
+    await J.tap('[data-pet-use="dog"]');
+    assert(await J.evaluate(() => JP.debug.shop.pet === 'dog' && JSON.parse(localStorage.getItem('jump.shop1')).pet === 'dog'), '다시 고르기·저장 안 됨');
+    await J.tap('#btn-shop-back');
+    assert(await J.evaluate(() => JP.debug.mode === 'title' && !document.getElementById('pet-preview').hidden && /로봇 강아지/.test(document.getElementById('char-small').textContent)), '시작 화면에 강아지가 안 보임');
+    await J.tap('#btn-start');
+    assert(await until(J, () => JP.debug.mode === 'play' && JP.debug.world.pet && JP.debug.world.pet.id === 'dog'), '판에 강아지가 없음');
+    await J.waitForTimeout(900);
+    await J.evaluate(() => JP.debug.pause());
+    await J.waitForTimeout(250);
+    // 멈춘 화면에서 펫 자리의 픽셀이 밝다 (펫이 그려져 있다), 그리고 기둥 안
+    const px = await J.evaluate(() => {
+      const W = JP.debug.world, v = JP.debug.view, q = W.pet, cv = document.getElementById('game');
+      const x = v.cx + q.x * v.scale, y = v.cy + v.ch - (q.y - W.cam) * v.scale;
+      const g = cv.getContext('2d'), d = g.getImageData(Math.round(x * v.dpr) - 3, Math.round(y * v.dpr) - 3, 7, 7).data;
+      let best = 0; for (let i = 0; i < d.length; i += 4) best = Math.max(best, d[i] + d[i + 1] + d[i + 2]);
+      return { x, y, inCol: x >= v.cx && x <= v.cx + v.cw && y >= v.cy && y <= v.cy + v.ch, best };
+    });
+    assert(px.inCol && px.best > 450, '펫이 안 보임 ' + JSON.stringify(px));
+    await J.evaluate(() => { JP.debug.quitRun(); JP.debug.selectPet(null); JP.debug.newGame(3); });
+    assert(await J.evaluate(() => JP.debug.world.pet === null && document.getElementById('pet-preview').hidden), '펫 없음인데 펫이 있음');
+    await J.evaluate(() => { JP.debug.selectPet('star'); JP.debug.toTitle(); });
+  });
   await test('시작 화면·결과 화면에 게임 고르기로 가는 집 버튼', async () => {
     assert(await J.evaluate(() => /index\.html$/.test(document.getElementById('btn-hub').getAttribute('href')) && /index\.html$/.test(document.getElementById('btn-over-hub').getAttribute('href'))), '집 버튼 주소');
   });

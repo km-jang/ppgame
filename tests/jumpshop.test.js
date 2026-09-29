@@ -323,5 +323,104 @@ test('깜짝 선물: 선물 코인은 배율 없이 그대로 더하고, 시작 
   assert(r.giftCoins === 7 && r.giftItems[0] === 'rocketStart' && r.gifts === 2 && r.fevers === 1 && r.rooms === 1, 'runOf');
 });
 
+// ─── 따라다니는 꼬마 펫 (2026-09-29) ─────────────────────────
+test('펫: 꼬마 별은 공짜로 처음부터 데리고 다닌다 (새 저장본·펫 칸이 없던 예전 저장본 모두)', () => {
+  const st = SH.blank();
+  assert(st.pet === 'star' && st.pets.star === true && Object.keys(st.pets).length === 1, 'blank ' + JSON.stringify([st.pet, st.pets]));
+  assert(SH.price(st, 'star') === null && SH.buy(st, 'star').reason === 'owned', 'star is owned');
+  const old = SH.clean({ coins: 10, char: 'robot', chars: { robot: true } });
+  assert(old.pet === 'star' && old.pets.star, 'old save gets the star pet');
+  assert(SH.worldOpts(st).pet === 'star', 'world gets the pet');
+  const W = create(1, Object.assign({ diff: 'easy', viewH: 600 }, SH.worldOpts(st)));
+  assert(W.pet && W.pet.id === 'star', 'world has the pet');
+});
+test('펫: 사면 바로 데리고 다니고, 가진 펫끼리 바꾸고, "펫 없음"도 고른다 (한 번에 하나)', () => {
+  const st = SH.blank();
+  const dog = D.PETS.find(p => p.id === 'dog');
+  let r = SH.buy(st, 'dog');
+  assert(!r.ok && r.reason === 'coins' && !st.pets.dog && st.pet === 'star', 'poor');
+  st.coins = 1000;
+  r = SH.buy(st, 'dog');
+  assert(r.ok && st.pets.dog && st.pet === 'dog' && st.coins === 1000 - dog.price, 'bought and equipped');
+  assert(SH.buy(st, 'dog').reason === 'owned', 'owned');
+  assert(SH.selectPet(st, 'star') && st.pet === 'star', 'switch');
+  assert(!SH.selectPet(st, 'ufo') && st.pet === 'star', 'cannot pick a locked pet');
+  assert(!SH.selectPet(st, 'nope') && st.pet === 'star', 'unknown');
+  assert(SH.selectPet(st, null) && st.pet === null && SH.worldOpts(st).pet === null, 'none');
+  assert(create(1, Object.assign({ viewH: 600 }, SH.worldOpts(st))).pet === null, 'no pet in the world');
+  assert(SH.selectPet(st, 'none') && st.pet === null, "'none' works too");
+  // 값: 캐릭터보다 싸게 (250 ~ 700), 상점 id가 겹치지 않는다
+  const all = [...D.CHARS, ...D.PETS, ...D.UPGRADES, ...D.START_ITEMS].map(x => x.id);
+  assert(new Set(all).size === all.length, 'unique shop ids');
+  const pp = D.PETS.filter(p => p.price).map(p => p.price);
+  assert(Math.min(...pp) >= 250 && Math.max(...pp) <= 700 && Math.max(...pp) < Math.max(...D.CHARS.map(c => c.price)), 'prices ' + pp.join());
+});
+test('펫: 저장하고 다시 불러와도 그대로 ("펫 없음"도), 망가진 값은 기본으로', () => {
+  const store = memStore();
+  const st = SH.blank();
+  st.coins = 2000; SH.buy(st, 'jelly'); SH.buy(st, 'ufo');
+  SH.save(st, store, null);
+  const back = SH.load(store, null);
+  assert(back.pet === 'ufo' && back.pets.jelly && back.pets.ufo && back.pets.star && !back.pets.dog, 'round trip ' + JSON.stringify(back.pets));
+  SH.selectPet(back, null); SH.save(back, store, null);
+  assert(SH.load(store, null).pet === null, 'none is remembered');
+  assert(JSON.stringify(SH.load(store, null)) === JSON.stringify(back), 'same shape');
+  const bad = SH.clean({ pet: 'ufo', pets: { ufo: 'yes', dog: true, nope: true, star: false } });
+  assert(bad.pet === 'star' && bad.pets.dog && !bad.pets.ufo && !('nope' in bad.pets) && bad.pets.star, 'cleaned ' + JSON.stringify(bad));
+  assert(SH.clean({ pet: 42 }).pet === 'star' && SH.clean({ pet: 'none' }).pet === null, 'odd values');
+});
+test('펫 미션: 펫을 데리고 다닐 때만 나오고, 펫이 주운 별로 채운다 (누적·한 판). 예전 미션 id는 그대로', () => {
+  const ids = D.MISSIONS.map(m => m.id);
+  for (const id of ['hsum1000', 'star200', 'spring20', 'rocket3', 'save3', 'crumb30', 'bnc300', 'games5', 'stomp15', 'h100', 'h250', 'h500', 'star30', 'stomp5', 'combo12', 't120', 'n150', 'x80']) assert(ids.includes(id), 'kept ' + id);
+  const pm = D.MISSIONS.filter(m => m.pet);
+  assert(pm.map(m => m.id).join() === 'pet30,pet8' && pm.every(m => m.stat === 'petStars'), 'pet missions');
+  const st = SH.blank();
+  SH.selectPet(st, null);
+  for (let k = 0; k < 300; k++) { st.missions = []; st.mseed = k + 1; SH.fillMissions(st); for (const m of st.missions) assert(!SH.missionDef(m.id).pet, 'no pet mission without a pet ' + m.id); }
+  SH.selectPet(st, 'star');
+  let seen = false;
+  for (let k = 0; k < 300 && !seen; k++) { st.missions = []; st.mseed = k + 1; SH.fillMissions(st); seen = st.missions.some(m => m.id === 'pet30' || m.id === 'pet8'); }
+  assert(seen, 'pet missions appear with a pet');
+  st.missions = [{ id: 'pet30', prog: 0, done: false }, { id: 'pet8', prog: 0, done: false }, { id: 'h100', prog: 0, done: false }];
+  SH.progressMissions(st, run({ petStars: 9 }));
+  assert(st.missions[0].prog === 9 && st.missions[1].done, 'progress ' + JSON.stringify(st.missions));
+  SH.progressMissions(st, run({ petStars: 25 }));
+  assert(st.missions[0].done && st.missions[0].prog === 30, 'life adds up');
+  // 실제 판: 판 요약에 petStars
+  const W = create(4, Object.assign({ diff: 'easy', viewH: 600 }, SH.worldOpts(SH.blank())));
+  for (let i = 0; i < 60 * 40 && W.phase === 'play'; i++) { W.input.dir = botDir(W); step(W, 1 / 60); W.events.length = 0; W.fx.length = 0; }
+  const r = SH.runOf(W);
+  assert(r.petStars === W.petStars && r.petStars > 0, 'runOf petStars ' + r.petStars);
+});
+test('코인 크기: 펫을 데리고 다녀도 아이 흉내 봇의 1분 코인은 펫 없을 때의 +15% 안 (기본 펫 꼬마 별, 숫자를 찍는다)', () => {
+  const measure = (pet, n) => {
+    const perMin = {}, ps = {};
+    for (const diff of D.DIFF_ORDER) {
+      let sum = 0, time = 0, pst = 0;
+      for (let seed = 1; seed <= n; seed++) {
+        const W = create(seed, { diff, viewH: 600, pet });
+        const bot = kidBot(seed, KID);
+        for (let i = 0; i < 60 * 300 && W.phase === 'play'; i++) { W.input.dir = bot(W, 1 / 60); step(W, 1 / 60); W.events.length = 0; W.fx.length = 0; }
+        sum += SH.coinsFor(SH.runOf(W), SH.blank()).total; time += W.t; pst += W.petStars;
+      }
+      perMin[diff] = sum / time * 60; ps[diff] = Math.round(pst / n);
+    }
+    return { perMin, ps };
+  };
+  const round = o => JSON.stringify(Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Math.round(v)])));
+  const base = measure(null, 16), lines = [];
+  for (const p of D.PETS) {
+    const m = measure(p.id, 16);
+    lines.push(p.id + ' ' + round(m.perMin) + ' (펫이 주운 별 한 판 ' + JSON.stringify(m.ps) + ')');
+    for (const d of D.DIFF_ORDER) {
+      const k = m.perMin[d] / base.perMin[d];
+      // 기본 펫(누구나 데리고 다님)은 +15% 안. 해파리·UFO는 판의 길을 바꿔 시드마다 흔들림이 커서 +25% 안
+      // (시드 40으로 잰 값은 모두 +10% 안팎: jump/PLAN.md 24절)
+      assert(k <= (p.id === 'star' ? 1.15 : 1.25) && k >= 0.8, p.id + ' ' + d + ' x' + k.toFixed(2));
+    }
+  }
+  console.log('       아이 흉내 봇 1분 코인: 펫 없음 ' + round(base.perMin) + '\n       ' + lines.join('\n       '));
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

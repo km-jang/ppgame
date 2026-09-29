@@ -316,7 +316,7 @@
   // ─── 그리기 상태 (꾸밈 전용) ───────────────────────────────
   const R = { bgKey: '', zones: [], cloudLayer: null, stars: null, colKey: '', col: null, mileKey: '', miles: {},
     parts: [], texts: [], clouds: [], squash: [], shake: 0, flash: 0, world: null, banner: null, big: null, stormKey: '', storm: null,
-    occ: [], fixed: [] };
+    occ: [], fixed: [], petTrail: [], hearts: [], petSay: null, petPos: null };
 
   // ─── 글자 자리 나누기 (2026-09-27 점검) ─────────────────────
   // 이름표("위에서 꾹!"·"위험!" 등)가 높이 눈금 이름표·주인공·주인공이 노리는 발판·서로와 겹치지 않게, 한 프레임 동안 차지한 칸을 적어 둔다.
@@ -365,7 +365,7 @@
 
   // 규칙이 남긴 연출 요청(W.fx)을 입자로 바꾼다. 좌표는 월드(점), 크기는 화면 픽셀
   function takeFx(W, v) {
-    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.clouds.length = 0; R.squash.length = 0; R.shake = 0; R.flash = 0; R.banner = null; R.big = null; }
+    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.clouds.length = 0; R.squash.length = 0; R.shake = 0; R.flash = 0; R.banner = null; R.big = null; R.petTrail.length = 0; R.hearts.length = 0; R.petSay = null; R.petPos = null; }
     const s = v.scale, big = v.hud !== false;
     const zoneNow = W.fx.some(f => f.kind === 'zone');
     for (const f of W.fx) {
@@ -439,6 +439,10 @@
       } else if (f.kind === 'crumble') {
         burst(f.x, f.y, 10, ['#ffa94d', '#b85410', '#ffe0b8'], 180, 5 * s);
         if (!v.calm && big) R.shake = Math.max(R.shake, D.FX.shake);
+      } else if (f.kind === 'star' && f.pet) {
+        // 펫이 주운 별: 작은 반짝이만 (점수 글자는 빼서 주인공 둘레가 복잡하지 않게)
+        ring(f.x, f.y, 18 * s, '#ffe66d', 0.3);
+        burst(f.x, f.y, 6, ['#ffe66d', '#fff4c2'], 180, 3 * s);
       } else if (f.kind === 'star') {
         ring(f.x, f.y, 26 * s, '#ffe66d', 0.35);
         burst(f.x, f.y, D.FX.starSparks, ['#ffe66d', '#fff4c2', '#ffcf3a'], 260, 4 * s);
@@ -460,6 +464,26 @@
         ring(f.x, f.y, 50 * s, K.top, 0.4);
         burst(f.x, f.y, 16, [K.color, K.top, '#ffffff', '#ffe66d'], 340, 5 * s);
         if (big) { text(f.x, f.y + 44, '꾹!', K.top, 30 * s); text(f.x + 30, f.y + 10, '+' + f.pts, '#ffe66d', 22 * s); }
+      } else if (f.kind === 'petCheer') {
+        // 펫 응원: 하트 (신기록·새 장소는 두 개 + 반짝이), 아슬아슬·신기록은 짧은 글자
+        // 하트와 글자는 펫에 붙어 따라다닌다 (펫 자리에서 위로 떠오름, 화면 px 거리)
+        const n = f.what === 'best' || f.what === 'place' ? 2 : 1;
+        for (let i = 0; i < n; i++) {
+          if (R.hearts.length > 6) R.hearts.shift();
+          R.hearts.push({ dx: (i - (n - 1) / 2) * 22 * s, dy: -(18 + i * 8) * s, life: 1.1, max: 1.1, size: (i ? 8 : 11) * s, color: i ? '#ffb3e0' : '#ff5ea8' });
+        }
+        if (n > 1) burst(f.x, f.y, 10, ['#ffe66d', '#ff9ee0', '#ffffff'], 200, 3.5 * s);
+        const say = { near: ['아슬아슬!', '#ffd6f0'], best: ['신기록!', '#ffe66d'], place: ['와아!', '#bff8ff'] }[f.what];
+        R.petSay = big && say ? { txt: say[0], color: say[1], size: 20 * s, life: 1.1, max: 1.1 } : R.petSay;
+      } else if (f.kind === 'petBoost') {
+        ring(f.x, f.y, 40 * s, '#ff9ee0', 0.45);
+        burst(f.x, f.y, 12, ['#ff9ee0', '#ffffff', '#ffd6f4'], 260, 4 * s);
+        if (big) text(f.x, f.y + 50, '폴짝!', '#ff9ee0', 28 * s);
+      } else if (f.kind === 'petZap') {
+        const K = MON[f.mk] || MON.slime;
+        ring(f.x, f.y, 48 * s, '#c9b0ff', 0.45);
+        burst(f.x, f.y, 16, ['#c9b0ff', K.color, '#ffffff'], 320, 4.5 * s);
+        if (big) text(f.x, f.y + 40, '톡!', '#e6dcff', 28 * s);
       } else if (f.kind === 'bump') {
         ring(f.x, f.y, 34 * s, '#ffffff', 0.3);
         if (big) text(f.x, f.y + 40, '앗!', '#ffe6f4', 24 * s);
@@ -490,6 +514,9 @@
     for (let i = R.texts.length - 1; i >= 0; i--) { const q = R.texts[i]; q.life -= dt; q.y += 40 * dt; if (q.life <= 0) R.texts.splice(i, 1); }
     for (let i = R.clouds.length - 1; i >= 0; i--) { const q = R.clouds[i]; q.life -= dt; q.y += 30 * dt; if (q.life <= 0) R.clouds.splice(i, 1); }
     for (let i = R.squash.length - 1; i >= 0; i--) { if ((R.squash[i].life -= dt) <= 0) R.squash.splice(i, 1); }
+    for (let i = R.petTrail.length - 1; i >= 0; i--) { if ((R.petTrail[i].life -= dt) <= 0) R.petTrail.splice(i, 1); }
+    for (let i = R.hearts.length - 1; i >= 0; i--) { const q = R.hearts[i]; q.life -= dt; q.dy -= 34 * dt; if (q.life <= 0) R.hearts.splice(i, 1); }
+    if (R.petSay && (R.petSay.life -= dt) <= 0) R.petSay = null;
     if (R.banner && (R.banner.life -= dt) <= 0) R.banner = null;
     if (R.big && (R.big.life -= dt) <= 0) R.big = null;
     R.shake = Math.max(0, R.shake - dt * 40);
@@ -1743,6 +1770,282 @@
     }
   }
 
+  // ─── 따라다니는 꼬마 펫 (D.PETS, 2026-09-29) ───────────────────
+  // 몸통(광택·얼굴·발광)은 펫·크기별로 한 번 미리 그려 두고 찍기만 한다 (발광 shadowBlur는 미리 그릴 때 한 번).
+  // 매 프레임에는 작은 움직이는 부분만: 별 흔들림 · 강아지 꼬리 · 해파리 다리 · 반딧불 날개 · UFO 불빛.
+  // 움직임 줄이기면 둥실거림을 줄이고 반짝이 꼬리를 그리지 않는다
+  const petDef = id => D.PETS.find(p => p.id === id) || null;
+  const petCache = {};
+  function petEyes(g, rp, y, gap, er, col) {
+    for (const d of [-1, 1]) {
+      g.fillStyle = col || '#1b1430';
+      g.beginPath(); g.ellipse(d * gap, y, er * 0.8, er, 0, 0, TAU); g.fill();
+      g.fillStyle = '#ffffff';
+      g.beginPath(); g.arc(d * gap - er * 0.25, y - er * 0.4, er * 0.36, 0, TAU); g.fill();
+    }
+  }
+  function petBlush(g, rp, y, gap) {
+    g.fillStyle = 'rgba(255,110,160,0.45)';
+    for (const d of [-1, 1]) { g.beginPath(); g.ellipse(d * gap, y, rp * 0.14, rp * 0.08, 0, 0, TAU); g.fill(); }
+  }
+  function petSmile(g, rp, y, w, col) {
+    g.strokeStyle = col || '#5a2a10'; g.lineWidth = Math.max(1, rp * 0.08); g.lineCap = 'round';
+    g.beginPath(); g.arc(0, y - w * 0.4, w, Math.PI * 0.2, Math.PI * 0.8); g.stroke();
+  }
+  function petSprite(look, rp, dpr) {
+    const key = look + '|' + rp + '|' + dpr;
+    if (petCache[key]) return petCache[key];
+    const m = Math.ceil(rp * 0.9) + 4, size = rp * 2 + m * 2;
+    const c = document.createElement('canvas');
+    c.width = c.height = Math.round(size * dpr);
+    const g = c.getContext('2d');
+    g.scale(dpr, dpr); g.translate(size / 2, size / 2);
+    const K = D.PETS.find(p => p.look === look) || D.PETS[0];
+    g.shadowColor = 'rgba(' + K.glow + ',0.9)'; g.shadowBlur = rp * 0.7;
+    if (look === 'star') {
+      // 꼬마 별: 둥근 다섯 뿔 별
+      const grad = g.createRadialGradient(-rp * 0.3, -rp * 0.35, rp * 0.1, 0, 0, rp * 1.1);
+      grad.addColorStop(0, '#fffbe0'); grad.addColorStop(0.45, '#ffe66d'); grad.addColorStop(1, '#f0a020');
+      g.fillStyle = grad; g.lineJoin = 'round';
+      g.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? rp * 0.55 : rp * 1.08;
+        const x = Math.cos(a) * rr, y = Math.sin(a) * rr + rp * 0.06;
+        if (i) g.lineTo(x, y); else g.moveTo(x, y);
+      }
+      g.closePath(); g.fill();
+      g.shadowBlur = 0;
+      g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = Math.max(1, rp * 0.1); g.stroke();
+      petEyes(g, rp, rp * 0.02, rp * 0.24, rp * 0.13, '#4a2600');
+      petBlush(g, rp, rp * 0.26, rp * 0.42);
+      petSmile(g, rp, rp * 0.3, rp * 0.13, '#7a3a00');
+    } else if (look === 'dog') {
+      // 로봇 강아지: 은빛 파란 둥근 머리 + 늘어진 귀 + 반짝 눈 + 분홍 혀
+      for (const d of [-1, 1]) {
+        g.fillStyle = '#2f5fb0';
+        g.beginPath(); g.ellipse(d * rp * 0.78, rp * 0.22, rp * 0.26, rp * 0.56, d * 0.12, 0, TAU); g.fill();
+        g.fillStyle = '#5a8ee0';
+        g.beginPath(); g.ellipse(d * rp * 0.8, rp * 0.36, rp * 0.14, rp * 0.34, d * 0.12, 0, TAU); g.fill();
+      }
+      const grad = g.createRadialGradient(-rp * 0.3, -rp * 0.35, rp * 0.1, 0, 0, rp);
+      grad.addColorStop(0, '#f2fbff'); grad.addColorStop(0.5, '#9fdcff'); grad.addColorStop(1, '#3a7ac8');
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(0, 0, rp * 0.9, 0, TAU); g.fill();
+      g.shadowBlur = 0;
+      // 주둥이
+      g.fillStyle = '#e8f6ff';
+      g.beginPath(); g.ellipse(0, rp * 0.36, rp * 0.42, rp * 0.3, 0, 0, TAU); g.fill();
+      g.fillStyle = '#1b2340';
+      g.beginPath(); g.ellipse(0, rp * 0.22, rp * 0.14, rp * 0.1, 0, 0, TAU); g.fill();
+      g.fillStyle = '#ff7aa8';
+      g.beginPath(); g.ellipse(rp * 0.08, rp * 0.56, rp * 0.1, rp * 0.13, 0, 0, TAU); g.fill();
+      petEyes(g, rp, -rp * 0.14, rp * 0.32, rp * 0.15, '#10203a');
+      // 머리 위 작은 볼트
+      g.fillStyle = '#ffe66d';
+      g.beginPath(); g.arc(0, -rp * 0.92, rp * 0.14, 0, TAU); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = Math.max(1, rp * 0.07);
+      g.beginPath(); g.arc(0, 0, rp * 0.9, Math.PI * 1.1, Math.PI * 1.45); g.stroke();
+    } else if (look === 'jelly') {
+      // 아기 해파리: 반투명 분홍 둥근 지붕 + 물방울 무늬 (다리는 매 프레임)
+      const grad = g.createRadialGradient(-rp * 0.25, -rp * 0.4, rp * 0.1, 0, -rp * 0.1, rp * 1.05);
+      grad.addColorStop(0, 'rgba(255,240,250,0.98)'); grad.addColorStop(0.5, 'rgba(255,158,224,0.95)'); grad.addColorStop(1, 'rgba(190,70,170,0.95)');
+      g.fillStyle = grad;
+      g.beginPath(); g.moveTo(-rp, rp * 0.2); g.bezierCurveTo(-rp * 1.02, -rp * 0.9, rp * 1.02, -rp * 0.9, rp, rp * 0.2);
+      for (let i = 0; i < 5; i++) { const x0 = rp - i * rp * 0.4; g.quadraticCurveTo(x0 - rp * 0.2, rp * 0.42, x0 - rp * 0.4, rp * 0.2); }
+      g.closePath(); g.fill();
+      g.shadowBlur = 0;
+      g.fillStyle = 'rgba(255,255,255,0.5)';
+      for (const [x, y, s] of [[-0.45, -0.35, 0.12], [0.5, -0.2, 0.09], [0.1, -0.55, 0.07]]) { g.beginPath(); g.arc(x * rp, y * rp, s * rp, 0, TAU); g.fill(); }
+      petEyes(g, rp, -rp * 0.02, rp * 0.3, rp * 0.13, '#4a0f40');
+      petBlush(g, rp, rp * 0.14, rp * 0.52);
+      petSmile(g, rp, rp * 0.14, rp * 0.1, '#7a1a60');
+    } else if (look === 'firefly') {
+      // 반짝 반딧불: 빛나는 연두 꼬리 방울 + 작은 몸 + 더듬이 (날개는 매 프레임)
+      const tail = g.createRadialGradient(0, rp * 0.45, rp * 0.05, 0, rp * 0.45, rp * 0.6);
+      tail.addColorStop(0, '#fbffd8'); tail.addColorStop(0.5, '#d4ff6a'); tail.addColorStop(1, '#7ad61c');
+      g.fillStyle = tail;
+      g.beginPath(); g.ellipse(0, rp * 0.45, rp * 0.52, rp * 0.5, 0, 0, TAU); g.fill();
+      g.shadowBlur = 0;
+      const body = g.createRadialGradient(-rp * 0.2, -rp * 0.4, rp * 0.05, 0, -rp * 0.15, rp * 0.7);
+      body.addColorStop(0, '#d8ffe6'); body.addColorStop(0.5, '#6fe0a0'); body.addColorStop(1, '#2a8a5c');
+      g.fillStyle = body;
+      g.beginPath(); g.arc(0, -rp * 0.2, rp * 0.58, 0, TAU); g.fill();
+      g.strokeStyle = '#1f6a4a'; g.lineWidth = Math.max(1, rp * 0.08); g.lineCap = 'round';
+      for (const d of [-1, 1]) { g.beginPath(); g.moveTo(d * rp * 0.2, -rp * 0.7); g.quadraticCurveTo(d * rp * 0.3, -rp * 1.05, d * rp * 0.55, -rp * 1.08); g.stroke(); }
+      g.fillStyle = '#d4ff6a';
+      for (const d of [-1, 1]) { g.beginPath(); g.arc(d * rp * 0.55, -rp * 1.08, rp * 0.1, 0, TAU); g.fill(); }
+      petEyes(g, rp, -rp * 0.24, rp * 0.22, rp * 0.13, '#0a2a1a');
+      petBlush(g, rp, -rp * 0.02, rp * 0.4);
+    } else {
+      // 꼬마 UFO: 보라 빛 원반 + 유리 뚜껑 속 작은 초록 얼굴 (가장자리 불빛은 매 프레임)
+      const dome = g.createRadialGradient(-rp * 0.15, -rp * 0.55, rp * 0.05, 0, -rp * 0.25, rp * 0.6);
+      dome.addColorStop(0, 'rgba(240,255,255,0.95)'); dome.addColorStop(1, 'rgba(94,231,255,0.55)');
+      g.fillStyle = dome;
+      g.beginPath(); g.ellipse(0, -rp * 0.05, rp * 0.62, rp * 0.78, 0, Math.PI, TAU); g.fill();
+      g.fillStyle = '#7dff9a';
+      g.beginPath(); g.arc(0, -rp * 0.3, rp * 0.36, 0, TAU); g.fill();
+      petEyes(g, rp, -rp * 0.34, rp * 0.14, rp * 0.1, '#0c2a14');
+      const disc = g.createLinearGradient(0, -rp * 0.2, 0, rp * 0.45);
+      disc.addColorStop(0, '#efe6ff'); disc.addColorStop(0.45, '#b388ff'); disc.addColorStop(1, '#4a2a9a');
+      g.fillStyle = disc;
+      g.beginPath(); g.ellipse(0, rp * 0.12, rp * 0.98, rp * 0.34, 0, 0, TAU); g.fill();
+      g.shadowBlur = 0;
+      g.strokeStyle = 'rgba(255,255,255,0.65)'; g.lineWidth = Math.max(1, rp * 0.07);
+      g.beginPath(); g.ellipse(0, rp * 0.02, rp * 0.9, rp * 0.2, 0, Math.PI * 1.1, Math.PI * 1.6); g.stroke();
+    }
+    petCache[key] = { c, size };
+    return petCache[key];
+  }
+  // 펫 하나 그리기 (x, y 화면 좌표, rp 반지름 px). S: {t, calm, face, cheer 0 ~ 1, ready, moving, zap: 목표 화면 좌표}
+  function drawPetBody(ctx, look, x, y, rp, dpr, S) {
+    const K = D.PETS.find(p => p.look === look) || D.PETS[0];
+    const t = S.t, calm = S.calm;
+    if (S.zap) {
+      // UFO 끌어당기는 빛: 목표까지 반투명 삼각형
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#c9b0ff';
+      ctx.beginPath(); ctx.moveTo(x - rp * 0.5, y + rp * 0.2); ctx.lineTo(S.zap.x - rp * 0.9, S.zap.y); ctx.lineTo(S.zap.x + rp * 0.9, S.zap.y); ctx.lineTo(x + rp * 0.5, y + rp * 0.2); ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    glow(ctx, 'rgba(' + K.glow + ',0.55)', x, y, rp * (S.ready ? 3 : 2.3), S.ready && !calm ? 0.6 + Math.sin(t * 6) * 0.2 : 0.55);
+    const sp = petSprite(look, Math.round(rp), dpr);
+    ctx.save();
+    ctx.translate(x, y);
+    if (S.face < 0 && look !== 'star' && look !== 'ufo') ctx.scale(-1, 1);
+    if (look === 'star' && !calm) ctx.rotate(Math.sin(t * 2.4) * 0.14 + S.cheer * TAU);
+    if (look === 'ufo' && !calm) ctx.rotate(Math.sin(t * 1.8) * 0.08);
+    if (look === 'jelly') {
+      // 다리 네 가닥: 물결치듯 (움직임 줄이기면 가만히)
+      ctx.strokeStyle = 'rgba(255,190,235,0.85)'; ctx.lineWidth = Math.max(1.2, rp * 0.13); ctx.lineCap = 'round';
+      for (let i = 0; i < 4; i++) {
+        const bx = (i - 1.5) * rp * 0.45, w = calm ? 0 : Math.sin(t * 5 + i * 1.3) * rp * 0.18;
+        ctx.beginPath(); ctx.moveTo(bx, rp * 0.25); ctx.quadraticCurveTo(bx + w, rp * 0.7, bx - w * 0.6, rp * 1.05); ctx.stroke();
+      }
+    } else if (look === 'firefly') {
+      // 날개 두 장: 파닥 (움직임 줄이기면 반쯤 편 채로)
+      const f = calm ? 0.6 : 0.35 + 0.65 * Math.abs(Math.sin(t * 22));
+      ctx.fillStyle = 'rgba(220,255,240,0.55)'; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1;
+      for (const d of [-1, 1]) { ctx.beginPath(); ctx.ellipse(d * rp * 0.55, -rp * 0.55, rp * 0.5, rp * 0.28 * f + 1, d * 0.5, 0, TAU); ctx.fill(); ctx.stroke(); }
+    } else if (look === 'dog') {
+      // 흔드는 꼬리 (뒤쪽)
+      const wag = calm ? 0.3 : Math.sin(t * (S.moving ? 18 : 10)) * 0.5;
+      ctx.strokeStyle = '#3a7ac8'; ctx.lineWidth = Math.max(1.5, rp * 0.18); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-rp * 0.7, rp * 0.5); ctx.quadraticCurveTo(-rp * 1.1, rp * 0.3, -rp * 1.15 - Math.sin(wag) * rp * 0.3, -rp * 0.05 + Math.cos(wag) * rp * 0.1); ctx.stroke();
+    }
+    const half = sp.size / 2;
+    ctx.drawImage(sp.c, -half, -half, sp.size, sp.size);
+    if (look === 'ufo') {
+      // 가장자리 불빛 셋: 차례로 깜빡
+      for (let i = 0; i < 3; i++) {
+        const on = calm ? 1 : (Math.floor(t * 6) % 3 === i ? 1 : 0.35);
+        ctx.fillStyle = ['#ffe66d', '#5ee7ff', '#ff9ee0'][i];
+        ctx.globalAlpha = on;
+        ctx.beginPath(); ctx.arc((i - 1) * rp * 0.55, rp * 0.2, rp * 0.1, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+  // 반딧불 특기: 이번 점프로 내려앉을 수 있는 가장 높은 발판을 연두빛 테두리와 작은 화살표로 비춘다 (발판보다 먼저 그려 발판을 가리지 않는다)
+  function drawPetHint(ctx, W, v) {
+    const p = JP.World.petHint ? JP.World.petHint(W) : null;
+    if (!p) return;
+    const s = v.scale, x = SX(v, p.x), y = SY(v, p.y), w = p.w * s, h = D.PLAT.h * s;
+    const pulse = v.calm ? 0.8 : 0.6 + Math.sin(W.t * 6) * 0.25;
+    glow(ctx, 'rgba(182,255,92,0.75)', x, y + h * 0.5, Math.max(w * 0.62, 30), pulse * 0.8);
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = '#d4ff6a'; ctx.lineWidth = Math.max(2, 2.5 * s);
+    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x - w / 2 - 4, y - 4, w + 8, h + 8, (h + 8) / 2); else ctx.rect(x - w / 2 - 4, y - 4, w + 8, h + 8); ctx.stroke();
+    // 발판 위 작은 아래 화살표 (움직임 줄이기면 가만히)
+    const ay = y - 14 * s - (v.calm ? 0 : Math.abs(Math.sin(W.t * 4)) * 6 * s), aw = 7 * s;
+    ctx.fillStyle = '#eaffc2';
+    ctx.beginPath(); ctx.moveTo(x - aw, ay - aw); ctx.lineTo(x + aw, ay - aw); ctx.lineTo(x, ay); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  function heartPath(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + s * 0.35);
+    ctx.bezierCurveTo(x - s * 1.1, y - s * 0.35, x - s * 0.45, y - s * 1.05, x, y - s * 0.45);
+    ctx.bezierCurveTo(x + s * 0.45, y - s * 1.05, x + s * 1.1, y - s * 0.35, x, y + s * 0.35);
+    ctx.closePath();
+  }
+  function drawPet(ctx, W, v, a) {
+    const pet = W.pet, def = pet && petDef(pet.id);
+    if (!def) { R.petPos = null; return; }
+    const s = v.scale, rp = Math.max(9, D.PET.r * s * 1.15);   // 그림은 규칙 크기보다 조금 크게 (작은 탭에서도 알아보게)
+    let wx = pet.px + JP.World.wrapDelta(pet.px, pet.x) * a;
+    const wy = pet.py + (pet.y - pet.py) * a;
+    if (wx < 0) wx += WW; else if (wx >= WW) wx -= WW;
+    // 둥실둥실 (움직임 줄이기면 아주 조금)
+    const bob = (v.calm ? 0.15 : 1) * Math.sin(W.t * (def.look === 'jelly' ? 2.2 : 3.4)) * rp * 0.35;
+    const ck = W.t - pet.cheerAt, cheer = ck >= 0 && ck < D.PET.cheerTime ? ck / D.PET.cheerTime : 0;
+    const hop = cheer > 0 ? Math.sin(cheer * Math.PI) * rp * (v.calm ? 0.4 : 1.2) : 0;
+    const x = SX(v, wx), y = SY(v, wy) + bob - hop;
+    const K = def.perk || {};
+    let zap = null;
+    if (pet.state === 'fetch' && pet.tkind === 'monster' && pet.tgt) zap = { x: SX(v, pet.tgt.x), y: SY(v, pet.tgt.y) };
+    const S = { t: W.t, calm: !!v.calm, face: pet.face, cheer: cheer > 0 && !v.calm && (pet.cheer === 'best' || pet.cheer === 'place') ? cheer : 0,
+      ready: !!K.every && pet.cool <= 0, moving: pet.state !== 'follow', zap };
+    // 날아갈 때 반짝이 꼬리 (움직임 줄이기면 없음)
+    if (!v.calm && pet.state !== 'follow' && W.phase === 'play') {
+      if (R.petTrail.length > 8) R.petTrail.shift();
+      R.petTrail.push({ x: wx, y: wy, life: 0.35, max: 0.35, color: def.color });
+    }
+    const copies = [x];
+    if (x - v.cx < rp * 2) copies.push(x + v.cw);
+    if (v.cx + v.cw - x < rp * 2) copies.push(x - v.cw);
+    for (const cx of copies) drawPetBody(ctx, def.look, cx, y, rp, v.dpr, S);
+    R.petPos = { x, y, rp };
+  }
+  // 반짝이 꼬리 · 응원 하트 (주인공 위에)
+  function drawPetFx(ctx, v) {
+    for (const q of R.petTrail) {
+      ctx.globalAlpha = q.life / q.max * 0.8;
+      ctx.fillStyle = q.color;
+      const x = SX(v, q.x), y = SY(v, q.y), sz = 2 + 3 * q.life / q.max;
+      ctx.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+    }
+    const at = R.petPos;
+    if (!at) { ctx.globalAlpha = 1; return; }
+    for (const q of R.hearts) {
+      const k = q.life / q.max, x = at.x + q.dx, y = at.y + q.dy;
+      ctx.globalAlpha = Math.min(1, k * 2.5);
+      const sz = q.size * (v.calm ? 1 : 0.8 + Math.min(1, (1 - k) * 6) * 0.2);
+      heartPath(ctx, x, y, sz);
+      ctx.fillStyle = q.color; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1, sz * 0.12); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.arc(x - sz * 0.4, y - sz * 0.4, sz * 0.15, 0, TAU); ctx.fill();
+    }
+    const Q = R.petSay;
+    if (Q && v.hud !== false) {
+      // 펫이 외치는 짧은 말: 펫 아래쪽에 (펫 머리 위 하트와 겹치지 않게), 기둥 밖으로 잘리지 않게
+      ctx.globalAlpha = Math.min(1, Q.life / Q.max * 2.5);
+      ctx.font = Math.round(Math.max(14, Q.size)) + 'px ' + DISP; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const hw = ctx.measureText(Q.txt).width / 2 + 6, x = Math.max(v.cx + hw, Math.min(v.cx + v.cw - hw, at.x)), y = at.y + at.rp * 1.9;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(5,7,12,0.85)'; ctx.strokeText(Q.txt, x, y);
+      ctx.fillStyle = Q.color; ctx.fillText(Q.txt, x, y);
+      ctx.textBaseline = 'alphabetic';
+    }
+    ctx.globalAlpha = 1;
+  }
+  // 상점·시작 화면 미리보기: 캔버스 한가운데 펫 하나 (움직임 없이). 'none'이면 점선 동그라미
+  function paintPet(cv, id) {
+    if (!cv) return;
+    const g = cv.getContext('2d'), w = cv.width, h = cv.height;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const def = petDef(id);
+    if (!def) {
+      g.strokeStyle = 'rgba(207,216,230,0.55)'; g.lineWidth = Math.max(2, w * 0.03); g.setLineDash([w * 0.06, w * 0.05]);
+      g.beginPath(); g.arc(w / 2, h / 2, Math.min(w, h) * 0.3, 0, TAU); g.stroke();
+      g.setLineDash([]);
+      return;
+    }
+    const rp = Math.round(Math.min(w, h) * 0.26);
+    drawPetBody(g, def.look, w / 2, h * 0.47, rp, 1, { t: 0.4, calm: true, face: 1, cheer: 0, ready: false, moving: false, zap: null });
+  }
+
   // 구조 구름 (쉬움): 아래에서 받아 던져 올려 준 자리
   function drawRescue(ctx, v) {
     for (const q of R.clouds) {
@@ -2145,6 +2448,8 @@
       if (tr) { R.fixed.push(tr); R.occ.push(tr); }
       const P = W.p, r = D.PLAYER.r * v.scale, hx = SX(v, P.px + (P.x - P.px) * a), hy = SY(v, P.py + (P.y - P.py) * a);
       occupy(hx - r * 1.8, hy - r * 2.4, r * 3.6, r * 3.8);
+      // 펫 자리도 이름표가 피한다
+      if (W.pet) { const q = W.pet, rp = D.PET.r * v.scale * 1.7; occupy(SX(v, q.x) - rp, SY(v, q.y) - rp * 1.2, rp * 2, rp * 2.2); }
       const reach = (W.phys ? W.phys.jump : D.PLAYER.jump) * 1.6;
       for (const p of W.plats) {
         if (!p.main || p.broken || p.y < P.y - D.PLAYER.r * 2 || p.y > P.y + reach) continue;
@@ -2157,6 +2462,7 @@
     ctx.beginPath(); ctx.rect(v.cx, v.cy, v.cw, v.ch); ctx.clip();
     drawRoom(ctx, W, v);
     if (!W.room) { drawPull(ctx, W, v); drawMarks(ctx, W, v); }
+    drawPetHint(ctx, W, v);
     drawPlats(ctx, W, v, a);
     drawGifts(ctx, W, v);
     drawStars(ctx, W, v);
@@ -2165,8 +2471,10 @@
     drawMonsters(ctx, W, v, a);
     drawRescue(ctx, v);
     drawDust(ctx, v);
+    drawPet(ctx, W, v, a);        // 펫은 주인공 뒤에
     drawPlayer(ctx, W, v, a);
     drawFx(ctx, v);
+    drawPetFx(ctx, v);
     if (!W.room) { drawStorm(ctx, W, v, a); drawBottom(ctx, W, v); }
     drawFeverEdge(ctx, W, v);
     ctx.restore();
@@ -2184,7 +2492,7 @@
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
-  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || R.clouds.length > 0 || R.squash.length > 0 || !!R.banner || !!R.big;
+  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || R.clouds.length > 0 || R.squash.length > 0 || R.hearts.length > 0 || R.petTrail.length > 0 || !!R.petSay || !!R.banner || !!R.big;
 
-  JP.Render = { draw, layout, busy, paintChar, paintSkin: paintChar, paintPlace, placeOf };
+  JP.Render = { draw, layout, busy, paintChar, paintSkin: paintChar, paintPet, paintPlace, placeOf };
 })(JP);

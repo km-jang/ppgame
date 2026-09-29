@@ -54,8 +54,8 @@
         <p class="tagline">발판을 밟고 하늘 높이 올라가요</p>
         <p id="best" class="best"></p>
         <button id="btn-char" type="button" class="ship-card" aria-label="캐릭터 바꾸기">
-          <canvas id="char-preview" class="ship-cv" width="128" height="128" aria-hidden="true"></canvas>
-          <span class="sc-txt"><small>내 캐릭터</small><b id="char-name">통통 로봇</b><em id="char-desc"></em></span>
+          <span class="sc-pic"><canvas id="char-preview" class="ship-cv" width="128" height="128" aria-hidden="true"></canvas><canvas id="pet-preview" class="pet-cv" width="64" height="64" aria-hidden="true"></canvas></span>
+          <span class="sc-txt"><small id="char-small">내 캐릭터</small><b id="char-name">통통 로봇</b><em id="char-desc"></em></span>
           <span class="sc-go">바꾸기</span>
         </button>
         <div id="title-missions" class="mcard"></div>
@@ -95,6 +95,7 @@
       </div>
       <div class="tabs" role="tablist" aria-label="상점 칸">
         <button type="button" role="tab" data-tab="chars" aria-selected="true">캐릭터</button>
+        <button type="button" role="tab" data-tab="pets" aria-selected="false">펫</button>
         <button type="button" role="tab" data-tab="up" aria-selected="false">강화</button>
         <button type="button" role="tab" data-tab="items" aria-selected="false">시작 아이템</button>
       </div>
