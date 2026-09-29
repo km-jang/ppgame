@@ -150,6 +150,42 @@ test('톡 누르면 작은 구슬, 공 위에는 그려지지 않는다', () => 
   assert(!Wd.pointFree(W, b.x, b.y), 'ball is not free');
 });
 
+// 평평한 땅에서 밀린 공이 땅에 누운 선을 넘을 때: 선 앞 속도 대비 선 위 최저 속도
+function lipKeep() {
+  const G = 520, y = G - PH.lineHalf - 3;
+  const L = Object.assign({}, D.levelById('moon-2'), { ground: [{ top: [[0, G], [1280, G]] }], ball: [110, G - PH.ballR], push: [360, 0], goal: [1250, G], sol: [[[400, y], [700, y]]] });
+  const W = Wd.create(L);
+  stroke(W, [[400, y], [700, y]]);
+  let v0 = null, vmin = Infinity;
+  for (let t = 0; t < 4 && W.phase === 'run'; t += 1 / 60) {
+    Wd.step(W, 1 / 60);
+    const b = Wd.ballState(W);
+    if (v0 === null && b.x > 300 && b.x < 340) v0 = b.vx;
+    if (b.x > 360 && b.x < 460) vmin = Math.min(vmin, b.vx);
+  }
+  return vmin / v0;
+}
+
+test('선 양 끝 비탈: 땅에 누운 선을 넘는 공이 선 끝 턱에 걸리지 않는다 (비탈 없으면 걸림)', () => {
+  const keep = lipKeep();
+  assert(keep > 0.85, 'with ramps ' + keep.toFixed(3));
+  const flat = PH.rampFlat;
+  PH.rampFlat = 2; // 비탈을 만들지 않게
+  try { const no = lipKeep(); assert(no < 0.7, 'without ramps ' + no.toFixed(3)); } finally { PH.rampFlat = flat; }
+});
+
+test('비탈: 구슬과 가파른 끝에는 없고, 벽 앞에서는 땅 속으로 들어가지 않는다', () => {
+  const L = D.levelById('moon-1'), W = Wd.create(L);
+  stroke(W, [[500, 200], [501, 200]]);
+  stroke(W, [[300, 100], [300, 300]]);
+  assert(Wd.rampPoints(W, 0).length === 0, 'dot has no ramp');
+  assert(Wd.rampPoints(W, 1).length === 0, 'steep line has no ramp');
+  stroke(W, [[700, 600], [1000, 600]]);
+  const rs = Wd.rampPoints(W, 2);
+  assert(rs.length >= 1, 'flat line has a ramp');
+  for (const r of rs) for (const [x, y] of r) assert(!W.ground.some(g => Wd.inPoly(g.poly, x, y)), 'ramp point in ground ' + x + ',' + y);
+});
+
 test('잉크가 떨어지면 더 그려지지 않고, 되돌리기로 돌려받는다', () => {
   const L = D.levelById('moon-2'), W = Wd.create(L);
   Wd.beginStroke(W, 500, 100);

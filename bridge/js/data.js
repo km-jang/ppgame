@@ -11,7 +11,9 @@
     scale: 40,            // 40px = 1m
     gravity: 14,          // m/초² (지구 9.8보다 조금 세게: 아이가 기다리지 않게)
     ballR: 34, ballDensity: 1, ballFriction: 0.6, ballBounce: 0.06,
-    lineHalf: 7,          // 그린 선 굵기의 반 (px)
+    lineHalf: 5,          // 그린 선 굵기의 반 (px). 14px이면 공이 선 끝 턱에 걸려 속도를 절반 넘게 잃었다 (2026-09-29 소유자 태블릿 확인)
+    rampLen: 44,          // 선 양 끝 비탈 길이 (px): 아래 면은 그대로, 위 면만 끝으로 갈수록 얇아져 공이 턱 없이 올라탄다
+    rampFlat: 0.5,        // 끝의 기울기가 이보다 가파르면(가로 성분이 작으면) 비탈을 만들지 않는다
     lineDensity: 2, lineFriction: 0.8, dotFriction: 0.2,
     dotR: 13,             // 톡 눌러 만드는 구슬
     step: 10,             // 선 점 사이 최소 간격 (px)

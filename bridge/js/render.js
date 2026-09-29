@@ -203,25 +203,33 @@
     return gr;
   }
   // 그린 선: 그리는 중(빛 분필) · 진짜 물건이 된 선(단단한 막대)
-  function inkLine(g, pts, mode, pen) {
+  // ramps: 선 끝 비탈(세 점 묶음). 선과 같은 층마다 같은 색으로 채우고, 층이 선보다 굵은 만큼 테두리를 둘러 이어 보이게
+  function inkLine(g, pts, mode, pen, ramps) {
     const C = pen.c;
     if (pts.length === 1) pts = [pts[0], [pts[0][0] + 0.5, pts[0][1]]];
     g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
     const main = pen.rainbow ? rainbowOf(g, pts) : C[1];
     if (mode === 'drawing') {
       smoothPath(g, pts);
-      g.strokeStyle = C[0]; g.lineWidth = 34; g.stroke();
-      g.strokeStyle = C[0]; g.lineWidth = 22; g.stroke();
-      g.strokeStyle = main; g.lineWidth = 12; g.stroke();
-      g.strokeStyle = C[2]; g.lineWidth = 4.5; g.stroke();
+      g.strokeStyle = C[0]; g.lineWidth = 26; g.stroke();
+      g.strokeStyle = C[0]; g.lineWidth = 16; g.stroke();
+      g.strokeStyle = main; g.lineWidth = 9; g.stroke();
+      g.strokeStyle = C[2]; g.lineWidth = 3.5; g.stroke();
     } else {
       const w = PH.lineHalf * 2;
-      g.save(); g.translate(0, 8); smoothPath(g, pts); g.strokeStyle = 'rgba(0,0,0,0.32)'; g.lineWidth = w + 4; g.stroke(); g.restore();
-      smoothPath(g, pts);
-      g.strokeStyle = C[0]; g.lineWidth = w + 14; g.stroke();
-      g.strokeStyle = C[3]; g.lineWidth = w + 3; g.stroke();
-      g.strokeStyle = main; g.lineWidth = w - 1; g.stroke();
-      g.save(); g.translate(0, -2.5); smoothPath(g, pts); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 3; g.stroke(); g.restore();
+      const layer = (color, lw) => {
+        smoothPath(g, pts); g.strokeStyle = color; g.lineWidth = lw; g.stroke();
+        for (const r of ramps || []) {
+          g.beginPath(); g.moveTo(r[0][0], r[0][1]); g.lineTo(r[1][0], r[1][1]); g.lineTo(r[2][0], r[2][1]); g.closePath();
+          g.fillStyle = color; g.fill();
+          if (lw > w) { g.lineWidth = lw - w; g.stroke(); }
+        }
+      };
+      g.save(); g.translate(0, 6); layer('rgba(0,0,0,0.32)', w + 4); g.restore();
+      layer(C[0], w + 10);
+      layer(C[3], w + 3);
+      layer(main, w - 1);
+      g.save(); g.translate(0, -2); smoothPath(g, pts); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 2.5; g.stroke(); g.restore();
     }
     g.restore();
   }
@@ -511,7 +519,7 @@
     for (let i = 0; i < W.lines.length; i++) {
       const s = W.strokes[i];
       if (s.kind === 'dot') { const st = Wd().bodyState(W.lines[i]); inkDot(g, st.x, st.y, st.a, pen); }
-      else inkLine(g, Wd().linePoints(W, i), 'solid', pen);
+      else inkLine(g, Wd().linePoints(W, i), 'solid', pen, Wd().rampPoints(W, i));
     }
     if (W.drawing && W.drawing.pts.length) inkLine(g, W.drawing.pts, 'drawing', pen);
     if (view.drawTip) {
