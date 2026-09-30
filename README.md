@@ -7,7 +7,6 @@
 | [`jump/`](jump/) | **통통 점프** · 발판을 통통 밟고 위로 ([기획서](jump/PLAN.md)) |
 | [`runner/`](runner/) | **슝슝 우주 달리기** · 줄을 바꿔 운석을 피하는 우주 달리기 ([기획서](runner/PLAN.md)) |
 | [`bridge/`](bridge/) | **슥슥 우주 다리** · 손가락으로 그린 선이 진짜 다리가 되는 물리 퍼즐 ([기획서](bridge/PLAN.md)) |
-| [`archive/robocar/`](archive/robocar/) | **뚝딱 로봇카** · 보류 (2026-09-27). 첫 화면에서 뺐고, 코드와 테스트는 그대로 보관 |
 
 저장소 첫 화면(`index.html`)에서 다섯 게임 중 하나를 고른다.
 
@@ -57,7 +56,6 @@ node tests/runner.test.js    # 슝슝 우주 달리기 규칙
 node tests/bridge.test.js    # 슥슥 우주 다리 규칙·상점
 node tests/profile.test.js   # 아이 프로필·보호자 설정·놀이 시간 알림·기록 옮기기
 node tests/flow.test.js      # 네 게임 화면 흐름 (Playwright 크로미움, 없으면 건너뜀)
-# 보류 중인 뚝딱 로봇카: node archive/robocar/tests/robocar.test.js · park.test.js · flow.test.js
 ```
 
 게임 규칙(`game/js/world.js`)을 브라우저 없이 수천 프레임 돌려서 웨이브 진행·카드·보스·게임 오버·관통·도탄을 확인한다.
@@ -80,9 +78,10 @@ main에 합친 것만 이 주소에 나온다.
 
 ## 소리 출처
 
-소리 파일(`game/sounds/`, 보류 중인 `archive/robocar/sounds/`)은 Kenney(kenney.nl)의 무료 스타터 키트에서 가져왔다 (MIT 라이선스, 각 폴더 `LICENSE.md`).
+소리 파일(`game/sounds/`)은 Kenney(kenney.nl)의 무료 스타터 키트에서 가져왔다 (MIT 라이선스, 각 폴더 `LICENSE.md`).
 
 ## 이전 작업물
 
 방치형 클리커 "sudo make AGI"와 함께 있던 문서는 2026-09-24 재기획 때 모두 폐기했다.
-git 기록에는 남아 있다.
+뚝딱 로봇카(5~6세용 변신 로봇카)는 2026-09-27 소유자가 폐기했고, 2026-09-30 코드 폴더 `archive/`도 저장소에서 뺐다.
+둘 다 git 기록에는 남아 있다.

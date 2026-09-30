@@ -686,11 +686,17 @@
 
   // ─── 루프 ──────────────────────────────────────────────────
   // 120Hz 화면에서도 60번만 그린다 (배터리·발열). 규칙은 흐른 시간만큼 1/120초 칸으로 돌아 결과가 같다
-  const MIN_FRAME = 1000 / 60 - 2;
+  // (예전에는 60번에 맞춘 최소 간격으로 걸러 90Hz 화면에서 45번만 그렸다)
+  let rawTs = 0, fastScreen = 0, skip = false;
   function frame(ts) {
     requestAnimationFrame(frame);
     if (typeof PROFILE !== 'undefined') PROFILE.setPlaying(mode === 'play'); // 놀이 시간 세기 (common/profile.js)
-    if (ts - lastTs < MIN_FRAME) return;
+    // 화면 주사율 살피기: 100Hz가 넘는 화면(120Hz)만 한 번씩 걸러 60번 그리고, 90Hz·60Hz 화면은 매번 그린다
+    const gap = (ts - rawTs) / 1000 || 0;
+    rawTs = ts;
+    if (gap > 0 && gap < 0.1) fastScreen = fastScreen * 0.9 + (gap < 0.0095 ? 1 : 0) * 0.1;
+    skip = fastScreen > 0.6 ? !skip : false;
+    if (skip) return;
     const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
     lastTs = ts;
 
