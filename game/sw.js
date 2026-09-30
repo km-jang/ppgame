@@ -1,7 +1,7 @@
 'use strict';
 // 오프라인 실행: 게임 파일을 기기에 저장해 두고 인터넷 없이도 연다.
 // 파일이 바뀌면 VERSION을 올린다.
-const VERSION = 'ngun-v21';
+const VERSION = 'ngun-v22';
 const FILES = ['./', 'index.html', '../common/profile.js', '../common/hub.js', '../common/worlds.js', '../common/sound.js', 'style.css', 'manifest.json', 'icon.svg',
   'js/util.js', 'js/data.js', 'js/world.js', 'js/records.js', 'js/shop.js', 'js/render.js', 'js/input.js', 'js/samples.js', 'js/audio.js', 'js/main.js',
   'sounds/blaster.ogg', 'sounds/enemy_hurt.ogg', 'sounds/enemy_destroy.ogg', 'sounds/enemy_attack.ogg', 'sounds/impact.ogg', 'sounds/weapon_change.ogg'];

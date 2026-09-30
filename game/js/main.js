@@ -43,6 +43,7 @@
   let runSaved = false; // 이번 판 기록을 이미 넣었나 (게임 오버·그만두기 중 한 번만)
   let medalCheckT = 0;
   let lastTs = 0;
+  let rawTs = 0, fastScreen = 0, skip = false; // 120Hz 화면이면 한 번 걸러 그린다 (60번만)
   let frozenDrawn = false; // 일시정지·카드 화면에선 한 번만 그리고 쉰다 (배터리)
 
   // ─── 화면 크기 ─────────────────────────────────────────────
@@ -68,6 +69,7 @@
     input.touch.home = { x: Math.round(28 + R * 1.15), y: Math.round(h - 30 - R * 1.15) };
     for (const el of [stickMove, stickAim]) el.style.setProperty('--r', R + 'px');
     frozenDrawn = false;
+    skip = true; // 캔버스가 지워지니 다음 장면은 거르지 않는다 (120Hz 화면에서 한 장 빈 화면 막기)
     canvas.width = Math.round(w * view.dpr);
     canvas.height = Math.round(h * view.dpr);
     canvas.style.width = w + 'px';
@@ -935,6 +937,13 @@
   function frame(ts) {
     // 놀이 시간 세기 (common/profile.js): 판이 도는 동안과 카드 고르는 동안만
     if (typeof PROFILE !== 'undefined') PROFILE.setPlaying(mode === 'play' || (mode === 'cards' && !cardsIdle));
+    // 화면 주사율 살피기: 100Hz가 넘는 화면(120Hz)만 한 번씩 걸러 60번 그리고, 90Hz·60Hz 화면은 매번 그린다
+    const gap = (ts - rawTs) / 1000 || 0;
+    rawTs = ts;
+    if (gap > 0 && gap < 0.1) fastScreen = fastScreen * 0.9 + (gap < 0.0095 ? 1 : 0) * 0.1;
+    skip = fastScreen > 0.6 ? !skip : false;
+    // 건너뛴 장면의 시간은 다음 장면의 dt에 모인다 (게임 빠르기는 그대로, 배터리·발열만 줄어듦)
+    if (skip) { requestAnimationFrame(frame); return; }
     const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0);
     lastTs = ts;
 
