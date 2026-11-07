@@ -331,8 +331,18 @@
     const L = W.level;
     // 시소 받침 (움직이지 않는 세모)
     for (const s of L.seesaws || []) {
-      g.fillStyle = '#8fa0b8'; g.beginPath(); g.moveTo(s.x, s.y - 4); g.lineTo(s.x - 30, s.y + 56); g.lineTo(s.x + 30, s.y + 56); g.closePath(); g.fill();
-      g.fillStyle = '#c8d4e6'; g.beginPath(); g.moveTo(s.x, s.y - 4); g.lineTo(s.x - 10, s.y + 56); g.lineTo(s.x + 4, s.y + 56); g.closePath(); g.fill();
+      // (2026-11-07 시각 품질) 어두운 금속 세모 + 빛을 받는 왼쪽 면 + 가장자리 빛 테 (모양은 그대로)
+      const tri = () => { g.beginPath(); g.moveTo(s.x, s.y - 4); g.lineTo(s.x - 30, s.y + 56); g.lineTo(s.x + 30, s.y + 56); g.closePath(); };
+      const fg = g.createLinearGradient(s.x - 30, s.y, s.x + 30, s.y + 56);
+      fg.addColorStop(0, '#3a4766'); fg.addColorStop(0.5, '#1a2238'); fg.addColorStop(1, '#090d1a');
+      g.fillStyle = fg; tri(); g.fill();
+      const lg = g.createLinearGradient(s.x, s.y - 4, s.x, s.y + 56);
+      lg.addColorStop(0, 'rgba(190,220,255,0.35)'); lg.addColorStop(1, 'rgba(190,220,255,0.04)');
+      g.fillStyle = lg; g.beginPath(); g.moveTo(s.x, s.y - 4); g.lineTo(s.x - 10, s.y + 56); g.lineTo(s.x + 4, s.y + 56); g.closePath(); g.fill();
+      g.save(); g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round';
+      for (const [lw, al] of [[8, 0.05], [4, 0.1]]) { g.strokeStyle = VC.rgba(PLANK_EDGE, al); g.lineWidth = lw; g.beginPath(); g.moveTo(s.x - 30, s.y + 56); g.lineTo(s.x, s.y - 4); g.lineTo(s.x + 30, s.y + 56); g.stroke(); }
+      g.restore();
+      g.strokeStyle = 'rgba(200,236,255,0.7)'; g.lineWidth = 1.1; g.beginPath(); g.moveTo(s.x - 30, s.y + 56); g.lineTo(s.x, s.y - 4); g.lineTo(s.x + 30, s.y + 56); g.stroke();
     }
     L.ground.forEach((gr, i) => paintRock(g, T, Wd().groundPoly(gr), rimOf(gr), !!gr.ice, 11 + i * 7));
     for (const r of L.rocks || []) paintBoulder(g, T, r[0], r[1], r[2]);
@@ -594,33 +604,139 @@
     g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.ellipse(-7, -10, 4, 2.5, -0.6, 0, TAU); g.fill();
     g.restore();
   }
+  // (2026-11-07 시각 품질) 상자와 시소 판: 두꺼운 남색 테두리를 걷고 어두운 유리 패널로. 모양·크기는 규칙 그대로(그림만).
+  // 크기마다 한 번 미리 그려 두고(본체 한 장 + 가산 혼합으로 얹는 빛 한 장) 매 프레임은 돌려 찍기만 한다
+  const OBJ = new Map();
+  function objSprite(key, lw, lh, pad, paintBase, paintGlow) {
+    const res = Math.round(R.res * 4) / 4, k = key + '|' + lw + 'x' + lh + '|' + res;
+    let sp = OBJ.get(k);
+    if (sp) return sp;
+    if (OBJ.size > 24) OBJ.clear();
+    const W2 = lw + pad * 2, H2 = lh + pad * 2, mk = paint => {
+      const c = canvas(Math.ceil(W2 * res), Math.ceil(H2 * res)), g = c.getContext('2d');
+      g.scale(res, res); g.translate(W2 / 2, H2 / 2); paint(g, lw, lh, res); return c;
+    };
+    sp = { base: mk(paintBase), glow: mk(paintGlow), w: W2, h: H2 };
+    OBJ.set(k, sp);
+    return sp;
+  }
+  function putSprite(g, sp) {
+    g.drawImage(sp.base, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+    const op = g.globalCompositeOperation;
+    g.globalCompositeOperation = 'lighter'; g.drawImage(sp.glow, -sp.w / 2, -sp.h / 2, sp.w, sp.h); g.globalCompositeOperation = op;
+  }
+  // 바깥 빛 번짐: 넓고 옅은 선을 여러 번
+  function haloStroke(g, path, col, layers) { for (const [lw, al] of layers) { path(); g.strokeStyle = VC.rgba(col, al); g.lineWidth = lw; g.stroke(); } }
+  const CRATE_EDGE = VC.parse('#7fd4ff'), CRATE_HAZ = VC.parse('#ffc93a');   // VC.rgba는 [r,g,b]를 받는다
+  function crateStripes(w, h) { const o = []; for (let y = -h / 2 + 30; y < h / 2 - 10; y += 60) o.push([-w / 2 + 12, y, w / 2 - 12, y + 20]); return o; }
+  function paintCrate(g, w, h, res) {
+    const r = 10, body = () => rr(g, -w / 2, -h / 2, w, h, r), inset = 7;
+    // 바닥 그늘 (부드럽게 세 겹)
+    for (const [d, al] of [[10, 0.08], [6, 0.12], [3, 0.16]]) { g.fillStyle = 'rgba(0,0,8,' + al + ')'; rr(g, -w / 2 + 4 - d / 2, -h / 2 + 7 - d / 2, w + d, h + d, r + d / 2); g.fill(); }
+    // 어두운 유리 몸통: 왼쪽 위가 살짝 밝은 남흑색
+    const bg = g.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    bg.addColorStop(0, '#2c3a5c'); bg.addColorStop(0.45, '#141c34'); bg.addColorStop(1, '#070b18');
+    g.fillStyle = bg; body(); g.fill();
+    g.save(); body(); g.clip();
+    // 안쪽 판: 한 단 깊은 유리 + 가운데 옅은 푸른 빛
+    const iw = w - inset * 2, ih = h - inset * 2;
+    const ig = g.createLinearGradient(0, -ih / 2, 0, ih / 2);
+    ig.addColorStop(0, '#0e1630'); ig.addColorStop(1, '#060a16');
+    g.fillStyle = ig; rr(g, -iw / 2, -ih / 2, iw, ih, r - 4); g.fill();
+    const rg = g.createRadialGradient(-iw * 0.15, -ih * 0.2, 0, -iw * 0.15, -ih * 0.2, Math.max(iw, ih) * 0.7);
+    rg.addColorStop(0, 'rgba(110,170,255,0.16)'); rg.addColorStop(1, 'rgba(110,170,255,0)');
+    g.fillStyle = rg; g.fillRect(-w / 2, -h / 2, w, h);
+    // 안쪽 판 가장자리: 위·왼쪽은 그늘, 아래·오른쪽은 빛 (움푹 들어간 유리)
+    g.lineWidth = 1.2;
+    g.strokeStyle = 'rgba(0,0,10,0.7)'; g.beginPath(); g.moveTo(-iw / 2, ih / 2 - 4); g.lineTo(-iw / 2, -ih / 2); g.lineTo(iw / 2 - 4, -ih / 2); g.stroke();
+    g.strokeStyle = 'rgba(150,200,255,0.22)'; g.beginPath(); g.moveTo(-iw / 2 + 4, ih / 2); g.lineTo(iw / 2, ih / 2); g.lineTo(iw / 2, -ih / 2 + 4); g.stroke();
+    // 경고 줄무늬: 빛나는 호박색 띠 (모양·자리는 예전 그대로)
+    g.save(); rr(g, -iw / 2, -ih / 2, iw, ih, r - 4); g.clip(); g.lineCap = 'round';
+    for (const [x0, y0, x1, y1] of crateStripes(w, h)) {
+      const sg = g.createLinearGradient(x0, y0, x1, y1);
+      sg.addColorStop(0, '#ff9d1e'); sg.addColorStop(0.5, '#ffc93a'); sg.addColorStop(1, '#ff9d1e');
+      g.strokeStyle = sg; g.lineWidth = 7; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+      g.strokeStyle = 'rgba(255,250,220,0.85)'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(x0 + 3, y0 - 1.2); g.lineTo(x1 - 3, y1 - 1.2); g.stroke();
+    }
+    g.restore();
+    // 유리 반사: 왼쪽 위에서 비스듬히 내려오는 넓은 띠 + 윗변 가는 빛줄
+    const gl = g.createLinearGradient(-w / 2, -h / 2, -w / 2 + w * 0.9, -h / 2 + w * 0.9);
+    gl.addColorStop(0, 'rgba(255,255,255,0.2)'); gl.addColorStop(0.55, 'rgba(255,255,255,0.05)'); gl.addColorStop(0.56, 'rgba(255,255,255,0)');
+    g.fillStyle = gl; g.beginPath(); g.moveTo(-w / 2, -h / 2); g.lineTo(w / 2, -h / 2); g.lineTo(-w / 2, -h / 2 + w * 1.1); g.closePath(); g.fill();
+    const tl = g.createLinearGradient(-w / 2, 0, w / 2, 0);
+    tl.addColorStop(0, 'rgba(255,255,255,0)'); tl.addColorStop(0.3, 'rgba(255,255,255,0.55)'); tl.addColorStop(1, 'rgba(255,255,255,0.05)');
+    g.fillStyle = tl; g.fillRect(-w / 2 + r, -h / 2 + 1.5, w - r * 2, 1.4);
+    g.restore();
+    // 테두리: 굵은 남색 대신 가는 빛 테 (왼쪽 위 밝고 오른쪽 아래로 옅어짐)
+    const eg = g.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    eg.addColorStop(0, 'rgba(200,236,255,0.95)'); eg.addColorStop(0.5, VC.rgba(CRATE_EDGE, 0.55)); eg.addColorStop(1, VC.rgba(CRATE_EDGE, 0.2));
+    g.strokeStyle = eg; g.lineWidth = 1.6; rr(g, -w / 2 + 0.8, -h / 2 + 0.8, w - 1.6, h - 1.6, r - 0.8); g.stroke();
+    // 모서리 못: 작은 유리 광택 구슬
+    const bolt = VFX.createGlossySphere(4.5, '#9cc8ff', { glow: 0, shadow: 0.35, gloss: 1, res });
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) VFX.drawSphere(g, bolt, dx * (w / 2 - 12), dy * (h / 2 - 12));
+  }
+  function paintCrateGlow(g, w, h) {
+    const r = 10;
+    haloStroke(g, () => rr(g, -w / 2, -h / 2, w, h, r), CRATE_EDGE, [[16, 0.04], [9, 0.07], [4, 0.12]]);
+    g.save(); rr(g, -w / 2 + 7, -h / 2 + 7, w - 14, h - 14, r - 4); g.clip(); g.lineCap = 'round';
+    for (const [x0, y0, x1, y1] of crateStripes(w, h)) {
+      for (const [lw, al] of [[22, 0.05], [14, 0.09], [9, 0.16]]) { g.strokeStyle = VC.rgba(CRATE_HAZ, al); g.lineWidth = lw; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+    }
+    g.restore();
+    for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) glowDot(g, dx * (w / 2 - 12), dy * (h / 2 - 12), 10, 'rgba(140,200,255,0.5)');
+  }
   function crate(g, b) {
     const s = Wd().bodyState(b), u = b.getUserData();
     g.save(); g.translate(s.x, s.y); g.rotate(s.a);
-    const w = u.w, h = u.h;
-    g.fillStyle = 'rgba(0,0,0,0.3)'; rr(g, -w / 2 + 4, -h / 2 + 6, w, h, 10); g.fill();
-    const gr = g.createLinearGradient(-w / 2, 0, w / 2, 0);
-    gr.addColorStop(0, '#6a7a9a'); gr.addColorStop(0.5, '#a8b8d8'); gr.addColorStop(1, '#5a6a88');
-    g.fillStyle = gr; rr(g, -w / 2, -h / 2, w, h, 10); g.fill();
-    g.strokeStyle = '#2a3450'; g.lineWidth = 4; g.stroke();
-    g.strokeStyle = 'rgba(255,210,63,0.9)'; g.lineWidth = 8;
-    for (let y = -h / 2 + 30; y < h / 2 - 10; y += 60) { g.beginPath(); g.moveTo(-w / 2 + 12, y); g.lineTo(w / 2 - 12, y + 20); g.stroke(); }
-    g.fillStyle = '#e8f7ff'; for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { g.beginPath(); g.arc(dx * (w / 2 - 12), dy * (h / 2 - 12), 5, 0, TAU); g.fill(); }
+    putSprite(g, objSprite('crate', u.w, u.h, 26, paintCrate, paintCrateGlow));
     g.restore();
+  }
+  const PLANK_EDGE = VC.parse('#78d6ff'), PLANK_END = VC.parse('#ff5ec8');
+  function paintPlank(g, w, h) {
+    const body = () => rr(g, -w / 2, -h / 2, w, h, h / 2);
+    for (const [d, al] of [[8, 0.08], [4, 0.14]]) { g.fillStyle = 'rgba(0,0,8,' + al + ')'; rr(g, -w / 2 + 3 - d / 2, -h / 2 + 7 - d / 2, w + d, h + d, h / 2 + d / 2); g.fill(); }
+    // 어두운 유리 막대: 위는 남빛, 아래로 짙어짐
+    const bg = g.createLinearGradient(0, -h / 2, 0, h / 2);
+    bg.addColorStop(0, '#3a4c78'); bg.addColorStop(0.4, '#18213c'); bg.addColorStop(1, '#070b18');
+    g.fillStyle = bg; body(); g.fill();
+    g.save(); body(); g.clip();
+    // 안쪽 에너지 심: 아래쪽에 옅은 푸른 빛줄 (유리 속 빛)
+    const cg = g.createLinearGradient(-w / 2, 0, w / 2, 0);
+    cg.addColorStop(0, VC.rgba(PLANK_EDGE, 0)); cg.addColorStop(0.5, VC.rgba(PLANK_EDGE, 0.5)); cg.addColorStop(1, VC.rgba(PLANK_EDGE, 0));
+    g.fillStyle = cg; g.fillRect(-w / 2, h * 0.1, w, 2);
+    // 위 반사: 윗면 절반 옅은 흰 띠 + 가는 빛줄
+    const tg = g.createLinearGradient(0, -h / 2, 0, 0);
+    tg.addColorStop(0, 'rgba(255,255,255,0.22)'); tg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = tg; g.fillRect(-w / 2, -h / 2, w, h / 2);
+    const tl = g.createLinearGradient(-w / 2, 0, w / 2, 0);
+    tl.addColorStop(0, 'rgba(255,255,255,0.1)'); tl.addColorStop(0.25, 'rgba(255,255,255,0.75)'); tl.addColorStop(0.7, 'rgba(255,255,255,0.35)'); tl.addColorStop(1, 'rgba(255,255,255,0.08)');
+    g.fillStyle = tl; g.fillRect(-w / 2 + h / 2, -h / 2 + 2.2, w - h, 1.3);
+    // 양 끝 분홍 발판: 자리·크기 예전 그대로, 빛나는 유리 조각으로
+    for (const e of [-1, 1]) {
+      const x = e * (w / 2 - 22) - 8, pg = g.createLinearGradient(0, -h / 2, 0, h / 2);
+      pg.addColorStop(0, '#ffc2ea'); pg.addColorStop(0.45, '#ff5ec8'); pg.addColorStop(1, '#8a1a66');
+      g.fillStyle = pg; rr(g, x, -h / 2, 16, h, 4); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillRect(x + 3, -h / 2 + 2, 10, 1.3);
+    }
+    g.restore();
+    // 테두리: 가는 빛 테 (위 밝고 아래 옅게)
+    const eg = g.createLinearGradient(0, -h / 2, 0, h / 2);
+    eg.addColorStop(0, 'rgba(210,240,255,0.9)'); eg.addColorStop(1, VC.rgba(PLANK_EDGE, 0.25));
+    g.strokeStyle = eg; g.lineWidth = 1.3; rr(g, -w / 2 + 0.65, -h / 2 + 0.65, w - 1.3, h - 1.3, h / 2 - 0.65); g.stroke();
+  }
+  function paintPlankGlow(g, w, h) {
+    haloStroke(g, () => rr(g, -w / 2, -h / 2, w, h, h / 2), PLANK_EDGE, [[16, 0.04], [9, 0.07], [4, 0.12]]);
+    for (const e of [-1, 1]) glowDot(g, e * (w / 2 - 22), 0, 28, VC.rgba(PLANK_END, 0.8));
   }
   function plank(g, sw) {
     const s = Wd().bodyState(sw.plank), w = sw.w, h = PH.plankHalf * 2;
     g.save(); g.translate(s.x, s.y); g.rotate(s.a);
-    g.fillStyle = 'rgba(0,0,0,0.3)'; rr(g, -w / 2 + 3, -h / 2 + 7, w, h, h / 2); g.fill();
-    const gr = g.createLinearGradient(0, -h / 2, 0, h / 2);
-    gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.5, '#b8c8e0'); gr.addColorStop(1, '#6a7a98');
-    g.fillStyle = gr; rr(g, -w / 2, -h / 2, w, h, h / 2); g.fill();
-    g.strokeStyle = '#2a3450'; g.lineWidth = 2.5; g.stroke();
-    g.fillStyle = '#ff5ec8'; for (const e of [-1, 1]) { rr(g, e * (w / 2 - 22) - 8, -h / 2, 16, h, 4); g.fill(); }
+    putSprite(g, objSprite('plank', w, h, 24, paintPlank, paintPlankGlow));
     g.restore();
-    // 받침 못
-    g.fillStyle = '#ffe66d'; g.beginPath(); g.arc(sw.x, sw.y, 7, 0, TAU); g.fill();
-    g.fillStyle = '#8a5a00'; g.beginPath(); g.arc(sw.x, sw.y, 3, 0, TAU); g.fill();
+    // 받침 못: 금빛 유리 구슬 + 가운데 축 구멍
+    g.save(); g.globalCompositeOperation = 'lighter'; glowDot(g, sw.x, sw.y, 18, 'rgba(255,214,90,0.45)'); g.restore();
+    VFX.drawSphere(g, VFX.createGlossySphere(7, '#ffd34d', { glow: 0, shadow: 0.4, gloss: 1, res: R.res }), sw.x, sw.y);
+    g.fillStyle = 'rgba(60,34,0,0.85)'; g.beginPath(); g.arc(sw.x, sw.y, 2.4, 0, TAU); g.fill();
   }
   function spring(g, sp, t) {
     const o = sp.o, sq = sp.squash, top = o.y - 10 + sq * 8;
