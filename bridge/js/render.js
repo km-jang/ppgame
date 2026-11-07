@@ -665,17 +665,35 @@
     else { g.strokeStyle = '#0d3a18'; g.lineWidth = 3; g.arc(0, -34, 8, 0.2, Math.PI - 0.2); g.stroke(); }
     g.restore();
   }
+  // (2026-11-07 시각 품질 10단계) 말풍선: 흰 풍선 대신 어두운 유리 풍선 + 빛 테두리 + 위 반사 줄, 글자는 밝은 하늘색 (자리·크기 그대로)
   function speech(g, x, y, text) {
     g.font = '28px Jua, sans-serif';
     const w = g.measureText(text).width + 40;
     x = Math.max(w / 2 + 10, Math.min(VW - w / 2 - 10, x));
-    g.save();
-    g.fillStyle = 'rgba(255,255,255,0.96)'; rr(g, x - w / 2, y - 28, w, 56, 28); g.fill();
-    g.beginPath(); g.moveTo(x - w / 2 + 26, y + 22); g.lineTo(x - w / 2 + 12, y + 44); g.lineTo(x - w / 2 + 46, y + 24); g.fill();
-    g.fillStyle = '#12304a'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x, y + 2);
+    const L = x - w / 2, T = y - 28, Hh = 56, Rr = 28, edge = [120, 225, 255];
+    // 풍선 + 꼬리를 한 길로 (테두리가 꼬리까지 이어지게)
+    const shape = () => {
+      g.beginPath();
+      g.moveTo(L + Rr, T); g.lineTo(L + w - Rr, T); g.arc(L + w - Rr, T + Rr, Rr, -Math.PI / 2, Math.PI / 2);
+      g.lineTo(L + 46, T + Hh - 4); g.lineTo(L + 12, y + 44); g.lineTo(L + 26, T + Hh - 6);
+      g.arc(L + Rr, T + Rr, Rr, Math.PI / 2 + 0.55, Math.PI * 1.5); g.closePath();
+    };
+    g.save(); g.lineJoin = 'round';
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (const [lw, al] of [[14, 0.06], [7, 0.12]]) { shape(); g.strokeStyle = VC.rgba(edge, al); g.lineWidth = lw; g.stroke(); }
+    g.restore();
+    const bg = g.createLinearGradient(0, T, 0, T + Hh);
+    bg.addColorStop(0, 'rgba(30,48,92,0.94)'); bg.addColorStop(1, 'rgba(8,12,30,0.94)');
+    shape(); g.fillStyle = bg; g.fill();
+    g.strokeStyle = 'rgba(200,240,255,0.85)'; g.lineWidth = 1.6; g.stroke();
+    const hl = g.createLinearGradient(L, 0, L + w, 0);
+    hl.addColorStop(0, 'rgba(255,255,255,0)'); hl.addColorStop(0.25, 'rgba(255,255,255,0.5)'); hl.addColorStop(1, 'rgba(255,255,255,0.05)');
+    g.fillStyle = hl; rr(g, L + Rr * 0.6, T + 4, w - Rr * 1.2, 2, 1); g.fill();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = VC.rgba(edge, 0.35); g.fillText(text, x, y + 3); g.restore();
+    g.fillStyle = '#e8f9ff'; g.fillText(text, x, y + 2);
     g.restore();
   }
-  // (2026-11-07 시각 품질 9단계) 처음 판 손가락: 살색·굵은 갈색 테두리 대신 어두운 유리 손 + 빛 테두리 (모양·자리는 예전 그대로)
   function hand(g, x, y, s, col) {
     const C = col || [140, 230, 255];
     const shape = () => { rr(g, -8, -40, 20, 60, 10); rr(g, -20, 4, 46, 52, 18); };
@@ -698,11 +716,49 @@
     g.fillStyle = 'rgba(240,252,255,0.95)'; rr(g, -3, -36, 10, 9, 4.5); g.fill();
     g.restore();
   }
-  function heart(g, x, y, s, col) {
-    g.save(); g.translate(x, y); g.scale(s, s); g.fillStyle = col || '#ff5ec8';
-    g.beginPath(); g.moveTo(0, 8); g.bezierCurveTo(-22, -8, -10, -24, 0, -12); g.bezierCurveTo(10, -24, 22, -8, 0, 8); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.ellipse(-7, -10, 4, 2.5, -0.6, 0, TAU); g.fill();
+  // (2026-11-07 시각 품질 10단계) 하트: 납작한 색 하트 대신 유리 광택 하트 + 가산 혼합 빛 번짐. 색마다 한 번 미리 그려 둠
+  const HEARTS = new Map();
+  function heartPath(g) { g.beginPath(); g.moveTo(0, 8); g.bezierCurveTo(-22, -8, -10, -24, 0, -12); g.bezierCurveTo(10, -24, 22, -8, 0, 8); g.closePath(); }
+  function heartSprite(col) {
+    let sp = HEARTS.get(col);
+    if (sp) return sp;
+    const C = VC.parse(col), K = 3, S = 64, mk = () => { const c = canvas(S * K, S * K), g = c.getContext('2d'); g.scale(K, K); g.translate(S / 2, S / 2 + 4); return [c, g]; };
+    const [body, g] = mk();
+    const gr = g.createRadialGradient(-6, -12, 1, 0, -4, 20);
+    gr.addColorStop(0, VC.rgba(VC.lighten(C, 0.7), 1)); gr.addColorStop(0.45, VC.rgba(C, 1)); gr.addColorStop(1, VC.rgba(VC.darken(C, 0.5), 1));
+    heartPath(g); g.fillStyle = gr; g.fill();
+    g.save(); heartPath(g); g.clip();
+    const lo = g.createLinearGradient(0, -4, 0, 8); lo.addColorStop(0, 'rgba(0,0,20,0)'); lo.addColorStop(1, 'rgba(0,0,20,0.35)');
+    g.fillStyle = lo; g.fillRect(-24, -26, 48, 36);
+    g.fillStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.ellipse(-7, -11, 4.5, 2.4, -0.6, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.9)'; g.beginPath(); g.arc(-3.5, -14, 1.2, 0, TAU); g.fill();
     g.restore();
+    heartPath(g); g.strokeStyle = VC.rgba(VC.lighten(C, 0.6), 0.8); g.lineWidth = 0.9; g.stroke();
+    const [glow, h] = mk();
+    glowDot(h, 0, -6, 26, VC.rgba(C, 0.5));
+    sp = { body, glow, S };
+    HEARTS.set(col, sp);
+    return sp;
+  }
+  function heart(g, x, y, s, col) {
+    const sp = heartSprite(col || '#ff5ec8'), d = sp.S * s;
+    const op = g.globalCompositeOperation;
+    g.globalCompositeOperation = 'lighter'; g.drawImage(sp.glow, x - d / 2, y - d / 2 - 4 * s, d, d);
+    g.globalCompositeOperation = op; g.drawImage(sp.body, x - d / 2, y - d / 2 - 4 * s, d, d);
+  }
+  // 먼지·연기: 납작한 원 대신 가장자리가 부드럽게 사라지는 덩이 (색마다 한 번 미리 그림)
+  const PUFFS = new Map();
+  function puffSprite(col) {
+    let c = PUFFS.get(col);
+    if (c) return c;
+    const C = VC.parse(col), S = 48;
+    c = canvas(S, S); const g = c.getContext('2d');
+    const al = /rgba/.test(col) ? parseFloat(col.split(',')[3]) : 1;
+    const gr = g.createRadialGradient(S * 0.45, S * 0.42, 0, S / 2, S / 2, S / 2);
+    gr.addColorStop(0, VC.rgba(VC.lighten(C, 0.25), al)); gr.addColorStop(0.45, VC.rgba(C, al * 0.6)); gr.addColorStop(1, VC.rgba(C, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    PUFFS.set(col, c);
+    return c;
   }
   // (2026-11-07 시각 품질) 상자와 시소 판: 두꺼운 남색 테두리를 걷고 어두운 유리 패널로. 모양·크기는 규칙 그대로(그림만).
   // 크기마다 한 번 미리 그려 두고(본체 한 장 + 가산 혼합으로 얹는 빛 한 장) 매 프레임은 돌려 찍기만 한다
@@ -936,8 +992,13 @@
       if (p.k === 'conf') { p.vy += 700 * dt; p.vx *= 0.99; p.rot += dt * 6; } else if (p.k !== 'heart') { p.vy += 120 * dt; }
       const a = 1 - p.t / p.life;
       g.globalAlpha = Math.max(0, Math.min(1, a * 1.4));
-      if (p.k === 'dust') { g.fillStyle = p.c; g.beginPath(); g.arc(p.x, p.y, p.r * (1 + p.t), 0, TAU); g.fill(); }
-      else if (p.k === 'star') { g.fillStyle = p.c; starPath(g, p.x, p.y, p.r, p.r * 0.45, 4, p.t * 4); g.fill(); }
+      if (p.k === 'dust') { const rr0 = p.r * (1 + p.t) * 1.5, op = g.globalCompositeOperation; g.globalCompositeOperation = 'lighter'; g.drawImage(puffSprite(p.c), p.x - rr0, p.y - rr0, rr0 * 2, rr0 * 2); g.globalCompositeOperation = op; }   // 빛 먼지: 회색 연기로 보이지 않게 가산 혼합
+      else if (p.k === 'star') {
+        // 반짝 별: 가산 혼합 빛 번짐 + 흰 심이 든 별
+        g.save(); g.globalCompositeOperation = 'lighter'; glowDot(g, p.x, p.y, p.r * 3, VC.rgba(VC.parse(p.c), 0.55 * g.globalAlpha)); g.restore();
+        g.fillStyle = p.c; starPath(g, p.x, p.y, p.r, p.r * 0.45, 4, p.t * 4); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.9)'; starPath(g, p.x, p.y, p.r * 0.5, p.r * 0.22, 4, p.t * 4); g.fill();
+      }
       else if (p.k === 'heart') heart(g, p.x, p.y, p.r, p.c);
       else if (p.k === 'conf') { g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.fillStyle = p.c; if (p.star) { starPath(g, 0, 0, p.r * 1.6, p.r * 0.7); g.fill(); } else g.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); g.restore(); }
     }
