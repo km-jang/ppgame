@@ -8,10 +8,10 @@
 
   // 행성 모양
   const THEME = {
-    moon: { sky: ['#05060f', '#11163a', '#262c5a'], neb: ['rgba(120,140,255,0.20)', 'rgba(255,120,220,0.10)'],
+    moon: { sky: ['#05060f', '#11163a', '#262c5a'], neb: ['rgba(120,140,255,0.20)', 'rgba(255,120,220,0.10)'], nebC: [[60, 90, 230], [150, 70, 210], [255, 150, 230]],
       rock: ['#c4c8da', '#6a6f8a', '#30344a'], rim: '#eef4ff', far: '#1e2346', far2: '#141836', haze: '150,170,255',
       planet: { x: 1030, y: 150, r: 84, c: ['#9fd8ff', '#2f7bd8', '#123a7a'], land: '#4fd68a' }, weather: 'dust', music: 'earth' },
-    mars: { sky: ['#12040a', '#3a0f14', '#7a2a1c'], neb: ['rgba(255,110,80,0.22)', 'rgba(180,70,255,0.14)'],
+    mars: { sky: ['#12040a', '#3a0f14', '#7a2a1c'], neb: ['rgba(255,110,80,0.22)', 'rgba(180,70,255,0.14)'], nebC: [[210, 70, 45], [140, 45, 190], [255, 180, 120]],
       rock: ['#c0553a', '#5a1a12', '#2a0a08'], rim: '#ffb07a', far: '#4a1512', far2: '#2c0b0c', haze: '255,160,120',
       planet: { x: 980, y: 140, r: 46, c: ['#e8dcc8', '#9a8a7a', '#3a3028'], moon2: true }, weather: 'sand', music: 'mars' },
   };
@@ -74,21 +74,93 @@
     g.fillStyle = sh; g.fillRect(x - r, y - r, r * 2, r * 2);
     g.restore();
   }
+  // (2026-11-07 시각 품질 7단계) 성운 여러 겹. 하늘은 판마다 한 번 미리 그리니 게임 중 속도는 그대로.
+  // 값 잡음(value noise)을 여러 겹 쌓은 fbm을 한 번 비틀어(domain warp) 실 같은 성운 모양을 만든다. 모두 판 좌표로 재서 화면 비율이 달라도 같은 자리
+  function vnoise(seed) {
+    const hash = (x, y) => { let t = (x * 374761393 + y * 668265263 + seed * 2147483647) | 0; t = Math.imul(t ^ (t >>> 13), 1274126177); return ((t ^ (t >>> 16)) >>> 0) / 4294967296; };
+    const sm = t => t * t * (3 - 2 * t);
+    const n = (x, y) => {
+      const ix = Math.floor(x), iy = Math.floor(y), fx = sm(x - ix), fy = sm(y - iy);
+      const a = hash(ix, iy), b = hash(ix + 1, iy), c = hash(ix, iy + 1), d = hash(ix + 1, iy + 1);
+      return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+    };
+    return (x, y, oct) => { let v = 0, amp = 0.5, fr = 1, tot = 0; for (let i = 0; i < (oct || 5); i++) { v += n(x * fr, y * fr) * amp; tot += amp; amp *= 0.5; fr *= 2.03; } return v / tot; };
+  }
+  const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  function nebulaField(seed) {
+    const F = vnoise(seed), S = 1 / 430;
+    // 성운 밀도 0~1, 색 섞기 0~1, 먼지 띠 0~1
+    return (x, y) => {
+      const px = x * S, py = y * S;
+      const qx = F(px + 1.7, py + 9.2, 4), qy = F(px + 8.3, py + 2.8, 4);
+      const v = F(px + 1.9 * qx, py + 1.9 * qy, 5);
+      const fade = 1 - sstep(330, 560, y);                 // 아래(먼 산 쪽)로 갈수록 옅게
+      const dens = sstep(0.44, 0.86, v) * fade;
+      const mixc = sstep(0.3, 0.7, F(px * 0.7 + 40, py * 0.7 + 13, 3));
+      const dust = sstep(0.52, 0.7, F(px * 2.2 + 70, py * 2.2 + 5, 4)) * sstep(0.35, 0.6, v) * fade;
+      return [dens, mixc, dust];
+    };
+  }
+  function paintNebula(g, T, x0, y0, x1, y1, field) {
+    const [c1, c2, c3] = T.nebC, NW = 360, NH = Math.max(8, Math.round(NW * (y1 - y0) / (x1 - x0)));
+    const lit = canvas(NW, NH), dk = canvas(NW, NH), gl = lit.getContext('2d'), gd = dk.getContext('2d');
+    const A = gl.createImageData(NW, NH), B = gd.createImageData(NW, NH), a = A.data, b = B.data;
+    for (let j = 0; j < NH; j++) for (let i = 0; i < NW; i++) {
+      const x = x0 + (i + 0.5) / NW * (x1 - x0), y = y0 + (j + 0.5) / NH * (y1 - y0);
+      const [d, m, du] = field(x, y), core = d * d * d, k = (j * NW + i) * 4;
+      const lum = d * 0.75 * (1 - du * 0.85);
+      a[k] = Math.min(255, (c1[0] + (c2[0] - c1[0]) * m) * lum + c3[0] * core * 0.45);
+      a[k + 1] = Math.min(255, (c1[1] + (c2[1] - c1[1]) * m) * lum + c3[1] * core * 0.45);
+      a[k + 2] = Math.min(255, (c1[2] + (c2[2] - c1[2]) * m) * lum + c3[2] * core * 0.45);
+      a[k + 3] = 255;
+      b[k] = 4; b[k + 1] = 3; b[k + 2] = 10; b[k + 3] = Math.round(du * 120);
+    }
+    gl.putImageData(A, 0, 0); gd.putImageData(B, 0, 0);
+    g.save(); g.imageSmoothingEnabled = true;
+    g.globalCompositeOperation = 'source-over'; g.drawImage(dk, x0, y0, x1 - x0, y1 - y0);   // 먼지 띠: 바탕을 어둡게
+    g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.62; g.drawImage(lit, x0, y0, x1 - x0, y1 - y0);   // 성운 빛: 더하기
+    g.restore();
+  }
   function paintSky(g, T, w, h, f) {
     const gr = g.createLinearGradient(0, 0, 0, h);
     gr.addColorStop(0, T.sky[0]); gr.addColorStop(0.55, T.sky[1]); gr.addColorStop(1, T.sky[2]);
     g.fillStyle = gr; g.fillRect(0, 0, w, h);
     g.save(); g.translate(f.ox, f.oy); g.scale(f.k, f.k);
     const x0 = -f.ox / f.k, x1 = (w - f.ox) / f.k, y0 = -f.oy / f.k, y1 = (h - f.oy) / f.k;
+    // 1겹: 넓고 옅은 빛 두 덩이 (예전 그대로)
     glowDot(g, VW * 0.22, VH * 0.3, 560, T.neb[0]);
     glowDot(g, VW * 0.72, VH * 0.18, 480, T.neb[1]);
+    // 2겹: 비튼 잡음 성운 + 어두운 먼지 띠
+    const field = nebulaField(T === THEME.mars ? 5 : 3);
+    paintNebula(g, T, x0, y0, x1, y1, field);
+    // 3겹: 성운 속 밝은 심 몇 개 (가산 혼합)
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const rc = BR.rng(31), c3 = T.nebC[2];
+    for (let i = 0, put = 0; i < 400 && put < 5; i++) {
+      const x = x0 + rc() * (x1 - x0), y = y0 + rc() * Math.min(420 - y0, y1 - y0), [d] = field(x, y);
+      if (d < 0.6) continue;
+      put++;
+      glowDot(g, x, y, 70 + rc() * 70, VC.rgba(c3, 0.05 + 0.05 * d));
+      glowDot(g, x, y, 18 + rc() * 14, 'rgba(255,255,255,' + (0.04 + 0.05 * d).toFixed(3) + ')');
+    }
+    g.restore();
+    // 4겹: 별. 성운이 짙은 곳에 더 많고, 먼지 띠 속은 드물다. 밝은 별 몇 개는 색 번짐과 십자 빛
     const rnd = BR.rng(7);
-    const n = Math.round(240 * (x1 - x0) * (y1 - y0) / (VW * VH));
+    const n = Math.round(420 * (x1 - x0) * (y1 - y0) / (VW * VH));
     for (let i = 0; i < n; i++) {
-      const x = x0 + rnd() * (x1 - x0), y = y0 + rnd() * (y1 - y0) * 0.85, big = rnd() < 0.07, r = big ? 2.2 : rnd() * 1.3 + 0.3;
-      g.globalAlpha = 0.35 + rnd() * 0.65; g.fillStyle = rnd() < 0.2 ? '#ffe9b0' : '#eaf6ff';
+      const x = x0 + rnd() * (x1 - x0), y = y0 + rnd() * (y1 - y0) * 0.85, big = rnd() < 0.05, r = big ? 2 : rnd() * 1.2 + 0.3;
+      const al = 0.35 + rnd() * 0.65, warm = rnd() < 0.2, [d, , du] = field(x, y);
+      if (rnd() > 0.3 + 0.7 * d * (1 - du)) continue;
+      g.globalAlpha = al * (1 - du * 0.7); g.fillStyle = warm ? '#ffe9b0' : '#eaf6ff';
       g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
-      if (big) { g.globalAlpha = 0.5; g.fillRect(x - 6, y - 0.5, 12, 1); g.fillRect(x - 0.5, y - 6, 1, 12); }
+      if (big) {
+        g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1;
+        glowDot(g, x, y, 14, warm ? 'rgba(255,200,120,0.35)' : VC.rgba(T.nebC[0], 0.45));
+        const lx = g.createLinearGradient(x - 14, 0, x + 14, 0); lx.addColorStop(0, 'rgba(255,255,255,0)'); lx.addColorStop(0.5, 'rgba(255,255,255,0.7)'); lx.addColorStop(1, 'rgba(255,255,255,0)');
+        const ly = g.createLinearGradient(0, y - 14, 0, y + 14); ly.addColorStop(0, 'rgba(255,255,255,0)'); ly.addColorStop(0.5, 'rgba(255,255,255,0.7)'); ly.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = lx; g.fillRect(x - 14, y - 0.6, 28, 1.2); g.fillStyle = ly; g.fillRect(x - 0.6, y - 14, 1.2, 28);
+        g.restore();
+      }
     }
     g.globalAlpha = 1;
     bigPlanet(g, T.planet);
