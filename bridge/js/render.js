@@ -656,23 +656,37 @@
     const sp = g.createRadialGradient(0, 0, 0, 0, 0, 14);
     sp.addColorStop(0, 'rgba(255,255,255,0.95)'); sp.addColorStop(0.55, 'rgba(255,255,255,0.75)'); sp.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = sp; g.beginPath(); g.arc(0, 0, 14, 0, TAU); g.fill(); g.restore();
-    g.fillStyle = 'rgba(255,154,232,0.8)';
-    for (const [a, b, c] of [[-18, -30, 5], [14, -26, 4], [20, -68, 3]]) { g.beginPath(); g.arc(a, b, c, 0, TAU); g.fill(); }
+    // (2026-11-07 시각 품질 13단계) 분홍 점(볼처럼 보이던 것) 대신 몸 속에서 빛나는 연두 발광 점 (가산 혼합)
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (const [a, b, c] of [[-18, -30, 5], [14, -26, 4], [20, -68, 3]]) { glowDot(g, a, b, c * 3, 'rgba(190,255,120,0.55)'); g.fillStyle = 'rgba(230,255,200,0.9)'; g.beginPath(); g.arc(a, b, c * 0.55, 0, TAU); g.fill(); }
+    g.restore();
     g.strokeStyle = '#4fd68a'; g.lineWidth = 4;
     const sway = calm ? 0 : Math.sin(t * 2.2) * 5;
     g.beginPath(); g.moveTo(0, -90); g.quadraticCurveTo(6 + sway, -112, -4 + sway, -124); g.stroke();
     g.save(); g.globalCompositeOperation = 'lighter'; glowDot(g, -4 + sway, -126, 24, 'rgba(255,230,109,0.55)'); g.restore();
     VFX.drawSphere(g, VFX.createGlossySphere(7, '#ffe66d', { glow: 0.8, shadow: 0, res: R.res }), -4 + sway, -126);
-    // 눈 (가끔 깜빡)
-    const blink = !calm && (t % 3.7) < 0.12;
-    g.fillStyle = '#fff'; g.beginPath(); g.ellipse(0, -60, 17, blink ? 2 : 18, 0, 0, TAU); g.fill();
-    if (!blink) {
-      g.fillStyle = '#0d3a18'; g.beginPath(); g.arc(3, -58, 9, 0, TAU); g.fill();
-      g.fillStyle = '#fff'; g.beginPath(); g.arc(6, -62, 3.5, 0, TAU); g.fill();
+    // 눈: 큰 흰 눈 대신 어두운 유리 렌즈 안에서 빛나는 고리 눈동자 (가끔 깜빡이면 빛 한 줄). 자리·크기·깜빡임 그대로
+    const blink = !calm && (t % 3.7) < 0.12, EC = [140, 255, 190];
+    const lens = g.createRadialGradient(-4, -66, 2, 0, -60, 19);
+    lens.addColorStop(0, '#1e3a40'); lens.addColorStop(0.7, '#08161c'); lens.addColorStop(1, '#030a0e');
+    g.fillStyle = lens; g.beginPath(); g.ellipse(0, -60, 17, blink ? 3 : 18, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(200,255,225,0.85)'; g.lineWidth = 1.6; g.stroke();
+    g.save(); g.globalCompositeOperation = 'lighter';
+    if (blink) {
+      g.strokeStyle = VC.rgba(EC, 0.9); g.lineWidth = 2.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(-11, -60); g.lineTo(11, -60); g.stroke();
+    } else {
+      glowDot(g, 3, -58, 16, VC.rgba(EC, 0.6));
+      g.strokeStyle = VC.rgba(EC, 0.95); g.lineWidth = 3; g.beginPath(); g.arc(3, -58, 8, 0, TAU); g.stroke();
+      g.fillStyle = 'rgba(240,255,245,0.95)'; g.beginPath(); g.arc(3, -58, 3.2, 0, TAU); g.fill();
     }
-    g.fillStyle = '#0d3a18'; g.beginPath();
-    if (ex > 0.5) { g.ellipse(0, -30, 10, 8, 0, 0, Math.PI); g.fill(); g.fillStyle = '#ff7aa8'; g.beginPath(); g.ellipse(0, -26, 5, 3, 0, 0, TAU); g.fill(); }
-    else { g.strokeStyle = '#0d3a18'; g.lineWidth = 3; g.arc(0, -34, 8, 0.2, Math.PI - 0.2); g.stroke(); }
+    g.restore();
+    if (!blink) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.ellipse(-6, -68, 4.5, 2.5, -0.5, 0, TAU); g.fill(); }
+    // 입: 빛나는 한 줄 (신나면 크게 벌린 빛 반달)
+    g.save(); g.lineCap = 'round';
+    const mouth = () => { g.beginPath(); if (ex > 0.5) g.arc(0, -32, 10, 0.15, Math.PI - 0.15); else g.arc(0, -34, 8, 0.2, Math.PI - 0.2); };
+    g.globalCompositeOperation = 'lighter'; mouth(); g.strokeStyle = VC.rgba(EC, 0.35); g.lineWidth = 8; g.stroke();
+    g.globalCompositeOperation = 'source-over'; mouth(); g.strokeStyle = '#eafff2'; g.lineWidth = ex > 0.5 ? 3.4 : 2.6; g.stroke();
+    g.restore();
     g.restore();
   }
   // (2026-11-07 시각 품질 10단계) 말풍선: 흰 풍선 대신 어두운 유리 풍선 + 빛 테두리 + 위 반사 줄, 글자는 밝은 하늘색 (자리·크기 그대로)
