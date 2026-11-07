@@ -559,25 +559,39 @@
     sh.addColorStop(0, 'rgba(4,8,30,0)'); sh.addColorStop(0.7, 'rgba(4,8,30,0.1)'); sh.addColorStop(1, 'rgba(4,8,30,0.42)');
     g.fillStyle = sh; g.fillRect(-r, -r, r * 2, r * 2);
     g.restore();
-    // 얼굴 (돌지 않음)
-    const ex = r * 0.3, ey = -r * 0.12;
+    // 얼굴 (돌지 않음). (2026-11-07 시각 품질 8단계) 큰 흰 눈·분홍 볼 대신 어두운 유리 바이저 안에서 빛나는 눈, 빛나는 입 한 줄.
+    // 기분 셋은 그대로: happy 세로 빛 알약 눈·작은 웃음 / wow 빛 고리 눈·동그란 입 / joy 웃는 반달 눈·큰 웃음
+    const E = VC.parse(ch.ui || ch.col[1]), EW = VC.rgba(VC.lighten(E, 0.75), 1), ex = r * 0.27, ey = -r * 0.02;
+    const vg = g.createLinearGradient(0, ey - r * 0.3, 0, ey + r * 0.3);
+    vg.addColorStop(0, 'rgba(3,8,24,0.86)'); vg.addColorStop(1, 'rgba(10,20,52,0.62)');
+    g.fillStyle = vg; g.beginPath(); g.ellipse(0, ey, r * 0.62, r * 0.29, 0, 0, TAU); g.fill();
+    g.lineWidth = r * 0.035; g.lineCap = 'round';
+    g.strokeStyle = 'rgba(255,255,255,0.32)'; g.beginPath(); g.ellipse(0, ey, r * 0.6, r * 0.27, 0, Math.PI * 1.15, Math.PI * 1.85); g.stroke();
+    g.strokeStyle = VC.rgba(E, 0.45); g.beginPath(); g.ellipse(0, ey, r * 0.6, r * 0.27, 0, Math.PI * 0.2, Math.PI * 0.8); g.stroke();
+    // 빛나는 선: 넓고 옅은 색 번짐(가산 혼합) 위에 가는 흰 심
+    const glowStroke = (path, lw) => {
+      g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round'; g.lineJoin = 'round';
+      for (const [k, al] of [[3, 0.22], [1.8, 0.4]]) { path(); g.strokeStyle = VC.rgba(E, al); g.lineWidth = lw * k; g.stroke(); }
+      g.restore();
+      path(); g.strokeStyle = EW; g.lineWidth = lw; g.lineCap = 'round'; g.stroke();
+    };
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (const sx of [-1, 1]) glowDot(g, sx * ex, ey, r * 0.34, VC.rgba(E, 0.65));
+    g.restore();
     if (mood === 'joy') {
-      g.strokeStyle = '#0a1a2a'; g.lineWidth = r * 0.08; g.lineCap = 'round';
-      for (const s of [-1, 1]) { g.beginPath(); g.arc(s * ex, ey + r * 0.06, r * 0.13, Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
-    } else {
-      for (const s of [-1, 1]) {
-        g.fillStyle = '#fff'; g.beginPath(); g.ellipse(s * ex, ey, r * 0.2, r * 0.25, 0, 0, TAU); g.fill();
-        g.fillStyle = '#0a1a2a'; g.beginPath(); g.ellipse(s * ex + r * 0.05, ey + r * 0.03, r * 0.11, r * 0.15, 0, 0, TAU); g.fill();
-        g.fillStyle = '#fff'; g.beginPath(); g.arc(s * ex + r * 0.09, ey - r * 0.04, r * 0.045, 0, TAU); g.fill();
+      for (const sx of [-1, 1]) glowStroke(() => { g.beginPath(); g.arc(sx * ex, ey + r * 0.07, r * 0.11, Math.PI * 1.15, Math.PI * 1.85); }, r * 0.08);
+    } else if (mood === 'wow') {
+      for (const sx of [-1, 1]) {
+        glowStroke(() => { g.beginPath(); g.arc(sx * ex, ey, r * 0.11, 0, TAU); }, r * 0.065);
+        g.fillStyle = EW; g.beginPath(); g.arc(sx * ex, ey, r * 0.035, 0, TAU); g.fill();
       }
+    } else {
+      for (const sx of [-1, 1]) glowStroke(() => { g.beginPath(); g.moveTo(sx * ex, ey - r * 0.08); g.lineTo(sx * ex, ey + r * 0.08); }, r * 0.13);
     }
-    g.fillStyle = 'rgba(255,120,170,0.55)';
-    for (const s of [-1, 1]) { g.beginPath(); g.ellipse(s * r * 0.55, r * 0.2, r * 0.13, r * 0.08, 0, 0, TAU); g.fill(); }
-    g.strokeStyle = '#0a1a2a'; g.fillStyle = '#0a1a2a'; g.lineWidth = r * 0.07; g.lineCap = 'round';
-    g.beginPath();
-    if (mood === 'wow') { g.ellipse(0, r * 0.33, r * 0.12, r * 0.15, 0, 0, TAU); g.fill(); }
-    else if (mood === 'joy') { g.arc(0, r * 0.16, r * 0.26, 0.1, Math.PI - 0.1); g.closePath(); g.fill(); }
-    else { g.arc(0, r * 0.18, r * 0.22, 0.2, Math.PI - 0.2); g.stroke(); }
+    // 입: 바이저 아래 빛 한 줄
+    if (mood === 'wow') glowStroke(() => { g.beginPath(); g.arc(0, r * 0.44, r * 0.07, 0, TAU); }, r * 0.055);
+    else if (mood === 'joy') glowStroke(() => { g.beginPath(); g.arc(0, r * 0.3, r * 0.2, 0.35, Math.PI - 0.35); }, r * 0.065);
+    else glowStroke(() => { g.beginPath(); g.arc(0, r * 0.32, r * 0.14, 0.45, Math.PI - 0.45); }, r * 0.06);
     // 광택 덮개 (돌지 않음)
     VFX.drawSphere(g, cap, 0, 0);
     g.restore();
