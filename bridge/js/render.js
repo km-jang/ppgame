@@ -1240,7 +1240,16 @@
     const T = THEME[planet] || THEME.moon;
     const c = planet === 'moon' ? ['#ffffff', '#b8bccf', '#4a4f6a'] : ['#ffcf9a', '#d4553a', '#6a1c14'];
     g.save(); if (locked) g.globalAlpha = 0.45;
-    bigPlanet(g, { x: s / 2, y: s / 2, r: s * 0.4, c });
+    // (2026-11-07 시각 품질 12단계) 대기 빛 번짐(가산 혼합) + 행성 + 빛 쪽 가는 대기 테와 광택
+    const r = s * 0.4, x = s / 2, y = s / 2, ac = planet === 'moon' ? [170, 200, 255] : [255, 140, 90];
+    g.save(); g.globalCompositeOperation = 'lighter'; glowDot(g, x, y, r * 1.25, VC.rgba(ac, 0.35)); g.restore();
+    bigPlanet(g, { x, y, r, c });
+    g.save(); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+    g.strokeStyle = VC.rgba(ac, 0.75); g.lineWidth = s * 0.02; g.beginPath(); g.arc(x, y, r - s * 0.01, Math.PI * 0.95, Math.PI * 1.75); g.stroke();
+    g.restore();
+    const hl = g.createRadialGradient(x - r * 0.4, y - r * 0.45, 0, x - r * 0.4, y - r * 0.45, r * 0.45);
+    hl.addColorStop(0, 'rgba(255,255,255,0.55)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = hl; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
     g.restore();
     return T;
   }

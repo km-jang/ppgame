@@ -660,3 +660,46 @@ body.playing .tip.on { display: block; animation: fade .3s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .round-btn.pulse, .lv.next, .big-stars i.on, .tip { animation: none !important; }
 }
+
+/* ═══ (2026-11-07 시각 품질 12단계) 시작 화면·판 고르기·결과 창: 어두운 유리 패널 ═══
+   크기·자리·글자는 그대로 두고 배경·테두리·그림자만 바꾼다. backdrop-filter(뒤 흐리기)는 뒤에서 게임 화면이 계속 움직여
+   작은 탭에서 느릴 수 있어 쓰지 않고, 여러 겹 그라데이션으로 유리 느낌을 낸다 */
+.panel {
+  border-color: rgba(140, 220, 255, .26);
+  background:
+    linear-gradient(172deg, rgba(255, 255, 255, .075) 0, rgba(255, 255, 255, .02) 22%, rgba(255, 255, 255, 0) 40%),
+    radial-gradient(120% 70% at 15% 0%, rgba(94, 160, 255, .14), rgba(94, 160, 255, 0) 60%),
+    radial-gradient(90% 60% at 100% 100%, rgba(179, 125, 255, .1), rgba(179, 125, 255, 0) 60%),
+    linear-gradient(180deg, rgba(18, 26, 48, .95), rgba(7, 10, 22, .97));
+  box-shadow: 0 28px 70px rgba(0, 0, 0, .6), 0 0 46px rgba(94, 231, 255, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .16), inset 0 0 0 1px rgba(94, 231, 255, .05), inset 0 -24px 48px rgba(94, 231, 255, .035);
+}
+.panel::before { height: 2px; background: linear-gradient(90deg, transparent, rgba(160, 245, 255, .95) 30%, #fff 50%, rgba(160, 245, 255, .95) 70%, transparent); box-shadow: 0 0 12px rgba(94, 231, 255, .7); }
+
+/* 행성 카드: 유리 카드 + 행성 색 빛 (달 푸른빛·화성 주황빛) */
+.planet { --pg: 160, 190, 255; border-color: rgba(var(--pg), .32);
+  background:
+    linear-gradient(170deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, 0) 38%),
+    radial-gradient(70% 90% at 22% 50%, rgba(var(--pg), .2), rgba(var(--pg), 0) 70%),
+    linear-gradient(180deg, rgba(20, 28, 52, .9), rgba(8, 11, 24, .92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 6px 18px rgba(0, 0, 0, .35); }
+.planet[data-planet="mars"] { --pg: 255, 130, 90; }
+.planet.now { border-color: var(--yellow); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 0 0 1px rgba(255, 230, 109, .25), 0 0 22px rgba(255, 230, 109, .35), 0 6px 18px rgba(0, 0, 0, .35); }
+.planet.locked { opacity: .7; }
+.planet.locked canvas { filter: saturate(.4) brightness(.8); }
+
+/* 판 고르기 칸: 유리 타일 */
+.lv { border-color: rgba(140, 220, 255, .3);
+  background:
+    linear-gradient(172deg, rgba(255, 255, 255, .1), rgba(255, 255, 255, 0) 42%),
+    radial-gradient(80% 70% at 50% 0%, rgba(94, 231, 255, .16), rgba(94, 231, 255, 0) 70%),
+    linear-gradient(180deg, rgba(20, 30, 56, .92), rgba(8, 12, 26, .94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), inset 0 -10px 20px rgba(94, 231, 255, .05), 0 6px 16px rgba(0, 0, 0, .35); }
+.lv b { text-shadow: 0 0 14px rgba(94, 231, 255, .45); }
+.lv.next { border-color: var(--yellow); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 0 0 1px rgba(255, 230, 109, .25), 0 0 22px rgba(255, 230, 109, .4); }
+.lv.next b { text-shadow: 0 0 16px rgba(255, 230, 109, .6); }
+.lv.locked b { text-shadow: none; }
+
+/* 미션 카드·내 캐릭터 칸: 같은 유리 결 */
+.mcard { background: linear-gradient(172deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, 0) 40%), rgba(255, 210, 63, .04); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08); }
+.ship-card { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1); }
