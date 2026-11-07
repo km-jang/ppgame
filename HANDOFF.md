@@ -75,7 +75,7 @@
 | 무엇 | 주소 |
 |---|---|
 | 게임 고르기 (다섯 게임) | https://claude.ai/artifact/1NdyjCYm93T3mgEURVTa5g |
-| 슥슥 우주 다리 | https://claude.ai/artifact/QFPesAxFSHW6pWuVt5bUaE |
+| 슥슥 우주 다리 (시각 품질 브랜치 `claude/vfx-261107`, 2026-11-07) | https://claude.ai/artifact/JBvnki5H8B6nBAPY98pu2N (옛 주소 QFPesAxFSHW6pWuVt5bUaE는 그 전 버전, 갱신 안 함) |
 | 냠냠 뱀 (N-SNAKE) | https://claude.ai/artifact/L7ZpZUk2D3JoALBrgMz1Yt |
 | 통통 점프 | https://claude.ai/artifact/LEoZaLGDtkW1YGxDL9JUad |
 | 슝슝 우주 달리기 | https://claude.ai/artifact/8H1RimBK5smscCYK2YXnGT |
