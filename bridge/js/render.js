@@ -118,53 +118,211 @@
     if (gr.top) return gr.top.map(p => p.slice());
     return [gr.poly[0], gr.poly[1]];
   }
+  // ─── 바위 질감 (2026-11-07 시각 품질 3단계) ─────────────────
+  // 이어 붙여도 이음매가 안 보이는 회색 잡음 한 장(384px)을 행성마다 한 번 만든다. 큰 무늬(물결 같은 덩어리)와
+  // 날카로운 줄무늬(바위 결)를 섞었고, 땅을 미리 그릴 때 부드러운 빛 섞기(soft-light)로 덮는다. 게임 중에는 다시 만들지 않는다
+  const NOISE = {};
+  function noiseTile(seed) {
+    if (NOISE[seed]) return NOISE[seed];
+    const N = 512, cv = canvas(N, N), g = cv.getContext('2d');
+    const img = g.createImageData(N, N), d = img.data, rnd = BR.rng(seed);
+    const oct = [8, 16, 32, 64, 128, 256].map(p => { const v = new Float32Array(p * p); for (let i = 0; i < v.length; i++) v[i] = rnd(); return { p, v }; });
+    const sm = t => t * t * (3 - 2 * t);
+    const val = (o, x, y) => {
+      const fx = x * o.p / N, fy = y * o.p / N, ix = Math.floor(fx), iy = Math.floor(fy), tx = sm(fx - ix), ty = sm(fy - iy);
+      const p = o.p, a = o.v[(iy % p) * p + ix % p], b = o.v[(iy % p) * p + (ix + 1) % p], c = o.v[((iy + 1) % p) * p + ix % p], e = o.v[((iy + 1) % p) * p + (ix + 1) % p];
+      return a + (b - a) * tx + (c - a) * ty + (a - b - c + e) * tx * ty;
+    };
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      // 고른 덩어리(앞 셋)와 거친 결(뒤 셋)을 비슷한 무게로, 마지막에 낱알 하나하나 작은 잡티를 더해 모래알처럼
+      let f = 0, ridge = 0;
+      const W6 = [0.3, 0.2, 0.16, 0.14, 0.11, 0.09];
+      for (let k = 0; k < oct.length; k++) { const n = val(oct[k], x, y); f += n * W6[k]; if (k === 1 || k === 2) ridge += (1 - Math.abs(n * 2 - 1)) * (k === 1 ? 0.6 : 0.4); }
+      const v = Math.max(0, Math.min(1, f * 0.82 + Math.pow(ridge, 4) * 0.2 + (rnd() - 0.5) * 0.14 + 0.02));
+      const c = Math.round(v * 255), i = (y * N + x) * 4;
+      d[i] = d[i + 1] = d[i + 2] = c; d[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    return (NOISE[seed] = cv);
+  }
+  function polyPath(g, P) { g.beginPath(); P.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); }
+  function linePath(g, pts, dy) { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y + (dy || 0)) : g.moveTo(x, y + (dy || 0)))); }
+
+  // 땅 덩어리 하나. 위에서 아래로: 햇빛 받은 윗면 · 바위 몸 · 어둠 속으로 사라지는 아랫부분.
+  // 겹: 세로 그라데이션 몸 · 바위 질감 · 윗면과 나란한 지층 · 가장자리 안쪽 그늘 · 깨진 틈 · 운석 구덩이(화성은 자갈도) ·
+  //     윗면 햇빛 띠 · 아래로 갈수록 하늘 색 어둠 · 빛나는 윗면 테두리(넓은 빛 번짐 + 색 + 하얀 심) · 반짝이는 알갱이
   function paintRock(g, T, poly, rim, ice, seed) {
     const P = widen(poly);
     const cols = ice ? ICE : T.rock;
-    g.save();
-    g.beginPath(); P.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath();
+    const c0 = VC.parse(cols[0]), c1 = VC.parse(cols[1]), c2 = VC.parse(cols[2]), sky = VC.parse(T.sky[0]);
+    const rimC = VC.parse(ice ? '#dffaff' : T.rim);
+    const rm = widen(rim.map(p => p.slice()));
+    const xs = P.map(p => p[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
     const top = Math.min(...P.map(p => p[1]));
-    const gr = g.createLinearGradient(0, top, 0, top + 320);
-    gr.addColorStop(0, cols[0]); gr.addColorStop(0.25, cols[1]); gr.addColorStop(1, cols[2]);
+    const rnd = BR.rng(seed);
+    g.save();
+    polyPath(g, P);
+    // 1) 몸: 윗면은 밝고, 조금 아래 본래 색, 깊을수록 하늘 쪽 남색으로 가라앉는다
+    const gr = g.createLinearGradient(0, top, 0, top + 520);
+    gr.addColorStop(0, VC.rgba(VC.lighten(c0, 0.05), 1));
+    gr.addColorStop(0.08, VC.rgba(VC.mix(c0, c1, 0.45), 1));
+    gr.addColorStop(0.3, VC.rgba(c1, 1));
+    gr.addColorStop(0.62, VC.rgba(VC.mix(c2, sky, 0.25), 1));
+    gr.addColorStop(1, VC.rgba(VC.mix(c2, sky, 0.7), 1));
     g.fillStyle = gr; g.fill();
     g.clip();
-    const xs = P.map(p => p[0]), x0 = Math.min(...xs), x1 = Math.max(...xs);
-    const rnd = BR.rng(seed);
+    // 2) 바위 질감 (얼음은 옅게)
+    const tile = noiseTile(ice ? 41 : (T === THEME.mars ? 23 : 17));
+    const pat = g.createPattern(tile, 'repeat');
+    if (pat) {
+      if (pat.setTransform && typeof DOMMatrix !== 'undefined') pat.setTransform(new DOMMatrix().translate(seed * 37, seed * 11).scale(0.55));
+      g.globalCompositeOperation = 'soft-light'; g.globalAlpha = ice ? 0.4 : 0.8;
+      g.fillStyle = pat; g.fillRect(x0 - 10, top - 10, x1 - x0 + 20, 1700);
+      g.globalAlpha = ice ? 0.12 : 0.22; g.globalCompositeOperation = 'multiply';
+      g.fillRect(x0 - 10, top - 10, x1 - x0 + 20, 1700);
+      g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+    }
     if (ice) {
-      // 얼음: 비스듬한 빛줄기
-      g.strokeStyle = 'rgba(255,255,255,0.25)'; g.lineWidth = 10;
-      for (let x = x0 - 200; x < x1; x += 90) { g.beginPath(); g.moveTo(x, top); g.lineTo(x + 160, top + 320); g.stroke(); }
+      // 얼음: 안쪽 깊은 푸른 결정면 + 비스듬한 부드러운 빛줄기(가산 혼합) + 가는 날카로운 반사선
+      const deep = g.createLinearGradient(0, top + 40, 0, top + 420);
+      deep.addColorStop(0, 'rgba(40,120,200,0)'); deep.addColorStop(1, 'rgba(10,40,110,0.55)');
+      g.fillStyle = deep; g.fillRect(x0 - 10, top, x1 - x0 + 20, 1200);
+      g.globalCompositeOperation = 'lighter';
+      for (let x = x0 - 260; x < x1; x += 120 + rnd() * 80) {
+        const wv = 30 + rnd() * 50;
+        const band = g.createLinearGradient(x, top, x + wv, top);
+        band.addColorStop(0, 'rgba(200,245,255,0)'); band.addColorStop(0.5, 'rgba(200,245,255,0.16)'); band.addColorStop(1, 'rgba(200,245,255,0)');
+        g.save(); g.transform(1, 0, 0.55, 1, -0.55 * top, 0); g.fillStyle = band; g.fillRect(x, top, wv, 1400); g.restore();
+        g.lineWidth = 1.2;
+        const sl = g.createLinearGradient(0, top, 0, top + 520); sl.addColorStop(0, 'rgba(235,252,255,0.4)'); sl.addColorStop(1, 'rgba(235,252,255,0)');
+        g.strokeStyle = sl; g.beginPath(); g.moveTo(x + wv * 0.5, top); g.lineTo(x + wv * 0.5 + 286, top + 520); g.stroke();
+      }
+      g.globalCompositeOperation = 'source-over';
     } else {
-      g.globalAlpha = 0.16; g.strokeStyle = '#000'; g.lineWidth = 3;
-      for (let i = 1; i < 9; i++) { g.beginPath(); for (let x = x0 - 20; x < x1 + 20; x += 30) g.lineTo(x, top + 26 + i * 34 + Math.sin(x * 0.03 + i) * 6); g.stroke(); }
-      g.globalAlpha = 1;
-      const n = Math.min(40, Math.round((x1 - x0) / 70));
-      for (let i = 0; i < n; i++) {
-        const cx = x0 + rnd() * (x1 - x0), cy = top + 40 + rnd() * 300, cr = 6 + rnd() * 16;
-        g.fillStyle = 'rgba(0,0,0,0.22)'; g.beginPath(); g.ellipse(cx, cy, cr, cr * 0.6, 0, 0, TAU); g.fill();
-        g.fillStyle = 'rgba(255,255,255,0.10)'; g.beginPath(); g.ellipse(cx, cy + cr * 0.25, cr * 0.8, cr * 0.3, 0, 0, Math.PI); g.fill();
+      // 3) 지층: 윗면 모양을 따라 아래로 겹겹이 (밝은 줄 위, 어두운 줄 아래로 한 쌍)
+      for (let i = 1, off = 30; i < 11; i++, off += 26 + i * 5) {
+        const wob = rnd() * 10;
+        const band = rm.map(([x, y]) => [x, y + off + Math.sin(x * 0.012 + i * 1.7) * (5 + wob) + Math.sin(x * 0.041 + i) * 2.5]);
+        g.lineJoin = 'round';
+        g.strokeStyle = 'rgba(255,255,255,' + (0.07 - i * 0.004).toFixed(3) + ')'; g.lineWidth = 2;
+        linePath(g, band, -2); g.stroke();
+        g.strokeStyle = 'rgba(0,0,12,' + (0.22 - i * 0.012).toFixed(3) + ')'; g.lineWidth = 3 + i * 0.4;
+        linePath(g, band, 1); g.stroke();
+      }
+      // 4) 깨진 틈: 윗면에서 아래로 갈라져 내려가는 지그재그 (어두운 틈 + 오른쪽 아래 밝은 모서리)
+      const nCrack = Math.max(1, Math.round((x1 - x0) / 260));
+      for (let k = 0; k < nCrack; k++) {
+        const t0 = rnd(), seg = Math.min(rm.length - 2, Math.floor(t0 * (rm.length - 1))), u = rnd();
+        if (seg < 0) break;
+        let cx = rm[seg][0] + (rm[seg + 1][0] - rm[seg][0]) * u, cy = rm[seg][1] + (rm[seg + 1][1] - rm[seg][1]) * u + 6;
+        const pts = [[cx, cy]], len = 4 + Math.floor(rnd() * 5);
+        for (let j = 0; j < len; j++) { cx += (rnd() - 0.5) * 36; cy += 18 + rnd() * 26; pts.push([cx, cy]); }
+        g.lineCap = 'round'; g.lineJoin = 'round';
+        g.strokeStyle = 'rgba(0,0,10,0.45)'; g.lineWidth = 3.2; linePath(g, pts); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1.2; g.save(); g.translate(1.6, 1.4); linePath(g, pts); g.stroke(); g.restore();
+      }
+      // 5) 운석 구덩이: 빛이 왼쪽 위에서 오니 안쪽 벽은 왼쪽 위가 그늘, 오른쪽 아래가 밝고, 바깥 테는 왼쪽 위가 밝다
+      const nCr = Math.min(36, Math.round((x1 - x0) / 75));
+      for (let i = 0; i < nCr; i++) {
+        const cx = x0 + rnd() * (x1 - x0), cy = top + 48 + Math.pow(rnd(), 1.4) * 320, cr = 5 + Math.pow(rnd(), 2) * 22, e = 0.55;
+        g.save(); g.translate(cx, cy); g.scale(1, e);
+        const bowl = g.createLinearGradient(-cr, -cr, cr, cr);
+        bowl.addColorStop(0, 'rgba(0,0,12,0.5)'); bowl.addColorStop(0.55, 'rgba(0,0,12,0.18)'); bowl.addColorStop(1, VC.rgba(VC.lighten(c0, 0.2), 0.32));
+        g.fillStyle = bowl; g.beginPath(); g.arc(0, 0, cr, 0, TAU); g.fill();
+        g.strokeStyle = VC.rgba(VC.lighten(c0, 0.3), 0.35); g.lineWidth = Math.max(1, cr * 0.16);
+        g.beginPath(); g.arc(0, 0, cr * 1.04, Math.PI * 0.95, Math.PI * 1.75); g.stroke();
+        g.strokeStyle = 'rgba(0,0,12,0.25)';
+        g.beginPath(); g.arc(0, 0, cr * 1.06, Math.PI * 1.95, Math.PI * 0.75); g.stroke();
+        g.restore();
+      }
+      // 화성: 반쯤 묻힌 작은 자갈 (위 밝고 아래 그림자)
+      if (T === THEME.mars) for (let i = 0, n = Math.round((x1 - x0) / 40); i < n; i++) {
+        const cx = x0 + rnd() * (x1 - x0), cy = top + 30 + Math.pow(rnd(), 1.6) * 260, r = 2.5 + rnd() * 6;
+        g.fillStyle = 'rgba(0,0,8,0.35)'; g.beginPath(); g.ellipse(cx + r * 0.3, cy + r * 0.45, r, r * 0.55, 0, 0, TAU); g.fill();
+        const pg = g.createRadialGradient(cx - r * 0.35, cy - r * 0.45, 0, cx, cy, r);
+        pg.addColorStop(0, VC.rgba(VC.lighten(c0, 0.35), 1)); pg.addColorStop(1, VC.rgba(VC.mix(c1, c2, 0.5), 1));
+        g.fillStyle = pg; g.beginPath(); g.ellipse(cx, cy, r, r * 0.7, 0, 0, TAU); g.fill();
       }
     }
+    // 6) 가장자리 안쪽 그늘: 덩어리 테두리 안쪽을 어둡게 해 입체로 (윗면은 다음 겹에서 다시 밝힌다)
+    g.lineJoin = 'round';
+    //    덩어리 바깥을 칠하면서 그 그림자를 안쪽으로 흐리게 떨어뜨린다 (미리 그리는 그림이라 번짐을 써도 된다). 바깥 칠은 잘라 낸 영역 밖이라 안 보인다
+    for (const [blur, al] of ice ? [[60, 0.35]] : [[70, 0.55], [22, 0.35]]) {
+      g.save(); g.shadowColor = 'rgba(2,4,16,' + al + ')'; g.shadowBlur = blur; g.fillStyle = '#000';
+      g.beginPath(); g.rect(x0 - 3000, top - 3000, x1 - x0 + 6000, 9000); P.slice().reverse().forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath();
+      g.fill('evenodd'); g.restore();
+    }
+    // 7) 윗면 햇빛 띠: 테두리 바로 아래가 가장 밝고 아래로 사라진다 (가산 혼합 여러 겹)
+    g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+    for (const [lw, al] of [[56, 0.05], [34, 0.07], [18, 0.1], [8, 0.14]]) { linePath(g, rm); g.strokeStyle = VC.rgba(VC.lighten(c0, 0.2), al); g.lineWidth = lw; g.stroke(); }
+    g.globalCompositeOperation = 'source-over';
+    // 윗면 가까이 고운 먼지 알갱이
+    for (let i = 0, n = Math.round((x1 - x0) / 9); i < n; i++) {
+      const t = rnd(), seg = Math.min(rm.length - 2, Math.floor(t * (rm.length - 1)));
+      if (seg < 0) break;
+      const u = rnd(), x = rm[seg][0] + (rm[seg + 1][0] - rm[seg][0]) * u, y = rm[seg][1] + (rm[seg + 1][1] - rm[seg][1]) * u + 3 + Math.pow(rnd(), 2) * 40;
+      g.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,12,0.2)';
+      g.fillRect(x, y, 1.6, 1.6);
+    }
+    // 8) 아래로 갈수록 하늘 색 어둠에 잠긴다 (땅이 화면 아래로 끝없이 이어져 보이게)
+    const fade = g.createLinearGradient(0, top + 220, 0, top + 760);
+    fade.addColorStop(0, VC.rgba(sky, 0)); fade.addColorStop(0.6, VC.rgba(sky, 0.55)); fade.addColorStop(1, VC.rgba(sky, 0.85));
+    g.fillStyle = fade; g.fillRect(x0 - 10, top + 220, x1 - x0 + 20, 2000);
     g.restore();
-    // 윗면 빛 테 (미리 그리는 그림이라 번짐을 써도 된다)
-    const rm = widen(rim.concat([]).map(p => p.slice()));
+
+    // 9) 빛나는 윗면 테두리: 넓은 빛 번짐 · 색 띠 · 하얀 심 (미리 그리는 그림이라 번짐을 써도 된다)
     g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
-    g.shadowColor = ice ? '#bff4ff' : T.rim; g.shadowBlur = 16; g.strokeStyle = ice ? '#dffaff' : T.rim; g.lineWidth = 4;
-    g.beginPath(); rm.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
-    g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1.5; g.stroke();
+    g.globalCompositeOperation = 'lighter';
+    for (const [lw, al] of [[26, 0.05], [16, 0.08], [9, 0.14]]) { linePath(g, rm); g.strokeStyle = VC.rgba(rimC, al); g.lineWidth = lw; g.stroke(); }
+    g.globalCompositeOperation = 'source-over';
+    g.shadowColor = VC.rgba(rimC, 0.9); g.shadowBlur = 14; g.strokeStyle = VC.rgba(rimC, 0.95); g.lineWidth = 3.2;
+    linePath(g, rm); g.stroke();
+    g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,0.92)'; g.lineWidth = 1.3; linePath(g, rm, -0.4); g.stroke();
+    // 10) 테두리 위 반짝이: 십자 빛 몇 개
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0, n = Math.max(2, Math.round((x1 - x0) / 220)); i < n; i++) {
+      const t = rnd(), seg = Math.min(rm.length - 2, Math.floor(t * (rm.length - 1)));
+      if (seg < 0) break;
+      const u = rnd(), x = rm[seg][0] + (rm[seg + 1][0] - rm[seg][0]) * u, y = rm[seg][1] + (rm[seg + 1][1] - rm[seg][1]) * u, L = 7 + rnd() * 9;
+      glowDot(g, x, y, L * 1.4, VC.rgba(rimC, 0.45));
+      g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x - L, y); g.lineTo(x + L, y); g.moveTo(x, y - L * 0.7); g.lineTo(x, y + L * 0.7); g.stroke();
+    }
     g.restore();
   }
+  // 둥근 바위: 입체 몸 · 바위 질감 · 구덩이 · 아래 그늘 · 왼쪽 위 빛나는 테 · 아래 반사광
   function paintBoulder(g, T, x, y, r) {
-    glowDot(g, x, y - r * 0.3, r * 1.4, 'rgba(' + T.haze + ',0.10)');
+    const c0 = VC.parse(T.rock[0]), c1 = VC.parse(T.rock[1]), c2 = VC.parse(T.rock[2]), rimC = VC.parse(T.rim), sky = VC.parse(T.sky[0]);
+    glowDot(g, x, y - r * 0.3, r * 1.5, 'rgba(' + T.haze + ',0.12)');
     g.save(); g.beginPath(); g.arc(x, y, r, 0, TAU); g.clip();
-    const gr = g.createRadialGradient(x - r * 0.35, y - r * 0.45, r * 0.1, x, y, r * 1.05);
-    gr.addColorStop(0, T.rock[0]); gr.addColorStop(0.5, T.rock[1]); gr.addColorStop(1, T.rock[2]);
+    const gr = g.createRadialGradient(x - r * 0.38, y - r * 0.45, r * 0.08, x, y, r * 1.05);
+    gr.addColorStop(0, VC.rgba(VC.lighten(c0, 0.1), 1)); gr.addColorStop(0.4, VC.rgba(c1, 1)); gr.addColorStop(0.85, VC.rgba(VC.mix(c2, sky, 0.3), 1)); gr.addColorStop(1, VC.rgba(VC.mix(c2, sky, 0.6), 1));
     g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
-    g.fillStyle = 'rgba(0,0,0,0.22)';
-    for (const [dx, dy, k] of [[-0.3, -0.3, 0.16], [0.35, -0.1, 0.12], [0.05, 0.3, 0.2]]) { g.beginPath(); g.ellipse(x + dx * r, y + dy * r, k * r, k * r * 0.7, 0, 0, TAU); g.fill(); }
+    const pat = g.createPattern(noiseTile(T === THEME.mars ? 23 : 17), 'repeat');
+    if (pat) { g.globalCompositeOperation = 'soft-light'; g.globalAlpha = 0.9; g.fillStyle = pat; g.fillRect(x - r, y - r, r * 2, r * 2); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }
+    for (const [dx, dy, k] of [[-0.3, -0.3, 0.16], [0.35, -0.1, 0.12], [0.05, 0.3, 0.2], [-0.45, 0.25, 0.09]]) {
+      const cx = x + dx * r, cy = y + dy * r, cr = k * r;
+      const bowl = g.createLinearGradient(cx - cr, cy - cr, cx + cr, cy + cr);
+      bowl.addColorStop(0, 'rgba(0,0,12,0.45)'); bowl.addColorStop(1, VC.rgba(VC.lighten(c0, 0.2), 0.28));
+      g.fillStyle = bowl; g.beginPath(); g.ellipse(cx, cy, cr, cr * 0.7, 0, 0, TAU); g.fill();
+    }
+    const sh = g.createRadialGradient(x - r * 0.25, y - r * 0.3, r * 0.5, x, y, r);
+    sh.addColorStop(0, 'rgba(2,4,16,0)'); sh.addColorStop(1, 'rgba(2,4,16,0.5)');
+    g.fillStyle = sh; g.fillRect(x - r, y - r, r * 2, r * 2);
+    // 아래 반사광 (가산 혼합)
+    g.globalCompositeOperation = 'lighter';
+    g.strokeStyle = VC.rgba(rimC, 0.12); g.lineWidth = r * 0.05;
+    g.beginPath(); g.arc(x, y, r * 0.95, Math.PI * 0.05, Math.PI * 0.75); g.stroke();
     g.restore();
-    g.save(); g.shadowColor = T.rim; g.shadowBlur = 12; g.strokeStyle = T.rim; g.lineWidth = 3;
-    g.beginPath(); g.arc(x, y, r - 1, Math.PI * 1.1, Math.PI * 1.9); g.stroke(); g.restore();
+    g.save(); g.lineCap = 'round';
+    g.globalCompositeOperation = 'lighter';
+    for (const [lw, al] of [[18, 0.06], [10, 0.1]]) { g.strokeStyle = VC.rgba(rimC, al); g.lineWidth = lw; g.beginPath(); g.arc(x, y, r - 1, Math.PI * 1.05, Math.PI * 1.95); g.stroke(); }
+    g.globalCompositeOperation = 'source-over';
+    g.shadowColor = T.rim; g.shadowBlur = 12; g.strokeStyle = T.rim; g.lineWidth = 3;
+    g.beginPath(); g.arc(x, y, r - 1, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+    g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 1.2;
+    g.beginPath(); g.arc(x, y, r - 1.5, Math.PI * 1.2, Math.PI * 1.75); g.stroke();
+    g.restore();
   }
   function paintTerrain(g, W, T, f) {
     g.save(); g.translate(f.ox, f.oy); g.scale(f.k, f.k);
