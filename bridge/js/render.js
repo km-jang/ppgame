@@ -22,7 +22,9 @@
   const R = { parts: [], sky: null, skyKey: '', ter: null, terKey: '', vig: null, vigKey: '', t: 0, weather: [], fit: { k: 1, ox: 0, oy: 0 },
     // (2026-11-07) 시각 효과 상태: 손끝 용접 불꽃 · 공 젤리 탄성 · 지난 프레임 공 속도 (그림 전용, 규칙과 무관)
     calm: false, res: 2, weld: new VFX.ParticleEmitter({ max: 220, seed: 11 }), tip: null, sputter: 0,
-    jelly: new VFX.SpringScaler({ stiffness: 380, damping: 14 }), jAng: Math.PI / 2, prev: null };
+    jelly: new VFX.SpringScaler({ stiffness: 380, damping: 14 }), jAng: Math.PI / 2, prev: null,
+    // 친구와 만났을 때 축하: 화면 흔들림 남은 시간 · 빛의 파동 고리 · 별빛 폭죽
+    shake: 0, rings: [], cheer: new VFX.ParticleEmitter({ max: 260, seed: 23 }) };
 
   function rr(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
   function starPath(g, cx, cy, R1, r, n, rot) {
@@ -670,8 +672,42 @@
     if (kind === 'spark') for (let i = 0; i < 10; i++) { const a = rnd() * TAU, v = 60 + rnd() * 160; push({ k: 'star', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.6, t: 0, r: 5 + rnd() * 4, c: (o && o.c) || '#ffe66d' }); }
     if (kind === 'line') { const pts = o.pts; for (let i = 0; i < pts.length; i += Math.max(1, Math.floor(pts.length / 10))) push({ k: 'star', x: pts[i][0], y: pts[i][1], vx: (rnd() - 0.5) * 60, vy: -40 - rnd() * 60, life: 0.55, t: 0, r: 4 + rnd() * 3, c: o.c }); }
     if (kind === 'hearts') for (let i = 0; i < 7; i++) push({ k: 'heart', x: x + (rnd() - 0.5) * 120, y: y - rnd() * 40, vx: (rnd() - 0.5) * 40, vy: -80 - rnd() * 80, life: 1.6, t: -i * 0.08, r: 0.9 + rnd() * 0.7, c: rnd() < 0.3 ? '#ffe66d' : '#ff5ec8' });
-    if (kind === 'confetti') for (let i = 0; i < 60; i++) { const a = -Math.PI / 2 + (rnd() - 0.5) * 2.4, v = 300 + rnd() * 420; push({ k: 'conf', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 2.2, t: 0, r: 5 + rnd() * 5, c: CONF[i % CONF.length], rot: rnd() * TAU, star: i % 3 === 0 }); }
+    if (kind === 'confetti') cheer(x, y);
     if (kind === 'puff') for (let i = 0; i < 14; i++) { const a = rnd() * TAU, v = 40 + rnd() * 120; push({ k: 'dust', x: x + Math.cos(a) * 20, y: y + Math.sin(a) * 20, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.7, t: 0, r: 8 + rnd() * 10, c: 'rgba(230,240,255,0.5)' }); }
+  }
+  // 친구와 만난 순간의 축하 (2026-11-07 시각 품질 4단계, 그림만): 화면이 0.05초 흔들리고, 친구 둘레로 빛의 파동 고리 셋이
+  // 차례로 퍼지고, 알록달록한 별빛 36개와 불꽃 30개가 폭죽처럼 솟았다 떨어진다. 결과 창은 main.js가 1.4초 뒤에 연다.
+  // 움직임 줄이기면 흔들림 없음, 고리는 하나, 알갱이는 VFX가 줄인다
+  function cheer(x, y) {
+    const calm = R.calm;
+    if (!calm) R.shake = 0.05;
+    const cy = y + 30;   // 친구 몸 가운데쯤
+    R.rings.push({ x, y: cy, t: 0, life: 0.5, flash: true });
+    const set = calm ? [[0, 300, '#7dff9a']] : [[0, 340, '#7dff9a'], [0.12, 290, '#ffe66d'], [0.24, 240, '#ff7ac8']];
+    for (const [d, r, c] of set) R.rings.push({ x, y: cy, t: -d, life: 0.8, r, c });
+    R.cheer.emit(x, cy, { count: 36, kind: 'star', colors: CONF, speed: 560, speedJitter: 0.45, angle: -Math.PI / 2, spread: 2.5, gravity: 820, drag: 0.9, life: 1.9, lifeJitter: 0.3, size: 6.5, sizeJitter: 0.4, spin: 4, glow: 1.2 });
+    R.cheer.emit(x, cy, { count: 30, kind: 'spark', colors: ['#ffffff', '#fff3a6', '#7dff9a', '#9fd8ff'], speed: 700, speedJitter: 0.5, gravity: 700, drag: 1.4, life: 0.85, lifeJitter: 0.4, size: 3.6, glow: 1.3 });
+    R.cheer.emit(x, cy, { count: 16, kind: 'dot', colors: CONF, speed: 260, speedJitter: 0.6, gravity: 380, drag: 1.8, life: 1.4, size: 4.5 });
+  }
+  // 빛의 파동: 처음엔 굵고 밝다가 커질수록 가늘고 옅어진다 (가산 혼합 3겹 네온 고리). flash는 맨 처음 번쩍
+  function drawRings(g, dt) {
+    for (let i = R.rings.length - 1; i >= 0; i--) {
+      const q = R.rings[i];
+      q.t += dt;
+      if (q.t >= q.life) { R.rings.splice(i, 1); continue; }
+      if (q.t < 0) continue;
+      const u = q.t / q.life, e = 1 - Math.pow(1 - u, 3);   // 빨리 퍼졌다가 천천히
+      if (q.flash) {
+        g.save(); g.globalCompositeOperation = 'lighter';
+        glowDot(g, q.x, q.y, 80 + 220 * e, 'rgba(255,255,240,' + (0.75 * (1 - u)).toFixed(3) + ')');
+        g.restore();
+        continue;
+      }
+      const r = 30 + q.r * e;
+      const pts = [];
+      for (let k = 0; k < 48; k++) { const a = k * TAU / 48; pts.push({ x: q.x + Math.cos(a) * r, y: q.y + Math.sin(a) * r * 0.82 }); }
+      VFX.drawEnergyLine(g, pts, { color: q.c, width: 9 * (1 - u) + 1.5, glow: 1.3, alpha: 1 - u * u, closed: true });
+    }
   }
   function drawParts(g, dt) {
     const P = R.parts;
@@ -691,7 +727,7 @@
     }
     g.globalAlpha = 1;
   }
-  const busy = () => R.parts.length > 0 || R.weld.count > 0 || !R.jelly.settled;
+  const busy = () => R.parts.length > 0 || R.weld.count > 0 || !R.jelly.settled || R.cheer.count > 0 || R.rings.length > 0 || R.shake > 0;
 
   // 손끝 용접 불꽃: 그리는 동안 손가락 자리에서 작은 빛 알갱이가 톡톡 튄다.
   // 움직인 거리만큼 더 많이, 멈춰 있어도 가끔 한두 개. 위쪽으로 튀어 포물선을 그리며 떨어지고 작아지며 사라진다
@@ -742,15 +778,22 @@
     const vigKey = pw + 'x' + ph;
     if (R.vigKey !== vigKey) { R.vig = canvas(pw, ph); const g = R.vig.getContext('2d'); vignette(g, pw, ph); R.vigKey = vigKey; }
 
+    // 화면 흔들림 (축하 순간 0.05초): 남은 시간에 비례해 줄어드는 작은 떨림. 하늘은 두고 땅과 물건만 흔든다
+    let shx = 0, shy = 0;
+    if (R.shake > 0) {
+      const k = R.shake / 0.05, a = 11 * k;
+      shx = (Math.random() * 2 - 1) * a * dpr; shy = (Math.random() * 2 - 1) * a * 0.45 * dpr;
+      R.shake = Math.max(0, R.shake - dt);
+    }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(R.sky, 0, 0);
-    ctx.setTransform(dpr * f.k, 0, 0, dpr * f.k, dpr * f.ox, dpr * f.oy);
+    ctx.setTransform(dpr * f.k, 0, 0, dpr * f.k, dpr * f.ox + shx, dpr * f.oy + shy);
     const g = ctx, calm = !!view.calm;
     R.calm = calm; R.res = Math.max(1, Math.min(3, dpr * f.k * 1.25));
     weather(g, T.weather, dt, calm, f, w, h);
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.setTransform(1, 0, 0, 1, shx, shy);
     ctx.drawImage(R.ter, 0, 0);
-    ctx.setTransform(dpr * f.k, 0, 0, dpr * f.k, dpr * f.ox, dpr * f.oy);
+    ctx.setTransform(dpr * f.k, 0, 0, dpr * f.k, dpr * f.ox + shx, dpr * f.oy + shy);
 
     // 움직이는 물건
     for (const sw of W.seesaws) plank(g, sw);
@@ -762,6 +805,7 @@
     const won = W.phase === 'win';
     const jump = won && !calm ? Math.abs(Math.sin((W.t - W.win.t) * 7)) * 26 * Math.max(0, 1 - (W.t - W.win.t) / 2.5) : 0;
     friend(g, L.goal[0], L.goal[1], 1, R.t, won ? 1 : near, jump, calm);
+    drawRings(g, dt);
     // 힌트 점선 + 처음 판 손가락
     if (view.hint > 0 && L.sol) {
       g.save(); g.globalAlpha = Math.min(1, view.hint); g.setLineDash([4, 18]); g.lineCap = 'round'; g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 8;
@@ -817,6 +861,7 @@
     // 말풍선 (판을 막 열었을 때)
     if (!view.noSay && W.phase === 'ready' && W.t < 6 && L.say) speech(g, L.goal[0] + 60, L.goal[1] - 180, L.say);
     drawParts(g, dt);
+    R.cheer.update(dt); R.cheer.draw(g);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(R.vig, 0, 0);
   }

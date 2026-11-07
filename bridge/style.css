@@ -126,6 +126,10 @@ body:not(.touch) .only-touch { display: none; }
 .panel::before { content: ""; position: absolute; left: 24px; right: 24px; top: -1px; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); }
 .screen.on .panel { animation: panelIn .4s var(--ease) both; }
 @keyframes panelIn { from { opacity: 0; transform: translateY(18px) scale(.97); } }
+/* 결과 창 (2026-11-07): 축하 연출 뒤 아래에서 부드럽게 떠오르며 살짝 통통 (움직임 줄이기면 그냥 나타남) */
+#scr-clear.on .panel { animation: clearUp .7s cubic-bezier(.2, 1.25, .35, 1) both; }
+@keyframes clearUp { 0% { opacity: 0; transform: translateY(90px) scale(.92); } 55% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #scr-clear.on .panel { animation: fade .2s ease-out both; } }
 
 h1, h2 { margin: 0 0 6px; }
 h2 { font: normal 30px var(--disp); letter-spacing: 1px; }
