@@ -875,6 +875,36 @@
 
   // ─── 한 장 그리기 ─────────────────────────────────────────
   // view: {w, h, dpr, calm, char, pen, hint (0~1 힌트 점선), tutorial, drawTip:[x,y] 손가락 자리, noSay}
+  // (2026-11-07 시각 품질 6단계) 화면 전체 빛 번짐 (블룸). 그림만, shadowBlur·filter·getImageData 없이 drawImage만 쓴다.
+  //   1) 다 그린 화면을 1/4 크기로 줄여 담고  2) 자기 자신과 세 번 곱해(multiply) 어두운 곳은 거의 0, 밝은 곳만 남긴다 (밝기의 8제곱: 0.6은 0.02, 0.9는 0.43)
+  //   3) 1/8·1/16로 한 번 더 줄여 부드럽게 번지게 하고  4) 원래 크기로 늘려 가산 혼합으로 얹는다
+  // 느린 기기: 3초가 지난 뒤 최근 2초 평균 프레임이 1/50초보다 길면 끄고 페이지를 다시 열 때까지 끈 채로 둔다 (냠냠 뱀 view.low와 비슷)
+  const BLOOM = { on: true, auto: true, k: 0.7, avg: 1 / 60, seen: 0, key: '', a: null, b: null, c: null };
+  function bloom(ctx, dt) {
+    const B = BLOOM;
+    if (B.auto && dt > 0) {
+      B.avg += (dt - B.avg) * Math.min(1, dt / 2); B.seen += dt;
+      if (B.seen > 3 && B.avg > 1 / 50) B.on = false;
+    }
+    if (!B.on || !ctx.canvas) return;
+    const cv = ctx.canvas, w = cv.width, h = cv.height;
+    if (w < 16 || h < 16) return;
+    const key = w + 'x' + h;
+    if (B.key !== key) {
+      B.a = canvas(Math.ceil(w / 4), Math.ceil(h / 4)); B.b = canvas(Math.ceil(w / 8), Math.ceil(h / 8)); B.c = canvas(Math.ceil(w / 16), Math.ceil(h / 16));
+      B.key = key;
+    }
+    const a = B.a.getContext('2d'), b = B.b.getContext('2d'), c = B.c.getContext('2d');
+    a.globalCompositeOperation = 'copy'; a.drawImage(cv, 0, 0, B.a.width, B.a.height);
+    a.globalCompositeOperation = 'multiply'; a.drawImage(B.a, 0, 0); a.drawImage(B.a, 0, 0); a.drawImage(B.a, 0, 0);
+    b.globalCompositeOperation = 'copy'; b.drawImage(B.a, 0, 0, B.b.width, B.b.height);
+    c.globalCompositeOperation = 'copy'; c.drawImage(B.b, 0, 0, B.c.width, B.c.height);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = 'lighter'; ctx.imageSmoothingEnabled = true;
+    ctx.globalAlpha = B.k * 0.6; ctx.drawImage(B.b, 0, 0, w, h);
+    ctx.globalAlpha = B.k; ctx.drawImage(B.c, 0, 0, w, h);
+    ctx.restore();
+  }
   function draw(ctx, W, view, dt) {
     R.t += dt;
     const w = view.w, h = view.h, dpr = view.dpr;
@@ -978,6 +1008,7 @@
     if (!view.noSay && W.phase === 'ready' && W.t < 6 && L.say) speech(g, L.goal[0] + 60, L.goal[1] - 180, L.say);
     drawParts(g, dt);
     R.cheer.update(dt); R.cheer.draw(g);
+    bloom(ctx, dt);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(R.vig, 0, 0);
   }
@@ -1008,5 +1039,5 @@
     return T;
   }
 
-  BR.Render = { draw, fx, busy, toLevel, fitOf, paintChar, paintPen, paintPlanet, THEME, get fit() { return R.fit; }, _R: R };
+  BR.Render = { draw, fx, busy, toLevel, fitOf, paintChar, paintPen, paintPlanet, THEME, get fit() { return R.fit; }, bloom: BLOOM, _R: R };
 })(BR);
