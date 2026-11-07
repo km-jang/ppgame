@@ -197,9 +197,18 @@
 
   // 절약 모드(view.low, 느린 기기)면 입자 절반
   const low = n => (R.low ? Math.ceil(n / 2) : n);
+  // 빛 불꽃 (common/vfx.js, 2026-11-07 시각 품질): 네모 조각 대신 움직이는 쪽으로 늘어난 빛 줄, 가산 혼합.
+  // 개수·상한(D.FX.maxParticles)·절약 모드 절반은 예전 그대로. 위에서 보는 판이라 중력 없음
+  const SPARK = typeof VFX !== 'undefined' ? new VFX.ParticleEmitter({ max: D.FX.maxParticles, seed: 7 }) : null;
   function burst(x, y, n, colors, speed, size) {
-    const P = R.parts;
     n = low(n);
+    if (SPARK) {
+      // 예전 움직임에 맞춤: 속도 0.35~1배, 매 장면 0.9배로 느려짐(1초에 약 6.3), 0.35~0.75초
+      SPARK.emit(x, y, { count: n, colors, speed: speed * 0.675, speedJitter: 0.48, gravity: 0, drag: 6.3,
+        life: 0.55, lifeJitter: 0.36, size: size * 0.85, sizeJitter: 0.4, glow: 1.3 });
+      return;
+    }
+    const P = R.parts;
     for (let i = 0; i < n; i++) {
       if (P.length >= D.FX.maxParticles) P.shift();
       const a = Math.random() * TAU, sp = speed * (0.35 + Math.random() * 0.65), life = 0.35 + Math.random() * 0.4;
@@ -213,7 +222,7 @@
   // 규칙이 남긴 연출 요청(W.fx)을 입자로 바꾼다
   function takeFx(W, v) {
     R.low = !!v.low;
-    if (R.world !== W) { R.world = W; R.parts.length = 0; R.texts.length = 0; R.shake = 0; R.flash = 0; R.banner = null; }
+    if (R.world !== W) { R.world = W; R.parts.length = 0; if (SPARK) SPARK.clear(); R.texts.length = 0; R.shake = 0; R.flash = 0; R.banner = null; }
     for (const f of W.fx) {
       const p = toPx(v, f.x, f.y), c = v.cell;
       if (W.fun && f.pts && (f.kind === 'eat' || f.kind === 'gold') && (W.mult > 1 || (W.eff && W.eff.double > 0) || f.kind === 'gold')) {
@@ -326,6 +335,7 @@
   }
 
   function updateFx(dt) {
+    if (SPARK) SPARK.update(dt);
     const P = R.parts;
     for (let i = P.length - 1; i >= 0; i--) {
       const q = P[i];
@@ -345,9 +355,14 @@
       const a = q.life / q.max;
       ctx.globalAlpha = a;
       if (q.ring) {
+        // 빛 고리: 넓고 옅은 빛 번짐 두 겹 + 색 고리 + 흰 심 (가산 혼합이라 겹칠수록 밝다)
+        const rr = q.r * (1.1 - a * 0.8), w = 2 + a * 4;
         ctx.strokeStyle = q.color;
-        ctx.lineWidth = 2 + a * 4;
-        ctx.beginPath(); ctx.arc(q.x, q.y, q.r * (1.1 - a * 0.8), 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(q.x, q.y, rr, 0, TAU);
+        ctx.globalAlpha = a * 0.12; ctx.lineWidth = w * 4.2; ctx.stroke();
+        ctx.globalAlpha = a * 0.22; ctx.lineWidth = w * 2.2; ctx.stroke();
+        ctx.globalAlpha = a * 0.9; ctx.lineWidth = w; ctx.stroke();
+        ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = a * 0.75; ctx.lineWidth = Math.max(1, w * 0.32); ctx.stroke();
       } else {
         const s = q.size * (0.5 + a * 0.5);
         ctx.fillStyle = q.color;
@@ -356,6 +371,7 @@
     }
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
+    if (SPARK) SPARK.draw(ctx);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const q of R.texts) {
       ctx.globalAlpha = Math.min(1, q.life / q.max * 2);
@@ -394,6 +410,15 @@
   }
 
   // ─── 먹이 ─────────────────────────────────────────────────
+  // 유리 광택 구슬 (common/vfx.js). 크기는 칸 크기로 한 번 만들어 두고 맥박은 늘이기만 해서 매 장면 새로 그리지 않는다.
+  // vfx.js가 없으면 false를 돌려 예전 그림으로 그린다
+  function orb(ctx, x, y, r, color, s) {
+    if (typeof VFX === 'undefined' || s <= 0) return typeof VFX !== 'undefined';
+    const sp = VFX.createGlossySphere(Math.round(r * 4) / 4, color, { glow: 0.45, shadow: 0.25, glass: 0.65, rim: 1.1 });
+    if (!sp) return false;
+    VFX.drawSphere(ctx, sp, x, y, { scaleX: s, scaleY: s });
+    return true;
+  }
   function drawFood(ctx, W, v) {
     const f = W.food;
     if (!f) return;
@@ -431,10 +456,12 @@
       }
     } else {
       glow(ctx, 'rgba(255,46,136,0.7)', p.x, p.y, c * 1.25, 0.8 * k);
-      ctx.fillStyle = '#ff2e88';
-      ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.3 * pulse, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#ffd6e8';
-      ctx.beginPath(); ctx.arc(p.x - c * 0.07, p.y - c * 0.07, c * 0.11 * pulse, 0, TAU); ctx.fill();
+      if (!orb(ctx, p.x, p.y, c * 0.3, '#ff2e88', pulse)) {
+        ctx.fillStyle = '#ff2e88';
+        ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.3 * pulse, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#ffd6e8';
+        ctx.beginPath(); ctx.arc(p.x - c * 0.07, p.y - c * 0.07, c * 0.11 * pulse, 0, TAU); ctx.fill();
+      }
     }
   }
 
@@ -448,10 +475,12 @@
     glow(ctx, 'rgba(255,120,220,0.7)', p.x, p.y, c * 1.3, 0.8 * k);
     ctx.strokeStyle = 'hsl(' + hue + ',100%,70%)'; ctx.lineWidth = Math.max(2, c * 0.09);
     ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.42 * k, 0, TAU); ctx.stroke();
-    ctx.fillStyle = '#ff5fd0';
-    ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.28 * k, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffe0f6';
-    ctx.beginPath(); ctx.arc(p.x - c * 0.07, p.y - c * 0.07, c * 0.1 * k, 0, TAU); ctx.fill();
+    if (!orb(ctx, p.x, p.y, c * 0.28, '#ff5fd0', k)) {
+      ctx.fillStyle = '#ff5fd0';
+      ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.28 * k, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffe0f6';
+      ctx.beginPath(); ctx.arc(p.x - c * 0.07, p.y - c * 0.07, c * 0.1 * k, 0, TAU); ctx.fill();
+    }
   }
   // 선물 상자: 분홍 상자에 노란 리본. 사라지기 전 blink초는 깜빡 (움직임 줄이기면 흐리게만)
   function giftSprite(c) {
@@ -1379,7 +1408,7 @@
   }
 
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
-  const busy = () => R.parts.length > 0 || R.shake > 0 || R.flash > 0 || !!R.banner || !!(SN.Space && SN.Space.busy());
+  const busy = () => R.parts.length > 0 || (SPARK && SPARK.count > 0) || R.shake > 0 || R.flash > 0 || !!R.banner || !!(SN.Space && SN.Space.busy());
 
   SN.Render = { draw, layout, busy, drawCharPreview, drawSkinPreview: drawCharPreview, CHAR_IDS: Object.keys(LOOKS) };
 })(SN);
