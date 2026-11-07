@@ -544,9 +544,28 @@ body.playing #hud { display: flex; }
 .pdot { width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, var(--pc, #b8bccf) 55%, #333 100%); }
 .ink { display: flex; align-items: center; gap: 10px; width: min(380px, 34vw); height: 56px; padding: 0 16px; border-radius: 28px; background: rgba(12, 16, 30, .75); border: 2px solid rgba(94, 231, 255, .35); }
 .ink > .i { width: 26px; height: 26px; color: var(--yellow); }
-.ink-bar { position: relative; flex: 1; height: 20px; border-radius: 10px; background: rgba(255, 255, 255, .1); }
-#ink-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 10px; background: linear-gradient(90deg, #5ee7ff, #b37dff); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .35); transition: width .12s linear; }
-.ink.low #ink-fill { background: linear-gradient(90deg, #5ee7ff, #ff5ec8); }
+/* 잉크 막대 (2026-11-07 시각 품질 2단계): 어두운 반투명 유리관 안에 빛나는 액체.
+   관: 짙은 유리 + 안쪽 그림자 + 위쪽 반사 줄(::before) + 아래 반사광. 액체: 위는 밝고 아래는 짙은 세로 그라데이션 + 가로 색 흐름 + 표면 광택.
+   액체 끝(::after)은 늘 은은히 빛나고, 선을 긋는 동안(.using) 밝게 타오르며 맥박친다. 움직임 줄이기면 맥박 없음 */
+.ink-bar { position: relative; flex: 1; height: 22px; border-radius: 11px;
+  background: linear-gradient(180deg, rgba(2, 6, 18, .85), rgba(18, 28, 56, .7) 55%, rgba(6, 10, 26, .9));
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .75), inset 0 -2px 3px rgba(94, 231, 255, .22), 0 0 0 1px rgba(150, 220, 255, .22), 0 0 14px rgba(94, 231, 255, .12); }
+.ink-bar::before { content: ""; position: absolute; left: 9px; right: 9px; top: 3px; height: 4px; border-radius: 2px; z-index: 2; pointer-events: none;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .55) 18%, rgba(255, 255, 255, .25) 70%, rgba(255, 255, 255, 0)); }
+#ink-fill { position: absolute; left: 3px; top: 3px; bottom: 3px; width: 100%; max-width: calc(100% - 6px); border-radius: 8px; transition: width .12s linear;
+  --ink-a: #5ee7ff; --ink-b: #b37dff; --ink-tip: 94, 231, 255;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .55) 0, rgba(255, 255, 255, .12) 34%, rgba(0, 0, 0, 0) 52%, rgba(0, 10, 40, .35) 100%),
+    linear-gradient(90deg, var(--ink-a), var(--ink-b));
+  box-shadow: 0 0 8px rgba(94, 231, 255, .55), 0 0 18px rgba(179, 125, 255, .3); }
+.ink.low #ink-fill { --ink-b: #ff5ec8; --ink-tip: 255, 94, 200; box-shadow: 0 0 8px rgba(255, 94, 200, .6), 0 0 18px rgba(255, 94, 200, .3); }
+#ink-fill::after { content: ""; position: absolute; right: -6px; top: 50%; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, #fff 0, rgba(255, 255, 255, .9) 18%, rgba(var(--ink-tip), .6) 45%, rgba(var(--ink-tip), 0) 72%);
+  opacity: .55; transform: scale(.75); transition: opacity .15s, transform .15s; }
+.ink.using #ink-fill::after { opacity: 1; transform: scale(1.35); animation: inkTip .45s ease-in-out infinite alternate; }
+.ink.using #ink-fill { box-shadow: 0 0 10px rgba(var(--ink-tip), .75), 0 0 24px rgba(var(--ink-tip), .4); }
+@keyframes inkTip { from { transform: scale(1.15); } to { transform: scale(1.6); } }
+@media (prefers-reduced-motion: reduce) { .ink.using #ink-fill::after { animation: none; } #ink-fill, #ink-fill::after { transition: none; } }
 .ink-star { position: absolute; top: 100%; width: 18px; height: 18px; margin: 2px 0 0 -9px; background: #ffe66d; clip-path: polygon(50% 0, 62% 35%, 100% 38%, 70% 60%, 80% 100%, 50% 78%, 20% 100%, 30% 60%, 0 38%, 38% 35%); transition: opacity .2s, filter .2s; }
 .ink-star.off { opacity: .3; filter: grayscale(1); }
 /* 처음 판 안내 글 (화면 아래 가운데) */

@@ -10,6 +10,7 @@
 //
 // 쓰는 법
 //   VFX.createGlossySphere(radius, color, opt)  유리 광택 구슬 그림(보이지 않는 캔버스)을 한 번 만들어 돌려준다. 같은 값이면 저장해 둔 것을 준다
+//   VFX.createGlossCap(radius, opt)             광택 겹만 담은 덮개 (도는 무늬 위에 덮어 반사광을 빛 쪽에 고정)
 //   VFX.drawSphere(ctx, sprite, x, y, opt)      만든 구슬을 (x, y) 중심에 그린다. opt.scaleX·scaleY로 젤리처럼 찌그러뜨릴 수 있다
 //   VFX.drawEnergyLine(ctx, points, opt)        3겹 네온 선 (빛 번짐 · 색 · 하얀 심). shadowBlur를 쓰지 않고 가산 혼합만 쓴다
 //   new VFX.SpringScaler(opt)                   부딪히면 납작해졌다가 띠용 돌아오는 탄성 비율 계산기
@@ -104,6 +105,61 @@ var VFX = (typeof VFX !== 'undefined' && VFX) || {};
     return v;
   }
   function clearCache() { CACHE.clear(); }
+
+  // 유리 광택 겹만 그린다 (구슬 위에 덮는 용도로 따로도 쓴다). cx·cy 중심, R 반지름(그림 픽셀), lx·ly 빛 방향, ang 빛 각도
+  function paintGloss(g, cx, cy, R, lx, ly, ang, glossK) {
+    // (4) 유리 광택: 왼쪽 위 30% 지점, 빛 방향으로 기운 흰 타원. 넓고 부드러운 겹 + 선명한 심 + 아주 작은 반짝점
+    const hx = cx + lx * R * 0.43, hy = cy + ly * R * 0.43; // 중심에서 반지름의 약 30% (대각선 0.43 = 가로세로 각 0.3)
+    const tilt = ang + Math.PI / 2;
+    g.save();
+    g.beginPath(); g.arc(cx, cy, R * 0.985, 0, TAU); g.clip();
+    g.translate(hx, hy);
+    g.rotate(tilt);
+    // 넓은 겹
+    g.save();
+    g.scale(1, 0.58);
+    let sp = g.createRadialGradient(0, 0, 0, 0, 0, R * 0.52);
+    sp.addColorStop(0, 'rgba(255,255,255,' + (0.62 * glossK).toFixed(3) + ')');
+    sp.addColorStop(0.5, 'rgba(255,255,255,' + (0.22 * glossK).toFixed(3) + ')');
+    sp.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sp;
+    g.beginPath(); g.arc(0, 0, R * 0.52, 0, TAU); g.fill();
+    g.restore();
+    // 선명한 심: 가장자리가 빨리 끊기는 타원이라 유리처럼 또렷하다
+    g.save();
+    g.scale(1, 0.5);
+    sp = g.createRadialGradient(0, 0, 0, 0, 0, R * 0.3);
+    sp.addColorStop(0, 'rgba(255,255,255,' + Math.min(1, 0.98 * glossK).toFixed(3) + ')');
+    sp.addColorStop(0.62, 'rgba(255,255,255,' + Math.min(1, 0.9 * glossK).toFixed(3) + ')');
+    sp.addColorStop(0.86, 'rgba(255,255,255,' + (0.25 * glossK).toFixed(3) + ')');
+    sp.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sp;
+    g.beginPath(); g.arc(0, 0, R * 0.3, 0, TAU); g.fill();
+    g.restore();
+    g.restore();
+    // 반짝점: 광택 중심보다 조금 바깥쪽의 아주 작은 흰 점
+    const px = cx + lx * R * 0.6, py = cy + ly * R * 0.6;
+    const dot = g.createRadialGradient(px, py, 0, px, py, R * 0.09);
+    dot.addColorStop(0, 'rgba(255,255,255,' + Math.min(1, glossK).toFixed(3) + ')');
+    dot.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = dot;
+    g.beginPath(); g.arc(px, py, R * 0.09, 0, TAU); g.fill();
+
+    // 창문 반사: 광택 맞은편 아래쪽 안쪽의 가는 초승달 (유리 구슬의 두 번째 반사)
+    g.save();
+    g.beginPath(); g.arc(cx, cy, R * 0.9, 0, TAU); g.clip();
+    g.globalCompositeOperation = 'lighter';
+    const wx = cx - lx * R * 0.62, wy = cy - ly * R * 0.62;
+    g.translate(wx, wy);
+    g.rotate(tilt);
+    g.scale(1, 0.26);
+    const wr = g.createRadialGradient(0, 0, 0, 0, 0, R * 0.36);
+    wr.addColorStop(0, 'rgba(255,255,255,' + (0.3 * glossK).toFixed(3) + ')');
+    wr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = wr;
+    g.beginPath(); g.arc(0, 0, R * 0.36, 0, TAU); g.fill();
+    g.restore();
+  }
 
   // ---------------------------------------------------------------------------------------------
   // 1. 유리 광택 구슬 (createGlossySphere)
@@ -250,60 +306,27 @@ var VFX = (typeof VFX !== 'undefined' && VFX) || {};
       }
     }
 
-    // (4) 유리 광택: 왼쪽 위 30% 지점, 빛 방향으로 기운 흰 타원. 넓고 부드러운 겹 + 선명한 심 + 아주 작은 반짝점
-    if (glossK > 0) {
-      const hx = cx + lx * R * 0.43, hy = cy + ly * R * 0.43; // 중심에서 반지름의 약 30% (대각선 0.43 = 가로세로 각 0.3)
-      const tilt = ang + Math.PI / 2;
-      g.save();
-      g.beginPath(); g.arc(cx, cy, R * 0.985, 0, TAU); g.clip();
-      g.translate(hx, hy);
-      g.rotate(tilt);
-      // 넓은 겹
-      g.save();
-      g.scale(1, 0.58);
-      let sp = g.createRadialGradient(0, 0, 0, 0, 0, R * 0.52);
-      sp.addColorStop(0, 'rgba(255,255,255,' + (0.62 * glossK).toFixed(3) + ')');
-      sp.addColorStop(0.5, 'rgba(255,255,255,' + (0.22 * glossK).toFixed(3) + ')');
-      sp.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = sp;
-      g.beginPath(); g.arc(0, 0, R * 0.52, 0, TAU); g.fill();
-      g.restore();
-      // 선명한 심: 가장자리가 빨리 끊기는 타원이라 유리처럼 또렷하다
-      g.save();
-      g.scale(1, 0.5);
-      sp = g.createRadialGradient(0, 0, 0, 0, 0, R * 0.3);
-      sp.addColorStop(0, 'rgba(255,255,255,' + Math.min(1, 0.98 * glossK).toFixed(3) + ')');
-      sp.addColorStop(0.62, 'rgba(255,255,255,' + Math.min(1, 0.9 * glossK).toFixed(3) + ')');
-      sp.addColorStop(0.86, 'rgba(255,255,255,' + (0.25 * glossK).toFixed(3) + ')');
-      sp.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = sp;
-      g.beginPath(); g.arc(0, 0, R * 0.3, 0, TAU); g.fill();
-      g.restore();
-      g.restore();
-      // 반짝점: 광택 중심보다 조금 바깥쪽의 아주 작은 흰 점
-      const px = cx + lx * R * 0.6, py = cy + ly * R * 0.6;
-      const dot = g.createRadialGradient(px, py, 0, px, py, R * 0.09);
-      dot.addColorStop(0, 'rgba(255,255,255,' + Math.min(1, glossK).toFixed(3) + ')');
-      dot.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = dot;
-      g.beginPath(); g.arc(px, py, R * 0.09, 0, TAU); g.fill();
+    // (4) 유리 광택
+    if (glossK > 0) paintGloss(g, cx, cy, R, lx, ly, ang, glossK);
 
-      // 창문 반사: 광택 맞은편 아래쪽 안쪽의 가는 초승달 (유리 구슬의 두 번째 반사)
-      g.save();
-      g.beginPath(); g.arc(cx, cy, R * 0.9, 0, TAU); g.clip();
-      g.globalCompositeOperation = 'lighter';
-      const wx = cx - lx * R * 0.62, wy = cy - ly * R * 0.62;
-      g.translate(wx, wy);
-      g.rotate(tilt);
-      g.scale(1, 0.26);
-      const wr = g.createRadialGradient(0, 0, 0, 0, 0, R * 0.36);
-      wr.addColorStop(0, 'rgba(255,255,255,' + (0.3 * glossK).toFixed(3) + ')');
-      wr.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = wr;
-      g.beginPath(); g.arc(0, 0, R * 0.36, 0, TAU); g.fill();
-      g.restore();
-    }
+    return cachePut(key, { canvas: cv, radius: r, pad, res, size });
+  }
 
+  // 광택 덮개: 유리 광택 겹만 담은 그림. 구슬 몸통 위에 도는 무늬를 그린 뒤 맨 위에 덮으면
+  // 무늬는 굴러도 반사광은 늘 빛 쪽에 머문다. drawSphere로 그린다. opt: gloss · light · res (createGlossySphere와 같은 뜻)
+  function createGlossCap(radius, opt) {
+    opt = opt || {};
+    const r = Math.max(1, +radius || 1);
+    const glossK = opt.gloss == null ? 1 : clamp(opt.gloss, 0, 1.2);
+    const ang = opt.light == null ? -2.36 : +opt.light;
+    const res = resOf(opt);
+    const key = ['cap', r.toFixed(2), glossK, ang.toFixed(3), res].join('|');
+    const hit = cacheGet(key);
+    if (hit) return hit;
+    const pad = 1, size = (r + pad) * 2, S = Math.ceil(size * res);
+    const cv = makeCanvas(S, S);
+    if (!cv) return null;
+    paintGloss(cv.getContext('2d'), S / 2, S / 2, r * res, Math.cos(ang), Math.sin(ang), ang, glossK);
     return cachePut(key, { canvas: cv, radius: r, pad, res, size });
   }
 
@@ -735,7 +758,7 @@ var VFX = (typeof VFX !== 'undefined' && VFX) || {};
   }
 
   Object.assign(V, {
-    createGlossySphere, drawSphere, drawEnergyLine, SpringScaler, ParticleEmitter,
+    createGlossySphere, createGlossCap, drawSphere, drawEnergyLine, SpringScaler, ParticleEmitter,
     calm, clearCache,
     // 다른 그림 코드에서도 쓸 수 있는 색 도구
     color: { parse, rgba, mix, lighten, darken, deep, vivid },

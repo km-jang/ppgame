@@ -187,6 +187,7 @@
     $('ink-s3').classList.toggle('off', used > L.par[0]);
     $('ink-s2').classList.toggle('off', used > L.par[1]);
     $('ink').classList.toggle('low', fr < 0.2);
+    $('ink').classList.toggle('using', !!W.drawing);   // 선을 긋는 동안 잉크 끝이 밝게 빛난다 (그림만)
     $('btn-undo').disabled = !W.lines.length || W.phase === 'win';
   }
   function undo() { if (W && mode === 'play' && Wd.undo(W)) { ui('tap'); updateInk(); } }

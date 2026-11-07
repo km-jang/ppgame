@@ -19,7 +19,10 @@
   BR.THEME = THEME;
 
   // 그리기 상태 (규칙과 따로: 입자·흔들림·캐시)
-  const R = { parts: [], sky: null, skyKey: '', ter: null, terKey: '', vig: null, vigKey: '', t: 0, weather: [], fit: { k: 1, ox: 0, oy: 0 } };
+  const R = { parts: [], sky: null, skyKey: '', ter: null, terKey: '', vig: null, vigKey: '', t: 0, weather: [], fit: { k: 1, ox: 0, oy: 0 },
+    // (2026-11-07) 시각 효과 상태: 손끝 용접 불꽃 · 공 젤리 탄성 · 지난 프레임 공 속도 (그림 전용, 규칙과 무관)
+    calm: false, res: 2, weld: new VFX.ParticleEmitter({ max: 220, seed: 11 }), tip: null, sputter: 0,
+    jelly: new VFX.SpringScaler({ stiffness: 380, damping: 14 }), jAng: Math.PI / 2, prev: null };
 
   function rr(g, x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
   function starPath(g, cx, cy, R1, r, n, rot) {
@@ -187,6 +190,7 @@
   }
 
   // ─── 움직이는 것들 ─────────────────────────────────────────
+  function circlePts(x, y, r) { const o = []; for (let i = 0; i < 24; i++) { const a = i * TAU / 24; o.push({ x: x + Math.cos(a) * r, y: y + Math.sin(a) * r }); } return o; }
   function smoothPath(g, pts) {
     g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
     for (let i = 1; i < pts.length - 1; i++) {
@@ -202,72 +206,117 @@
     ['#ff5e7a', '#ffb13d', '#ffe66d', '#7dff9a', '#5ee7ff', '#b37dff'].forEach((c, i) => gr.addColorStop(i / 5, c));
     return gr;
   }
-  // 그린 선: 그리는 중(빛 분필) · 진짜 물건이 된 선(단단한 막대)
-  // ramps: 선 끝 비탈(세 점 묶음). 선과 같은 층마다 같은 색으로 채우고, 층이 선보다 굵은 만큼 테두리를 둘러 이어 보이게
-  function inkLine(g, pts, mode, pen, ramps) {
-    const C = pen.c;
+  // 그린 선 (2026-11-07 시각 품질 2단계: 입체 유리 튜브와 에너지 심지)
+  // 그리는 중: 반투명하게 빛나는 3겹 에너지 선이 맥박처럼 숨 쉰다 (VFX.drawEnergyLine)
+  // 물건이 된 선: 바닥 그림자 · 펜 색 빛 번짐 · 짙은 유리관 · 관 속 색 · 위쪽 반사 줄 · 아래 반사광 · 하얀 에너지 심지
+  // 관 굵기는 규칙의 선 굵기(PH.lineHalf * 2)와 같다. 빛 번짐만 바깥으로 퍼진다.
+  // ramps: 선 끝 비탈(세 점 묶음). 몸통 겹과 같은 색으로 채워 이어 보이게
+  const VC = VFX.color;
+  function penRGB(pen) { return VC.parse(pen.c[1]); }
+  function inkLine(g, pts, mode, pen, ramps, t) {
     if (pts.length === 1) pts = [pts[0], [pts[0][0] + 0.5, pts[0][1]]];
+    const C = pen.c, col = penRGB(pen);
     g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
-    const main = pen.rainbow ? rainbowOf(g, pts) : C[1];
     if (mode === 'drawing') {
-      smoothPath(g, pts);
-      g.strokeStyle = C[0]; g.lineWidth = 26; g.stroke();
-      g.strokeStyle = C[0]; g.lineWidth = 16; g.stroke();
-      g.strokeStyle = main; g.lineWidth = 9; g.stroke();
-      g.strokeStyle = C[2]; g.lineWidth = 3.5; g.stroke();
-    } else {
-      const w = PH.lineHalf * 2;
-      const layer = (color, lw) => {
-        smoothPath(g, pts); g.strokeStyle = color; g.lineWidth = lw; g.stroke();
-        for (const r of ramps || []) {
-          g.beginPath(); g.moveTo(r[0][0], r[0][1]); g.lineTo(r[1][0], r[1][1]); g.lineTo(r[2][0], r[2][1]); g.closePath();
-          g.fillStyle = color; g.fill();
-          if (lw > w) { g.lineWidth = lw - w; g.stroke(); }
-        }
-      };
-      g.save(); g.translate(0, 6); layer('rgba(0,0,0,0.32)', w + 4); g.restore();
-      layer(C[0], w + 10);
-      layer(C[3], w + 3);
-      layer(main, w - 1);
-      g.save(); g.translate(0, -2); smoothPath(g, pts); g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 2.5; g.stroke(); g.restore();
+      // 맥박: 1초에 약 1.3번 두께가 미세하게 부풀었다 가라앉는다 (움직임 줄이기면 멈춤)
+      const beat = R.calm ? 0.5 : 0.5 + 0.5 * Math.sin((t || 0) * 8.2);
+      const wv = 10 * (1 + (beat - 0.5) * 0.14);
+      if (pen.rainbow) {
+        const gr = rainbowOf(g, pts);
+        g.globalCompositeOperation = 'lighter';
+        smoothPath(g, pts);
+        for (const [k, al] of [[3.6, 0.06], [2.4, 0.1], [1.5, 0.16]]) { g.globalAlpha = al * (0.85 + beat * 0.3); g.strokeStyle = gr; g.lineWidth = wv * k; g.stroke(); }
+        g.globalAlpha = 0.72; g.strokeStyle = gr; g.lineWidth = wv; g.stroke();
+        g.globalAlpha = 0.9; g.strokeStyle = '#ffffff'; g.lineWidth = wv * 0.3; g.stroke();
+      } else {
+        VFX.drawEnergyLine(g, pts.map(p => ({ x: p[0], y: p[1] })), { color: C[1], width: wv, alpha: 0.72, glow: 1.15, core: 0.3, pulse: beat });
+      }
+      g.restore();
+      return;
     }
+    const w = PH.lineHalf * 2;
+    const main = pen.rainbow ? rainbowOf(g, pts) : C[1];
+    const deep = VC.rgba(VC.deep(col, 0.62), 0.92);
+    const layer = (style, lw, alpha) => {
+      g.globalAlpha = alpha == null ? 1 : alpha;
+      smoothPath(g, pts); g.strokeStyle = style; g.lineWidth = lw; g.stroke();
+      for (const r of ramps || []) {
+        g.beginPath(); g.moveTo(r[0][0], r[0][1]); g.lineTo(r[1][0], r[1][1]); g.lineTo(r[2][0], r[2][1]); g.closePath();
+        g.fillStyle = style; g.fill();
+        if (lw > w) { g.lineWidth = lw - w; g.stroke(); }
+      }
+    };
+    // 1) 바닥 그림자
+    g.save(); g.translate(0, 6); layer('rgba(0,0,8,0.34)', w + 4); g.restore();
+    // 2) 바깥 빛 번짐: 넓고 옅은 펜 색을 가산 혼합으로 세 번 (가운데로 갈수록 저절로 밝아짐)
+    g.globalCompositeOperation = 'lighter';
+    const halo = pen.rainbow ? main : VC.rgba(VC.vivid(col, 0.4), 1);
+    for (const [k, al] of [[34, 0.026], [27, 0.032], [21, 0.04], [15, 0.052], [10, 0.07], [6, 0.09]]) layer(halo, w + k, al);
+    g.globalCompositeOperation = 'source-over';
+    // 3) 유리관: 짙은 몸통 위에 펜 색이 비치는 반투명 속
+    layer(deep, w + 1);
+    g.globalCompositeOperation = 'lighter';
+    layer(main, w - 1, 0.42);
+    // 4) 관의 굴곡: 위쪽 가는 흰 반사 줄과 아래쪽 펜 색 반사광 (몸통 길이를 따라서만)
+    g.globalAlpha = 0.55; g.save(); g.translate(0, -w * 0.27); smoothPath(g, pts); g.strokeStyle = '#ffffff'; g.lineWidth = 1.5; g.stroke(); g.restore();
+    g.globalAlpha = 0.6; g.save(); g.translate(0, w * 0.3); smoothPath(g, pts); g.strokeStyle = pen.rainbow ? main : VC.rgba(VC.lighten(col, 0.3), 1); g.lineWidth = 1.4; g.stroke(); g.restore();
+    // 5) 에너지 심지: 펜 색 빛 위에 새하얀 가는 심
+    g.globalAlpha = 0.9; smoothPath(g, pts); g.strokeStyle = main; g.lineWidth = w * 0.42; g.stroke();
+    g.globalAlpha = 1; smoothPath(g, pts); g.strokeStyle = VC.rgba(VC.lighten(col, 0.85), 1); g.lineWidth = w * 0.2; g.stroke();
     g.restore();
   }
+  // 톡 구슬: 펜 색 유리 광택 구슬 (도는 것은 무늬가 아니라 구슬 자체라 광택은 덮개로 고정)
   function inkDot(g, x, y, a, pen) {
-    const C = pen.c, r = PH.dotR;
-    glowDot(g, x, y, r * 2.4, C[0]);
-    g.fillStyle = C[3]; g.beginPath(); g.arc(x, y, r + 1.5, 0, TAU); g.fill();
-    const gr = g.createRadialGradient(x - r * 0.4, y - r * 0.4, 1, x, y, r);
-    gr.addColorStop(0, C[2]); gr.addColorStop(1, pen.rainbow ? '#ff7ac8' : C[1]);
-    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r - 0.5, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.arc(x - r * 0.35 + Math.cos(a) * 0.5, y - r * 0.35, r * 0.25, 0, TAU); g.fill();
+    const r = PH.dotR, col = pen.rainbow ? '#b37dff' : pen.c[1];
+    VFX.drawSphere(g, VFX.createGlossySphere(r, col, { glow: 0.6, shadow: 0.4, gloss: 0, res: R.res }), x, y);
+    VFX.drawSphere(g, VFX.createGlossCap(r, { res: R.res }), x, y);
   }
 
   // 공 캐릭터. mood: happy | wow | joy
-  function ball(g, x, y, r, rot, mood, ch, glow) {
+  // (2026-11-07) 유리 광택 구슬: 미리 그린 몸통(그림자·입체 그라데이션·두께감·속빛·아래 반사광) 위에
+  // 도는 금속 무늬(rot만큼 회전)와 얼굴(돌지 않음)을 그리고, 맨 위에 광택 덮개를 얹는다.
+  // 광택 덮개는 회전하지 않아 굴러도 반사광이 늘 왼쪽 위 조명 쪽에 있다.
+  // sq: 젤리 탄성 {sx: 접선 방향 배율, sy: 부딪힌 방향 배율, ang: 부딪힌 방향 각도}. 닿은 점이 고정되게 중심을 옮긴다
+  function ball(g, x, y, r, rot, mood, ch, glow, sq, res) {
     const col = ch.col;
-    if (glow !== false) glowDot(g, x, y, r * 2.3, 'rgba(255,255,255,0.18)');
-    g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(x, y + r + 3, r * 0.85, r * 0.18, 0, 0, TAU); g.fill();
-    g.save(); g.translate(x, y);
-    g.save(); g.beginPath(); g.arc(0, 0, r, 0, TAU); g.clip();
-    const gr = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r * 1.05);
-    gr.addColorStop(0, col[0]); gr.addColorStop(0.45, col[1]); gr.addColorStop(1, col[2]);
-    g.fillStyle = gr; g.fillRect(-r, -r, r * 2, r * 2);
-    // 도는 무늬 (구르는 느낌)
+    const body = VFX.createGlossySphere(r, col[1], { glow: glow === false ? 0 : 0.5, shadow: 0.38, gloss: 0, glass: 0.75, rim: 1.1, rimColor: col[0], res });
+    const cap = VFX.createGlossCap(r, { gloss: 1.15, res });
+    g.save();
+    if (sq && (sq.sx !== 1 || sq.sy !== 1)) {
+      // 부딪힌 방향(ang)으로 납작하게, 그 직각으로 넓게. 닿은 점은 그대로
+      const nx = Math.cos(sq.ang), ny = Math.sin(sq.ang);
+      x -= nx * r * (1 - sq.sy); y -= ny * r * (1 - sq.sy);
+      g.translate(x, y); g.rotate(sq.ang); g.scale(sq.sy, sq.sx); g.rotate(-sq.ang);
+    } else g.translate(x, y);
+    VFX.drawSphere(g, body, 0, 0);
+    // 도는 금속 무늬: 구슬 안에만, 조금 패인 듯 어두운 그림자 한 번 + 밝은 무늬 한 번, 가장자리로 갈수록 어둡게
+    g.save(); g.beginPath(); g.arc(0, 0, r * 0.97, 0, TAU); g.clip();
     g.rotate(rot);
-    if (ch.deco === 'rays') {
-      g.fillStyle = 'rgba(255,255,255,0.35)';
-      for (let i = 0; i < 6; i++) { g.save(); g.rotate(i * TAU / 6); g.beginPath(); g.moveTo(r * 0.55, -r * 0.1); g.lineTo(r * 1.05, 0); g.lineTo(r * 0.55, r * 0.1); g.fill(); g.restore(); }
-    } else if (ch.deco === 'seeds') {
-      g.fillStyle = ch.spot;
-      for (let i = 0; i < 9; i++) { const a = i * 2.4, d = r * (0.35 + (i % 3) * 0.2); g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * 0.06, r * 0.1, a, 0, TAU); g.fill(); }
-    } else {
-      for (const [a, d, k] of [[0.3, 0.72, 0.2], [2.4, 0.7, 0.16], [4.2, 0.74, 0.18]]) {
-        g.fillStyle = ch.spot; starPath(g, Math.cos(a) * r * d, Math.sin(a) * r * d, r * k, r * k * 0.45); g.fill();
+    const deco = (fill, off) => {
+      g.save(); g.translate(off, off); g.fillStyle = fill;
+      if (ch.deco === 'rays') {
+        for (let i = 0; i < 6; i++) { g.save(); g.rotate(i * TAU / 6); g.beginPath(); g.moveTo(r * 0.55, -r * 0.1); g.lineTo(r * 1.05, 0); g.lineTo(r * 0.55, r * 0.1); g.fill(); g.restore(); }
+      } else if (ch.deco === 'seeds') {
+        for (let i = 0; i < 9; i++) { const a = i * 2.4, d = r * (0.35 + (i % 3) * 0.2); g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * 0.06, r * 0.1, a, 0, TAU); g.fill(); }
+      } else {
+        for (const [a, d, k] of [[0.3, 0.72, 0.2], [2.4, 0.7, 0.16], [4.2, 0.74, 0.18]]) { starPath(g, Math.cos(a) * r * d, Math.sin(a) * r * d, r * k, r * k * 0.45); g.fill(); }
       }
-    }
+      g.restore();
+    };
+    deco('rgba(4,10,30,0.35)', r * 0.04);
+    const spot = VC.parse(ch.deco === 'rays' ? '#ffffff' : ch.spot);
+    const mg = g.createLinearGradient(-r, -r, r, r); // 금속 광택: 밝은 쪽에서 짙은 쪽으로
+    mg.addColorStop(0, VC.rgba(VC.lighten(spot, 0.5), ch.deco === 'rays' ? 0.5 : 1));
+    mg.addColorStop(0.5, VC.rgba(spot, ch.deco === 'rays' ? 0.38 : 1));
+    mg.addColorStop(1, VC.rgba(VC.darken(spot, 0.35), ch.deco === 'rays' ? 0.3 : 1));
+    deco(mg, 0);
     g.restore();
-    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, r - 1, 0, TAU); g.stroke();
+    // 무늬 위에 다시 둥근 음영 (무늬가 구슬 표면을 따라 굽어 보이게)
+    g.save(); g.beginPath(); g.arc(0, 0, r, 0, TAU); g.clip();
+    const sh = g.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.2, 0, 0, r);
+    sh.addColorStop(0, 'rgba(4,8,30,0)'); sh.addColorStop(0.7, 'rgba(4,8,30,0.1)'); sh.addColorStop(1, 'rgba(4,8,30,0.42)');
+    g.fillStyle = sh; g.fillRect(-r, -r, r * 2, r * 2);
+    g.restore();
     // 얼굴 (돌지 않음)
     const ex = r * 0.3, ey = -r * 0.12;
     if (mood === 'joy') {
@@ -287,7 +336,8 @@
     if (mood === 'wow') { g.ellipse(0, r * 0.33, r * 0.12, r * 0.15, 0, 0, TAU); g.fill(); }
     else if (mood === 'joy') { g.arc(0, r * 0.16, r * 0.26, 0.1, Math.PI - 0.1); g.closePath(); g.fill(); }
     else { g.arc(0, r * 0.18, r * 0.22, 0.2, Math.PI - 0.2); g.stroke(); }
-    g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(-r * 0.45, -r * 0.55, r * 0.2, r * 0.11, -0.6, 0, TAU); g.fill();
+    // 광택 덮개 (돌지 않음)
+    VFX.drawSphere(g, cap, 0, 0);
     g.restore();
   }
 
@@ -306,22 +356,47 @@
     g.fillStyle = bg; g.beginPath(); g.moveTo(x - 60 * s, y); g.lineTo(x - 40 * s, y - 110 * s); g.lineTo(x + 40 * s, y - 110 * s); g.lineTo(x + 60 * s, y); g.fill();
     g.save(); g.translate(x, y - 6 * s - (jump || 0)); g.scale(s, s);
     g.fillStyle = 'rgba(0,0,0,0.3)'; g.beginPath(); g.ellipse(0, 4 + (jump || 0) / s, 34, 7, 0, 0, TAU); g.fill();
-    g.fillStyle = '#2fb86a'; rr(g, -20, -18, 12, 20, 6); g.fill(); rr(g, 8, -18, 12, 20, 6); g.fill();
+    const ft = g.createLinearGradient(0, -18, 0, 2);
+    ft.addColorStop(0, '#5fe89a'); ft.addColorStop(0.6, '#25a05a'); ft.addColorStop(1, '#0f5a32');
+    g.fillStyle = ft; rr(g, -20, -18, 12, 20, 6); g.fill(); rr(g, 8, -18, 12, 20, 6); g.fill();
     g.translate(0, bob);
     g.strokeStyle = '#4fd68a'; g.lineWidth = 11; g.lineCap = 'round';
     const wave = calm ? 0 : Math.sin(t * 8) * 8 * ex;
-    g.beginPath(); g.moveTo(-26, -48); g.quadraticCurveTo(-50, -60 - ex * 30, -48 - wave * 0.3, -84 + (1 - ex) * 40 + wave); g.stroke();
-    g.beginPath(); g.moveTo(26, -48); g.quadraticCurveTo(52, -62 - ex * 30, 56 + wave * 0.3, -90 + (1 - ex) * 44 - wave); g.stroke();
+    const arms = () => {
+      g.beginPath(); g.moveTo(-26, -48); g.quadraticCurveTo(-50, -60 - ex * 30, -48 - wave * 0.3, -84 + (1 - ex) * 40 + wave);
+      g.moveTo(26, -48); g.quadraticCurveTo(52, -62 - ex * 30, 56 + wave * 0.3, -90 + (1 - ex) * 44 - wave);
+    };
+    g.strokeStyle = '#1f8a4e'; g.lineWidth = 12; arms(); g.stroke();
+    g.strokeStyle = '#4fd68a'; g.lineWidth = 9; arms(); g.stroke();
+    // 팔 위쪽 광택 줄 (가산 혼합)
+    g.save(); g.globalCompositeOperation = 'lighter'; g.translate(-1.5, -2); g.strokeStyle = 'rgba(200,255,220,0.45)'; g.lineWidth = 3; arms(); g.stroke(); g.restore();
     const bgr = g.createRadialGradient(-12, -70, 6, 0, -48, 48);
     bgr.addColorStop(0, '#c8ffd8'); bgr.addColorStop(0.5, '#4fd68a'); bgr.addColorStop(1, '#1a7a4a');
     g.fillStyle = bgr; g.beginPath(); g.ellipse(0, -50, 36, 42, 0, 0, TAU); g.fill();
+    // (2026-11-07) 유리 광택 몸: 가장자리 두께감 · 아래 반사광 · 속빛 · 왼쪽 위 광택
+    g.save(); g.beginPath(); g.ellipse(0, -50, 36, 42, 0, 0, TAU); g.clip();
+    const edge = g.createRadialGradient(-4, -54, 22, 0, -50, 44);
+    edge.addColorStop(0, 'rgba(4,30,16,0)'); edge.addColorStop(0.75, 'rgba(4,30,16,0.18)'); edge.addColorStop(1, 'rgba(4,30,16,0.5)');
+    g.fillStyle = edge; g.fillRect(-40, -96, 80, 92);
+    g.globalCompositeOperation = 'lighter';
+    const inner = g.createRadialGradient(12, -30, 0, 12, -30, 30);
+    inner.addColorStop(0, 'rgba(160,255,200,0.35)'); inner.addColorStop(1, 'rgba(160,255,200,0)');
+    g.fillStyle = inner; g.fillRect(-40, -96, 80, 92);
+    const rim = g.createLinearGradient(-20, -80, 20, -10);
+    rim.addColorStop(0, 'rgba(180,255,210,0)'); rim.addColorStop(0.6, 'rgba(180,255,210,0)'); rim.addColorStop(1, 'rgba(200,255,225,0.85)');
+    g.strokeStyle = rim; g.lineWidth = 4; g.beginPath(); g.ellipse(0, -50, 34, 40, 0, 0, TAU); g.stroke();
+    g.restore();
+    g.save(); g.translate(-15, -74); g.rotate(-0.7); g.scale(1, 0.5);
+    const sp = g.createRadialGradient(0, 0, 0, 0, 0, 14);
+    sp.addColorStop(0, 'rgba(255,255,255,0.95)'); sp.addColorStop(0.55, 'rgba(255,255,255,0.75)'); sp.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sp; g.beginPath(); g.arc(0, 0, 14, 0, TAU); g.fill(); g.restore();
     g.fillStyle = 'rgba(255,154,232,0.8)';
     for (const [a, b, c] of [[-18, -30, 5], [14, -26, 4], [20, -68, 3]]) { g.beginPath(); g.arc(a, b, c, 0, TAU); g.fill(); }
     g.strokeStyle = '#4fd68a'; g.lineWidth = 4;
     const sway = calm ? 0 : Math.sin(t * 2.2) * 5;
     g.beginPath(); g.moveTo(0, -90); g.quadraticCurveTo(6 + sway, -112, -4 + sway, -124); g.stroke();
-    glowDot(g, -4 + sway, -126, 22, 'rgba(255,230,109,0.9)');
-    g.fillStyle = '#fff6c8'; g.beginPath(); g.arc(-4 + sway, -126, 6, 0, TAU); g.fill();
+    g.save(); g.globalCompositeOperation = 'lighter'; glowDot(g, -4 + sway, -126, 24, 'rgba(255,230,109,0.55)'); g.restore();
+    VFX.drawSphere(g, VFX.createGlossySphere(7, '#ffe66d', { glow: 0.8, shadow: 0, res: R.res }), -4 + sway, -126);
     // 눈 (가끔 깜빡)
     const blink = !calm && (t % 3.7) < 0.12;
     g.fillStyle = '#fff'; g.beginPath(); g.ellipse(0, -60, 17, blink ? 2 : 18, 0, 0, TAU); g.fill();
@@ -458,7 +533,35 @@
     }
     g.globalAlpha = 1;
   }
-  const busy = () => R.parts.length > 0;
+  const busy = () => R.parts.length > 0 || R.weld.count > 0 || !R.jelly.settled;
+
+  // 손끝 용접 불꽃: 그리는 동안 손가락 자리에서 작은 빛 알갱이가 톡톡 튄다.
+  // 움직인 거리만큼 더 많이, 멈춰 있어도 가끔 한두 개. 위쪽으로 튀어 포물선을 그리며 떨어지고 작아지며 사라진다
+  function weld(W, tip, pen, dt) {
+    if (!(W.drawing && tip)) { R.tip = null; return; }
+    const [x, y] = tip;
+    const col = pen.rainbow ? ['#ffffff', '#ff7ac8', '#5ee7ff', '#ffe66d'] : ['#ffffff', VC.rgba(VC.lighten(penRGB(pen), 0.45), 1), pen.c[1]];
+    let n = 0;
+    if (R.tip) n = Math.min(9, Math.floor(Math.hypot(x - R.tip[0], y - R.tip[1]) / 7));
+    R.sputter += dt;
+    if (R.sputter > 0.04) { R.sputter = 0; n += 2 + (R.weld.rand() < 0.5 ? 1 : 0); }
+    if (n > 0) R.weld.emit(x, y, { count: n, kind: 'spark', colors: col, speed: 300, speedJitter: 0.6, angle: -Math.PI / 2, spread: 2.9, gravity: 1300, drag: 1.1, life: 0.48, lifeJitter: 0.45, size: 3.4, sizeJitter: 0.5, glow: 1.3 });
+    R.tip = [x, y];
+  }
+  // 공이 쿵 부딪히는 순간 찾기: 지난 프레임과 속도가 크게 다르면(중력만으로는 못 바뀌는 만큼) 부딪힌 것.
+  // 속도가 바뀐 방향이 닿은 면에서 공 쪽으로 미는 방향이라, 그 방향으로 납작하게 한다
+  function bounce(W, bs, dt) {
+    const p = R.prev;
+    R.prev = { W, x: bs.x, y: bs.y, vx: bs.vx, vy: bs.vy, phase: W.phase };
+    R.jelly.update(dt);
+    if (!p || p.W !== W || p.phase !== W.phase || W.phase !== 'run') return;
+    if (Math.hypot(bs.x - p.x, bs.y - p.y) > 120) return; // 처음 자리로 돌아감 같은 순간 이동
+    const dvx = bs.vx - p.vx, dvy = bs.vy - p.vy - PH.gravity * PH.scale * dt;
+    const dv = Math.hypot(dvx, dvy);
+    if (dv < 160) return;
+    const k = Math.min(1, (dv - 160) / 520) * 0.75 + 0.25;
+    if (k * 0.3 > (R.jelly.scaleX - 1) + 0.02) { R.jAng = Math.atan2(-dvy, -dvx); R.jelly.squash(k); }
+  }
 
   // ─── 한 장 그리기 ─────────────────────────────────────────
   // view: {w, h, dpr, calm, char, pen, hint (0~1 힌트 점선), tutorial, drawTip:[x,y] 손가락 자리, noSay}
@@ -485,6 +588,7 @@
     ctx.drawImage(R.sky, 0, 0);
     ctx.setTransform(dpr * f.k, 0, 0, dpr * f.k, dpr * f.ox, dpr * f.oy);
     const g = ctx, calm = !!view.calm;
+    R.calm = calm; R.res = Math.max(1, Math.min(3, dpr * f.k * 1.25));
     weather(g, T.weather, dt, calm, f, w, h);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(R.ter, 0, 0);
@@ -521,23 +625,37 @@
       if (s.kind === 'dot') { const st = Wd().bodyState(W.lines[i]); inkDot(g, st.x, st.y, st.a, pen); }
       else inkLine(g, Wd().linePoints(W, i), 'solid', pen, Wd().rampPoints(W, i));
     }
-    if (W.drawing && W.drawing.pts.length) inkLine(g, W.drawing.pts, 'drawing', pen);
+    if (W.drawing && W.drawing.pts.length) inkLine(g, W.drawing.pts, 'drawing', pen, null, R.t);
+    weld(W, view.drawTip, pen, dt);
+    R.weld.update(dt);
     if (view.drawTip) {
-      const [x, y] = view.drawTip;
-      glowDot(g, x, y, 60, 'rgba(255,255,255,0.3)');
-      g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, 28, 0, TAU); g.stroke();
+      // 손끝: 펜 색 빛 번짐 + 하얀 불씨 + 얇은 빛 고리 (가산 혼합)
+      const [x, y] = view.drawTip, pc = pen.rainbow ? [255, 255, 255] : penRGB(pen);
+      const flick = calm ? 1 : 0.85 + 0.3 * Math.random();
+      g.save(); g.globalCompositeOperation = 'lighter';
+      glowDot(g, x, y, 64, VC.rgba(pc, 0.28));
+      glowDot(g, x, y, 16 * flick, 'rgba(255,255,255,0.95)');
+      g.restore();
+      if (W.drawing || !calm) VFX.drawEnergyLine(g, circlePts(x, y, 28), { color: pen.rainbow ? '#ffffff' : pen.c[1], width: 2.2, glow: 0.8, alpha: 0.75, closed: true });
     }
+    R.weld.draw(g);
     // 공
     const ch = D.CHARS.find(c => c.id === view.char) || D.CHARS[0];
     const speed = Math.hypot(bs.vx, bs.vy);
     const mood = won ? 'joy' : W.phase === 'fall' || speed > 520 ? 'wow' : 'happy';
+    bounce(W, bs, dt);
     if (!calm && speed > 380 && W.phase === 'run') {
-      // 빠를 때 꼬리
-      g.globalAlpha = 0.18; g.fillStyle = ch.col[1];
-      for (let k = 1; k <= 3; k++) { g.beginPath(); g.arc(bs.x - bs.vx * 0.02 * k, bs.y - bs.vy * 0.02 * k, PH.ballR * (1 - k * 0.12), 0, TAU); g.fill(); }
-      g.globalAlpha = 1;
+      // 빠를 때 혜성 꼬리: 지나온 길을 따라 갈수록 작고 옅어지는 빛 방울 (가산 혼합)
+      const k = Math.min(1, (speed - 380) / 500), cc = VC.parse(ch.col[1]);
+      g.save(); g.globalCompositeOperation = 'lighter';
+      for (let i = 1; i <= 7; i++) {
+        const u = i / 7, back = (0.012 + 0.05 * k) * i;
+        glowDot(g, bs.x - bs.vx * back, bs.y - bs.vy * back, PH.ballR * (1.05 - u * 0.6), VC.rgba(cc, (0.2 + 0.12 * k) * (1 - u)));
+      }
+      g.restore();
     }
-    ball(g, bs.x, bs.y, PH.ballR, bs.a, mood, ch);
+    const J = R.jelly;
+    ball(g, bs.x, bs.y, PH.ballR, bs.a, mood, ch, true, J.settled ? null : { sx: J.scaleX, sy: J.scaleY, ang: R.jAng }, R.res);
     // 말풍선 (판을 막 열었을 때)
     if (!view.noSay && W.phase === 'ready' && W.t < 6 && L.say) speech(g, L.goal[0] + 60, L.goal[1] - 180, L.say);
     drawParts(g, dt);
@@ -550,7 +668,7 @@
     const g = cv.getContext('2d'), s = cv.width;
     g.clearRect(0, 0, s, s);
     const ch = D.CHARS.find(c => c.id === id) || D.CHARS[0];
-    ball(g, s / 2, s / 2 - s * 0.02, s * 0.36, 0.3, 'happy', ch, true);
+    ball(g, s / 2, s / 2 - s * 0.02, s * 0.36, 0.3, 'happy', ch, true, null, 2);
   }
   function paintPen(cv, id) {
     const g = cv.getContext('2d'), s = cv.width;
