@@ -675,13 +675,27 @@
     g.fillStyle = '#12304a'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, x, y + 2);
     g.restore();
   }
-  function hand(g, x, y, s) {
+  // (2026-11-07 시각 품질 9단계) 처음 판 손가락: 살색·굵은 갈색 테두리 대신 어두운 유리 손 + 빛 테두리 (모양·자리는 예전 그대로)
+  function hand(g, x, y, s, col) {
+    const C = col || [140, 230, 255];
+    const shape = () => { rr(g, -8, -40, 20, 60, 10); rr(g, -20, 4, 46, 52, 18); };
     g.save(); g.translate(x, y); g.scale(s, s); g.rotate(-0.35);
-    g.fillStyle = 'rgba(0,0,0,0.3)'; rr(g, -14, 4, 36, 60, 16); g.fill();
-    g.fillStyle = '#ffe3c8'; g.strokeStyle = '#6a3a1a'; g.lineWidth = 3;
-    rr(g, -8, -40, 20, 60, 10); g.fill(); g.stroke();
-    rr(g, -20, 4, 46, 52, 18); g.fill(); g.stroke();
-    g.fillStyle = '#ffffff'; rr(g, -3, -36, 10, 12, 5); g.fill();
+    g.fillStyle = 'rgba(0,0,10,0.3)'; rr(g, -14, 8, 36, 60, 16); g.fill();
+    // 바깥 빛 테: 두 조각을 굵게 그은 뒤 위를 유리로 덮으면 바깥 반만 남아 하나의 테두리가 된다
+    g.save(); g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round';
+    for (const [lw, al] of [[14, 0.08], [8, 0.16], [4.5, 0.5]]) { g.strokeStyle = VC.rgba(C, al); g.lineWidth = lw; rr(g, -8, -40, 20, 60, 10); g.stroke(); rr(g, -20, 4, 46, 52, 18); g.stroke(); }
+    g.restore();
+    g.strokeStyle = 'rgba(235,250,255,0.95)'; g.lineWidth = 2.2; rr(g, -8, -40, 20, 60, 10); g.stroke(); rr(g, -20, 4, 46, 52, 18); g.stroke();
+    const fg = g.createLinearGradient(-20, -40, 26, 56);
+    fg.addColorStop(0, '#22345e'); fg.addColorStop(0.5, '#111a36'); fg.addColorStop(1, '#070b1a');
+    g.fillStyle = fg; rr(g, -8, -40, 20, 60, 10); g.fill(); rr(g, -20, 4, 46, 52, 18); g.fill();
+    // 유리 반사: 손가락 왼쪽 세로 빛줄 + 손바닥 위 옅은 띠
+    g.fillStyle = 'rgba(255,255,255,0.32)'; rr(g, -4, -34, 3, 40, 1.5); g.fill();
+    const sh = g.createLinearGradient(0, 4, 0, 30); sh.addColorStop(0, 'rgba(255,255,255,0.16)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sh; rr(g, -16, 7, 38, 22, 14); g.fill();
+    // 손톱 자리: 펜 색으로 빛나는 손끝
+    g.save(); g.globalCompositeOperation = 'lighter'; glowDot(g, 2, -32, 16, VC.rgba(C, 0.7)); g.restore();
+    g.fillStyle = 'rgba(240,252,255,0.95)'; rr(g, -3, -36, 10, 9, 4.5); g.fill();
     g.restore();
   }
   function heart(g, x, y, s, col) {
@@ -1040,16 +1054,31 @@
     drawRings(g, dt);
     // 힌트 점선 + 처음 판 손가락
     if (view.hint > 0 && L.sol) {
-      g.save(); g.globalAlpha = Math.min(1, view.hint); g.setLineDash([4, 18]); g.lineCap = 'round'; g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 8;
-      for (const s of L.sol) { smoothPath(g, s.length > 1 ? s : [s[0], [s[0][0] + 1, s[0][1]]]); g.stroke(); }
+      // (2026-11-07 시각 품질 9단계) 흰 점선 대신 펜 색으로 빛나는 길: 옅은 빛 띠 위로 빛 방울이 출발점에서 끝으로 흘러간다 (움직임 줄이기면 멈춤)
+      const hp = penOf(view.pen), HC = hp.rainbow ? [150, 235, 255] : penRGB(hp), ha = Math.min(1, view.hint);
+      const flow = calm ? 0 : -R.t * 42;
+      g.save(); g.globalAlpha = ha; g.lineCap = 'round'; g.lineJoin = 'round'; g.globalCompositeOperation = 'lighter';
+      for (const s of L.sol) {
+        const pts = s.length > 1 ? s : [s[0], [s[0][0] + 1, s[0][1]]];
+        smoothPath(g, pts); g.setLineDash([]); g.strokeStyle = VC.rgba(HC, 0.07); g.lineWidth = 22; g.stroke();
+        g.setLineDash([2, 20]); g.lineDashOffset = flow;
+        smoothPath(g, pts); g.strokeStyle = VC.rgba(HC, 0.32); g.lineWidth = 13; g.stroke();
+        smoothPath(g, pts); g.strokeStyle = VC.rgba(HC, 0.8); g.lineWidth = 7; g.stroke();
+        smoothPath(g, pts); g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 3; g.stroke();
+      }
+      g.setLineDash([]);
+      // 출발점: 숨 쉬는 빛 고리
+      const p0 = L.sol[0][0], beat = calm ? 0.5 : (Math.sin(R.t * 4) + 1) / 2;
+      glowDot(g, p0[0], p0[1], 26 + beat * 8, VC.rgba(HC, 0.35));
+      g.strokeStyle = VC.rgba(HC, 0.7); g.lineWidth = 2; g.beginPath(); g.arc(p0[0], p0[1], 13 + beat * 5, 0, TAU); g.stroke();
       g.restore();
       if (view.tutorial && L.sol[0].length > 1) {
         // 손가락이 정답 선을 따라 천천히 (움직임 줄이기면 가운데에 멈춤)
         const s = L.sol[0], k = calm ? 0.5 : (R.t * 0.35) % 1.3;
         const q = Math.min(1, k), seg = q * (s.length - 1), i = Math.min(s.length - 2, Math.floor(seg)), u = seg - i;
         const hx = s[i][0] + (s[i + 1][0] - s[i][0]) * u, hy = s[i][1] + (s[i + 1][1] - s[i][1]) * u;
-        glowDot(g, hx, hy, 40, 'rgba(255,255,255,0.35)');
-        hand(g, hx + 4, hy + 40, 1.1);
+        g.save(); g.globalCompositeOperation = 'lighter'; glowDot(g, hx, hy, 40, VC.rgba(HC, 0.4)); g.restore();
+        hand(g, hx + 4, hy + 40, 1.1, HC);
       }
     }
     // 그린 선
