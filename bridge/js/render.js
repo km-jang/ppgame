@@ -420,7 +420,17 @@
     for (const r of L.rocks || []) paintBoulder(g, T, r[0], r[1], r[2]);
     // 스프링 받침 (눌리는 판은 매 프레임)
     for (const s of L.springs || []) {
-      g.fillStyle = '#3a2a50'; rr(g, s.x - s.w / 2 - 6, s.y + 4, s.w + 12, 14, 6); g.fill();
+      // (2026-11-07 시각 품질 11단계) 어두운 금속 받침 + 분홍 빛 테 + 양 끝 빛 나사 (자리·크기 그대로)
+      const bx = s.x - s.w / 2 - 6, bw = s.w + 12, by = s.y + 4, base = () => rr(g, bx, by, bw, 14, 6);
+      g.save(); g.globalCompositeOperation = 'lighter';
+      for (const [lw, al] of [[10, 0.06], [5, 0.12]]) { base(); g.strokeStyle = VC.rgba(SPRING_C, al); g.lineWidth = lw; g.stroke(); }
+      g.restore();
+      const bg = g.createLinearGradient(0, by, 0, by + 14);
+      bg.addColorStop(0, '#3a3058'); bg.addColorStop(1, '#0c0818');
+      g.fillStyle = bg; base(); g.fill();
+      g.strokeStyle = 'rgba(255,190,235,0.6)'; g.lineWidth = 1.1; base(); g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(bx + 8, by + 2, bw - 16, 1.2);
+      for (const e of [-1, 1]) { glowDot(g, s.x + e * (bw / 2 - 9), by + 7, 7, VC.rgba(SPRING_C, 0.8)); g.fillStyle = '#ffe0f6'; g.beginPath(); g.arc(s.x + e * (bw / 2 - 9), by + 7, 1.8, 0, TAU); g.fill(); }
     }
     g.restore();
   }
@@ -894,24 +904,44 @@
     VFX.drawSphere(g, VFX.createGlossySphere(7, '#ffd34d', { glow: 0, shadow: 0.4, gloss: 1, res: R.res }), sw.x, sw.y);
     g.fillStyle = 'rgba(60,34,0,0.85)'; g.beginPath(); g.arc(sw.x, sw.y, 2.4, 0, TAU); g.fill();
   }
+  // (2026-11-07 시각 품질 11단계) 스프링: 분홍 용수철·납작한 판 대신 빛나는 네온 코일(뒤쪽 줄은 어두운 금속) + 어두운 유리 판과 분홍 빛 테,
+  // 눌리면(squash, 규칙이 정한 값을 읽기만 함) 판과 코일이 더 밝게 빛난다. 위 화살표는 빛나는 겹 꺾쇠 (자리·크기·깜빡임 그대로)
+  const SPRING_C = VC.parse('#ff5ec8');
   function spring(g, sp, t) {
     const o = sp.o, sq = sp.squash, top = o.y - 10 + sq * 8;
-    // 용수철
-    g.strokeStyle = '#ffb3e6'; g.lineWidth = 5; g.lineCap = 'round';
-    g.beginPath();
-    const n = 4, y0 = top + 12, y1 = o.y + 8;
-    for (let i = 0; i <= n * 2; i++) { const x = o.x + (i % 2 ? 1 : -1) * (o.w / 2 - 16) * (i === 0 || i === n * 2 ? 0 : 1); g.lineTo(x, y0 + (y1 - y0) * i / (n * 2)); }
-    g.stroke();
-    glowDot(g, o.x, top, o.w * 0.9, 'rgba(255,94,200,0.3)');
-    const gr = g.createLinearGradient(0, top - 10, 0, top + 12);
-    gr.addColorStop(0, '#ffd0f0'); gr.addColorStop(1, '#ff3ea8');
-    g.fillStyle = gr; rr(g, o.x - o.w / 2, top - 10, o.w, 20, 10); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.7)'; rr(g, o.x - o.w / 2 + 8, top - 7, o.w - 16, 5, 3); g.fill();
-    // 위쪽 화살표 (살짝 깜빡)
-    g.globalAlpha = 0.5 + 0.3 * Math.sin(t * 5);
-    g.fillStyle = '#fff'; g.beginPath(); g.moveTo(o.x, top - 44); g.lineTo(o.x - 12, top - 26); g.lineTo(o.x + 12, top - 26); g.fill();
-    g.globalAlpha = 1;
+    const n = 4, y0 = top + 12, y1 = o.y + 8, half = o.w / 2 - 16, pts = [];
+    for (let i = 0; i <= n * 2; i++) pts.push({ x: o.x + (i % 2 ? 1 : -1) * half * (i === 0 || i === n * 2 ? 0 : 1), y: y0 + (y1 - y0) * i / (n * 2) });
+    // 코일: 뒤로 가는 줄(오른쪽에서 왼쪽)은 어두운 금속, 앞으로 오는 줄은 네온
+    g.lineCap = 'round';
+    for (let i = 1; i < pts.length; i++) if (i % 2 === 0) { g.strokeStyle = '#4a1e46'; g.lineWidth = 4.5; g.beginPath(); g.moveTo(pts[i - 1].x, pts[i - 1].y); g.lineTo(pts[i].x, pts[i].y); g.stroke(); }
+    // 앞줄: 가는 분홍 금속 줄 + 옅은 빛 (코일이 몇 픽셀 높이라 강한 네온이면 한 줄 빛 막대로 뭉쳐 보인다)
+    g.save(); g.globalCompositeOperation = 'lighter'; g.strokeStyle = VC.rgba(SPRING_C, 0.18 + sq * 0.35); g.lineWidth = 6;
+    for (let i = 1; i < pts.length; i += 2) { g.beginPath(); g.moveTo(pts[i - 1].x, pts[i - 1].y); g.lineTo(pts[i].x, pts[i].y); g.stroke(); }
+    g.restore();
+    g.strokeStyle = '#e866b8'; g.lineWidth = 2.6;
+    for (let i = 1; i < pts.length; i += 2) { g.beginPath(); g.moveTo(pts[i - 1].x, pts[i - 1].y); g.lineTo(pts[i].x, pts[i].y); g.stroke(); }
+    // 판: 빛 번짐 + 어두운 유리 알약 + 분홍 빛 테 + 위 반사 줄 + 안쪽 빛 심
+    const L = o.x - o.w / 2, T = top - 10, pill = () => rr(g, L, T, o.w, 20, 10);
+    g.save(); g.globalCompositeOperation = 'lighter';
+    glowDot(g, o.x, top, o.w * (0.85 + sq * 0.3), VC.rgba(SPRING_C, 0.22 + sq * 0.3));
+    for (const [lw, al] of [[12, 0.06], [6, 0.14]]) { pill(); g.strokeStyle = VC.rgba(SPRING_C, al * (1 + sq)); g.lineWidth = lw; g.stroke(); }
+    g.restore();
+    const gr = g.createLinearGradient(0, T, 0, T + 20);
+    gr.addColorStop(0, '#5a2a68'); gr.addColorStop(0.5, '#2a1238'); gr.addColorStop(1, '#12061c');
+    g.fillStyle = gr; pill(); g.fill();
+    const cg = g.createLinearGradient(L, 0, L + o.w, 0);
+    cg.addColorStop(0, VC.rgba(SPRING_C, 0)); cg.addColorStop(0.5, VC.rgba(VC.lighten(SPRING_C, 0.4), 0.55 + sq * 0.45)); cg.addColorStop(1, VC.rgba(SPRING_C, 0));
+    g.fillStyle = cg; g.fillRect(L + 8, top + 2, o.w - 16, 2);
+    g.fillStyle = 'rgba(255,255,255,0.6)'; rr(g, L + 10, T + 3, o.w - 20, 2, 1); g.fill();
+    pill(); g.strokeStyle = 'rgba(255,200,240,0.9)'; g.lineWidth = 1.4; g.stroke();
+    // 위쪽 겹 꺾쇠 (살짝 깜빡, 움직임 줄이기면 멈춤)
+    const blink = R.calm ? 0.65 : 0.5 + 0.3 * Math.sin(t * 5);
+    for (const [dy, al] of [[0, 1], [12, 0.55]]) {
+      const yy = top - 44 + dy;
+      VFX.drawEnergyLine(g, [{ x: o.x - 12, y: yy + 14 }, { x: o.x, y: yy }, { x: o.x + 12, y: yy + 14 }], { color: '#ffffff', width: 3, glow: 0.8, alpha: blink * al, smooth: false });
+    }
   }
+
 
   // 날씨 (그림만): 모래바람 · 달 먼지 반짝임
   function weather(g, kind, dt, calm, f, w, h) {
