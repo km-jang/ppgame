@@ -197,6 +197,7 @@
 
   // 절약 모드(view.low, 느린 기기)면 입자 절반
   const low = n => (R.low ? Math.ceil(n / 2) : n);
+  const VFX_C = typeof VFX !== 'undefined' ? VFX.color : null;
   // 빛 불꽃 (common/vfx.js, 2026-11-07 시각 품질): 네모 조각 대신 움직이는 쪽으로 늘어난 빛 줄, 가산 혼합.
   // 개수·상한(D.FX.maxParticles)·절약 모드 절반은 예전 그대로. 위에서 보는 판이라 중력 없음
   const SPARK = typeof VFX !== 'undefined' ? new VFX.ParticleEmitter({ max: D.FX.maxParticles, seed: 7 }) : null;
@@ -412,6 +413,19 @@
   // ─── 먹이 ─────────────────────────────────────────────────
   // 유리 광택 구슬 (common/vfx.js). 크기는 칸 크기로 한 번 만들어 두고 맥박은 늘이기만 해서 매 장면 새로 그리지 않는다.
   // vfx.js가 없으면 false를 돌려 예전 그림으로 그린다
+  // 빛 고리 조각: 넓은 번짐 두 겹 + 색 + 흰 심 (가산 혼합). n조각, rot만큼 돌아 있다
+  function energyRing(ctx, x, y, r, w, C, rot, n, a) {
+    if (r <= 0 || a <= 0) return;
+    const gap = n > 1 ? 0.55 : 0, span = TAU / n - gap;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) { const a0 = rot + i * TAU / n; ctx.moveTo(x + Math.cos(a0) * r, y + Math.sin(a0) * r); ctx.arc(x, y, r, a0, a0 + span); }
+    for (const [k, al] of [[3.6, 0.1], [2, 0.22], [1, 0.9]]) { ctx.strokeStyle = rgbaOf(C, al * a); ctx.lineWidth = w * k; ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(255,255,255,' + 0.8 * a + ')'; ctx.lineWidth = Math.max(0.8, w * 0.35); ctx.stroke();
+    ctx.restore();
+  }
   function orb(ctx, x, y, r, color, s) {
     if (typeof VFX === 'undefined' || s <= 0) return typeof VFX !== 'undefined';
     const sp = VFX.createGlossySphere(Math.round(r * 4) / 4, color, { glow: 0.45, shadow: 0.25, glass: 0.65, rim: 1.1 });
@@ -437,26 +451,41 @@
         ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.72, -Math.PI / 2, -Math.PI / 2 + TAU * left); ctx.stroke();
       }
       const r = c * 0.42 * pulse, rot = v.calm ? 0 : W.t * 2;
-      // 네 갈래 별
-      ctx.fillStyle = '#ffe66d';
+      // 네 갈래 별: 금빛 유리 (가운데 흰빛에서 가장자리 짙은 금), 빛 테는 가산 혼합
       ctx.beginPath();
       for (let i = 0; i < 8; i++) {
         const a = rot + TAU * i / 8, rr = i % 2 ? r * 0.42 : r;
         const x = p.x + Math.cos(a) * rr, y = p.y + Math.sin(a) * rr;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
-      ctx.closePath(); ctx.fill();
+      ctx.closePath();
+      if (r > 0) {
+        const sg = ctx.createRadialGradient(p.x - r * 0.15, p.y - r * 0.15, 0, p.x, p.y, r);
+        sg.addColorStop(0, '#fffbe6'); sg.addColorStop(0.35, '#ffe66d'); sg.addColorStop(1, '#d99a00');
+        ctx.fillStyle = sg;
+      } else ctx.fillStyle = '#ffe66d';
+      ctx.fill();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter'; ctx.lineJoin = 'round';
+      for (const [w, a] of [[0.22, 0.12], [0.1, 0.3], [0.035, 0.9]]) { ctx.strokeStyle = 'rgba(255,214,90,' + a + ')'; ctx.lineWidth = Math.max(1, c * w); ctx.stroke(); }
+      ctx.restore();
+      // 가운데 흰 빛 심
+      glow(ctx, 'rgba(255,250,220,0.95)', p.x, p.y, Math.max(2, r * 0.6), k);
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.28, 0, TAU); ctx.fill();
-      // 주위를 도는 반짝이 둘
-      ctx.fillStyle = '#fff4c2';
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.5, r * 0.16), 0, TAU); ctx.fill();
+      // 주위를 도는 반짝이 둘: 빛 점 (가산 혼합)
+      ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 2; i++) {
-        const a = -rot * 1.5 + Math.PI * i;
-        ctx.fillRect(p.x + Math.cos(a) * c * 0.7 - 1.5, p.y + Math.sin(a) * c * 0.7 - 1.5, 3, 3);
+        const a = -rot * 1.5 + Math.PI * i, sx = p.x + Math.cos(a) * c * 0.7, sy = p.y + Math.sin(a) * c * 0.7;
+        glow(ctx, 'rgba(255,230,140,0.9)', sx, sy, c * 0.2, 0.9 * k);
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(sx, sy, Math.max(1, c * 0.04), 0, TAU); ctx.fill();
       }
+      ctx.globalCompositeOperation = 'source-over';
     } else {
       glow(ctx, 'rgba(255,46,136,0.7)', p.x, p.y, c * 1.25, 0.8 * k);
-      if (!orb(ctx, p.x, p.y, c * 0.3, '#ff2e88', pulse)) {
+      // 고리 먹이: 구슬을 둘러싼 빛 고리 세 조각이 천천히 돈다 (움직임 줄이기면 멈춤)
+      energyRing(ctx, p.x, p.y, c * 0.4 * pulse, c * 0.07, [255, 46, 136], v.calm ? 0 : W.t * 1.6, 3, k);
+      if (!orb(ctx, p.x, p.y, c * 0.22, '#ff2e88', pulse)) {
         ctx.fillStyle = '#ff2e88';
         ctx.beginPath(); ctx.arc(p.x, p.y, c * 0.3 * pulse, 0, TAU); ctx.fill();
         ctx.fillStyle = '#ffd6e8';
@@ -564,13 +593,26 @@
     const K = ITEM[it.kind], p = toPx(v, it.x, it.y), c = v.cell;
     const bob = v.calm ? 0 : Math.sin(W.t * 5) * c * 0.06;
     glow(ctx, K.color, p.x, p.y + bob, c * 1.4, 0.7);
-    ctx.fillStyle = 'rgba(7,10,18,0.9)';
-    ctx.beginPath(); ctx.arc(p.x, p.y + bob, c * 0.46, 0, TAU); ctx.fill();
-    ctx.strokeStyle = K.color; ctx.lineWidth = Math.max(2, c * 0.1); ctx.stroke();
-    ctx.fillStyle = K.color;
+    // 어두운 유리 원판 (2026-11-07 시각 품질): 아이템 색이 안에서 은은히, 빛 테 3겹, 왼쪽 위 유리 반사
+    const IC = VFX_C ? VFX_C.parse(K.color) : [255, 255, 255], x = p.x, y = p.y + bob, rr = c * 0.46;
+    const dg = ctx.createRadialGradient(x - rr * 0.3, y - rr * 0.35, rr * 0.1, x, y, rr);
+    dg.addColorStop(0, rgbaOf(mix(IC, [10, 14, 30], 0.6), 0.95)); dg.addColorStop(1, 'rgba(6,8,16,0.95)');
+    ctx.fillStyle = dg;
+    ctx.beginPath(); ctx.arc(x, y, rr, 0, TAU); ctx.fill();
+    energyRing(ctx, x, y, rr, Math.max(1.5, c * 0.08), IC, 0, 1, 1);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, rr * 0.86, 0, TAU); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath(); ctx.ellipse(x - rr * 0.25, y - rr * 0.55, rr * 0.7, rr * 0.32, -0.35, 0, TAU); ctx.fill();
+    ctx.restore();
     ctx.font = '700 ' + Math.round(c * (K.glyph.length > 1 ? 0.46 : 0.6)) + 'px ' + NUM;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(K.glyph, p.x, p.y + bob + c * 0.03);
+    ctx.fillStyle = K.color;
+    ctx.fillText(K.glyph, x, y + c * 0.03);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.22; ctx.fillStyle = '#ffffff';
+    ctx.fillText(K.glyph, x, y + c * 0.03);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     // 나타난 뒤 3초 동안 이름표 (좋은 아이템이라는 것을 알 수 있게)
     const age = W.t - it.born;
     if (age < 3) {
@@ -730,12 +772,20 @@
       g.strokeStyle = 'rgba(210,250,255,0.75)'; g.lineWidth = Math.max(1, s * 0.05); g.stroke();
     });
   }
+  // 마디 구슬은 유리 광택 구슬(common/vfx.js). 색 단계마다 한 번 만들어 두고 찍기만. vfx.js가 없으면 예전 구슬
+  function neonGlass(c, k, col) {
+    if (typeof VFX === 'undefined') return null;
+    const r = Math.round(c * (0.42 - 0.12 * k / (NEON_STEPS - 1)) * 4) / 4;
+    return VFX.createGlossySphere(r, rgb(col(k / (NEON_STEPS - 1))), { glow: 0, shadow: 0.3, glass: 0.75, rim: 1.2, gloss: 0.9 });
+  }
   function paintNeonBeads(ctx, pts, c, lk) {
     const n = pts.length;
     for (let i = n - 1; i >= 1; i--) {
       const t = i / Math.max(1, n - 1), r = c * (0.42 - 0.12 * t);
       const k = Math.round(t * (NEON_STEPS - 1));
-      ctx.drawImage(neonBeadSprite(c, k, lk.col), pts[i].x - r, pts[i].y - r, r * 2, r * 2);
+      const sp = neonGlass(c, k, lk.col);
+      if (sp) VFX.drawSphere(ctx, sp, pts[i].x, pts[i].y, { scaleX: r / sp.radius, scaleY: r / sp.radius });
+      else ctx.drawImage(neonBeadSprite(c, k, lk.col), pts[i].x - r, pts[i].y - r, r * 2, r * 2);
     }
   }
 
@@ -767,23 +817,42 @@
     ctx.moveTo(pts[n - 1].x, pts[n - 1].y);
     for (let i = n - 2; i >= 0; i--) { if (far(i + 1)) ctx.moveTo(pts[i].x, pts[i].y); else ctx.lineTo(pts[i].x, pts[i].y); }
   }
-  // 매끈한 관 (네온 뱀·꼬마 용). 죽으면 붉게
-  function paintTube(ctx, pts, far, c, lk, tm, dead) {
-    const n = pts.length;
-    ctx.strokeStyle = 'rgba(0,4,12,0.55)';
-    ctx.lineWidth = c * 0.86;
-    bodyPath(ctx, pts, far); ctx.stroke();
+  // 매끈한 유리관 (네온 뱀·꼬마 용·라이벌, 2026-11-07 시각 품질). 죽으면 붉게. 굵기는 예전 그대로
+  //   어두운 유리 껍질 → 몸 색 빛 번짐(가산) → 짙은 색 관 → 안쪽에서 빛나는 심(가산) → 위 반사 줄
+  const deadCol = q => [Math.round(q[0] * 0.5 + 128), Math.round(q[1] * 0.35), Math.round(q[2] * 0.45)];
+  function segs(ctx, pts, far, n, c, lk, tm, dead, wk, colFn, alpha) {
     for (let i = n - 1; i >= 1; i--) {
       if (far(i)) continue;
       const t = i / Math.max(1, n - 1);
       const q = lk.col(t, i, tm);
-      ctx.strokeStyle = dead ? rgb([Math.round(q[0] * 0.5 + 128), Math.round(q[1] * 0.35), Math.round(q[2] * 0.45)]) : rgb(q);
-      ctx.lineWidth = c * (0.74 - 0.26 * t);
+      ctx.strokeStyle = colFn(dead ? deadCol(q) : q, alpha);
+      ctx.lineWidth = c * (0.74 - 0.26 * t) * wk;
       ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[i - 1].x, pts[i - 1].y); ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(255,255,255,' + (dead ? 0.22 : lk.gloss) + ')';
-    ctx.lineWidth = Math.max(1, c * 0.12);
+  }
+  const rgbaOf = (q, a) => 'rgba(' + q[0] + ',' + q[1] + ',' + q[2] + ',' + a + ')';
+  const deepOf = (q, a) => rgbaOf(mix(q, [4, 10, 30], 0.55), a);
+  const coreOf = (q, a) => rgbaOf(mix(q, [255, 255, 255], 0.35), a);
+  function paintTube(ctx, pts, far, c, lk, tm, dead) {
+    const n = pts.length;
+    ctx.strokeStyle = 'rgba(2,6,16,0.85)';
+    ctx.lineWidth = c * 0.9;
     bodyPath(ctx, pts, far); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    segs(ctx, pts, far, n, c, lk, tm, dead, 1.45, rgbaOf, 0.16);
+    ctx.globalCompositeOperation = 'source-over';
+    segs(ctx, pts, far, n, c, lk, tm, dead, 1, deepOf, 1);
+    ctx.globalCompositeOperation = 'lighter';
+    segs(ctx, pts, far, n, c, lk, tm, dead, 0.62, rgbaOf, 0.85);
+    segs(ctx, pts, far, n, c, lk, tm, dead, 0.24, coreOf, 0.7);
+    ctx.globalCompositeOperation = 'source-over';
+    // 위 반사 줄: 왼쪽 위 빛을 받은 유리 겉면
+    ctx.save();
+    ctx.translate(-c * 0.12, -c * 0.14);
+    ctx.strokeStyle = 'rgba(255,255,255,' + (dead ? 0.2 : Math.min(0.5, lk.gloss * 1.7)) + ')';
+    ctx.lineWidth = Math.max(1, c * 0.07);
+    bodyPath(ctx, pts, far); ctx.stroke();
+    ctx.restore();
   }
 
   // 꼬마 용: 등 가시 · 날개 한 쌍 · 꼬리 불꽃
@@ -952,6 +1021,60 @@
     ctx.lineCap = 'butt';
   }
 
+  // 네온 뱀 머리 (2026-11-07 시각 품질, 참고 그림 각진 머리): 앞이 모난 어두운 유리 투구, 빛 테 3겹,
+  // 왼쪽 위 유리 반사, 얼굴 자리에서 빛나는 눈 둘과 웃는 빛 줄, 앞 끝 노란 빛 코. 칸 = 1, 앞 = +x
+  const HEAD_PTS = [[-0.5, -0.3], [-0.34, -0.48], [0.2, -0.5], [0.58, -0.2], [0.58, 0.2], [0.2, 0.5], [-0.34, 0.48], [-0.5, 0.3]];
+  function headPath(ctx, k) {
+    ctx.beginPath();
+    HEAD_PTS.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * k) : ctx.moveTo(x * k, y * k)));
+    ctx.closePath();
+  }
+  function paintNeonHead(ctx, dead, tm) {
+    const C = dead ? [255, 77, 109] : [94, 231, 255], D2 = dead ? [90, 10, 24] : [10, 34, 92];
+    // 노란 코: 앞 끝 작은 빛 꺾쇠
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255,214,90,0.35)'; ctx.lineWidth = 0.22;
+    ctx.beginPath(); ctx.moveTo(0.6, -0.12); ctx.lineTo(0.74, 0); ctx.lineTo(0.6, 0.12); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = 0.09;
+    ctx.beginPath(); ctx.moveTo(0.6, -0.12); ctx.lineTo(0.74, 0); ctx.lineTo(0.6, 0.12); ctx.stroke();
+    // 몸통: 짙은 유리 (빛 쪽이 밝다)
+    const g = ctx.createLinearGradient(-0.4, -0.5, 0.3, 0.5);
+    g.addColorStop(0, rgbaOf(mix(C, D2, 0.35), 1)); g.addColorStop(0.5, rgbaOf(D2, 1)); g.addColorStop(1, rgbaOf(mix(D2, [0, 0, 0], 0.5), 1));
+    headPath(ctx, 1); ctx.fillStyle = g; ctx.fill();
+    // 안쪽 색 빛 (가운데가 은은하게)
+    const rg = ctx.createRadialGradient(0.1, 0, 0.02, 0.05, 0, 0.6);
+    rg.addColorStop(0, rgbaOf(C, 0.35)); rg.addColorStop(1, rgbaOf(C, 0));
+    ctx.fillStyle = rg; ctx.fill();
+    // 빛 테: 넓고 옅은 번짐 둘 + 색 테 + 흰 심 (가산)
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [w, a] of [[0.26, 0.1], [0.14, 0.22], [0.06, 0.9]]) { headPath(ctx, 1); ctx.strokeStyle = rgbaOf(C, a); ctx.lineWidth = w; ctx.stroke(); }
+    headPath(ctx, 1); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 0.022; ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    // 왼쪽 위 유리 반사 띠
+    ctx.save();
+    headPath(ctx, 0.92); ctx.clip();
+    const sg = ctx.createLinearGradient(-0.5, -0.5, -0.1, -0.1);
+    sg.addColorStop(0, 'rgba(255,255,255,0.45)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.moveTo(-0.6, -0.6); ctx.lineTo(0.3, -0.6); ctx.lineTo(-0.6, 0.15); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // 눈: 빛나는 둥근 네모 (번짐 + 색 + 흰 심). 앞을 본다
+    const blink = !dead && tm && (tm % 3.6) < 0.12;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of [1, -1]) {
+      const ex = 0.24, ey = s * 0.2, eh = blink ? 0.03 : dead ? 0.05 : 0.11;
+      ctx.fillStyle = rgbaOf(C, 0.28); rrect(ctx, ex - 0.12, ey - eh - 0.06, 0.24, (eh + 0.06) * 2, 0.1); ctx.fill();
+      ctx.fillStyle = rgbaOf(mix(C, [255, 255, 255], 0.2), 0.95); rrect(ctx, ex - 0.065, ey - eh, 0.13, eh * 2, 0.06); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; rrect(ctx, ex - 0.025, ey - eh * 0.6, 0.05, eh * 1.2, 0.025); ctx.fill();
+    }
+    // 웃는 입 빛 줄 (부딪히면 일자)
+    ctx.strokeStyle = rgbaOf(C, 0.35); ctx.lineWidth = 0.1;
+    ctx.beginPath(); if (dead) { ctx.moveTo(0.42, -0.08); ctx.lineTo(0.42, 0.08); } else ctx.arc(0.3, 0, 0.13, -0.85, 0.85); ctx.stroke();
+    ctx.strokeStyle = 'rgba(235,252,255,0.95)'; ctx.lineWidth = 0.04; ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   // 머리를 가는 방향으로 돌린다 (앞 = +x). 왼쪽은 뒤집기만 해서 위아래가 거꾸로 되지 않게
   function faceTo(ctx, h, d) {
     ctx.translate(h.x, h.y);
@@ -976,19 +1099,7 @@
       ctx.save();
       faceTo(ctx, h, d);
       ctx.scale(c, c);
-      ctx.fillStyle = '#ffe66d'; rrect(ctx, 0.36, -0.1, 0.3, 0.2, 0.09); ctx.fill();
-      const g = ctx.createRadialGradient(-0.14, -0.18, 0.04, 0, 0, 0.56);
-      g.addColorStop(0, dead ? '#ffd6dc' : '#e6fdff'); g.addColorStop(0.45, dead ? '#ff4d6d' : '#5ee7ff'); g.addColorStop(1, dead ? '#8a1020' : '#1f5fd0');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, 0.54, 0, TAU); ctx.fill();
-      ctx.strokeStyle = 'rgba(6,30,70,0.8)'; ctx.lineWidth = 0.05; ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.ellipse(-0.2, -0.26, 0.14, 0.08, -0.5, 0, TAU); ctx.fill();
-      for (const s of [1, -1]) {
-        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(0.16, s * 0.21, 0.13, 0.12, 0, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#062036'; ctx.beginPath(); ctx.arc(0.21, s * 0.21, 0.07, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0.235, s * 0.21 - 0.03, 0.025, 0, TAU); ctx.fill();
-      }
-      ctx.strokeStyle = '#06324d'; ctx.lineWidth = 0.045;
-      ctx.beginPath(); ctx.arc(0.3, 0, 0.1, -0.9, 0.9); ctx.stroke();
+      paintNeonHead(ctx, dead, tm);
       ctx.restore();
       ctx.lineCap = 'butt';
       return;
