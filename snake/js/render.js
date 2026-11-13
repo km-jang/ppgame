@@ -183,7 +183,7 @@
     const x = v.bx + v.bw / 2;
     // 알림(토스트)이 판 위쪽에 떠 있으면 그 아래로
     let y = v.by + fs * 1.1 - (v.calm ? 0 : (1 - k) * 8) + (v.toastUntil && performance.now() < v.toastUntil ? 52 : 0);
-    const h = W && W.snake && W.snake[0] ? v.by + (W.snake[0].y + 0.5) * v.cell : -1e9;
+    const h = W && W.snake && W.snake[0] ? cellY(v, W.snake[0].y) : -1e9;
     if (Math.abs(h - y) < fs * 1.6) { y = v.by + v.bh - fs * 1.6; a *= 0.6; }
     if (Math.abs(h - y) < fs * 1.2) a *= 0.5;
     ctx.globalAlpha = a;
@@ -193,7 +193,136 @@
     ctx.globalAlpha = 1; ctx.textBaseline = 'alphabetic';
   }
 
-  function toPx(v, gx, gy) { return { x: v.bx + (gx + 0.5) * v.cell, y: v.by + (gy + 0.5) * v.cell }; }
+  // 칸 → 화면 자리. 넓은 우주(v.wide)에서는 칸 0,0의 화면 자리(v.ox, v.oy)가 화면을 따라 움직이고,
+  // 판 끝이 이어진 쉬움(v.tor)은 화면 가운데에서 가장 가까운 쪽으로 편다 (판 끝 너머가 끊김 없이 이어져 보인다)
+  const nearTo = (g, c, n) => c + ((g - c) % n + n * 1.5) % n - n / 2;
+  const cellX = (v, gx) => (v.wide ? v.ox : v.bx) + ((v.tor ? nearTo(gx, v.camX, v.cols) : gx) + 0.5) * v.cell;
+  const cellY = (v, gy) => (v.wide ? v.oy : v.by) + ((v.tor ? nearTo(gy, v.camY, v.rows) : gy) + 0.5) * v.cell;
+  function toPx(v, gx, gy) { return { x: cellX(v, gx), y: cellY(v, gy) }; }
+  // 앞 걸음 자리 q에서 지금 자리 s로 a만큼 간 화면 자리. 한 칸 넘게 떨어졌으면(포털·벽 넘기) 건너뛴다.
+  // 판 끝이 이어진 판에서는 끝을 넘는 걸음도 한 칸으로 이어 그린다
+  function stepPx(v, q, s, a) {
+    let qx = q ? q.x : s.x, qy = q ? q.y : s.y;
+    if (v.tor) { qx = nearTo(qx, s.x, v.cols); qy = nearTo(qy, s.y, v.rows); }
+    if (Math.abs(qx - s.x) + Math.abs(qy - s.y) > 1) { qx = s.x; qy = s.y; }
+    return { x: cellX(v, qx + (s.x - qx) * a), y: cellY(v, qy + (s.y - qy) * a) };
+  }
+  const apart = (v, p, q) => {
+    let dx = Math.abs(p.x - q.x), dy = Math.abs(p.y - q.y);
+    if (v.tor) { dx = Math.min(dx, v.cols - dx); dy = Math.min(dy, v.rows - dy); }
+    return dx + dy > 1;
+  };
+
+  // ─── 넓은 우주: 따라가는 화면 (PLAN 3.12) ─────────────────
+  // 머리가 화면 가운데 3분의 1 안에 있으면 가만히, 그 밖으로 나가면 그쪽으로 미끄러지듯 따라간다. 판 끝에서는 멈춘다.
+  // 움직임 줄이기면 미끄러지지 않고 머리가 가장자리에 가까워질 때 화면 반 장씩 옮긴다.
+  // v.bx·by·bw·bh는 언제나 화면에 보이는 네모(창)이다
+  const CAM = { world: null, x: 0, y: 0 };
+  function camera(W, v, dt) {
+    const vc = v.bw / v.cell, vr = v.bh / v.cell;
+    v.cols = W.cols; v.rows = W.rows;
+    v.wide = !!W.view && (W.cols > vc + 0.5 || W.rows > vr + 0.5);
+    v.tor = v.wide && !!W.easy;
+    if (!v.wide) { CAM.world = null; return; }
+    const s = W.snake[0], a = W.phase === 'play' ? W.alpha : 0;
+    let qx = W.prev[0] ? W.prev[0].x : s.x, qy = W.prev[0] ? W.prev[0].y : s.y;
+    if (v.tor) { qx = nearTo(qx, s.x, W.cols); qy = nearTo(qy, s.y, W.rows); }
+    if (Math.abs(qx - s.x) + Math.abs(qy - s.y) > 1) { qx = s.x; qy = s.y; }
+    let hx = qx + (s.x - qx) * a + 0.5, hy = qy + (s.y - qy) * a + 0.5;
+    const ox0 = v.ox, oy0 = v.oy, fresh = CAM.world !== W;
+    if (fresh) { CAM.world = W; CAM.x = hx; CAM.y = hy; }
+    if (v.tor) { hx = nearTo(hx, CAM.x, W.cols); hy = nearTo(hy, CAM.y, W.rows); }
+    let tx = CAM.x, ty = CAM.y;
+    if (v.calm) {
+      if (Math.abs(hx - CAM.x) > vc * 0.38) CAM.x += Math.sign(hx - CAM.x) * vc / 2;
+      if (Math.abs(hy - CAM.y) > vr * 0.38) CAM.y += Math.sign(hy - CAM.y) * vr / 2;
+    } else {
+      const zx = vc / 6, zy = vr / 6, k = 1 - Math.exp(-(dt || 0) * 6);
+      if (hx - CAM.x > zx) tx = hx - zx; else if (hx - CAM.x < -zx) tx = hx + zx;
+      if (hy - CAM.y > zy) ty = hy - zy; else if (hy - CAM.y < -zy) ty = hy + zy;
+      CAM.x += (tx - CAM.x) * k; CAM.y += (ty - CAM.y) * k;
+    }
+    if (!v.tor) {
+      CAM.x = Math.max(vc / 2, Math.min(W.cols - vc / 2, CAM.x));
+      CAM.y = Math.max(vr / 2, Math.min(W.rows - vr / 2, CAM.y));
+    }
+    v.camX = CAM.x - 0.5; v.camY = CAM.y - 0.5;
+    v.ox = Math.round(v.bx + v.bw / 2 - CAM.x * v.cell); v.oy = Math.round(v.by + v.bh / 2 - CAM.y * v.cell);
+    // 이미 떠 있는 알갱이·글자는 판에 붙어 있는 것처럼 화면과 함께 민다
+    if (!fresh && ox0 != null) {
+      const dx = v.ox - ox0, dy = v.oy - oy0;
+      if (dx || dy) {
+        for (const q of R.parts) { q.x += dx; q.y += dy; }
+        for (const q of R.texts) { q.x += dx; q.y += dy; }
+        if (SPARK) for (const q of SPARK.pool) if (q.on) { q.x += dx; q.y += dy; q.px += dx; q.py += dy; }
+      }
+    }
+  }
+  // 넓은 우주의 판 바닥: 창 안에 격자를 밀어 그리고(판 전체를 한 장으로 미리 그리지 않는다), 판 끝이 창 안에 들어오면 테두리
+  function drawWideBoard(ctx, W, v) {
+    const c = v.cell, x0 = v.bx, y0 = v.by, w = v.bw, h = v.bh;
+    const deadly = !W.easy, EC = deadly ? '255,90,105' : '94,231,255';
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip();
+    // 판 안쪽만 어둡게 (판 밖은 우주 그대로)
+    const L = v.tor ? x0 : Math.max(x0, v.ox), T = v.tor ? y0 : Math.max(y0, v.oy);
+    const Rr = v.tor ? x0 + w : Math.min(x0 + w, v.ox + W.cols * c), B = v.tor ? y0 + h : Math.min(y0 + h, v.oy + W.rows * c);
+    ctx.fillStyle = 'rgba(3,7,14,0.62)';
+    ctx.fillRect(L, T, Rr - L, B - T);
+    const gx0 = Math.floor((L - v.ox) / c), gx1 = Math.ceil((Rr - v.ox) / c), gy0 = Math.floor((T - v.oy) / c), gy1 = Math.ceil((B - v.oy) / c);
+    for (const strong of [false, true]) {
+      ctx.strokeStyle = strong ? 'rgba(94,231,255,0.13)' : 'rgba(94,231,255,0.055)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let g = gx0; g <= gx1; g++) if ((((g % 4) + 4) % 4 === 0) === strong) { const x = v.ox + g * c + 0.5; if (x > L && x < Rr) { ctx.moveTo(x, T); ctx.lineTo(x, B); } }
+      for (let g = gy0; g <= gy1; g++) if ((((g % 4) + 4) % 4 === 0) === strong) { const y = v.oy + g * c + 0.5; if (y > T && y < B) { ctx.moveTo(L, y); ctx.lineTo(Rr, y); } }
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(94,231,255,0.22)';
+    for (let gx = Math.ceil(gx0 / 4) * 4; gx <= gx1; gx += 4) for (let gy = Math.ceil(gy0 / 4) * 4; gy <= gy1; gy += 4) ctx.fillRect(v.ox + gx * c - 1, v.oy + gy * c - 1, 3, 3);
+    // 판 끝 (이어진 판에는 끝이 없다): 빛 번짐 두 겹 + 선
+    if (!v.tor) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [lw, al] of [[22, 0.07], [10, 0.16], [2.5, 0.9]]) { ctx.strokeStyle = 'rgba(' + EC + ',' + al + ')'; ctx.lineWidth = lw; ctx.strokeRect(v.ox - 1, v.oy - 1, W.cols * c + 2, W.rows * c + 2); }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();
+    // 창 테두리: 옅은 청록 선과 모서리 꺾쇠 (여기까지가 보이는 곳)
+    ctx.strokeStyle = 'rgba(94,231,255,0.28)'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(x0 - 1, y0 - 1, w + 2, h + 2);
+    const k = Math.min(28, c * 1.4);
+    ctx.strokeStyle = '#bff8ff'; ctx.lineWidth = 3; ctx.lineCap = 'square';
+    ctx.beginPath();
+    for (const [x, y, sx, sy] of [[x0 - 4, y0 - 4, 1, 1], [x0 + w + 4, y0 - 4, -1, 1], [x0 - 4, y0 + h + 4, 1, -1], [x0 + w + 4, y0 + h + 4, -1, -1]]) {
+      ctx.moveTo(x, y + sy * k); ctx.lineTo(x, y); ctx.lineTo(x + sx * k, y);
+    }
+    ctx.stroke(); ctx.lineCap = 'butt';
+  }
+  // 창 밖에 있는 것을 가리키는 화살표 (먹이·황금·보너스·아이템·선물·라이벌). 급한 것은 깜빡인다
+  function drawArrows(ctx, W, v) {
+    const c = v.cell, m = c * 0.75, cxm = v.bx + v.bw / 2, cym = v.by + v.bh / 2, T = [];
+    if (W.food) T.push([W.food, W.food.gold ? '#ffe66d' : '#ff5fa8', W.food.gold]);
+    if (W.bonus) T.push([W.bonus, '#ff5fd0', true]);
+    if (W.item) T.push([W.item, ITEM[W.item.kind].color, false]);
+    if (W.gift) T.push([W.gift, '#ff9fd6', false]);
+    const V = W.rival;
+    if (V && V.phase === 'play' && V.body.length) T.push([V.body[0], RIVAL_ORANGE, false]);
+    for (const [o, col, urgent] of T) {
+      const p = toPx(v, o.x, o.y);
+      if (p.x >= v.bx && p.x <= v.bx + v.bw && p.y >= v.by && p.y <= v.by + v.bh) continue;
+      const ax = Math.max(v.bx + m, Math.min(v.bx + v.bw - m, p.x)), ay = Math.max(v.by + m, Math.min(v.by + v.bh - m, p.y));
+      const an = Math.atan2(p.y - cym, p.x - cxm), pl = v.calm ? 1 : 1 + Math.sin(W.t * (urgent ? 14 : 7)) * 0.12;
+      ctx.globalCompositeOperation = 'lighter';
+      glow(ctx, col, ax, ay, c * 0.9, 0.5);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.save();
+      ctx.translate(ax, ay); ctx.rotate(an); ctx.scale(pl, pl);
+      ctx.beginPath(); ctx.moveTo(c * 0.46, 0); ctx.lineTo(-c * 0.28, -c * 0.34); ctx.lineTo(-c * 0.1, 0); ctx.lineTo(-c * 0.28, c * 0.34); ctx.closePath();
+      ctx.fillStyle = col; ctx.fill();
+      ctx.strokeStyle = 'rgba(5,7,12,0.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.restore();
+    }
+  }
 
   // 절약 모드(view.low, 느린 기기)면 입자 절반
   const low = n => (R.low ? Math.ceil(n / 2) : n);
@@ -403,6 +532,7 @@
       }
       ctx.globalAlpha = 1;
     }
+    if (v.wide) { drawWideBoard(ctx, W, v); return; }
     const key = [v.w, v.h, v.dpr, v.cell, W.cols, W.rows, W.mode, W.level, W.walls ? W.walls.length : 0, W.diff || (W.easy ? 1 : 0), W.wallVer || 0].join(',');
     if (R.boardKey !== key || R.boardWalls !== W.walls) { R.boardKey = key; R.boardWalls = W.walls; R.board = paintBoard(v, W.cols, W.rows, v.dpr, W); }
     ctx.drawImage(R.board, v.bx - BM, v.by - BM, v.bw + BM * 2, v.bh + BM * 2);
@@ -1255,16 +1385,13 @@
     const dead = W.phase === 'over' && !W.won;
     const pts = new Array(n);
     for (let i = 0; i < n; i++) {
-      const s = S[i];
-      let q = P[i] || s;
-      if (Math.abs(q.x - s.x) + Math.abs(q.y - s.y) > 1) q = s;   // 포털·벽 넘기: 건너뛴 칸은 이어 그리지 않는다
-      pts[i] = { x: v.bx + (q.x + (s.x - q.x) * a + 0.5) * c, y: v.by + (q.y + (s.y - q.y) * a + 0.5) * c };
+      pts[i] = stepPx(v, P[i], S[i], a);   // 포털·벽 넘기: 건너뛴 칸은 이어 그리지 않는다
     }
     const ghost = W.eff && W.eff.ghost > 0;
     if (ghost) ctx.globalAlpha = 0.45 + (v.calm ? 0 : Math.sin(W.t * 12) * 0.12);
     const lk = lookOf(v.char || v.skin), tm = v.calm ? 0 : W.t, d = SN.World.DIRS[W.dir];
     // 포털·벽 넘기로 떨어진 마디 사이는 잇지 않는다
-    const far = i => Math.abs(S[i].x - S[i - 1].x) + Math.abs(S[i].y - S[i - 1].y) > 1;
+    const far = i => apart(v, S[i], S[i - 1]);
     // 거대 뱀: 몸이 굵고 금빛으로 빛난다 (끝나기 1초 전부터 깜빡, 움직임 줄이기면 그대로)
     const giant = W.eff && W.eff.giant > 0, gk = giant ? 1.7 : 1;
     if (giant) {
@@ -1321,16 +1448,13 @@
     const a = W.phase === 'play' && V.phase === 'play' ? V.alpha : 0;
     const pts = new Array(n);
     for (let i = 0; i < n; i++) {
-      const s = B[i];
-      let q = P[i] || s;
-      if (Math.abs(q.x - s.x) + Math.abs(q.y - s.y) > 1) q = s;
-      pts[i] = { x: v.bx + (q.x + (s.x - q.x) * a + 0.5) * c, y: v.by + (q.y + (s.y - q.y) * a + 0.5) * c };
+      pts[i] = stepPx(v, P[i], B[i], a);
     }
     const tm = v.calm ? 0 : W.t, dizzy = V.stun > 0 && V.phase === 'play';
     // 나오기 전 예고: 깜빡이는 반투명 (부딪혀도 괜찮은 때)
     if (V.phase === 'warn') ctx.globalAlpha = v.calm ? 0.4 : 0.25 + 0.3 * (0.5 + 0.5 * Math.sin(W.t * 14));
     else if (dizzy) ctx.globalAlpha = 0.8;
-    const far = i => Math.abs(B[i].x - B[i - 1].x) + Math.abs(B[i].y - B[i - 1].y) > 1;
+    const far = i => apart(v, B[i], B[i - 1]);
     const d = SN.World.DIRS[V.dir];
     // 대왕 뱀: 마디가 더 크고 머리에 금빛 왕관 (규칙은 한 칸 그대로)
     const bc = V.boss ? c * D.BOSS.cellMul : c;
@@ -1533,11 +1657,14 @@
   // view: {dpr, w, h, bx, by, bw, bh, cell, ui, hudMid, hudLeft, hudRight, hud, touch, calm, best}
   function draw(ctx, W, v, dt) {
     ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
+    camera(W, v, dt);
     takeFx(W, v);
     updateFx(dt || 0);
     drawBackground(ctx, W, v, dt);
     ctx.save();
     if (R.shake > 0) ctx.translate((Math.random() - 0.5) * R.shake, (Math.random() - 0.5) * R.shake);
+    // 넓은 우주: 판 위 것들은 창 안에서만 보인다
+    if (v.wide) { ctx.save(); ctx.beginPath(); ctx.rect(v.bx, v.by, v.bw, v.bh); ctx.clip(); }
     drawPortals(ctx, W, v);
     drawFood(ctx, W, v);
     drawBonus(ctx, W, v);
@@ -1548,6 +1675,7 @@
     drawRivalTag(ctx, W, v);
     if (v.hud !== false) drawDanger(ctx, W, v);
     drawFx(ctx, v);
+    if (v.wide) { ctx.restore(); if (v.hud !== false) drawArrows(ctx, W, v); }
     drawFeverBorder(ctx, W, v);
     if (v.hud !== false) drawBanner(ctx, v, W);
     ctx.restore();
@@ -1563,5 +1691,5 @@
   // 멈춘 화면처럼 입자가 남아 있는지 (다 사라지면 그리기를 쉰다)
   const busy = () => R.parts.length > 0 || (SPARK && SPARK.count > 0) || R.shake > 0 || R.flash > 0 || !!R.banner || !!(SN.Space && SN.Space.busy());
 
-  SN.Render = { draw, layout, busy, drawCharPreview, drawSkinPreview: drawCharPreview, CHAR_IDS: Object.keys(LOOKS) };
+  SN.Render = { draw, layout, busy, cellPx: toPx, drawCharPreview, drawSkinPreview: drawCharPreview, CHAR_IDS: Object.keys(LOOKS) };
 })(SN);

@@ -144,7 +144,7 @@
   function spawnGift(W) {
     const free = freeCells(W), h = W.snake[0];
     const far = free.filter(i => Math.abs(i % W.cols - h.x) + Math.abs(Math.floor(i / W.cols) - h.y) > GF.minDist);
-    const pool = far.length ? far : free;
+    const pool = nearHead(W, far.length ? far : free, D.WIDE.timedR);
     if (!pool.length) return false;
     const i = pool[Math.floor(W.funRng() * pool.length)];
     W.gift = { x: i % W.cols, y: Math.floor(i / W.cols), life: GF.life, born: W.t };
@@ -180,7 +180,7 @@
   }
   // 피버 보너스 구슬 (보통 구슬과 같지만 황금 차례와 상관없음)
   function spawnBonus(W) {
-    const free = freeCells(W);
+    const free = nearHead(W, freeCells(W), D.WIDE.timedR);
     if (!free.length) { W.bonus = null; return false; }
     const i = free[Math.floor(W.funRng() * free.length)];
     W.bonus = { x: i % W.cols, y: Math.floor(i / W.cols), born: W.t };
@@ -354,6 +354,8 @@
     };
     W.startLevel = W.level;
     W.easy = W.diff === 'easy'; W.hard = W.diff === 'hard';
+    // 넓은 우주: 화면에 보이는 칸 수 [가로, 세로]. 판(cols×rows)이 이보다 넓다
+    if (opts.view && opts.view[0] > 0 && opts.view[1] > 0) W.view = { c: opts.view[0], r: opts.view[1] };
     const am = Number(opts.adapt);
     W.adapt = Number.isFinite(am) && am > 0 ? Math.max(0.7, Math.min(1.3, am)) : 1;
     W.growMul = adaptPow(W, 'perGrow');
@@ -444,19 +446,34 @@
     return free;
   }
 
+  // 넓은 우주: 빈 칸 중 머리에서 가까운 것만 (화면의 k배 거리 안, 쉬움은 판 끝 너머도 가깝다). 없으면 그대로
+  function nearHead(W, free, k) {
+    if (!W.view || !free.length) return free;
+    const h = W.snake[0], C = W.cols, R = W.rows, rx = W.view.c * k, ry = W.view.r * k;
+    const near = free.filter(i => {
+      let dx = Math.abs(i % C - h.x), dy = Math.abs(Math.floor(i / C) - h.y);
+      if (W.easy) { dx = Math.min(dx, C - dx); dy = Math.min(dy, R - dy); }
+      return dx <= rx && dy <= ry;
+    });
+    return near.length ? near : free;
+  }
+
   // 빈 칸 중 하나에 먹이를 놓는다. 빈 칸이 없으면 판을 다 채운 것
   function spawnFood(W) {
     W.food = null;
-    const free = freeCells(W);
+    let free = freeCells(W);
     if (!free.length) return false;
+    const gold0 = (W.eaten + (W.rival ? W.rival.eaten : 0) + 1) % D.FOOD.goldEvery === 0;
+    free = nearHead(W, free, gold0 ? D.WIDE.timedR : D.WIDE.foodR);
     const i = free[Math.floor(W.rand() * free.length)];
     W.food = { x: i % W.cols, y: Math.floor(i / W.cols), gold: (W.eaten + (W.rival ? W.rival.eaten : 0) + 1) % D.FOOD.goldEvery === 0, born: W.t };
     return true;
   }
 
   function spawnItem(W) {
-    const free = freeCells(W);
+    let free = freeCells(W);
     if (!free.length) return false;
+    free = nearHead(W, free, D.WIDE.timedR);
     const i = free[Math.floor(W.rand() * free.length)];
     const kind = ITEM_KINDS[Math.floor(W.rand() * ITEM_KINDS.length)];
     W.item = { kind, x: i % W.cols, y: Math.floor(i / W.cols), life: D.ITEM.life, born: W.t };

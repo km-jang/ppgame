@@ -1565,5 +1565,48 @@ test('소리: 귀가 따가운 소리 없음 (네모파는 1.3kHz 아래, 잡음
   for (const m of body.matchAll(/'sawtooth',\s*([\d.]+)/g)) assert(+m[1] < 400, 'saw ' + m[0]);
 });
 
+// ─── 넓은 우주 (PLAN 3.12): 판이 화면보다 넓고 먹이는 머리 가까이에 ───
+test('넓은 우주: 먹이는 머리에서 화면의 0.75배 거리 안, 황금·아이템은 0.5배 거리 안', () => {
+  const W = create(96, 60, 5, { mode: 'endless', diff: 'normal', view: [32, 20] });
+  assert(W.view && W.view.c === 32 && W.view.r === 20, 'view kept');
+  for (let k = 0; k < 300; k++) {
+    W.snake[0] = { x: Math.floor(W.rand() * 96), y: Math.floor(W.rand() * 60) };
+    W.eaten = k;
+    assert(spawnFood(W), 'food placed');
+    const h = W.snake[0], f = W.food, r = f.gold ? D.WIDE.timedR : D.WIDE.foodR;
+    assert(Math.abs(f.x - h.x) <= 32 * r && Math.abs(f.y - h.y) <= 20 * r, 'food near ' + JSON.stringify([h, f]));
+    W.item = null;
+    assert(spawnItem(W), 'item placed');
+    assert(Math.abs(W.item.x - h.x) <= 32 * D.WIDE.timedR && Math.abs(W.item.y - h.y) <= 20 * D.WIDE.timedR, 'item near');
+  }
+});
+test('넓은 우주: 쉬움은 판 끝 너머도 가깝다 (구석에 있어도 반대편 끝에 나올 수 있다)', () => {
+  const W = create(72, 45, 9, { mode: 'endless', diff: 'easy', view: [24, 15] });
+  let across = 0;
+  for (let k = 0; k < 300; k++) {
+    W.snake[0] = { x: 0, y: 0 };
+    W.eaten = 0;
+    spawnFood(W);
+    const f = W.food, dx = Math.min(f.x, 72 - f.x), dy = Math.min(f.y, 45 - f.y);
+    assert(dx <= 24 * D.WIDE.foodR && dy <= 15 * D.WIDE.foodR, 'wrapped near ' + JSON.stringify(f));
+    if (f.x > 36 || f.y > 22) across++;
+  }
+  assert(across > 50, 'some across the edge: ' + across);
+});
+test('넓은 우주가 아니면 먹이 자리는 예전 그대로 (같은 씨앗, 같은 자리)', () => {
+  const A = create(COLS, ROWS, 42, { mode: 'endless', diff: 'normal' }), B = create(COLS, ROWS, 42, { mode: 'endless', diff: 'normal' });
+  assert(!A.view, 'no view');
+  const seen = new Set();
+  for (let k = 0; k < 200; k++) { spawnFood(A); spawnFood(B); assert(A.food.x === B.food.x && A.food.y === B.food.y, 'same'); seen.add(A.food.x + ',' + A.food.y); }
+  let far = 0; for (const q of seen) { const [x, y] = q.split(',').map(Number); if (Math.abs(x - A.snake[0].x) > 16) far++; }
+  assert(far > 0, 'whole board is used');
+});
+test('넓은 우주: 쉬움 봇이 큰 판에서 먹이를 찾아 먹는다', () => {
+  const W = create(72, 45, 3, { mode: 'endless', diff: 'easy', view: [24, 15], rival: false });
+  W.wait = 0;
+  for (let i = 0; i < 3000 && W.phase === 'play'; i++) { const d = botDir(W); if (d) turn(W, d); step(W, 1 / speed(W) + 1e-9); }
+  assert(W.eaten >= 20, 'ate ' + W.eaten);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

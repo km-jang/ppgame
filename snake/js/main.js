@@ -79,7 +79,8 @@
 
   // 판은 화면을 가득 쓴다 (버튼 자리를 비우지 않는다. 조작은 화면 밀기)
   function fit(world) {
-    const L = SN.Render.layout(world.cols, world.rows, view.w, view.h, view.hudH);
+    // 넓은 우주: 화면에는 world.view 칸만 보이고 판은 그보다 넓다 (그리기가 머리를 따라간다)
+    const L = SN.Render.layout(world.view ? world.view.c : world.cols, world.view ? world.view.r : world.rows, view.w, view.h, view.hudH);
     Object.assign(view, L);
   }
   function renderDiff() {
@@ -145,7 +146,7 @@
   function placeToast() {
     const t = $('toast');
     if (mode !== 'play' || !W || !view.cell || !t.classList.contains('on')) { if (t.style.top) t.style.top = ''; return; }
-    const h = W.snake[0], hy = view.by + (h.y + 0.5) * view.cell, hx = view.bx + (h.x + 0.5) * view.cell;
+    const hp = SN.Render.cellPx(view, W.snake[0].x, W.snake[0].y), hy = hp.y, hx = hp.x;
     const th = t.offsetHeight || 40, tw = t.offsetWidth || 300;
     let y = view.by + 10;
     const near = hy < y + th + view.cell * 1.5 && Math.abs(hx - innerWidth / 2) < tw / 2 + view.cell * 2;
@@ -484,7 +485,11 @@
     const lo = SH.takeLoadout(shop);
     SH.save(shop);
     // 알아서 맞춰 주는 난이도 (놀이 본부): 처음 두 판은 1, 그 뒤 0.85~1.12. 속도 오름·황금 시간·라이벌 실력에 조금씩
-    W = SN.World.create(cols, rows, seed, Object.assign(SH.worldOpts(shop, lo, lastOpts), { adapt: adaptMul(lastOpts.diff), skyStart: skyStart() }));
+    const wo = Object.assign(SH.worldOpts(shop, lo, lastOpts), { adapt: adaptMul(lastOpts.diff), skyStart: skyStart() });
+    // 넓은 우주 (PLAN 3.12): 무한 모드는 판이 화면의 D.WIDE.mul배, 화면이 머리를 따라간다
+    const wide = wo.mode === 'endless' ? D.WIDE.mul : 1;
+    if (wide > 1) wo.view = [cols, rows];
+    W = SN.World.create(cols * wide, rows * wide, seed, wo);
     rivalToast = false;
     lastEarn = null;
     view.char = shop.char;
