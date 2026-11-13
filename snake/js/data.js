@@ -135,11 +135,11 @@
     //   goldPlus: 황금 구슬 시간 +초 · startGhost: 판(레벨) 시작 유령 초 · ghostMul: 유령 아이템 시간 배율
     // price 0 = 처음부터 가짐. color: 이름·카드 색
     CHARS: [
-      { id: 'neon',   name: '네온 뱀',       price: 0,    color: '#5ee7ff', look: '반짝이는 청록 몸에 노란 코',
+      { id: 'neon',   name: '네온 뱀',       price: 0,    color: '#5ee7ff', look: '빛줄기 몸에 화살촉 머리',
         trait: '느긋해요: 조금 천천히 가요',           traits: { speedMul: 0.94 } },
-      { id: 'robot',  name: '로봇 뱀',       price: 300,  color: '#c9d6e3', look: '쇠 마디와 빛나는 눈 가리개',
+      { id: 'robot',  name: '로봇 뱀',       price: 300,  color: '#c9d6e3', look: '빛 이음새 장갑과 눈 가리개',
         trait: '아이템이 더 자주 나와요',         traits: { itemMul: 0.75 } },
-      { id: 'dragon', name: '꼬마 용',       price: 500,  color: '#ff9f43', look: '작은 뿔과 날개, 꼬리에 불꽃',
+      { id: 'dragon', name: '꼬마 용',       price: 500,  color: '#ff9f43', look: '불꽃 비늘과 빛 날개, 꼬리에 불꽃',
         trait: '콤보가 더 오래 이어져요',            traits: { comboPlus: 1.2 } },
       { id: 'bug',    name: '무지개 애벌레', price: 800,  color: '#ff7ad9', look: '동글동글 무지개 마디와 더듬이',
         trait: '황금 구슬이 더 오래 남아요',       traits: { goldPlus: 3 } },

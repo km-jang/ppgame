@@ -696,9 +696,9 @@
   const mix = (a, b, t) => [Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), Math.round(a[2] + (b[2] - a[2]) * t)];
   const rgb = c => 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
   const LOOKS = {
-    neon:   { body: 'tube',   head: 'neon',   glow: 'rgba(94,231,255,0.45)',  headGlow: 'rgba(94,231,255,0.7)',  gloss: 0.22, col: t => mix([94, 231, 255], [52, 96, 255], t) },
-    robot:  { body: 'plates', head: 'robot',  glow: 'rgba(140,200,255,0.32)', headGlow: 'rgba(94,231,255,0.6)' },
-    dragon: { body: 'tube',   head: 'dragon', glow: 'rgba(255,130,40,0.45)',  headGlow: 'rgba(255,170,60,0.7)',  gloss: 0.2, deco: 'dragon', col: t => mix([255, 196, 72], [196, 44, 36], t) },
+    neon:   { body: 'ribbon', head: 'neon',   glow: 'rgba(94,231,255,0.45)',  headGlow: 'rgba(94,231,255,0.7)',  gloss: 0.22, col: t => mix([94, 231, 255], [52, 96, 255], t) },
+    robot:  { body: 'plates', head: 'robot',  glow: 'rgba(94,231,255,0.3)', headGlow: 'rgba(94,231,255,0.6)' },
+    dragon: { body: 'tube',   head: 'dragon', glow: 'rgba(255,130,40,0.45)',  headGlow: 'rgba(255,170,60,0.7)',  gloss: 0.2, lit: 0.5, deco: 'dragon', col: t => mix([255, 160, 50], [196, 44, 36], t) },
     bug:    { body: 'beads',  head: 'bug',    glow: 'rgba(255,122,217,0.36)', headGlow: 'rgba(255,160,230,0.6)' },
     galaxy: { body: 'nebula', head: 'galaxy', glow: 'rgba(140,110,255,0.45)', headGlow: 'rgba(199,166,255,0.7)' },
   };
@@ -723,27 +723,6 @@
     g.beginPath();
     if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h);
   }
-  // 로봇 마디: 은빛 둥근 네모 판. 짝수는 가운데 청록 불빛, 홀수는 네 귀퉁이 나사
-  function plateSprite(c, odd) {
-    const px = Math.round(c);
-    return sprite('plate' + px + (odd ? 'b' : 'a'), px, (g, s) => {
-      const m = s * 0.06, w = s - m * 2;
-      const gr = g.createLinearGradient(0, m, 0, s - m);
-      gr.addColorStop(0, odd ? '#dfe8f2' : '#f2f7fc'); gr.addColorStop(0.5, odd ? '#9aa9bb' : '#b7c4d3'); gr.addColorStop(1, '#5d6b7e');
-      rrect(g, m, m, w, w, s * 0.22); g.fillStyle = gr; g.fill();
-      g.lineWidth = Math.max(1, s * 0.05); g.strokeStyle = '#2b3645'; g.stroke();
-      rrect(g, m + s * 0.12, m + s * 0.12, w - s * 0.24, w - s * 0.24, s * 0.14);
-      g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = Math.max(1, s * 0.03); g.stroke();
-      if (odd) {
-        g.fillStyle = '#3a4656';
-        for (const [x, y] of [[0.28, 0.28], [0.72, 0.28], [0.28, 0.72], [0.72, 0.72]]) { g.beginPath(); g.arc(s * x, s * y, s * 0.055, 0, TAU); g.fill(); }
-      } else {
-        const lg = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s * 0.26);
-        lg.addColorStop(0, '#e9fdff'); lg.addColorStop(0.35, '#5ee7ff'); lg.addColorStop(1, 'rgba(94,231,255,0)');
-        g.fillStyle = lg; g.fillRect(0, 0, s, s);
-      }
-    });
-  }
   // 애벌레 구슬 마디: 색(hue 칸)마다 광택 구슬
   const BUG_HUES = 18;
   function beadSprite(c, k) {
@@ -760,32 +739,104 @@
     });
   }
 
-  // 네온 뱀 마디 구슬: 머리 0 → 꼬리 1 색을 NEON_STEPS 단계로 미리 그려 둔다
-  const NEON_STEPS = 12;
-  function neonBeadSprite(c, k, col) {
-    const px = Math.round(c);
-    return sprite('neonbead' + px + '_' + k, px, (g, s) => {
-      const q = col(k / (NEON_STEPS - 1)), r = s / 2;
-      const gr = g.createRadialGradient(r * 0.65, r * 0.6, r * 0.08, r, r, r);
-      gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.38, rgb(q)); gr.addColorStop(1, rgb(mix(q, [8, 18, 60], 0.5)));
-      g.fillStyle = gr; g.beginPath(); g.arc(r, r, r * 0.95, 0, TAU); g.fill();
-      g.strokeStyle = 'rgba(210,250,255,0.75)'; g.lineWidth = Math.max(1, s * 0.05); g.stroke();
-    });
-  }
-  // 마디 구슬은 유리 광택 구슬(common/vfx.js). 색 단계마다 한 번 만들어 두고 찍기만. vfx.js가 없으면 예전 구슬
-  function neonGlass(c, k, col) {
-    if (typeof VFX === 'undefined') return null;
-    const r = Math.round(c * (0.42 - 0.12 * k / (NEON_STEPS - 1)) * 4) / 4;
-    return VFX.createGlossySphere(r, rgb(col(k / (NEON_STEPS - 1))), { glow: 0, shadow: 0.3, glass: 0.75, rim: 1.2, gloss: 0.9 });
-  }
-  function paintNeonBeads(ctx, pts, c, lk) {
+  // ─── 새 캐릭터 모습 공통 도구 (2026-11-12, PLAN 3.11) ───
+  // 모서리를 둥글게 이은 몸 길 (꼬리에서 머리로). 포털·벽 넘기로 떨어진 곳은 잇지 않는다
+  function roundPath(ctx, pts, far) {
     const n = pts.length;
-    for (let i = n - 1; i >= 1; i--) {
-      const t = i / Math.max(1, n - 1), r = c * (0.42 - 0.12 * t);
-      const k = Math.round(t * (NEON_STEPS - 1));
-      const sp = neonGlass(c, k, lk.col);
-      if (sp) VFX.drawSphere(ctx, sp, pts[i].x, pts[i].y, { scaleX: r / sp.radius, scaleY: r / sp.radius });
-      else ctx.drawImage(neonBeadSprite(c, k, lk.col), pts[i].x - r, pts[i].y - r, r * 2, r * 2);
+    ctx.beginPath();
+    for (let i = n - 1; i >= 0; i--) {
+      const p = pts[i], noNext = i === n - 1 || far(i + 1), noPrev = i === 0 || far(i);
+      if (noNext) ctx.moveTo(p.x, p.y);
+      if (noPrev) { ctx.lineTo(p.x, p.y); continue; }
+      const q = pts[i - 1], mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+      if (noNext) ctx.lineTo(mx, my); else ctx.quadraticCurveTo(p.x, p.y, mx, my);
+    }
+  }
+  // 마디 i를 지나는 둥근 조각 하나 (굵기를 마디마다 달리할 때)
+  function curveSeg(ctx, pts, far, i, n) {
+    const p = pts[i];
+    let ax = p.x, ay = p.y, bx = p.x, by = p.y;
+    if (i < n - 1 && !far(i + 1)) { ax = (p.x + pts[i + 1].x) / 2; ay = (p.y + pts[i + 1].y) / 2; }
+    if (i > 0 && !far(i)) { bx = (p.x + pts[i - 1].x) / 2; by = (p.y + pts[i - 1].y) / 2; }
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(p.x, p.y, bx, by); ctx.stroke();
+  }
+  // 마디가 향한 각도: 꺾이는 칸에서는 앞뒤 방향의 가운데(대각선)
+  function segAngle(dirs, far, i, n) {
+    let dx = dirs[i][0], dy = dirs[i][1];
+    if (i < n - 1 && !far(i + 1)) { dx += dirs[i + 1][0]; dy += dirs[i + 1][1]; }
+    return Math.atan2(dy, dx);
+  }
+  // 머리 그림 도구 (칸 = 1 좌표): 유리 채움 · 빛 테 · 왼쪽 위 반사 · 빛 점
+  function polyU(ctx, P, k) {
+    k = k || 1;
+    ctx.beginPath();
+    for (let i = 0; i < P.length; i++) { if (i) ctx.lineTo(P[i][0] * k, P[i][1] * k); else ctx.moveTo(P[i][0] * k, P[i][1] * k); }
+    ctx.closePath();
+  }
+  function glassU(ctx, C, D2) {
+    const g = ctx.createLinearGradient(-0.4, -0.5, 0.3, 0.5);
+    g.addColorStop(0, rgbaOf(mix(C, D2, 0.35), 1)); g.addColorStop(0.5, rgbaOf(D2, 1)); g.addColorStop(1, rgbaOf(mix(D2, [0, 0, 0], 0.5), 1));
+    ctx.fillStyle = g; ctx.fill();
+  }
+  const RIM3 = [[0.26, 0.1], [0.14, 0.22], [0.06, 0.9]], RIM2 = [[0.16, 0.12], [0.045, 0.75]];
+  function rimU(ctx, C, ws) {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [w, a] of ws) { ctx.strokeStyle = rgbaOf(C, a); ctx.lineWidth = w; ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 0.022; ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  function sheenU(ctx) {   // 지금 길을 오려 그 안에만
+    ctx.save();
+    ctx.clip();
+    const sg = ctx.createLinearGradient(-0.5, -0.5, -0.1, -0.1);
+    sg.addColorStop(0, 'rgba(255,255,255,0.42)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.moveTo(-0.8, -0.8); ctx.lineTo(0.35, -0.8); ctx.lineTo(-0.8, 0.2); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  function dotU(ctx, x, y, r, C, a) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, rgbaOf(C, a)); g.addColorStop(0.4, rgbaOf(C, a * 0.4)); g.addColorStop(1, rgbaOf(C, 0));
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 네온 뱀: 에너지 리본. 몸 전체가 꼬리로 갈수록 가늘어지는 빛줄기(꼬리 끝도 칸의 4분의 1 굵기),
+  // 마디 자리마다 옅은 빛 점, 빛 방울 셋이 꼬리에서 머리로 흐른다(움직임 줄이기면 없음). 머리 뒤 첫 마디는 길이 숫자 구슬
+  const NEON_STEPS = 12;
+  function neonGlass(c, col) {
+    if (typeof VFX === 'undefined') return null;
+    return VFX.createGlossySphere(Math.round(c * 0.38 * 4) / 4, col, { glow: 0, shadow: 0.3, glass: 0.75, rim: 1.2, gloss: 0.9 });
+  }
+  function paintRibbon(ctx, pts, far, c, lk, tm, dead, calm) {
+    const n = pts.length, m = Math.max(1, n - 1);
+    const C0 = dead ? [255, 77, 109] : [94, 231, 255], C1 = dead ? [150, 20, 50] : [52, 96, 255];
+    ctx.strokeStyle = 'rgba(2,6,16,0.6)';
+    for (let i = n - 1; i >= 0; i--) { ctx.lineWidth = c * (0.62 - 0.28 * i / m); curveSeg(ctx, pts, far, i, n); }
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [w0, w1, a, white] of [[1.0, 0.56, 0.16, 0], [0.5, 0.26, 0.9, 0], [0.17, 0.09, 0.9, 1]]) {
+      for (let i = n - 1; i >= 0; i--) {
+        const t = i / m;
+        ctx.strokeStyle = white ? 'rgba(235,253,255,' + a + ')' : rgbaOf(mix(C0, C1, Math.round(t * (NEON_STEPS - 1)) / (NEON_STEPS - 1)), a);
+        ctx.lineWidth = c * (w0 + (w1 - w0) * t);
+        curveSeg(ctx, pts, far, i, n);
+      }
+    }
+    const step = n > 120 ? 2 : 1;
+    for (let i = n - 1; i >= 2; i -= step) glow(ctx, dead ? 'rgba(255,170,185,0.9)' : 'rgba(200,250,255,0.9)', pts[i].x, pts[i].y, c * 0.24, 0.55);
+    if (!calm && !dead && tm && n > 3) {
+      for (let k = 0; k < 3; k++) {
+        const f = (tm * 0.5 + k / 3) % 1, u = (1 - f) * m, i = Math.min(m - 1, Math.floor(u)), r = u - i;
+        if (far(i + 1)) continue;
+        glow(ctx, 'rgba(210,250,255,0.95)', pts[i].x + (pts[i + 1].x - pts[i].x) * r, pts[i].y + (pts[i + 1].y - pts[i].y) * r, c * 0.62, 0.85 * Math.sin(Math.PI * f));
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    if (n > 1 && !far(1)) {
+      const sp = neonGlass(c, dead ? '#ff8a9c' : '#5ee7ff');
+      if (sp) VFX.drawSphere(ctx, sp, pts[1].x, pts[1].y, { scaleX: c * 0.38 / sp.radius, scaleY: c * 0.38 / sp.radius });
+      else { ctx.fillStyle = dead ? '#ff8a9c' : '#5ee7ff'; ctx.beginPath(); ctx.arc(pts[1].x, pts[1].y, c * 0.38, 0, TAU); ctx.fill(); }
     }
   }
 
@@ -843,8 +894,9 @@
     ctx.globalCompositeOperation = 'source-over';
     segs(ctx, pts, far, n, c, lk, tm, dead, 1, deepOf, 1);
     ctx.globalCompositeOperation = 'lighter';
-    segs(ctx, pts, far, n, c, lk, tm, dead, 0.62, rgbaOf, 0.85);
-    segs(ctx, pts, far, n, c, lk, tm, dead, 0.24, coreOf, 0.7);
+    const lit = lk.lit == null ? 1 : lk.lit;   // 밝은 몸 색(꼬마 용)은 속 빛을 낮춰 유리 느낌을 지킨다
+    segs(ctx, pts, far, n, c, lk, tm, dead, 0.62, rgbaOf, 0.85 * lit);
+    segs(ctx, pts, far, n, c, lk, tm, dead, 0.24, coreOf, 0.7 * lit);
     ctx.globalCompositeOperation = 'source-over';
     // 위 반사 줄: 왼쪽 위 빛을 받은 유리 겉면
     ctx.save();
@@ -857,32 +909,20 @@
 
   // 꼬마 용: 등 가시 · 날개 한 쌍 · 꼬리 불꽃
   function paintDragonDeco(ctx, pts, far, c, tm, dirs, calm) {
-    const n = pts.length;
-    // 비늘: 마디마다 꼬리 쪽으로 둥글게 휜 줄
-    ctx.strokeStyle = 'rgba(110,18,8,0.5)'; ctx.lineWidth = Math.max(1, c * 0.07);
+    const n = pts.length, step = n > 120 ? 2 : 1;
+    // 등 비늘: 마디마다 머리 쪽을 가리키는 빛 꺾쇠 (꺾이는 칸은 대각선)
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255,220,120,0.5)'; ctx.lineWidth = Math.max(1, c * 0.055);
     ctx.beginPath();
-    for (let i = 1; i < n; i++) {
-      const t = i / (n - 1), s = c * (1 - 0.35 * t), [ux, uy] = dirs[i], p = pts[i];
-      const a0 = Math.atan2(-uy, -ux), cx = p.x + ux * s * 0.2, cy = p.y + uy * s * 0.2;
-      ctx.moveTo(cx + Math.cos(a0 - 0.95) * s * 0.3, cy + Math.sin(a0 - 0.95) * s * 0.3);
-      ctx.arc(cx, cy, s * 0.3, a0 - 0.95, a0 + 0.95);
+    for (let i = n - 2; i >= 1; i -= step) {
+      const t = i / (n - 1), s = c * (0.5 - 0.2 * t), a = segAngle(dirs, far, i, n), ux = Math.cos(a), uy = Math.sin(a), p = pts[i];
+      ctx.moveTo(p.x - ux * s * 0.35 + uy * s * 0.55, p.y - uy * s * 0.35 - ux * s * 0.55);
+      ctx.lineTo(p.x + ux * s * 0.15, p.y + uy * s * 0.15);
+      ctx.lineTo(p.x - ux * s * 0.35 - uy * s * 0.55, p.y - uy * s * 0.35 + ux * s * 0.55);
     }
     ctx.stroke();
-    // 옆 가시: 두 마디마다 양옆으로 뒤를 향한 작은 가시
-    ctx.fillStyle = '#ffe9b0';
-    ctx.beginPath();
-    for (let i = 3; i < n - 1; i += 2) {
-      const t = i / (n - 1), s = c * (1 - 0.45 * t), [ux, uy] = dirs[i], px = -uy, py = ux, p = pts[i];
-      for (const sd of [1, -1]) {
-        const bx = p.x + px * sd * s * 0.3, by = p.y + py * sd * s * 0.3;
-        ctx.moveTo(bx + ux * s * 0.14, by + uy * s * 0.14);
-        ctx.lineTo(bx + px * sd * s * 0.26 - ux * s * 0.2, by + py * sd * s * 0.26 - uy * s * 0.2);
-        ctx.lineTo(bx - ux * s * 0.16, by - uy * s * 0.16);
-        ctx.closePath();
-      }
-    }
-    ctx.fill();
-    // 날개: 머리 뒤 두 번째 마디에서 양옆으로 (천천히 파닥)
+    ctx.globalCompositeOperation = 'source-over';
+    // 빛 날개: 머리 뒤 두 번째 마디에서 양옆으로 (천천히 파닥). 속이 비치는 주황 막에 빛 테
     if (n > 3) {
       const k = 2, p = pts[k], [ux, uy] = dirs[k], px = -uy, py = ux;
       const flap = calm ? 1 : 0.82 + 0.18 * Math.sin(tm * 7);
@@ -894,17 +934,20 @@
         ctx.quadraticCurveTo(p.x + ox * c * 0.9 * flap + ux * c * 0.25, p.y + oy * c * 0.9 * flap + uy * c * 0.25, tipX, tipY);
         ctx.quadraticCurveTo(p.x + ox * c * 0.55 * flap - ux * c * 0.35, p.y + oy * c * 0.55 * flap - uy * c * 0.35, p.x + ox * c * 0.22 - ux * c * 0.55, p.y + oy * c * 0.22 - uy * c * 0.55);
         ctx.closePath();
-        ctx.fillStyle = 'rgba(255,110,60,0.82)'; ctx.fill();
-        ctx.strokeStyle = '#ffd08a'; ctx.lineWidth = Math.max(1, c * 0.06); ctx.stroke();
-        // 날개 뼈
+        ctx.fillStyle = 'rgba(255,110,40,0.3)'; ctx.fill();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(255,150,50,0.22)'; ctx.lineWidth = c * 0.16; ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,200,110,0.9)'; ctx.lineWidth = Math.max(1, c * 0.05); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(p.x + ox * c * 0.25, p.y + oy * c * 0.25); ctx.lineTo(tipX, tipY); ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
       }
     }
-    // 꼬리 불꽃: 꼬리 끝에서 뒤로 (살랑살랑)
+    // 꼬리 불꽃: 꼬리 끝에서 뒤로 (살랑살랑), 가산 혼합
     const t = pts[n - 1], [ux, uy] = dirs[n - 1], px = -uy, py = ux;
     const fl = calm ? 1 : 0.85 + 0.15 * Math.sin(tm * 17) + 0.08 * Math.sin(tm * 29);
+    ctx.globalCompositeOperation = 'lighter';
     glow(ctx, 'rgba(255,140,40,0.8)', t.x - ux * c * 0.4, t.y - uy * c * 0.4, c * 0.9, 0.8);
-    for (const [len, wid, col] of [[0.95, 0.3, '#ff5a1f'], [0.6, 0.17, '#ffe66d']]) {
+    for (const [len, wid, col] of [[0.95, 0.3, 'rgba(255,90,31,0.8)'], [0.6, 0.17, 'rgba(255,230,109,0.95)']]) {
       const L = c * len * fl, Wd = c * wid;
       ctx.beginPath();
       ctx.moveTo(t.x + px * Wd, t.y + py * Wd);
@@ -913,19 +956,47 @@
       ctx.closePath();
       ctx.fillStyle = col; ctx.fill();
     }
+    ctx.globalCompositeOperation = 'source-over';
   }
 
-  // 로봇 뱀: 전선 위에 은빛 쇠 마디
-  function paintPlates(ctx, pts, far, c) {
+  // 로봇 뱀: 청록 빛 이음새 위에 어두운 금속 장갑 판. 불빛이 마디를 따라 머리 쪽으로 흐른다
+  // 판 그림(가는 쪽이 +x)은 칸 크기마다 한 번 그려 두고 돌려 찍는다
+  function armorSprite(c, lit) {
+    const px = Math.round(c);
+    return sprite('armor' + px + (lit ? 'L' : ''), px, (g, s) => {
+      const w = s * 0.62, h = s * 0.94, x = (s - w) / 2, y = (s - h) / 2;
+      const gr = g.createLinearGradient(0, y, 0, y + h);
+      gr.addColorStop(0, '#4f5e78'); gr.addColorStop(0.35, '#1d2638'); gr.addColorStop(1, '#090e17');
+      rrect(g, x, y, w, h, s * 0.14); g.fillStyle = gr; g.fill();
+      g.strokeStyle = 'rgba(190,215,240,0.42)'; g.lineWidth = Math.max(1, s * 0.035); g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.2)'; rrect(g, x + s * 0.07, y + s * 0.06, w - s * 0.14, h * 0.1, s * 0.04); g.fill();
+      g.fillStyle = lit ? '#04121a' : '#05080e'; rrect(g, s * 0.44, s * 0.24, s * 0.12, s * 0.52, s * 0.05); g.fill();
+      if (lit) {
+        const lg = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s * 0.46);
+        lg.addColorStop(0, 'rgba(94,231,255,0.75)'); lg.addColorStop(1, 'rgba(94,231,255,0)');
+        g.globalCompositeOperation = 'lighter'; g.fillStyle = lg; g.fillRect(0, 0, s, s);
+        g.fillStyle = 'rgba(225,253,255,0.95)'; rrect(g, s * 0.46, s * 0.27, s * 0.08, s * 0.46, s * 0.04); g.fill();
+      }
+    });
+  }
+  function paintPlates(ctx, pts, far, c, tm, dirs) {
     const n = pts.length;
-    ctx.strokeStyle = '#2b3645'; ctx.lineWidth = c * 0.46;
-    bodyPath(ctx, pts, far); ctx.stroke();
-    ctx.strokeStyle = 'rgba(94,231,255,0.7)'; ctx.lineWidth = Math.max(1, c * 0.08);
-    bodyPath(ctx, pts, far); ctx.stroke();
-    const sa = plateSprite(c, false), sb = plateSprite(c, true);
+    ctx.strokeStyle = '#0a0f18'; ctx.lineWidth = c * 0.42;
+    roundPath(ctx, pts, far); ctx.stroke();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(94,231,255,0.14)'; ctx.lineWidth = c * 0.7; ctx.stroke();
+    ctx.strokeStyle = 'rgba(94,231,255,0.9)'; ctx.lineWidth = c * 0.2; ctx.stroke();
+    ctx.strokeStyle = 'rgba(230,253,255,0.8)'; ctx.lineWidth = Math.max(1, c * 0.07); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+    const sa = armorSprite(c, false), sb = armorSprite(c, true);
     for (let i = n - 1; i >= 1; i--) {
-      const t = i / Math.max(1, n - 1), s = c * (0.84 - 0.24 * t);
-      ctx.drawImage(i % 2 ? sb : sa, pts[i].x - s / 2, pts[i].y - s / 2, s, s);
+      const t = i / Math.max(1, n - 1), hh = c * (1 - 0.32 * t);
+      const lit = Math.sin(tm * 6 - i * 0.7) > 0.3;
+      ctx.save();
+      ctx.translate(pts[i].x, pts[i].y);
+      ctx.rotate(segAngle(dirs, far, i, n));
+      ctx.drawImage(lit ? sb : sa, -c / 2, -hh / 2, c, hh);
+      ctx.restore();
     }
   }
 
@@ -1007,71 +1078,41 @@
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     const dirs = lk.body === 'tube' && !lk.deco ? null : segDirs(pts, far, d0 || [1, 0]);
-    if (lk.body === 'plates') paintPlates(ctx, pts, far, c);
+    if (lk.body === 'plates') paintPlates(ctx, pts, far, c, dead ? 0 : tm, dirs);
+    else if (lk.body === 'ribbon') paintRibbon(ctx, pts, far, c, lk, tm, dead, calm);
     else if (lk.body === 'beads') paintBeads(ctx, pts, c, tm, dirs, calm);
     else if (lk.body === 'nebula') paintNebula(ctx, pts, far, c, tm, dirs, calm);
     else paintTube(ctx, pts, far, c, lk, tm, dead);
-    if (lk.head === 'neon' && !dead) paintNeonBeads(ctx, pts, c, lk);
     if (lk.deco === 'dragon' && !dead) paintDragonDeco(ctx, pts, far, c, tm, dirs, calm);
     // 부딪혔다: 모양은 두고 붉게 덮는다 (네온 관은 이미 붉게 그렸다)
-    if (dead && lk.body !== 'tube') {
+    if (dead && lk.body !== 'tube' && lk.body !== 'ribbon') {
       ctx.strokeStyle = 'rgba(255,60,85,0.5)'; ctx.lineWidth = c * 0.8;
       bodyPath(ctx, pts, far); ctx.stroke();
     }
     ctx.lineCap = 'butt';
   }
 
-  // 네온 뱀 머리 (2026-11-07 시각 품질, 참고 그림 각진 머리): 앞이 모난 어두운 유리 투구, 빛 테 3겹,
-  // 왼쪽 위 유리 반사, 얼굴 자리에서 빛나는 눈 둘과 웃는 빛 줄, 앞 끝 노란 빛 코. 칸 = 1, 앞 = +x
-  const HEAD_PTS = [[-0.5, -0.3], [-0.34, -0.48], [0.2, -0.5], [0.58, -0.2], [0.58, 0.2], [0.2, 0.5], [-0.34, 0.48], [-0.5, 0.3]];
-  function headPath(ctx, k) {
-    ctx.beginPath();
-    HEAD_PTS.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * k) : ctx.moveTo(x * k, y * k)));
-    ctx.closePath();
-  }
+  // 네온 뱀 머리: 화살촉 모양 어두운 유리, 빛 테 3겹, 왼쪽 위 유리 반사, V자로 빛나는 눈. 칸 = 1, 앞 = +x
+  const HEAD_PTS = [[-0.42, 0], [-0.6, -0.44], [0.1, -0.38], [0.8, 0], [0.1, 0.38], [-0.6, 0.44]];
   function paintNeonHead(ctx, dead, tm) {
     const C = dead ? [255, 77, 109] : [94, 231, 255], D2 = dead ? [90, 10, 24] : [10, 34, 92];
-    // 노란 코: 앞 끝 작은 빛 꺾쇠
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = 'rgba(255,214,90,0.35)'; ctx.lineWidth = 0.22;
-    ctx.beginPath(); ctx.moveTo(0.6, -0.12); ctx.lineTo(0.74, 0); ctx.lineTo(0.6, 0.12); ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = '#ffe66d'; ctx.lineWidth = 0.09;
-    ctx.beginPath(); ctx.moveTo(0.6, -0.12); ctx.lineTo(0.74, 0); ctx.lineTo(0.6, 0.12); ctx.stroke();
-    // 몸통: 짙은 유리 (빛 쪽이 밝다)
-    const g = ctx.createLinearGradient(-0.4, -0.5, 0.3, 0.5);
-    g.addColorStop(0, rgbaOf(mix(C, D2, 0.35), 1)); g.addColorStop(0.5, rgbaOf(D2, 1)); g.addColorStop(1, rgbaOf(mix(D2, [0, 0, 0], 0.5), 1));
-    headPath(ctx, 1); ctx.fillStyle = g; ctx.fill();
-    // 안쪽 색 빛 (가운데가 은은하게)
+    polyU(ctx, HEAD_PTS); glassU(ctx, C, D2);
     const rg = ctx.createRadialGradient(0.1, 0, 0.02, 0.05, 0, 0.6);
     rg.addColorStop(0, rgbaOf(C, 0.35)); rg.addColorStop(1, rgbaOf(C, 0));
     ctx.fillStyle = rg; ctx.fill();
-    // 빛 테: 넓고 옅은 번짐 둘 + 색 테 + 흰 심 (가산)
-    ctx.globalCompositeOperation = 'lighter';
-    for (const [w, a] of [[0.26, 0.1], [0.14, 0.22], [0.06, 0.9]]) { headPath(ctx, 1); ctx.strokeStyle = rgbaOf(C, a); ctx.lineWidth = w; ctx.stroke(); }
-    headPath(ctx, 1); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 0.022; ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
-    // 왼쪽 위 유리 반사 띠
-    ctx.save();
-    headPath(ctx, 0.92); ctx.clip();
-    const sg = ctx.createLinearGradient(-0.5, -0.5, -0.1, -0.1);
-    sg.addColorStop(0, 'rgba(255,255,255,0.45)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = sg;
-    ctx.beginPath(); ctx.moveTo(-0.6, -0.6); ctx.lineTo(0.3, -0.6); ctx.lineTo(-0.6, 0.15); ctx.closePath(); ctx.fill();
-    ctx.restore();
-    // 눈: 빛나는 둥근 네모 (번짐 + 색 + 흰 심). 앞을 본다
+    rimU(ctx, C, RIM3);
+    polyU(ctx, HEAD_PTS, 0.92); sheenU(ctx);
+    // 눈: 앞으로 모이는 빛 줄 둘 (깜빡이면 짧아지고, 부딪히면 일자로 흐려진다)
     const blink = !dead && tm && (tm % 3.6) < 0.12;
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
     for (const s of [1, -1]) {
-      const ex = 0.24, ey = s * 0.2, eh = blink ? 0.03 : dead ? 0.05 : 0.11;
-      ctx.fillStyle = rgbaOf(C, 0.28); rrect(ctx, ex - 0.12, ey - eh - 0.06, 0.24, (eh + 0.06) * 2, 0.1); ctx.fill();
-      ctx.fillStyle = rgbaOf(mix(C, [255, 255, 255], 0.2), 0.95); rrect(ctx, ex - 0.065, ey - eh, 0.13, eh * 2, 0.06); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.9)'; rrect(ctx, ex - 0.025, ey - eh * 0.6, 0.05, eh * 1.2, 0.025); ctx.fill();
+      ctx.beginPath();
+      if (dead) { ctx.moveTo(0.06, s * 0.17); ctx.lineTo(0.3, s * 0.17); }
+      else if (blink) { ctx.moveTo(0.2, s * 0.14); ctx.lineTo(0.3, s * 0.1); }
+      else { ctx.moveTo(0.02, s * 0.25); ctx.lineTo(0.32, s * 0.09); }
+      ctx.strokeStyle = rgbaOf(C, 0.35); ctx.lineWidth = 0.17; ctx.stroke();
+      ctx.strokeStyle = dead ? 'rgba(255,220,226,0.7)' : 'rgba(240,253,255,0.95)'; ctx.lineWidth = 0.065; ctx.stroke();
     }
-    // 웃는 입 빛 줄 (부딪히면 일자)
-    ctx.strokeStyle = rgbaOf(C, 0.35); ctx.lineWidth = 0.1;
-    ctx.beginPath(); if (dead) { ctx.moveTo(0.42, -0.08); ctx.lineTo(0.42, 0.08); } else ctx.arc(0.3, 0, 0.13, -0.85, 0.85); ctx.stroke();
-    ctx.strokeStyle = 'rgba(235,252,255,0.95)'; ctx.lineWidth = 0.04; ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
   }
 
@@ -1109,42 +1150,43 @@
     ctx.scale(c, c);   // 여기부터 칸 = 1
     ctx.lineWidth = 0.06;
     if (lk.head === 'robot') {
-      // 안테나 · 둥근 네모 투구 · 앞쪽 눈 가리개(청록 불빛 줄)
-      ctx.strokeStyle = '#9aa9bb'; ctx.lineWidth = 0.08;
-      ctx.beginPath(); ctx.moveTo(-0.2, -0.36); ctx.lineTo(-0.38, -0.7); ctx.stroke();
-      ctx.fillStyle = '#ff5ec8'; ctx.beginPath(); ctx.arc(-0.38, -0.72, 0.1, 0, TAU); ctx.fill();
+      // 안테나(분홍 빛 끝) · 어두운 금속 투구에 청록 빛 테 · 눈 가리개 안에서 위아래로 훑는 빛 줄
+      const RC = dead ? [255, 77, 109] : [94, 231, 255];
+      ctx.strokeStyle = '#8899b0'; ctx.lineWidth = 0.06;
+      ctx.beginPath(); ctx.moveTo(-0.2, -0.42); ctx.lineTo(-0.36, -0.74); ctx.stroke();
+      dotU(ctx, -0.36, -0.76, 0.24, [255, 94, 200], 0.95);
       const g = ctx.createLinearGradient(0, -0.46, 0, 0.46);
-      g.addColorStop(0, '#f4f8fc'); g.addColorStop(0.55, '#aebccb'); g.addColorStop(1, '#5d6b7e');
-      rrect(ctx, -0.48, -0.46, 0.94, 0.92, 0.24); ctx.fillStyle = g; ctx.fill();
-      ctx.strokeStyle = '#2b3645'; ctx.lineWidth = 0.06; ctx.stroke();
-      rrect(ctx, -0.02, -0.36, 0.42, 0.72, 0.14); ctx.fillStyle = '#0a1826'; ctx.fill();
-      ctx.fillStyle = dead ? '#ff4d6d' : '#5ee7ff';
-      rrect(ctx, 0.14, -0.26, 0.12, 0.52, 0.05); ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(0.17, -0.2, 0.04, 0.14);
-      ctx.fillStyle = '#3a4656';
-      for (const y of [-0.28, 0.28]) { ctx.beginPath(); ctx.arc(-0.3, y, 0.06, 0, TAU); ctx.fill(); }
+      g.addColorStop(0, '#56657e'); g.addColorStop(0.4, '#1e2738'); g.addColorStop(1, '#090d16');
+      rrect(ctx, -0.5, -0.46, 1.04, 0.92, 0.22); ctx.fillStyle = g; ctx.fill();
+      rimU(ctx, RC, RIM2);
+      rrect(ctx, -0.46, -0.42, 0.96, 0.84, 0.2); sheenU(ctx);
+      rrect(ctx, 0, -0.36, 0.44, 0.72, 0.14); ctx.fillStyle = '#04070d'; ctx.fill();
+      const sc = dead || !tm ? 0 : Math.sin(tm * 2.4) * 0.22;
+      dotU(ctx, 0.22, sc, 0.36, RC, 0.8);
+      ctx.fillStyle = dead ? 'rgba(255,220,226,0.8)' : 'rgba(225,253,255,0.95)';
+      rrect(ctx, 0.06, sc - 0.035, 0.32, 0.07, 0.03); ctx.fill();
     } else if (lk.head === 'dragon') {
-      // 뒤로 휜 뿔 두 개 · 둥근 주둥이 · 가는 눈 · 콧구멍
+      // 뒤로 뻗은 어두운 뿔 둘(금빛 테) · 앞이 모난 주황 유리 머리 · 가늘게 빛나는 눈 · 콧김 불빛
+      const FC = dead ? [255, 77, 109] : [255, 150, 50], FD = dead ? [90, 10, 24] : [70, 16, 8];
       for (const s of [1, -1]) {
         ctx.beginPath();
-        ctx.moveTo(-0.08, s * 0.28);
-        ctx.quadraticCurveTo(-0.45, s * 0.46, -0.78, s * 0.66);
-        ctx.quadraticCurveTo(-0.5, s * 0.3, -0.34, s * 0.12);
-        ctx.closePath();
-        ctx.fillStyle = '#fff0c8'; ctx.fill();
-        ctx.strokeStyle = '#b8743a'; ctx.lineWidth = 0.04; ctx.stroke();
+        ctx.moveTo(-0.1, s * 0.3); ctx.quadraticCurveTo(-0.5, s * 0.55, -0.85, s * 0.74); ctx.lineTo(-0.4, s * 0.18); ctx.closePath();
+        ctx.fillStyle = '#2a1208'; ctx.fill();
+        rimU(ctx, dead ? FC : [255, 210, 120], [[0.1, 0.2], [0.035, 0.9]]);
       }
-      const g = ctx.createRadialGradient(-0.1, -0.15, 0.05, 0, 0, 0.6);
-      g.addColorStop(0, '#ffd27a'); g.addColorStop(0.6, '#ff8c3a'); g.addColorStop(1, '#c8401f');
-      ctx.fillStyle = dead ? '#ff4d6d' : g;
-      ctx.beginPath(); ctx.ellipse(-0.06, 0, 0.48, 0.42, 0, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(0.3, 0, 0.3, 0.28, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#fff27a';
-      for (const s of [1, -1]) { ctx.beginPath(); ctx.ellipse(0.08, s * 0.2, 0.11, 0.065, s * 0.35, 0, TAU); ctx.fill(); }
-      ctx.fillStyle = '#3a0d05';
+      const H = [[-0.48, -0.36], [0.1, -0.44], [0.48, -0.24], [0.72, -0.08], [0.72, 0.08], [0.48, 0.24], [0.1, 0.44], [-0.48, 0.36]];
+      polyU(ctx, H); glassU(ctx, FC, FD);
+      rimU(ctx, FC, RIM3);
+      polyU(ctx, H, 0.92); sheenU(ctx);
+      const blink = !dead && tm && (tm % 4.1) < 0.12;
       for (const s of [1, -1]) {
-        ctx.beginPath(); ctx.ellipse(0.1, s * 0.2, 0.025, 0.055, 0, 0, TAU); ctx.fill();
-        ctx.beginPath(); ctx.arc(0.5, s * 0.1, 0.035, 0, TAU); ctx.fill();
+        dotU(ctx, 0.18, s * 0.2, 0.2, dead ? FC : [255, 230, 100], 0.6);
+        ctx.save();
+        ctx.translate(0.18, s * 0.2); ctx.rotate(s * 0.35);
+        ctx.fillStyle = dead ? 'rgba(255,220,226,0.8)' : 'rgba(255,246,170,0.98)';
+        ctx.beginPath(); ctx.ellipse(0, 0, 0.12, dead || blink ? 0.018 : 0.05, 0, 0, TAU); ctx.fill();
+        ctx.restore();
+        if (!dead) dotU(ctx, 0.66, s * 0.07, 0.11, [255, 130, 40], 0.9);
       }
     } else if (lk.head === 'bug') {
       // 앞으로 뻗은 더듬이 두 개(끝에 노란 구슬) · 광택 둥근 머리 · 작은 눈
