@@ -710,9 +710,15 @@
     }
     for (let k = 1; k <= 8; k++) { line(-0.5 - k, 'rgba(' + A.grid + ',0.28)', 1.5, 0); line(2.5 + k, 'rgba(' + A.grid + ',0.28)', 1.5, 0); }
     // 줄 사이 선 (옅게) · 길 테두리 (밝게, 발광은 여기서 한 번만)
-    line(0.5, 'rgba(' + A.lane + ',0.35)', 2, 6); line(1.5, 'rgba(' + A.lane + ',0.35)', 2, 6);
-    line(-0.5, 'rgba(' + A.lane + ',0.95)', 3, 16); line(2.5, 'rgba(' + A.lane + ',0.95)', 3, 16);
-    g.shadowBlur = 0;
+    // (2026-11-14 시각 품질, common/vfx.js) 길 테두리와 줄 사이 선을 에너지 선(번짐 + 색 + 흰 심)으로. 판마다 한 번 미리 그리는 배경이라 게임 중 속도는 그대로
+    g.shadowBlur = 0; g.shadowColor = 'rgba(0,0,0,0)';
+    const energy = (l, w, al, gl) => { const p0 = proj(L, l, far), p1 = proj(L, l, near); VFX.drawEnergyLine(g, [{ x: p0.x, y: p0.y }, { x: p1.x, y: p1.y }], { color: 'rgb(' + A.lane + ')', width: w, glow: gl, core: 0.34, alpha: al, pulse: 0.5 }); };
+    energy(0.5, 1.6, 0.42, 0.7); energy(1.5, 1.6, 0.42, 0.7);
+    energy(-0.5, 2.6, 1, 1.1); energy(2.5, 2.6, 1, 1.1);
+    // 길 바닥 반짝임: 가운데 줄이 아주 옅게 밝아 유리 바닥처럼
+    const sheen = g.createLinearGradient(0, hy, 0, h);
+    sheen.addColorStop(0, 'rgba(' + A.lane + ',0)'); sheen.addColorStop(0.55, 'rgba(' + A.lane + ',0.05)'); sheen.addColorStop(1, 'rgba(' + A.lane + ',0.02)');
+    g.fillStyle = sheen; quad(-0.5, 2.5); g.fill();
     // 지평선 빛
     const hg = g.createLinearGradient(0, hy - 18, 0, hy + 30);
     hg.addColorStop(0, 'rgba(' + A.glow + ',0)'); hg.addColorStop(0.35, 'rgba(' + A.glow + ',0.55)'); hg.addColorStop(1, 'rgba(' + A.glow + ',0)');
@@ -1221,8 +1227,13 @@
       const l = proj(L, -8.5, rel), r = proj(L, 10.5, rel), tl = proj(L, -0.5, rel), tr = proj(L, 2.5, rel);
       ctx.globalAlpha = a * 0.35; ctx.strokeStyle = 'rgb(' + A.grid + ')';
       ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
-      ctx.globalAlpha = a * 0.55; ctx.strokeStyle = 'rgb(' + A.lane + ')';
+      // 길 가로줄: 옅은 빛 번짐 한 겹 + 선 (가산 혼합)
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = a * 0.1; ctx.lineWidth = 7; ctx.strokeStyle = 'rgb(' + A.lane + ')';
       ctx.beginPath(); ctx.moveTo(tl.x, tl.y); ctx.lineTo(tr.x, tr.y); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = a * 0.6; ctx.beginPath(); ctx.moveTo(tl.x, tl.y); ctx.lineTo(tr.x, tr.y); ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
     }
     ctx.globalAlpha = 1;
     // 빛줄기: 빨라질수록·부스트 때 지평선에서 사방으로 흩어진다 (움직임 줄이기 설정이면 생략)
