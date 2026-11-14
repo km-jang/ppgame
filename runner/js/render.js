@@ -1715,6 +1715,8 @@
 
   // 위쪽 막대: 길 위에 떠 있는 두꺼운 보라 막대 + 높은 기둥 (밑으로 미끄러져 지나간다).
   // 바닥 레이저 문(빨강, 바닥 줄무늬)과 한눈에 다르게: 높이 떠 있고, 밑이 비어 보이고, 막대에 아래 화살표
+  // (2026-11-14 시각 품질, common/vfx.js) 기둥은 어두운 유리 막대(보라 빛 테·왼쪽 위 반사 줄), 막대는 짙은 보라 유리 띠에
+  // 사선 줄무늬(위험 표시)와 위아래 에너지 선, 가운데 아래 화살표는 빛남. 높이·모양·판정은 그대로
   function drawBar(ctx, W, L, o, rel, fade, v) {
     const lo = D.OBST.barLo, hi = D.OBST.barHi, top = hi + 0.55;
     // 바닥: 밑으로 지나갈 길이 파랗게 빛난다
@@ -1722,36 +1724,54 @@
     ctx.fillStyle = '#7a5cff';
     floorQuad(ctx, L, o.x, rel, 0.42, 0.45); ctx.fill();
     ctx.globalAlpha = fade;
-    // 기둥 (위로 높이)
+    // 기둥 (위로 높이): 어두운 유리 막대 + 보라 빛 테
     const lb = proj(L, o.x - 0.46, rel, 0), lt = proj(L, o.x - 0.46, rel, top), rb = proj(L, o.x + 0.46, rel, 0), rt = proj(L, o.x + 0.46, rel, top);
     const pw = Math.max(2, lb.s * 0.12);
-    ctx.fillStyle = '#1e0a36'; ctx.strokeStyle = '#b36bff'; ctx.lineWidth = Math.max(1, pw * 0.25);
-    for (const [bt, tp] of [[lb, lt], [rb, rt]]) { ctx.fillRect(bt.x - pw / 2, tp.y, pw, bt.y - tp.y); ctx.strokeRect(bt.x - pw / 2, tp.y, pw, bt.y - tp.y); }
-    // 막대: 두꺼운 띠 + 흰·보라 사선 줄무늬 (위험 표시) + 빛
+    for (const [bt, tp] of [[lb, lt], [rb, rt]]) {
+      const x0 = bt.x - pw / 2, h = bt.y - tp.y;
+      const gr = ctx.createLinearGradient(x0, 0, x0 + pw, 0);
+      gr.addColorStop(0, '#4a2a78'); gr.addColorStop(0.45, '#160a2a'); gr.addColorStop(1, '#09040f');
+      ctx.fillStyle = gr; ctx.fillRect(x0, tp.y, pw, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.26)'; ctx.fillRect(x0 + pw * 0.14, tp.y, Math.max(1, pw * 0.14), h);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(179,107,255,0.26)'; ctx.lineWidth = Math.max(2, pw * 0.7); ctx.strokeRect(x0, tp.y, pw, h);
+      ctx.strokeStyle = 'rgba(200,140,255,0.95)'; ctx.lineWidth = Math.max(1, pw * 0.16); ctx.strokeRect(x0, tp.y, pw, h);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // 막대: 짙은 보라 유리 띠 + 사선 줄무늬 + 위아래 에너지 선
     const a = proj(L, o.x - 0.46, rel, hi), b = proj(L, o.x + 0.46, rel, lo);
     const flick = v.calm ? 1 : 0.85 + 0.15 * Math.sin(W.t * 18 + o.z);
     ctx.globalCompositeOperation = 'lighter';
-    for (let i = 0; i <= 4; i++) glow(ctx, 'rgba(190,110,255,0.9)', a.x + (b.x - a.x) * i / 4, (a.y + b.y) / 2, a.s * 0.45, fade * 0.45 * flick);
+    for (let i = 0; i <= 4; i++) glow(ctx, 'rgba(190,110,255,0.9)', a.x + (b.x - a.x) * i / 4, (a.y + b.y) / 2, a.s * 0.45, fade * 0.4 * flick);
     ctx.globalCompositeOperation = 'source-over';
     const bw = b.x - a.x, bh = b.y - a.y;
+    ctx.globalAlpha = fade;
     ctx.save();
     ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(a.x, a.y, bw, bh, Math.min(bh * 0.3, 8)); else ctx.rect(a.x, a.y, bw, bh);
-    ctx.fillStyle = '#6a22c8'; ctx.fill();
+    const bg = ctx.createLinearGradient(0, a.y, 0, b.y);
+    bg.addColorStop(0, '#7a3ad8'); bg.addColorStop(0.5, '#3a1272'); bg.addColorStop(1, '#1c0838');
+    ctx.fillStyle = bg; ctx.fill();
     ctx.clip();
-    ctx.strokeStyle = 'rgba(255,240,255,0.55)'; ctx.lineWidth = Math.max(2, bh * 0.22);
+    ctx.strokeStyle = 'rgba(255,240,255,0.42)'; ctx.lineWidth = Math.max(2, bh * 0.2);
     ctx.beginPath();
     for (let x = a.x - bh; x < b.x + bh; x += bh * 0.9) { ctx.moveTo(x, b.y); ctx.lineTo(x + bh, a.y); }
     ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(a.x, a.y + bh * 0.06, bw, Math.max(1, bh * 0.1));   // 위 반사 줄
     ctx.restore();
-    ctx.strokeStyle = '#e8c8ff'; ctx.lineWidth = Math.max(1.5, a.s * 0.05);
-    ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(a.x, a.y, bw, bh, Math.min(bh * 0.3, 8)); else ctx.rect(a.x, a.y, bw, bh); ctx.stroke();
-    // 막대 가운데 아래 화살표 (밑으로!)
+    ctx.globalAlpha = fade * flick;
+    for (const yy of [a.y, b.y]) VFX.drawEnergyLine(ctx, [{ x: a.x, y: yy }, { x: b.x, y: yy }], { color: '#c78bff', width: Math.max(1.5, a.s * 0.05), glow: 1, core: 0.4, alpha: 0.95 });
+    ctx.globalAlpha = fade;
+    // 막대 가운데 아래 화살표 (밑으로!): 흰 화살표에 보라 빛 번짐
     const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2, ar = bh * 0.32;
+    ctx.globalCompositeOperation = 'lighter'; glow(ctx, 'rgba(255,240,255,0.9)', cx, cy, ar * 2, fade * 0.4); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = fade;
     ctx.fillStyle = '#ffffff';
     ctx.beginPath(); ctx.moveTo(cx - ar, cy - ar * 0.5); ctx.lineTo(cx + ar, cy - ar * 0.5); ctx.lineTo(cx, cy + ar * 0.7); ctx.closePath(); ctx.fill();
-    // 기둥 끝 불빛
-    ctx.fillStyle = '#e8c8ff';
-    for (const tp of [lt, rt]) { ctx.beginPath(); ctx.arc(tp.x, tp.y, Math.max(1.5, tp.s * 0.1), 0, TAU); ctx.fill(); }
+    // 기둥 끝 불빛: 보라 빛 점
+    ctx.globalCompositeOperation = 'lighter';
+    for (const tp of [lt, rt]) { glow(ctx, '#d6a8ff', tp.x, tp.y, Math.max(3, tp.s * 0.3), 0.9); ctx.globalAlpha = fade; }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = fade;
+    ctx.fillStyle = '#f0e0ff';
+    for (const tp of [lt, rt]) { ctx.beginPath(); ctx.arc(tp.x, tp.y, Math.max(1.2, tp.s * 0.06), 0, TAU); ctx.fill(); }
     ctx.globalAlpha = 1;
   }
 
