@@ -682,7 +682,7 @@
     if (fresh.length) setTimeout(() => { if (mode === 'over') SN.Audio.play('medal'); }, 900);
     $('over-t3').textContent = W.mode === 'stage' ? '단계' : '시간';
     // 다정한 제목 (빨간 "부딪혔다" 대신 따뜻한 색)
-    $('over-title').textContent = W.won ? '판을 가득 채웠어요!' : W.cause === 'self' ? '앗, 내 꼬리!' : '앗, 쿵!';
+    $('over-title').textContent = W.won ? '판을 가득 채웠어요!' : W.cause === 'self' ? '앗, 내 꼬리!' : W.cause === 'rival' ? '앗, 라이벌에게 먹혔어요!' : '앗, 쿵!';
     // 라이벌과 겨룬 결과 (라이벌이 나온 판만). 져도 다정하게
     const rr = SN.World.rivalResult(W), rl = $('over-rival');
     if (rr) {
@@ -718,6 +718,7 @@
       else if (ev === 'bossdown') vibrate([40, 40, 80]);
       else if (ev === 'bump' || ev === 'headbump') vibrate([15, 20, 15]);
       else if (ev === 'bite') vibrate(30);
+      else if (ev === 'mebitten') vibrate([40, 30, 60]);
       else if (ev === 'biteall') vibrate([30, 30, 60]);
       else if (ev === 'giftopen' || ev === 'fever') vibrate([20, 30, 20]);
       else if (ev === 'giant') vibrate(60);

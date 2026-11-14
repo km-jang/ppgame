@@ -256,6 +256,12 @@
       // 남는 앞부분이 minLen보다 짧거나 (멈칫한) 머리를 물면 통째로 먹고, 라이벌은 respawnMin~Max초 뒤 처음 길이로 다시 나온다.
       // 머리끼리 마주 부딪히면(라이벌이 멈칫하지 않았을 때) 둘 다 잠깐 멈춘다 (나는 headHold초, 라이벌은 headStun초). 아무도 안 끝난다
       bitePts: 5, biteMax: 12, biteStun: 1.5, respawnMin: 8, respawnMax: 12, headHold: 0.45, headStun: 1.2,
+      // 라이벌 여럿과 먹고 먹히는 구조 (PLAN 3.13, 넓은 우주에서만). count: 동시에 있는 마리 수. stagger: 마리 사이 등장 간격(초).
+      // graze: 나와 있는 동안 이 초마다 한 칸씩 저절로 자란다 (먹이는 내 가까이에만 나와서 먼 라이벌은 못 먹기 때문. maxLen까지)
+      // 라이벌은 자기보다 margin칸 이상 짧은 뱀(다른 라이벌이나 나)을 사냥한다. 먹으면 문 칸 수만큼(최대 eatMax) 길어지고,
+      // 통째로 먹히면 respawnMin~Max초 뒤 처음 길이로 다시 나온다. 라이벌이 나를 물면 그 칸부터 꼬리까지 잘려 나가고(minLen칸은 남음),
+      // 사냥당한 직후 safe초는 안 물린다. 머리를 옆이나 뒤에서 물리면 끝난다 (마주 보고 부딪히면 쿵)
+      wide: { count: { easy: 3, normal: 4, hard: 5 }, stagger: 12, maxLen: 30, eatMax: 8, respawnMin: 15, respawnMax: 25, graze: 5, margin: 3, dist: 0.7, near: 1.1, safe: 3 },
       blockStun: 1,    // 갈 곳이 막히면 멈칫. 멈칫이 끝나도 막혀 있으면 사라졌다가 back초 뒤 다른 자리에서 다시
       back: 3,
       // 난이도별 (시작 화면 난이도를 따른다. opts.rivalLevel로 따로 고를 수도 있다)

@@ -1630,5 +1630,73 @@ test('넓은 우주가 아니면 아이템은 예전처럼 한 개', () => {
   assert(top === 1, 'one at a time: ' + top);
 });
 
+// ─── 라이벌 여럿과 먹고 먹히는 구조 (PLAN 3.13) ───
+const { rivalEatRival, rivalBiteMe, pickPrey, rivalHit } = SN.World;
+const wideW = (diff, seed, opts) => create(diff === 'easy' ? 72 : 96, diff === 'easy' ? 45 : 60, seed, Object.assign({ mode: 'endless', diff, view: diff === 'easy' ? [24, 15] : [32, 20] }, opts));
+test('라이벌 여럿: 넓은 우주는 난이도 수만큼(쉬움 3·보통 4·어려움 5), 한 마리씩 시차를 두고 나온다. 아니면 예전처럼 한 마리', () => {
+  for (const [d, n] of [['easy', 3], ['normal', 4], ['hard', 5]]) {
+    const W = wideW(d, 3);
+    assert(W.rivals && W.rivals.length === n && W.rival === W.rivals[0], d + ' count');
+    W.rivals.forEach((V, k) => assert(V.idx === k && V.phase === 'wait' && V.since === (k ? D.RIVAL.wide.stagger * k : 0), 'since ' + k + ' ' + V.since));
+  }
+  const O = create(COLS, ROWS, 3, { mode: 'endless', diff: 'normal' });
+  assert(!O.rivals && O.rival, 'old single');
+  assert(!wideW('normal', 3, { rival: false }).rival, 'rival off');
+});
+test('라이벌끼리 물기: 가운데를 물면 그 뒤가 잘려 먹은 쪽이 길어지고, 앞쪽을 물면 통째로 사라졌다 한참 뒤 다시 나온다', () => {
+  const W = wideW('normal', 4), [A, B] = W.rivals;
+  const mk = (V, x0, y0, n) => { V.phase = 'play'; V.body = Array.from({ length: n }, (_, i) => ({ x: x0 - i, y: y0 })); V.prev = V.body.map(p => ({ x: p.x, y: p.y })); V.grow = 0; V.stun = 0; };
+  mk(A, 60, 10, 6); mk(B, 60, 20, 12);
+  const cells = rivalEatRival(W, A, B, 5);
+  assert(cells === 7 && B.body.length === 5 && B.phase === 'play', 'cut ' + cells + ' ' + B.body.length);
+  assert(A.grow === Math.min(D.RIVAL.wide.eatMax, 7), 'grew ' + A.grow);
+  assert(W.events.includes('rbite') && W.fx.some(f => f.kind === 'rbite'), 'event');
+  rivalEatRival(W, A, B, 1);
+  assert(B.phase === 'gone' && B.body.length === 0 && B.t >= D.RIVAL.wide.respawnMin && B.t <= D.RIVAL.wide.respawnMax, 'whole ' + B.t);
+  A.maxLen = 7; A.grow = 0; mk(B, 60, 30, 20); mk(A, 60, 10, 6);
+  rivalEatRival(W, A, B, 3);
+  assert(A.grow <= 1, 'max length respected ' + A.grow);
+});
+test('라이벌이 내 몸을 물면 그 칸부터 잘려 나가되 3칸은 남고, 3초 동안은 다시 안 물린다 (사냥감 고르기에서 빠짐)', () => {
+  const W = wideW('normal', 5), V = W.rivals[0];
+  V.phase = 'play'; V.body = Array.from({ length: 12 }, (_, i) => ({ x: 50 - i, y: 30 })); V.prev = V.body.map(p => ({ x: p.x, y: p.y }));
+  W.snake = Array.from({ length: 8 }, (_, i) => ({ x: 20 - i, y: 10 })); W.prev = W.snake.map(p => ({ x: p.x, y: p.y })); W.phase = 'play';
+  assert(pickPrey(W, V) === null, 'too far to hunt');
+  V.body = Array.from({ length: 12 }, (_, i) => ({ x: 28 - i, y: 14 }));
+  W.snake = W.snake.slice(0, 5);
+  const p = pickPrey(W, V);
+  assert(p && p.me, 'hunts a shorter me');
+  assert(rivalBiteMe(W, V, 4) === 1 && W.snake.length === 4, 'lost one, kept ' + W.snake.length);
+  W.snake = Array.from({ length: 9 }, (_, i) => ({ x: 20 - i, y: 10 }));
+  assert(rivalBiteMe(W, V, 1) === 6 && W.snake.length === 3, 'keeps min 3, got ' + W.snake.length);
+  assert(V.grow === D.RIVAL.wide.eatMax || V.grow > 0, 'rival grew');
+  assert(W.safeT === D.RIVAL.wide.safe, 'safe');
+  assert(pickPrey(W, V) === null || !pickPrey(W, V).me, 'not prey while safe');
+  W.safeT = 0; W.eff.ghost = 3; assert(!(pickPrey(W, V) || {}).me, 'ghost is not prey');
+});
+test('라이벌 여럿 소크: 봇이 어려움 큰 판에서 오래 놀아도 몸이 겹치지 않고 오류가 없고 내 몸은 3칸 밑으로 안 줄어든다', () => {
+  let bitten = 0, ate = 0, over = 0;
+  for (const seed of [1, 2, 3]) {
+    const W = wideW('hard', seed);
+    W.wait = 0;
+    for (let i = 0; i < 4000 && W.phase === 'play'; i++) {
+      const d = botDir(W); if (d) turn(W, d); step(W, 1 / speed(W) + 1e-9);
+      assert(W.snake.length >= 3, 'min length');
+      const seen = new Map();
+      for (const V of W.rivals) {
+        if (V.phase !== 'play' && V.phase !== 'warn') continue;
+        for (const p of V.body) {
+          assert(p.x >= 0 && p.y >= 0 && p.x < W.cols && p.y < W.rows, 'in bounds');
+          const k = p.x + ',' + p.y; assert(!seen.has(k), 'bodies overlap ' + k + ' ' + seen.get(k) + ' ' + V.idx); seen.set(k, V.idx);
+        }
+        assert(V.body.length <= V.maxLen + 1, 'rival max length ' + V.body.length);
+      }
+    }
+    bitten += W.bittenBy || 0; over += W.phase === 'over' ? 1 : 0; ate += W.rivals.reduce((a, V) => a + V.eaten, 0);
+    assert(W.phase !== 'over' || W.cause === 'rival' || W.cause === 'self' || W.cause === 'wall', 'cause ' + W.cause);
+  }
+  assert(ate > 0, 'rivals eat food');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

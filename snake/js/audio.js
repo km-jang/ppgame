@@ -102,6 +102,9 @@
     // 라이벌을 물어 먹음: 와삭 (통째로면 더 크게) · 머리끼리 쿵
     bite: { gap: 0.1, fn(t) { noise(t, 'bandpass', 1800, 700, 0.12, 0.28, 1.5); tone(t, 'triangle', 600, 300, 0.1, 0.12); tone(t + 0.08, 'triangle', 880, 1320, 0.12, 0.08); } },
     biteall: { gap: 0.3, fn(t) { noise(t, 'bandpass', 1800, 500, 0.2, 0.32, 1.5); [523, 659, 784, 1047].forEach((f, i) => tone(t + 0.1 + i * 0.06, 'triangle', f, f, 0.16, 0.12)); } },
+    // 라이벌끼리 물기(멀리서라 작게)와 내가 물린 소리 (PLAN 3.13)
+    rbite: { gap: 0.25, fn(t) { noise(t, 'bandpass', 1500, 600, 0.1, 0.12, 1.5); tone(t, 'triangle', 420, 260, 0.1, 0.06); } },
+    mebitten: { gap: 0.4, fn(t) { noise(t, 'bandpass', 1400, 400, 0.22, 0.3, 1.5); tone(t, 'sawtooth', 300, 120, 0.25, 0.14); tone(t + 0.12, 'triangle', 220, 150, 0.2, 0.1); } },
     headbump: { gap: 0.2, fn(t) { tone(t, 'sine', 300, 120, 0.2, 0.14); } },
     rivaleat: { gap: 0.08, fn(t) { tone(t, 'triangle', 262, 330, 0.06, 0.16); tone(t + 0.05, 'triangle', 392, 330, 0.09, 0.09); } },
     // 재미 셋: 선물 상자 나타남(딸랑) · 열기(팡파르) · 피버 시작(빠르게 오르는 음계) · 피버 끝 · 거대 변신(낮게 부풂) · 벽 부숨(쾅)
