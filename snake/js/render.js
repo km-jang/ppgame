@@ -303,7 +303,15 @@
     const c = v.cell, m = c * 0.75, cxm = v.bx + v.bw / 2, cym = v.by + v.bh / 2, T = [];
     if (W.food) T.push([W.food, W.food.gold ? '#ffe66d' : '#ff5fa8', W.food.gold]);
     if (W.bonus) T.push([W.bonus, '#ff5fd0', true]);
-    if (W.item) T.push([W.item, ITEM[W.item.kind].color, false]);
+    // 아이템은 창 밖인 것 중 가까운 3개만 (많이 나와도 화면이 어지럽지 않게)
+    const hh = W.snake[0], its = [W.item].concat(W.more || []).filter(Boolean)
+      .sort((p, q) => (Math.abs(p.x - hh.x) + Math.abs(p.y - hh.y)) - (Math.abs(q.x - hh.x) + Math.abs(q.y - hh.y)));
+    let shown = 0;
+    for (const q of its) {
+      const pp = toPx(v, q.x, q.y);
+      if (pp.x >= v.bx && pp.x <= v.bx + v.bw && pp.y >= v.by && pp.y <= v.by + v.bh) continue;
+      if (shown++ < 3) T.push([q, ITEM[q.kind].color, false]);
+    }
     if (W.gift) T.push([W.gift, '#ff9fd6', false]);
     const V = W.rival;
     if (V && V.phase === 'play' && V.body.length) T.push([V.body[0], RIVAL_ORANGE, false]);
@@ -717,7 +725,10 @@
     });
   }
   function drawItem(ctx, W, v) {
-    const it = W.item;
+    if (W.item) drawOneItem(ctx, W, v, W.item);
+    if (W.more) for (const q of W.more) drawOneItem(ctx, W, v, q);
+  }
+  function drawOneItem(ctx, W, v, it) {
     if (!it) return;
     if (it.life < 2 && Math.floor(it.life * 8) % 2 === 0) return;   // 곧 사라진다: 깜빡
     const K = ITEM[it.kind], p = toPx(v, it.x, it.y), c = v.cell;

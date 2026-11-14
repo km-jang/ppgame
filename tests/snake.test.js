@@ -1608,5 +1608,27 @@ test('넓은 우주: 쉬움 봇이 큰 판에서 먹이를 찾아 먹는다', ()
   assert(W.eaten >= 20, 'ate ' + W.eaten);
 });
 
+test('넓은 우주: 아이템이 여러 개 동시에 나오고 개수 한도를 지킨다 (쉬움 4, 보통 5), 먹으면 하나씩 사라진다', () => {
+  for (const [diff, max] of [['normal', 5], ['easy', 4]]) {
+    const W = create(diff === 'easy' ? 72 : 96, diff === 'easy' ? 45 : 60, 11, { mode: 'endless', diff, view: diff === 'easy' ? [24, 15] : [32, 20], rival: false });
+    W.wait = 0; W.snake = [{ x: 40, y: 25 }, { x: 39, y: 25 }, { x: 38, y: 25 }]; W.prev = W.snake.map(p => ({ x: p.x, y: p.y })); W.dir = 'right';
+    let top = 0;
+    for (let i = 0; i < 1500 && W.phase === 'play'; i++) {
+      W.snake = W.snake.slice(0, 3); const d = botDir(W); if (d) turn(W, d); step(W, 1 / speed(W) + 1e-9);
+      top = Math.max(top, (W.item ? 1 : 0) + W.more.length);
+      assert((W.item ? 1 : 0) + W.more.length <= max, 'cap ' + diff);
+      const all = [W.item].concat(W.more).filter(Boolean), keys = new Set(all.map(q => q.x + ',' + q.y));
+      assert(keys.size === all.length, 'no stacked items');
+    }
+    assert(top >= max - 1, diff + ' reached ' + top);
+  }
+});
+test('넓은 우주가 아니면 아이템은 예전처럼 한 개', () => {
+  const W = create(COLS, ROWS, 11, { mode: 'endless', diff: 'normal', rival: false });
+  W.wait = 0; let top = 0;
+  for (let i = 0; i < 1500 && W.phase === 'play'; i++) { const d = botDir(W); if (d) turn(W, d); step(W, 1 / speed(W) + 1e-9); top = Math.max(top, (W.item ? 1 : 0) + W.more.length); }
+  assert(top === 1, 'one at a time: ' + top);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

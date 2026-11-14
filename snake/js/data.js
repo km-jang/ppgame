@@ -39,6 +39,8 @@
     // 아이템(변수): 판에 가끔 하나씩 나타나 life초 뒤 사라진다. 먹으면 time초 동안 효과
     ITEM: {
       first: 6, gapMin: 9, gapMax: 15, life: 8,
+      // 넓은 우주(PLAN 3.13): 아이템이 여러 개 동시에 나온다. 넓은 판이라 남는 시간도 길게
+      wide: { max: 5, maxEasy: 4, gapMin: 3, gapMax: 6, life: 12 },
       kinds: {
         slow:   { name: '느린 시계', time: 6, color: '#7fd3ff', glyph: '◷' },   // 속도 60%
         double: { name: '점수 두 배', time: 8, color: '#ffe66d', glyph: '×2' },  // 먹이 점수 ×2

@@ -284,7 +284,7 @@
     W.snake = snake; W.prev = copy(snake);
     W.dir = 'right'; W.queue = []; W.grow = 0;
     W.wait = W.easy ? Infinity : D.START.wait; W.acc = 0; W.alpha = 0;   // 쉬움: 방향을 누를 때까지 기다린다
-    W.item = null; W.itemT = D.ITEM.first * W.itemGapMul;
+    W.item = null; W.more = []; W.itemT = D.ITEM.first * W.itemGapMul;
     W.eff = { slow: 0, double: 0, ghost: 0, giant: 0 };
     // 재미 셋: 선물 상자 · 피버 보너스 구슬 · 부서진 벽 표시 (레벨마다 새로)
     W.gift = null; W.bonus = null; W.wallVer = (W.wallVer || 0) + 1;
@@ -439,6 +439,7 @@
     if (W.walls) for (let i = 0; i < used.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) used[i] = 1;
     if (W.food) used[W.food.y * W.cols + W.food.x] = 1;
     if (W.item) used[W.item.y * W.cols + W.item.x] = 1;
+    if (W.more) for (const q of W.more) used[q.y * W.cols + q.x] = 1;
     if (W.gift) used[W.gift.y * W.cols + W.gift.x] = 1;
     if (W.bonus) used[W.bonus.y * W.cols + W.bonus.x] = 1;
     const free = [];
@@ -476,7 +477,8 @@
     free = nearHead(W, free, D.WIDE.timedR);
     const i = free[Math.floor(W.rand() * free.length)];
     const kind = ITEM_KINDS[Math.floor(W.rand() * ITEM_KINDS.length)];
-    W.item = { kind, x: i % W.cols, y: Math.floor(i / W.cols), life: D.ITEM.life, born: W.t };
+    const it = { kind, x: i % W.cols, y: Math.floor(i / W.cols), life: W.view ? D.ITEM.wide.life : D.ITEM.life, born: W.t };
+    if (!W.item) W.item = it; else W.more.push(it);
     W.events.push('item');
     return true;
   }
@@ -623,6 +625,7 @@
     if (W.grow > 0) W.grow--; else W.snake.pop();
     W.maxLen = Math.max(W.maxLen, W.snake.length);
     if (W.item && W.item.x === nx && W.item.y === ny) { const it = W.item; W.item = null; usePower(W, it); }
+    else if (W.more && W.more.length) { const k = W.more.findIndex(q => q.x === nx && q.y === ny); if (k >= 0) { const it = W.more.splice(k, 1)[0]; usePower(W, it); } }
     if (W.gift && W.gift.x === nx && W.gift.y === ny) openGift(W);
     if (eatBonus) { W.bonus = null; if (W.feverT > 0) spawnBonus(W); }
     if (W.mode === 'stage' && W.got >= W.goal) { clearLevel(W); return; }
@@ -682,11 +685,16 @@
     if (W.item) {
       W.item.life -= dt;
       if (W.item.life <= 0) W.item = null;
-    } else {
+    }
+    if (W.more.length) { for (const q of W.more) q.life -= dt; W.more = W.more.filter(q => q.life > 0); }
+    // 동시에 나오는 수: 예전엔 한 개(다 사라진 뒤에야 시계가 돎), 넓은 우주는 여러 개
+    const W5 = D.ITEM.wide, max = W.view ? (W.easy ? W5.maxEasy : W5.max) : 1;
+    if ((W.item ? 1 : 0) + W.more.length < max) {
       W.itemT -= dt;
       if (W.itemT <= 0) {
         spawnItem(W);
-        W.itemT = (D.ITEM.gapMin + W.rand() * (D.ITEM.gapMax - D.ITEM.gapMin)) * W.itemGapMul;
+        const g0 = W.view ? W5.gapMin : D.ITEM.gapMin, g1 = W.view ? W5.gapMax : D.ITEM.gapMax;
+        W.itemT = (g0 + W.rand() * (g1 - g0)) * W.itemGapMul;
       }
     }
   }
@@ -778,6 +786,7 @@
     if (W.walls) for (let i = 0; i < used.length; i++) if (W.walls[i] || W.portalAt[i] >= 0) used[i] = 1;
     if (W.food) used[W.food.y * C + W.food.x] = 1;
     if (W.item) used[W.item.y * C + W.item.x] = 1;
+    if (W.more) for (const q of W.more) used[q.y * C + q.x] = 1;
     const far = (x, y) => Math.abs(x - h.x) + Math.abs(y - h.y);
     const keys = Object.keys(DIRS);
     for (let k = 0; k < 400; k++) {
