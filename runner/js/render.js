@@ -741,36 +741,46 @@
   // 운석: 울퉁불퉁한 바위 + 빨간 테두리·빨간 빛무리 + 달아오른 금 (위험하다는 것이 한눈에)
   const MS = 128, MR = 42;   // 스프라이트 크기, 그 안의 바위 반지름
   const meteorSprites = [];
+  // 운석 (2026-11-14 시각 품질): 어두운 유리질 용암 바위. 둘레 붉은 빛 번짐(가산) + 안쪽에서 새는 주황 금(가산) + 빨간 빛 테 세 겹 + 왼쪽 위 반사.
+  // 한 번 미리 그려 두는 그림이라 shadowBlur는 여기서도 쓰지 않는다. 모양(11각)·크기·판정 그대로
   function meteorSprite(i) {
     if (meteorSprites[i]) return meteorSprites[i];
     const c = mk(MS, MS), g = c.getContext('2d'), o = MS / 2, rand = RN.rng(31 + i * 17);
-    const halo = g.createRadialGradient(o, o, MR * 0.8, o, o, o);
-    halo.addColorStop(0, 'rgba(255,59,78,0.75)'); halo.addColorStop(1, 'rgba(255,59,78,0)');
+    const halo = g.createRadialGradient(o, o, MR * 0.7, o, o, o);
+    halo.addColorStop(0, 'rgba(255,59,78,0.7)'); halo.addColorStop(0.5, 'rgba(255,59,78,0.2)'); halo.addColorStop(1, 'rgba(255,59,78,0)');
     g.fillStyle = halo; g.fillRect(0, 0, MS, MS);
     const pts = [];
     for (let k = 0; k < 11; k++) { const a = TAU * k / 11, r = MR * (0.82 + rand() * 0.18); pts.push([o + Math.cos(a) * r, o + Math.sin(a) * r]); }
     const path = () => { g.beginPath(); pts.forEach(([x, y], k) => (k ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); };
     const rg = g.createRadialGradient(o - MR * 0.4, o - MR * 0.45, MR * 0.1, o, o, MR);
-    rg.addColorStop(0, '#8a6470'); rg.addColorStop(0.55, '#46283a'); rg.addColorStop(1, '#1e0f1c');
+    rg.addColorStop(0, '#7a5a68'); rg.addColorStop(0.5, '#3a2030'); rg.addColorStop(1, '#140812');
     path(); g.fillStyle = rg; g.fill();
     // 구덩이
     for (let k = 0; k < 4; k++) {
       const a = rand() * TAU, d = rand() * MR * 0.5, r = MR * (0.1 + rand() * 0.1);
-      g.fillStyle = 'rgba(15,5,12,0.55)'; g.beginPath(); g.arc(o + Math.cos(a) * d, o + Math.sin(a) * d, r, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(10,3,8,0.6)'; g.beginPath(); g.arc(o + Math.cos(a) * d, o + Math.sin(a) * d, r, 0, TAU); g.fill();
     }
-    // 달아오른 금
-    g.strokeStyle = '#ff7a3d'; g.lineWidth = 2.5; g.lineCap = 'round';
-    g.shadowColor = '#ff3b4e'; g.shadowBlur = 8;
+    // 새는 용암 금: 넓은 번짐 + 주황 선 + 노란 심 (가산)
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    const cracks = [];
     for (let k = 0; k < 3; k++) {
-      let x = o + (rand() - 0.5) * MR, y = o + (rand() - 0.5) * MR;
-      g.beginPath(); g.moveTo(x, y);
-      for (let j = 0; j < 3; j++) { x += (rand() - 0.5) * MR * 0.6; y += (rand() - 0.5) * MR * 0.6; g.lineTo(x, y); }
-      g.stroke();
+      let x = o + (rand() - 0.5) * MR, y = o + (rand() - 0.5) * MR; const pl = [[x, y]];
+      for (let j = 0; j < 3; j++) { x += (rand() - 0.5) * MR * 0.6; y += (rand() - 0.5) * MR * 0.6; pl.push([x, y]); }
+      cracks.push(pl);
     }
-    // 빨간 테두리
-    g.shadowBlur = 10; g.strokeStyle = '#ff3b4e'; g.lineWidth = 4; g.lineJoin = 'round';
-    path(); g.stroke();
-    g.shadowBlur = 0;
+    g.globalCompositeOperation = 'lighter';
+    for (const [w, col] of [[7, 'rgba(255,70,40,0.22)'], [3.2, 'rgba(255,122,61,0.9)'], [1.2, 'rgba(255,236,170,0.95)']]) {
+      g.strokeStyle = col; g.lineWidth = w;
+      for (const pl of cracks) { g.beginPath(); pl.forEach(([x, y], j) => (j ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); }
+    }
+    // 빨간 빛 테 세 겹
+    for (const [w, al] of [[11, 0.12], [6, 0.3], [2.6, 0.95]]) { g.strokeStyle = 'rgba(255,59,78,' + al + ')'; g.lineWidth = w; path(); g.stroke(); }
+    g.strokeStyle = 'rgba(255,220,220,0.5)'; g.lineWidth = 0.9; path(); g.stroke();
+    g.globalCompositeOperation = 'source-over';
+    // 왼쪽 위 반사
+    g.save(); path(); g.clip();
+    g.fillStyle = 'rgba(255,255,255,0.16)'; g.beginPath(); g.ellipse(o - MR * 0.38, o - MR * 0.5, MR * 0.5, MR * 0.2, -0.6, 0, TAU); g.fill();
+    g.restore();
     return (meteorSprites[i] = c);
   }
 
@@ -1520,40 +1530,54 @@
   // 통통한 보라 배 + 금빛 테두리, 분홍 돛 둘, 별 무늬 깃발, 둥근 창 불빛, 뒤쪽 주황 엔진 (무섭지 않게 장난스러운 모양)
   let pirSpr = null;
   const PIR_W = 320, PIR_H = 220;
+  // (2026-11-14 시각 품질) 어두운 유리 선체에 금빛 빛 테 세 겹, 돛은 속이 비치는 분홍 유리 + 빛 테, 깃발의 별과 둥근 창과 포는 가산 혼합으로 빛남.
+  // 모양·크기·자리는 그대로이고 한 번 미리 그려 찍기만 한다
   function pirateSprite() {
     if (pirSpr) return pirSpr;
     const c = mk(PIR_W, PIR_H), g = c.getContext('2d'), cx = PIR_W / 2;
-    // 돛대와 돛
-    g.fillStyle = '#5a3a1a'; g.fillRect(cx - 50, 30, 7, 110); g.fillRect(cx + 38, 44, 7, 96);
-    const sail = (x, y, w, h, col) => {
+    const rim = (col, ws) => { g.save(); g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round'; for (const [w, al] of ws) { g.strokeStyle = col.replace('A', al); g.lineWidth = w; g.stroke(); } g.restore(); };
+    const R3 = [[9, 0.12], [4.5, 0.3], [2, 0.95]];
+    const dot = (x, y, r, col, al) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col.replace('A', al)); gr.addColorStop(1, col.replace('A', 0)); g.save(); g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.restore(); };
+    // 뒤쪽 엔진 빛 번짐 (선체 아래에서 은은히)
+    dot(cx, 190, 90, 'rgba(160,90,255,A)', 0.25);
+    // 돛대: 어두운 유리 막대 + 반사 줄
+    g.fillStyle = '#1c1030'; g.fillRect(cx - 50, 30, 7, 110); g.fillRect(cx + 38, 44, 7, 96);
+    g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(cx - 49, 30, 2, 110); g.fillRect(cx + 39, 44, 2, 96);
+    // 돛: 속이 비치는 분홍 유리 + 분홍 빛 테
+    const sail = (x, y, w, h) => {
       const sg = g.createLinearGradient(x, y, x + w, y);
-      sg.addColorStop(0, col[0]); sg.addColorStop(1, col[1]);
+      sg.addColorStop(0, 'rgba(255,95,168,0.55)'); sg.addColorStop(1, 'rgba(255,190,225,0.22)');
       g.fillStyle = sg;
       g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w * 1.25, y + h * 0.5, x, y + h); g.closePath(); g.fill();
-      g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.stroke();
+      rim('rgba(255,140,200,A)', [[7, 0.12], [3.5, 0.3], [1.6, 0.9]]);
+      g.fillStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.ellipse(x + w * 0.22, y + h * 0.3, w * 0.1, h * 0.2, 0.2, 0, TAU); g.fill();
     };
-    sail(cx - 43, 36, 70, 88, ['#ff5fa8', '#ffc0dc']);
-    sail(cx + 45, 50, 56, 74, ['#ff5fa8', '#ffc0dc']);
-    // 깃발 (노란 별)
-    g.fillStyle = '#1a0a2a'; g.fillRect(cx - 43, 16, 34, 20);
-    g.fillStyle = '#ffe66d'; g.beginPath();
+    sail(cx - 43, 36, 70, 88); sail(cx + 45, 50, 56, 74);
+    // 깃발: 어두운 판 + 빛나는 노란 별
+    g.fillStyle = '#12081f'; g.fillRect(cx - 43, 16, 34, 20);
+    g.beginPath(); g.rect(cx - 43, 16, 34, 20); rim('rgba(255,210,74,A)', [[3, 0.3], [1.2, 0.9]]);
+    dot(cx - 26, 26, 16, 'rgba(255,230,109,A)', 0.8);
+    g.fillStyle = '#fff2a8'; g.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + TAU * i / 10, r = i % 2 ? 3.5 : 8; g.lineTo(cx - 26 + Math.cos(a) * r, 26 + Math.sin(a) * r); }
     g.closePath(); g.fill();
-    // 배 몸통
-    const hg = g.createLinearGradient(0, 120, 0, 200);
-    hg.addColorStop(0, '#8a4ad8'); hg.addColorStop(0.5, '#5a2a9a'); hg.addColorStop(1, '#2a1050');
-    g.fillStyle = hg;
-    g.beginPath(); g.moveTo(18, 128); g.lineTo(PIR_W - 18, 128); g.quadraticCurveTo(PIR_W - 30, 200, cx + 40, 204); g.lineTo(cx - 40, 204); g.quadraticCurveTo(30, 200, 18, 128); g.closePath(); g.fill();
-    g.strokeStyle = '#ffd24a'; g.lineWidth = 5; g.stroke();
-    g.strokeStyle = 'rgba(255,210,74,0.6)'; g.lineWidth = 3; g.beginPath(); g.moveTo(28, 150); g.lineTo(PIR_W - 28, 150); g.stroke();
-    // 둥근 창 불빛
+    // 선체: 어두운 보랏빛 유리 + 금빛 빛 테 + 위쪽 반사 줄
+    const hull = () => { g.beginPath(); g.moveTo(18, 128); g.lineTo(PIR_W - 18, 128); g.quadraticCurveTo(PIR_W - 30, 200, cx + 40, 204); g.lineTo(cx - 40, 204); g.quadraticCurveTo(30, 200, 18, 128); g.closePath(); };
+    const hg = g.createLinearGradient(0, 120, 0, 205);
+    hg.addColorStop(0, '#6a3ab8'); hg.addColorStop(0.35, '#2a1250'); hg.addColorStop(1, '#0e0620');
+    hull(); g.fillStyle = hg; g.fill();
+    hull(); rim('rgba(255,210,74,A)', R3);
+    g.fillStyle = 'rgba(255,255,255,0.22)'; g.beginPath(); g.moveTo(26, 134); g.lineTo(PIR_W - 26, 134); g.lineTo(PIR_W - 30, 141); g.lineTo(30, 141); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(28, 150); g.lineTo(PIR_W - 28, 150); rim('rgba(255,210,74,A)', [[4, 0.18], [1.8, 0.7]]);
+    // 둥근 창 불빛: 빛나는 노란 점
     for (let i = -2; i <= 2; i++) {
-      g.fillStyle = '#2a1050'; g.beginPath(); g.arc(cx + i * 44, 172, 11, 0, TAU); g.fill();
-      g.fillStyle = '#ffe66d'; g.beginPath(); g.arc(cx + i * 44, 172, 7, 0, TAU); g.fill();
+      g.fillStyle = '#0e0620'; g.beginPath(); g.arc(cx + i * 44, 172, 11, 0, TAU); g.fill();
+      dot(cx + i * 44, 172, 18, 'rgba(255,220,100,A)', 0.8);
+      g.fillStyle = '#fff2a8'; g.beginPath(); g.arc(cx + i * 44, 172, 5.5, 0, TAU); g.fill();
     }
-    // 앞쪽 레이저 포 (가운데 아래)
-    g.fillStyle = '#3a1a5a'; g.fillRect(cx - 12, 198, 24, 14);
-    g.fillStyle = '#ff6b3d'; g.beginPath(); g.arc(cx, 212, 7, 0, TAU); g.fill();
+    // 앞쪽 레이저 포 (가운데 아래): 어두운 포신 + 주황 빛
+    g.fillStyle = '#1c1030'; g.fillRect(cx - 12, 198, 24, 14);
+    dot(cx, 212, 20, 'rgba(255,107,61,A)', 0.9);
+    g.fillStyle = '#ffd0a0'; g.beginPath(); g.arc(cx, 212, 5, 0, TAU); g.fill();
     return (pirSpr = c);
   }
   // 줄 가운데 선의 화면 x (멀리 far m, 가까이 near m)
@@ -2378,19 +2402,26 @@
     ctx.drawImage(spr, -SPR_BOX, -SPR_BOX, SPR_BOX * 2, SPR_BOX * 2);
     ctx.restore();
     ctx.globalAlpha = 1;
-    // 방패: 둥근 막
+    // 방패: 유리 거품 (옅은 청록 안쪽 빛 + 빛 테 세 겹 + 왼쪽 위 반사, 가산 혼합)
     if (W.shield) {
-      const pulse = v.calm ? 1 : 1 + Math.sin(W.t * 4) * 0.04;
+      const pulse = v.calm ? 1 : 1 + Math.sin(W.t * 4) * 0.04, rx = s * 1.25 * pulse, ry = s * 0.85 * pulse, cy = q.y - s * 0.1;
+      ctx.globalCompositeOperation = 'lighter';
       glow(ctx, 'rgba(94,231,255,0.35)', q.x, q.y, s * 1.5 * pulse, 0.8);
-      ctx.strokeStyle = 'rgba(191,248,255,0.85)'; ctx.lineWidth = Math.max(2, s * 0.04);
-      ctx.beginPath(); ctx.ellipse(q.x, q.y - s * 0.1, s * 1.25 * pulse, s * 0.85 * pulse, 0, 0, TAU); ctx.stroke();
+      const bg = ctx.createRadialGradient(q.x - rx * 0.3, cy - ry * 0.4, 0, q.x, cy, rx);
+      bg.addColorStop(0, 'rgba(180,245,255,0.16)'); bg.addColorStop(0.7, 'rgba(94,231,255,0.06)'); bg.addColorStop(1, 'rgba(94,231,255,0.18)');
+      ctx.fillStyle = bg; ctx.beginPath(); ctx.ellipse(q.x, cy, rx, ry, 0, 0, TAU); ctx.fill();
+      for (const [w, al] of [[s * 0.16, 0.1], [s * 0.07, 0.26], [Math.max(2, s * 0.03), 0.9]]) { ctx.strokeStyle = 'rgba(150,240,255,' + al + ')'; ctx.lineWidth = w; ctx.beginPath(); ctx.ellipse(q.x, cy, rx, ry, 0, 0, TAU); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = Math.max(1, s * 0.015); ctx.beginPath(); ctx.ellipse(q.x, cy, rx, ry, 0, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = Math.max(2, s * 0.05); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.ellipse(q.x, cy, rx * 0.86, ry * 0.86, 0, Math.PI * 1.08, Math.PI * 1.45); ctx.stroke();   // 왼쪽 위 반사 호
+      ctx.globalCompositeOperation = 'source-over'; ctx.lineCap = 'butt';
     }
-    // 자석: 분홍 고리가 번져 나간다
+    // 자석: 분홍 빛 고리가 번져 나간다 (에너지 선 고리)
     if (W.eff.magnet > 0) {
-      const tt = v.calm ? 0.5 : (W.t * 1.5) % 1;
-      ctx.globalAlpha = (1 - tt) * 0.7 * Math.min(1, W.eff.magnet);
-      ctx.strokeStyle = '#ff5fa8'; ctx.lineWidth = Math.max(2, s * 0.05);
-      ctx.beginPath(); ctx.ellipse(q.x, q.y, s * (1 + tt * 1.4), s * (0.5 + tt * 0.7), 0, 0, TAU); ctx.stroke();
+      const tt = v.calm ? 0.5 : (W.t * 1.5) % 1, n = 28, pts = [];
+      for (let k = 0; k < n; k++) { const an = TAU * k / n; pts.push({ x: q.x + Math.cos(an) * s * (1 + tt * 1.4), y: q.y + Math.sin(an) * s * (0.5 + tt * 0.7) }); }
+      ctx.globalAlpha = (1 - tt) * Math.min(1, W.eff.magnet);
+      VFX.drawEnergyLine(ctx, pts, { color: '#ff5fa8', width: Math.max(2, s * 0.05), glow: 1, core: 0.34, alpha: 0.9, closed: true });
       ctx.globalAlpha = 1;
     }
   }
@@ -2509,16 +2540,21 @@
     const ir = h * 0.3;
     return (txt ? ctx.measureText(txt).width : 0) + 16 * s + (icon ? ir * 2 + 5 * s : 0) + (hearts ? hearts[1] * (ir * 2.2 + 3 * s) : 0) - (txt ? 0 : 5 * s);
   }
+  // 칸 (2026-11-14 시각 품질): 어두운 유리 알약 (위 반사 줄 + 빛 테), 아이콘·하트는 뒤에서 은은히 빛난다. 크기·자리는 그대로
   function chip(ctx, x, y, h, txt, color, s, icon, hearts) {
     const ir = h * 0.3, w = chipW(ctx, h, txt, s, icon, hearts);
-    ctx.fillStyle = 'rgba(12,16,26,0.72)';
+    const gr = ctx.createLinearGradient(0, y, 0, y + h);
+    gr.addColorStop(0, 'rgba(30,40,66,0.82)'); gr.addColorStop(1, 'rgba(8,12,22,0.82)');
+    ctx.fillStyle = gr;
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x - w, y, w, h, 6 * s); else ctx.rect(x - w, y, w, h);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(94,231,255,0.22)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,225,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.16)'; ctx.fillRect(x - w + 6 * s, y + 2 * s, w - 12 * s, Math.max(1, h * 0.07));
     let ix = x - w + 8 * s + ir;
-    if (icon) { itemIcon(ctx, icon, ix, y + h / 2, ir, color); ix += ir * 2 + 5 * s; }
-    if (hearts) for (let i = 0; i < hearts[1]; i++) { itemIcon(ctx, i < hearts[0] ? 'heart' : 'heart0', ix, y + h / 2 + 1, ir, i < hearts[0] ? '#ff4d6d' : 'rgba(255,77,109,0.5)'); ix += ir * 2.2 + 3 * s; }
+    const lit = (cx, cy, c) => { ctx.globalCompositeOperation = 'lighter'; glow(ctx, c, cx, cy, ir * 2.1, 0.45); ctx.globalCompositeOperation = 'source-over'; };
+    if (icon) { lit(ix, y + h / 2, color); itemIcon(ctx, icon, ix, y + h / 2, ir, color); ix += ir * 2 + 5 * s; }
+    if (hearts) for (let i = 0; i < hearts[1]; i++) { if (i < hearts[0]) lit(ix, y + h / 2 + 1, '#ff4d6d'); itemIcon(ctx, i < hearts[0] ? 'heart' : 'heart0', ix, y + h / 2 + 1, ir, i < hearts[0] ? '#ff4d6d' : 'rgba(255,77,109,0.5)'); ix += ir * 2.2 + 3 * s; }
     if (txt) { ctx.fillStyle = color; ctx.fillText(txt, x - 8 * s, y + h / 2 + 1); }
     return w;
   }
