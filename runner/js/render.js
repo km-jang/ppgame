@@ -1650,6 +1650,8 @@
   }
 
   // 레이저 문: 양쪽 기둥 + 빨간 레이저 두 줄 + 바닥 노랑·검정 사선 줄무늬 (뛰어서 넘는다)
+  // 레이저 문 (2026-11-14 시각 품질, common/vfx.js): 바닥 사선 줄무늬 위에 어두운 유리 기둥(빨간 빛 테·왼쪽 위 반사 줄)과
+  // 기둥 사이를 가로지르는 두 줄 에너지 레이저(번짐 + 색 선 + 흰 심, 가산 혼합). 모양·높이·판정은 그대로
   function drawGate(ctx, W, L, o, rel, fade, v) {
     ctx.globalAlpha = fade;
     ctx.save();
@@ -1665,27 +1667,33 @@
     ctx.globalAlpha = fade;
     const hgt = D.OBST.gateH;
     const lb = proj(L, o.x - 0.44, rel, 0), lt = proj(L, o.x - 0.44, rel, hgt + 0.35), rb = proj(L, o.x + 0.44, rel, 0), rt = proj(L, o.x + 0.44, rel, hgt + 0.35);
-    // 기둥
+    // 기둥: 어두운 유리 막대 + 빨간 빛 테 + 왼쪽 위 반사 줄
     const pw = Math.max(2, lb.s * 0.16);
-    ctx.fillStyle = '#3a0a10'; ctx.strokeStyle = '#ff3b4e'; ctx.lineWidth = Math.max(1, pw * 0.25);
-    for (const [bt, tp] of [[lb, lt], [rb, rt]]) { ctx.fillRect(bt.x - pw / 2, tp.y, pw, bt.y - tp.y); ctx.strokeRect(bt.x - pw / 2, tp.y, pw, bt.y - tp.y); }
-    // 레이저 (깜빡이는 빨강, 발광은 스프라이트로)
+    for (const [bt, tp] of [[lb, lt], [rb, rt]]) {
+      const x0 = bt.x - pw / 2, h = bt.y - tp.y;
+      const gr = ctx.createLinearGradient(x0, 0, x0 + pw, 0);
+      gr.addColorStop(0, '#5a1a24'); gr.addColorStop(0.45, '#1c0509'); gr.addColorStop(1, '#0c0204');
+      ctx.fillStyle = gr; ctx.fillRect(x0, tp.y, pw, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(x0 + pw * 0.14, tp.y, Math.max(1, pw * 0.14), h);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,59,78,0.28)'; ctx.lineWidth = Math.max(2, pw * 0.7); ctx.strokeRect(x0, tp.y, pw, h);
+      ctx.strokeStyle = 'rgba(255,90,105,0.95)'; ctx.lineWidth = Math.max(1, pw * 0.16); ctx.strokeRect(x0, tp.y, pw, h);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // 레이저 두 줄: VFX.drawEnergyLine (깜빡임은 번짐 숨쉬기와 투명도로)
     const flick = v.calm ? 1 : 0.8 + 0.2 * Math.sin(W.t * 30 + o.z);
-    ctx.globalCompositeOperation = 'lighter';
     for (const hh of [hgt * 0.45, hgt * 0.9]) {
       const l = proj(L, o.x - 0.44, rel, hh), r = proj(L, o.x + 0.44, rel, hh);
-      const n = 5;
-      for (let i = 0; i <= n; i++) glow(ctx, 'rgba(255,59,78,0.9)', l.x + (r.x - l.x) * i / n, l.y, l.s * 0.3, fade * 0.6 * flick);
       ctx.globalAlpha = fade * flick;
-      ctx.strokeStyle = '#ff4d6d'; ctx.lineWidth = Math.max(2, l.s * 0.09);
-      ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
-      ctx.strokeStyle = '#ffd0d5'; ctx.lineWidth = Math.max(1, l.s * 0.03);
-      ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
+      VFX.drawEnergyLine(ctx, [{ x: l.x, y: l.y }, { x: r.x, y: r.y }], { color: '#ff3b6a', width: Math.max(2, l.s * 0.09), glow: 1.2, core: 0.38, alpha: 0.95, pulse: flick });
     }
-    ctx.globalCompositeOperation = 'source-over';
-    // 기둥 끝 불빛
-    ctx.fillStyle = '#ffe66d';
-    for (const tp of [lt, rt]) { ctx.beginPath(); ctx.arc(tp.x, tp.y, Math.max(1.5, tp.s * 0.1), 0, TAU); ctx.fill(); }
+    ctx.globalAlpha = fade;
+    // 기둥 끝 불빛: 노란 빛 점 (가산)
+    ctx.globalCompositeOperation = 'lighter';
+    for (const tp of [lt, rt]) { glow(ctx, '#ffe66d', tp.x, tp.y, Math.max(3, tp.s * 0.3), 0.9); ctx.globalAlpha = fade; }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = fade;
+    ctx.fillStyle = '#fff6c8';
+    for (const tp of [lt, rt]) { ctx.beginPath(); ctx.arc(tp.x, tp.y, Math.max(1.2, tp.s * 0.06), 0, TAU); ctx.fill(); }
     ctx.globalAlpha = 1;
   }
 
