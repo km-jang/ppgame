@@ -770,18 +770,25 @@
 
   // 별: 노란 네 갈래 별 + 흰 가운데
   let starSpr = null;
+  // 별 (2026-11-14 시각 품질): 금빛 유리 별 (가운데 흰빛에서 가장자리 짙은 금) + 빛 테 세 겹 + 흰 심, 둘레 은은한 번짐. 한 번 미리 그린다
   function starSprite() {
     if (starSpr) return starSpr;
-    const c = mk(64, 64), g = c.getContext('2d');
-    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gr.addColorStop(0, 'rgba(255,230,109,0.7)'); gr.addColorStop(1, 'rgba(255,230,109,0)');
-    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-    g.fillStyle = '#ffe66d';
-    g.beginPath();
-    for (let i = 0; i < 8; i++) { const a = -Math.PI / 2 + TAU * i / 8, r = i % 2 ? 7 : 20; g.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
-    g.closePath(); g.fill();
-    g.strokeStyle = '#fff4c2'; g.lineWidth = 1.5; g.stroke();
-    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(32, 32, 4.5, 0, TAU); g.fill();
+    const S = 96, M = S / 2, c = mk(S, S), g = c.getContext('2d');
+    const gr = g.createRadialGradient(M, M, 0, M, M, M);
+    gr.addColorStop(0, 'rgba(255,230,109,0.55)'); gr.addColorStop(0.5, 'rgba(255,200,60,0.16)'); gr.addColorStop(1, 'rgba(255,200,60,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, S, S);
+    const star = rr => { g.beginPath(); for (let i = 0; i < 8; i++) { const a = -Math.PI / 2 + TAU * i / 8, r = i % 2 ? rr * 0.36 : rr; g.lineTo(M + Math.cos(a) * r, M + Math.sin(a) * r); } g.closePath(); };
+    star(31);
+    const fg = g.createRadialGradient(M - 5, M - 6, 0, M, M, 31);
+    fg.addColorStop(0, '#fffbe6'); fg.addColorStop(0.35, '#ffe66d'); fg.addColorStop(1, '#d99a00');
+    g.fillStyle = fg; g.fill();
+    g.lineJoin = 'round'; g.globalCompositeOperation = 'lighter';
+    for (const [w, a] of [[9, 0.12], [4.5, 0.3], [1.6, 0.9]]) { g.strokeStyle = 'rgba(255,214,90,' + a + ')'; g.lineWidth = w; g.stroke(); }
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(M, M, 5, 0, TAU); g.fill();
+    const hl = g.createRadialGradient(M, M, 0, M, M, 12);
+    hl.addColorStop(0, 'rgba(255,255,255,0.8)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    g.globalCompositeOperation = 'lighter'; g.fillStyle = hl; g.fillRect(0, 0, S, S);
     return (starSpr = c);
   }
 
@@ -818,16 +825,25 @@
     }
   }
   const itemSprites = {};
+  // 아이템 구슬 (2026-11-14 시각 품질): 어두운 유리 원판(아이템 색이 안에서 은은히) + 아이템 색 빛 테 세 겹 + 왼쪽 위 유리 반사 + 속이 빛나는 그림
   function itemSprite(kind) {
     if (itemSprites[kind]) return itemSprites[kind];
     const c = mk(96, 96), g = c.getContext('2d'), K = ITEM[kind];
-    const gr = g.createRadialGradient(48, 48, 20, 48, 48, 48);
+    const gr = g.createRadialGradient(48, 48, 18, 48, 48, 48);
     gr.addColorStop(0, K.color); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.globalAlpha = 0.7; g.fillStyle = gr; g.fillRect(0, 0, 96, 96); g.globalAlpha = 1;
-    g.fillStyle = 'rgba(7,10,18,0.92)'; g.beginPath(); g.arc(48, 48, 30, 0, TAU); g.fill();
-    g.lineWidth = 4; g.strokeStyle = K.color; g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.ellipse(40, 34, 12, 6, -0.5, 0, TAU); g.fill();
+    g.globalAlpha = 0.55; g.fillStyle = gr; g.fillRect(0, 0, 96, 96); g.globalAlpha = 1;
+    const dg = g.createRadialGradient(40, 36, 4, 48, 48, 30);
+    dg.addColorStop(0, 'rgba(40,52,84,0.96)'); dg.addColorStop(1, 'rgba(5,8,16,0.97)');
+    g.fillStyle = dg; g.beginPath(); g.arc(48, 48, 30, 0, TAU); g.fill();
+    g.globalCompositeOperation = 'lighter';
+    for (const [w, a] of [[11, 0.12], [6, 0.28], [2.6, 0.95]]) { g.strokeStyle = K.color; g.globalAlpha = a; g.lineWidth = w; g.beginPath(); g.arc(48, 48, 30, 0, TAU); g.stroke(); }
+    g.globalAlpha = 0.6; g.strokeStyle = '#ffffff'; g.lineWidth = 0.9; g.beginPath(); g.arc(48, 48, 30, 0, TAU); g.stroke();
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    g.save(); g.beginPath(); g.arc(48, 48, 26, 0, TAU); g.clip();
+    g.fillStyle = 'rgba(255,255,255,0.2)'; g.beginPath(); g.ellipse(38, 32, 17, 8, -0.5, 0, TAU); g.fill();
+    g.restore();
     itemIcon(g, kind, 48, 49, 17, K.color);
+    g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.3; itemIcon(g, kind, 48, 49, 17, '#ffffff'); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     return (itemSprites[kind] = c);
   }
 
