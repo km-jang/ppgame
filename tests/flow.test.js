@@ -531,7 +531,8 @@ async function until(page, fn, arg, ms) {
     assert(await Z.evaluate(() => window._ui.includes('over') && !window._ui.includes('overSoft') && !SND.music.playing()), '결과 소리·음악 ' + await Z.evaluate(() => window._ui.join()));
     // 기다리면 1초마다 똑딱, 마지막은 높게, 5초 뒤 결과 (쉬움은 부드러운 결과 소리). 쉬움은 벽이 없으니 제 몸에 부딪힌다
     await Z.evaluate(() => { SN.debug.setEasy(true); SN.debug.newGame(5, { mode: 'endless', rival: false }); });
-    await Z.evaluate(() => { const W = SN.debug.world; W.snake = [{ x: 5, y: 4 }, { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 6, y: 4 }, { x: 7, y: 4 }]; W.prev = W.snake.slice(); W.dir = 'right'; W.queue.length = 0; W.wait = 0; W.food = { x: 0, y: 0, gold: false, born: 0 }; window._ui.length = 0; });
+    await Z.evaluate(() => { const W = SN.debug.world; W.view = null;   // 넓은 우주(2026-11-14)는 내 몸을 지나가므로, 제 몸에 부딪히는 예전 규칙으로 돌려 시험한다
+      W.snake = [{ x: 5, y: 4 }, { x: 4, y: 4 }, { x: 4, y: 5 }, { x: 5, y: 5 }, { x: 6, y: 5 }, { x: 6, y: 4 }, { x: 7, y: 4 }]; W.prev = W.snake.slice(); W.dir = 'right'; W.queue.length = 0; W.wait = 0; W.food = { x: 0, y: 0, gold: false, born: 0 }; window._ui.length = 0; });
     assert(await until(Z, () => SN.debug.mode === 'cont', null, 4000), '쉬움 한 번 더 묻기');
     assert(await until(Z, () => window._ui.includes('tick!'), null, 7000), '마지막 똑딱 ' + await Z.evaluate(() => window._ui.join()));
     assert(await Z.evaluate(() => window._ui.filter(n => n === 'tick').length === 3), '똑딱 수 ' + await Z.evaluate(() => window._ui.join()));

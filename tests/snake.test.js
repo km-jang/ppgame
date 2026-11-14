@@ -1698,5 +1698,16 @@ test('라이벌 여럿 소크: 봇이 어려움 큰 판에서 오래 놀아도 �
   assert(ate > 0, 'rivals eat food');
 });
 
+test('넓은 우주: 내 머리가 내 몸에 닿아도 끝나지 않고 지나간다 (예전 판은 그대로 끝)', () => {
+  const mkLoop = W => { W.wait = 0; W.snake = [{ x: 10, y: 10 }, { x: 10, y: 11 }, { x: 11, y: 11 }, { x: 11, y: 10 }, { x: 11, y: 9 }, { x: 10, y: 9 }]; W.prev = W.snake.map(p => ({ x: p.x, y: p.y })); W.dir = 'right'; W.queue = []; };
+  const A = wideW('normal', 8, { rival: false }); mkLoop(A);
+  ticks(A, 1);
+  assert(A.phase === 'play', 'wide passes through own body');
+  assert(dangerAhead(A, 3) === null || dangerAhead(A, 3).cause !== 'self', 'no self warning');
+  const B = create(COLS, ROWS, 8, { mode: 'endless', diff: 'normal', rival: false }); mkLoop(B);
+  ticks(B, 1);
+  assert(B.phase === 'over' && B.cause === 'self', 'normal board still ends');
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

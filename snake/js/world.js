@@ -589,7 +589,8 @@
     const eatMain = !!W.food && W.food.x === nx && W.food.y === ny;
     const eatBonus = !eatMain && !!W.bonus && W.bonus.x === nx && W.bonus.y === ny;
     const eat = eatMain || eatBonus;
-    if (!ghost) {
+    // 넓은 우주(W.view): 내 몸은 내가 지나갈 수 있다 (소유자 2026-11-14, 꼬리를 밟아 끝나는 일이 없다). 벽·판 끝·라이벌은 그대로
+    if (!ghost && !W.view) {
       // 이번에 꼬리가 빠지면 꼬리 끝 칸으로는 들어가도 된다
       const tailMoves = W.grow === 0 && !eat;
       const n = W.snake.length - (tailMoves ? 1 : 0);
@@ -1271,7 +1272,7 @@
       if (W.walls && W.walls[y * C + x] && !(W.eff && W.eff.giant > 0)) return out('wall');
       const pid = W.portalAt ? W.portalAt[y * C + x] : -1;
       if (pid >= 0) { const P = W.portals[pid]; const to = P.a.x === x && P.a.y === y ? P.b : P.a; x = to.x; y = to.y; }
-      for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return out('self');
+      if (!W.view) for (let i = 0; i < n - k; i++) if (W.snake[i].x === x && W.snake[i].y === y) return out('self');
     }
     return null;
   }
